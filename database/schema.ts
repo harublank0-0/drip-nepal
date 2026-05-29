@@ -7,6 +7,41 @@
 import { BaseModel, column } from '@adonisjs/lucid/orm'
 import { DateTime } from 'luxon'
 
+export class AddressSchema extends BaseModel {
+  static $columns = ['area', 'city', 'country', 'createdAt', 'district', 'fullName', 'id', 'isDefault', 'municipality', 'phone', 'postalCode', 'province', 'streetAddress', 'updatedAt', 'userId'] as const
+  $columns = AddressSchema.$columns
+  @column()
+  declare area: string | null
+  @column()
+  declare city: string
+  @column()
+  declare country: string
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare district: string
+  @column()
+  declare fullName: string
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare isDefault: boolean
+  @column()
+  declare municipality: string | null
+  @column()
+  declare phone: string | null
+  @column()
+  declare postalCode: string | null
+  @column()
+  declare province: string
+  @column()
+  declare streetAddress: string
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+  @column()
+  declare userId: string
+}
+
 export class AttributeValueSchema extends BaseModel {
   static $columns = ['attributeId', 'createdAt', 'id', 'slug', 'updatedAt', 'value'] as const
   $columns = AttributeValueSchema.$columns
@@ -41,6 +76,38 @@ export class AttributeSchema extends BaseModel {
   declare updatedAt: DateTime | null
 }
 
+export class CartItemSchema extends BaseModel {
+  static $columns = ['cartId', 'createdAt', 'id', 'productVariantId', 'quantity', 'updatedAt'] as const
+  $columns = CartItemSchema.$columns
+  @column()
+  declare cartId: string
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare productVariantId: string
+  @column()
+  declare quantity: number
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+}
+
+export class CartSchema extends BaseModel {
+  static $columns = ['createdAt', 'id', 'sessionId', 'updatedAt', 'userId'] as const
+  $columns = CartSchema.$columns
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare sessionId: string | null
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+  @column()
+  declare userId: string | null
+}
+
 export class CategorySchema extends BaseModel {
   static $columns = ['createdAt', 'description', 'id', 'image', 'isActive', 'name', 'parentId', 'slug', 'updatedAt'] as const
   $columns = CategorySchema.$columns
@@ -62,6 +129,89 @@ export class CategorySchema extends BaseModel {
   declare slug: string
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime | null
+}
+
+export class OrderItemSchema extends BaseModel {
+  static $columns = ['createdAt', 'id', 'orderId', 'productId', 'productNameSnapshot', 'productVariantId', 'productVariantSnapshot', 'quantity', 'shopId', 'skuSnapshot', 'subTotal', 'unitPrice'] as const
+  $columns = OrderItemSchema.$columns
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare orderId: string
+  @column()
+  declare productId: string
+  @column()
+  declare productNameSnapshot: string
+  @column()
+  declare productVariantId: string | null
+  @column()
+  declare productVariantSnapshot: string | null
+  @column()
+  declare quantity: number
+  @column()
+  declare shopId: string
+  @column()
+  declare skuSnapshot: string | null
+  @column()
+  declare subTotal: string
+  @column()
+  declare unitPrice: string
+}
+
+export class OrderSchema extends BaseModel {
+  static $columns = ['addressId', 'createdAt', 'discountTotal', 'grandTotal', 'id', 'notes', 'orderNumber', 'paymentStatus', 'placedAt', 'shippingTotal', 'status', 'subtotal', 'updatedAt', 'userId'] as const
+  $columns = OrderSchema.$columns
+  @column()
+  declare addressId: string | null
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare discountTotal: string
+  @column()
+  declare grandTotal: string
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare notes: string | null
+  @column()
+  declare orderNumber: string
+  @column()
+  declare paymentStatus: string
+  @column.dateTime()
+  declare placedAt: DateTime | null
+  @column()
+  declare shippingTotal: string
+  @column()
+  declare status: string
+  @column()
+  declare subtotal: string
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+  @column()
+  declare userId: string
+}
+
+export class PaymentSchema extends BaseModel {
+  static $columns = ['amount', 'createdAt', 'id', 'orderId', 'paidAt', 'provider', 'status', 'transactionReference'] as const
+  $columns = PaymentSchema.$columns
+  @column()
+  declare amount: string
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare orderId: string
+  @column()
+  declare paidAt: string | null
+  @column()
+  declare provider: string
+  @column()
+  declare status: string
+  @column()
+  declare transactionReference: string | null
 }
 
 export class PermissionSchema extends BaseModel {
