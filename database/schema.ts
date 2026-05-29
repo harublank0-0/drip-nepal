@@ -7,6 +7,63 @@
 import { BaseModel, column } from '@adonisjs/lucid/orm'
 import { DateTime } from 'luxon'
 
+export class AttributeValueSchema extends BaseModel {
+  static $columns = ['attributeId', 'createdAt', 'id', 'slug', 'updatedAt', 'value'] as const
+  $columns = AttributeValueSchema.$columns
+  @column()
+  declare attributeId: string
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare slug: string
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+  @column()
+  declare value: string
+}
+
+export class AttributeSchema extends BaseModel {
+  static $columns = ['createdAt', 'filterable', 'id', 'name', 'slug', 'updatedAt'] as const
+  $columns = AttributeSchema.$columns
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare filterable: boolean
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare name: string
+  @column()
+  declare slug: string
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+}
+
+export class CategorySchema extends BaseModel {
+  static $columns = ['createdAt', 'description', 'id', 'image', 'isActive', 'name', 'parentId', 'slug', 'updatedAt'] as const
+  $columns = CategorySchema.$columns
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare description: string | null
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare image: string | null
+  @column()
+  declare isActive: boolean
+  @column()
+  declare name: string
+  @column()
+  declare parentId: string | null
+  @column()
+  declare slug: string
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+}
+
 export class PermissionSchema extends BaseModel {
   static $columns = ['createdAt', 'description', 'id', 'name', 'slug', 'updatedAt'] as const
   $columns = PermissionSchema.$columns
@@ -20,6 +77,81 @@ export class PermissionSchema extends BaseModel {
   declare name: string
   @column()
   declare slug: string
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+}
+
+export class ProductImageSchema extends BaseModel {
+  static $columns = ['alt', 'createdAt', 'id', 'imageUrl', 'productId', 'sortOrder', 'variantId'] as const
+  $columns = ProductImageSchema.$columns
+  @column()
+  declare alt: string | null
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare imageUrl: string
+  @column()
+  declare productId: string
+  @column()
+  declare sortOrder: string | null
+  @column()
+  declare variantId: string | null
+}
+
+export class ProductVariantSchema extends BaseModel {
+  static $columns = ['comparePrice', 'createdAt', 'id', 'price', 'productId', 'quantity', 'sku', 'status', 'updatedAt', 'weight'] as const
+  $columns = ProductVariantSchema.$columns
+  @column()
+  declare comparePrice: string | null
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare price: string
+  @column()
+  declare productId: string
+  @column()
+  declare quantity: number
+  @column()
+  declare sku: string
+  @column()
+  declare status: string
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+  @column()
+  declare weight: string | null
+}
+
+export class ProductSchema extends BaseModel {
+  static $columns = ['brand', 'categoryId', 'createdAt', 'deletedAt', 'description', 'id', 'isFeatured', 'name', 'publishedAt', 'shopId', 'slug', 'status', 'updatedAt'] as const
+  $columns = ProductSchema.$columns
+  @column()
+  declare brand: string | null
+  @column()
+  declare categoryId: string
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime | null
+  @column.dateTime()
+  declare deletedAt: DateTime | null
+  @column()
+  declare description: string | null
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare isFeatured: boolean
+  @column()
+  declare name: string
+  @column()
+  declare publishedAt: string | null
+  @column()
+  declare shopId: string
+  @column()
+  declare slug: string
+  @column()
+  declare status: string
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime | null
 }
@@ -164,4 +296,13 @@ export class UserSchema extends BaseModel {
   declare updatedAt: DateTime | null
   @column()
   declare username: string | null
+}
+
+export class VariantAttributeValueSchema extends BaseModel {
+  static $columns = ['attributeValueId', 'variantId'] as const
+  $columns = VariantAttributeValueSchema.$columns
+  @column()
+  declare attributeValueId: string
+  @column()
+  declare variantId: string
 }
