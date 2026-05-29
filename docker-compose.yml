@@ -1,0 +1,32 @@
+services:
+  postgres:
+    image: docker.io/postgres:18.4
+    container_name: dripnepal-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: dripnepal
+      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: dripnepal
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+
+  redis:
+    image: docker.io/redis:8.6
+    container_name: dripnepal-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  mailpit:
+    image: docker.io/axllent/mailpit:latest
+    container_name: dripnepal-mailpit
+    restart: unless-stopped
+    ports:
+      - "8025:8025"
+      - "1025:1025"
+
+volumes:
+  postgres_data:
+
