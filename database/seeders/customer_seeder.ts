@@ -4,28 +4,23 @@ import { BaseSeeder } from '@adonisjs/lucid/seeders'
 
 const demoUsers = [
   {
-    email: 'dripuser1@dripnepal.com',
+    email: 'dripcustomer1@dripnepal.com',
     password: 'user1',
   },
 
   {
-    email: 'dripuser2@dripnepal.com',
+    email: 'dripcustomer2@dripnepal.com',
     password: 'user2',
   },
 
   {
-    email: 'dripuser3@dripnepal.com',
+    email: 'dripcustomer3@dripnepal.com',
     password: 'user3',
   },
 
   {
-    email: 'dripuser4@dripnepal.com',
+    email: 'dripcustomer4@dripnepal.com',
     password: 'user4',
-  },
-
-  {
-    email: 'dripuser5@dripnepal.com',
-    password: 'user5',
   },
 ]
 
