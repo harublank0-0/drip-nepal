@@ -14,6 +14,8 @@ export default class extends BaseSchema {
       table.uuid('shop_role_id').notNullable()
       table.foreign('shop_role_id').references('shop_roles.id').onDelete('CASCADE')
 
+      table.unique(['shop_id', 'user_id', 'shop_role_id'])
+
       table.timestamp('joined_at').notNullable().defaultTo(this.raw('now()'))
     })
   }

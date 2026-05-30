@@ -1,7 +1,7 @@
 import { BaseSchema } from '@adonisjs/lucid/schema'
 
 export default class extends BaseSchema {
-  protected tableName = 'product_images'
+  protected tableName = 'product_media'
 
   async up() {
     this.schema.createTable(this.tableName, (table) => {
@@ -13,9 +13,20 @@ export default class extends BaseSchema {
       table.uuid('variant_id').nullable()
       table.foreign('variant_id').references('product_variants.id').onDelete('CASCADE')
 
-      table.string('image_url', 255).notNullable()
+      table
+        .string('type', 50)
+        .notNullable()
+        .comment('image / video / instagram_reel / tiktok_video')
 
-      table.string('alt', 100).nullable()
+      table.string('provider', 50).nullable().comment('internal / instagram / tiktok / cloudinary')
+
+      table.string('url', 255).notNullable()
+
+      table.string('thumbnail_url', 255).nullable()
+
+      table.string('alt_text', 100).nullable()
+
+      table.jsonb('metadata').nullable()
 
       table.string('sort_order').nullable()
 

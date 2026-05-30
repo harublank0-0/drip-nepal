@@ -23,7 +23,7 @@ export default class extends BaseSchema {
         .string('status', 30)
         .notNullable()
         .defaultTo('pending_verification')
-        .comment('active,suspended,deleted, pendinv_verification,etc')
+        .comment('active, suspended, deleted, pending_verification,etc')
 
       table.timestamp('email_verified_at').nullable()
 
@@ -34,7 +34,7 @@ export default class extends BaseSchema {
       table.timestamp('created_at').notNullable()
       table.timestamp('updated_at').nullable()
 
-      table.index(['status'])
+      table.index(['status', 'email'])
     })
   }
 

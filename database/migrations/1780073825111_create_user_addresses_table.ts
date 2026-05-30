@@ -1,7 +1,7 @@
 import { BaseSchema } from '@adonisjs/lucid/schema'
 
 export default class extends BaseSchema {
-  protected tableName = 'addresses'
+  protected tableName = 'user_addresses'
 
   async up() {
     this.schema.createTable(this.tableName, (table) => {
@@ -10,9 +10,11 @@ export default class extends BaseSchema {
       table.uuid('user_id').notNullable()
       table.foreign('user_id').references('users.id').onDelete('CASCADE')
 
-      table.string('full_name').notNullable()
+      table.string('label', 50).nullable()
 
-      table.string('phone', 15).nullable().unique()
+      table.string('recipient_name').notNullable()
+
+      table.string('recipient_phone', 15).nullable().unique()
 
       table.string('country').notNullable().defaultTo('nepal')
 

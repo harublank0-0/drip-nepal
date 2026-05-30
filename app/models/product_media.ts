@@ -1,12 +1,12 @@
-import { CartItemSchema } from '#database/schema'
+import { ProductMediaSchema } from '#database/schema'
 import { belongsTo } from '@adonisjs/lucid/orm'
-import Cart from './cart.ts'
 import type { BelongsTo } from '@adonisjs/lucid/types/relations'
+import Product from './product.ts'
 import ProductVariant from './product_variant.ts'
 
-export default class CartItem extends CartItemSchema {
-  @belongsTo(() => Cart)
-  declare cart: BelongsTo<typeof Cart>
+export default class ProductMedia extends ProductMediaSchema {
+  @belongsTo(() => Product)
+  declare product: BelongsTo<typeof Product>
 
   @belongsTo(() => ProductVariant)
   declare productVariant: BelongsTo<typeof ProductVariant>

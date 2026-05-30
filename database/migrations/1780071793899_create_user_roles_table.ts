@@ -11,7 +11,7 @@ export default class extends BaseSchema {
       table.uuid('role_id').notNullable()
       table.foreign('role_id').references('roles.id').onDelete('CASCADE')
 
-      table.index(['user_id', 'role_id'])
+      table.unique(['user_id', 'role_id'])
     })
   }
 

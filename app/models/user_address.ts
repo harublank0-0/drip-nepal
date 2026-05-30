@@ -1,13 +1,13 @@
-import { CartSchema } from '#database/schema'
+import { UserAddressSchema } from '#database/schema'
 import { belongsTo, hasMany } from '@adonisjs/lucid/orm'
 import User from './user.ts'
 import type { BelongsTo, HasMany } from '@adonisjs/lucid/types/relations'
-import CartItem from './cart_item.ts'
+import Order from './order.ts'
 
-export default class Cart extends CartSchema {
+export default class UserAddress extends UserAddressSchema {
   @belongsTo(() => User)
   declare user: BelongsTo<typeof User>
 
-  @hasMany(() => CartItem)
-  declare items: HasMany<typeof CartItem>
+  @hasMany(() => Order)
+  declare orders: HasMany<typeof Order>
 }

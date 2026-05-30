@@ -7,41 +7,6 @@
 import { BaseModel, column } from '@adonisjs/lucid/orm'
 import { DateTime } from 'luxon'
 
-export class AddressSchema extends BaseModel {
-  static $columns = ['area', 'city', 'country', 'createdAt', 'district', 'fullName', 'id', 'isDefault', 'municipality', 'phone', 'postalCode', 'province', 'streetAddress', 'updatedAt', 'userId'] as const
-  $columns = AddressSchema.$columns
-  @column()
-  declare area: string | null
-  @column()
-  declare city: string
-  @column()
-  declare country: string
-  @column.dateTime({ autoCreate: true })
-  declare createdAt: DateTime
-  @column()
-  declare district: string
-  @column()
-  declare fullName: string
-  @column({ isPrimary: true })
-  declare id: string
-  @column()
-  declare isDefault: boolean
-  @column()
-  declare municipality: string | null
-  @column()
-  declare phone: string | null
-  @column()
-  declare postalCode: string | null
-  @column()
-  declare province: string
-  @column()
-  declare streetAddress: string
-  @column.dateTime({ autoCreate: true, autoUpdate: true })
-  declare updatedAt: DateTime | null
-  @column()
-  declare userId: string
-}
-
 export class AttributeValueSchema extends BaseModel {
   static $columns = ['attributeId', 'createdAt', 'id', 'slug', 'updatedAt', 'value'] as const
   $columns = AttributeValueSchema.$columns
@@ -161,10 +126,8 @@ export class OrderItemSchema extends BaseModel {
 }
 
 export class OrderSchema extends BaseModel {
-  static $columns = ['addressId', 'createdAt', 'discountTotal', 'grandTotal', 'id', 'notes', 'orderNumber', 'paymentStatus', 'placedAt', 'shippingTotal', 'status', 'subtotal', 'updatedAt', 'userId'] as const
+  static $columns = ['createdAt', 'discountTotal', 'grandTotal', 'id', 'notes', 'orderNumber', 'paymentStatus', 'placedAt', 'shippingTotal', 'status', 'subtotal', 'updatedAt', 'userAddressId', 'userId'] as const
   $columns = OrderSchema.$columns
-  @column()
-  declare addressId: string | null
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
   @column()
@@ -189,6 +152,8 @@ export class OrderSchema extends BaseModel {
   declare subtotal: string
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime | null
+  @column()
+  declare userAddressId: string | null
   @column()
   declare userId: string
 }
@@ -231,23 +196,40 @@ export class PermissionSchema extends BaseModel {
   declare updatedAt: DateTime | null
 }
 
-export class ProductImageSchema extends BaseModel {
-  static $columns = ['alt', 'createdAt', 'id', 'imageUrl', 'productId', 'sortOrder', 'variantId'] as const
-  $columns = ProductImageSchema.$columns
+export class ProductMediaSchema extends BaseModel {
+  static $columns = ['altText', 'createdAt', 'id', 'metadata', 'productId', 'provider', 'sortOrder', 'thumbnailUrl', 'type', 'url', 'variantId'] as const
+  $columns = ProductMediaSchema.$columns
   @column()
-  declare alt: string | null
+  declare altText: string | null
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
   @column({ isPrimary: true })
   declare id: string
   @column()
-  declare imageUrl: string
+  declare metadata: any | null
   @column()
   declare productId: string
   @column()
+  declare provider: string | null
+  @column()
   declare sortOrder: string | null
   @column()
+  declare thumbnailUrl: string | null
+  @column()
+  declare type: string
+  @column()
+  declare url: string
+  @column()
   declare variantId: string | null
+}
+
+export class ProductVariantAttributeValueSchema extends BaseModel {
+  static $columns = ['attributeValueId', 'productVariantId'] as const
+  $columns = ProductVariantAttributeValueSchema.$columns
+  @column()
+  declare attributeValueId: string
+  @column()
+  declare productVariantId: string
 }
 
 export class ProductVariantSchema extends BaseModel {
@@ -408,6 +390,43 @@ export class ShopSchema extends BaseModel {
   declare verifiedAt: DateTime | null
 }
 
+export class UserAddressSchema extends BaseModel {
+  static $columns = ['area', 'city', 'country', 'createdAt', 'district', 'id', 'isDefault', 'label', 'municipality', 'postalCode', 'province', 'recipientName', 'recipientPhone', 'streetAddress', 'updatedAt', 'userId'] as const
+  $columns = UserAddressSchema.$columns
+  @column()
+  declare area: string | null
+  @column()
+  declare city: string
+  @column()
+  declare country: string
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare district: string
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare isDefault: boolean
+  @column()
+  declare label: string | null
+  @column()
+  declare municipality: string | null
+  @column()
+  declare postalCode: string | null
+  @column()
+  declare province: string
+  @column()
+  declare recipientName: string
+  @column()
+  declare recipientPhone: string | null
+  @column()
+  declare streetAddress: string
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+  @column()
+  declare userId: string
+}
+
 export class UserRoleSchema extends BaseModel {
   static $columns = ['roleId', 'userId'] as const
   $columns = UserRoleSchema.$columns
@@ -446,13 +465,4 @@ export class UserSchema extends BaseModel {
   declare updatedAt: DateTime | null
   @column()
   declare username: string | null
-}
-
-export class VariantAttributeValueSchema extends BaseModel {
-  static $columns = ['attributeValueId', 'variantId'] as const
-  $columns = VariantAttributeValueSchema.$columns
-  @column()
-  declare attributeValueId: string
-  @column()
-  declare variantId: string
 }

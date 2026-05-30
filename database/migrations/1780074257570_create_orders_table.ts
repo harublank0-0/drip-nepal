@@ -10,8 +10,8 @@ export default class extends BaseSchema {
       table.uuid('user_id').notNullable()
       table.foreign('user_id').references('users.id').onDelete('CASCADE')
 
-      table.uuid('address_id').nullable()
-      table.foreign('address_id').references('addresses.id').onDelete('CASCADE')
+      table.uuid('user_address_id').nullable()
+      table.foreign('user_address_id').references('user_addresses.id').onDelete('CASCADE')
 
       table.string('order_number', 100).notNullable().unique()
 

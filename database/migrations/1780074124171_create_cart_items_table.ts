@@ -13,7 +13,7 @@ export default class extends BaseSchema {
       table.uuid('product_variant_id').notNullable()
       table.foreign('product_variant_id').references('product_variants.id').onDelete('CASCADE')
 
-      table.integer('quantity').notNullable().defaultTo(1)
+      table.integer('quantity', 10).notNullable().defaultTo(1)
 
       table.timestamp('created_at').notNullable()
       table.timestamp('updated_at').nullable()

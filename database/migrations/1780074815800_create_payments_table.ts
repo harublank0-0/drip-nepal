@@ -12,15 +12,19 @@ export default class extends BaseSchema {
 
       table.string('provider').notNullable().comment('cod, eSewa, khalti')
 
-      table.string('transaction_reference').nullable()
+      table.string('transaction_reference').nullable().unique()
 
       table.string('status').notNullable().comment('pending, paid, failed, refunded')
 
       table.decimal('amount', 10, 2).notNullable()
 
-      table.string('paid_at').nullable()
+      table.jsonb('gateway_response').nullable()
+
+      table.timestamp('paid_at').nullable()
 
       table.timestamp('created_at').notNullable()
+
+      table.timestamp('updated_at').nullable()
     })
   }
 
