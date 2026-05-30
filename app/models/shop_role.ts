@@ -3,7 +3,7 @@ import { belongsTo, hasMany, manyToMany } from '@adonisjs/lucid/orm'
 import type { BelongsTo, HasMany, ManyToMany } from '@adonisjs/lucid/types/relations'
 import Shop from './shop.ts'
 import Permission from './permission.ts'
-import ShopStaffRole from './shop_staff_role.ts'
+import ShopStaffAssignment from './shop_staff_assignment.ts'
 
 export default class ShopRole extends ShopRoleSchema {
   @belongsTo(() => Shop)
@@ -12,6 +12,6 @@ export default class ShopRole extends ShopRoleSchema {
   @manyToMany(() => Permission)
   declare permissions: ManyToMany<typeof Permission>
 
-  @hasMany(() => ShopStaffRole)
-  declare staffRoles: HasMany<typeof ShopStaffRole>
+  @hasMany(() => ShopStaffAssignment)
+  declare staffRoles: HasMany<typeof ShopStaffAssignment>
 }

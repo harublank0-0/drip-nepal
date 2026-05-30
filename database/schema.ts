@@ -96,6 +96,45 @@ export class CategorySchema extends BaseModel {
   declare updatedAt: DateTime | null
 }
 
+export class GlobalRolePermissionSchema extends BaseModel {
+  static $columns = ['createdAt', 'globalRoleId', 'permissionId', 'updatedAt'] as const
+  $columns = GlobalRolePermissionSchema.$columns
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare globalRoleId: string
+  @column()
+  declare permissionId: string
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+}
+
+export class GlobalRoleSchema extends BaseModel {
+  static $columns = ['createdAt', 'description', 'id', 'name', 'slug', 'updatedAt'] as const
+  $columns = GlobalRoleSchema.$columns
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare description: string | null
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare name: string
+  @column()
+  declare slug: string
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+}
+
+export class GlobalUserRoleSchema extends BaseModel {
+  static $columns = ['globalRoleId', 'userId'] as const
+  $columns = GlobalUserRoleSchema.$columns
+  @column()
+  declare globalRoleId: string
+  @column()
+  declare userId: string
+}
+
 export class OrderItemSchema extends BaseModel {
   static $columns = ['createdAt', 'id', 'orderId', 'productId', 'productNameSnapshot', 'productVariantId', 'productVariantSnapshot', 'quantity', 'shopId', 'skuSnapshot', 'subTotal', 'unitPrice'] as const
   $columns = OrderItemSchema.$columns
@@ -159,24 +198,28 @@ export class OrderSchema extends BaseModel {
 }
 
 export class PaymentSchema extends BaseModel {
-  static $columns = ['amount', 'createdAt', 'id', 'orderId', 'paidAt', 'provider', 'status', 'transactionReference'] as const
+  static $columns = ['amount', 'createdAt', 'gatewayResponse', 'id', 'orderId', 'paidAt', 'provider', 'status', 'transactionReference', 'updatedAt'] as const
   $columns = PaymentSchema.$columns
   @column()
   declare amount: string
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
+  @column()
+  declare gatewayResponse: any | null
   @column({ isPrimary: true })
   declare id: string
   @column()
   declare orderId: string
-  @column()
-  declare paidAt: string | null
+  @column.dateTime()
+  declare paidAt: DateTime | null
   @column()
   declare provider: string
   @column()
   declare status: string
   @column()
   declare transactionReference: string | null
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
 }
 
 export class PermissionSchema extends BaseModel {
@@ -265,7 +308,7 @@ export class ProductSchema extends BaseModel {
   @column()
   declare categoryId: string
   @column.dateTime({ autoCreate: true })
-  declare createdAt: DateTime | null
+  declare createdAt: DateTime
   @column.dateTime()
   declare deletedAt: DateTime | null
   @column()
@@ -284,36 +327,6 @@ export class ProductSchema extends BaseModel {
   declare slug: string
   @column()
   declare status: string
-  @column.dateTime({ autoCreate: true, autoUpdate: true })
-  declare updatedAt: DateTime | null
-}
-
-export class RolePermissionSchema extends BaseModel {
-  static $columns = ['createdAt', 'permissionId', 'roleId', 'updatedAt'] as const
-  $columns = RolePermissionSchema.$columns
-  @column.dateTime({ autoCreate: true })
-  declare createdAt: DateTime
-  @column()
-  declare permissionId: string
-  @column()
-  declare roleId: string
-  @column.dateTime({ autoCreate: true, autoUpdate: true })
-  declare updatedAt: DateTime | null
-}
-
-export class RoleSchema extends BaseModel {
-  static $columns = ['createdAt', 'description', 'id', 'name', 'slug', 'updatedAt'] as const
-  $columns = RoleSchema.$columns
-  @column.dateTime({ autoCreate: true })
-  declare createdAt: DateTime
-  @column()
-  declare description: string | null
-  @column({ isPrimary: true })
-  declare id: string
-  @column()
-  declare name: string
-  @column()
-  declare slug: string
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime | null
 }
@@ -344,9 +357,9 @@ export class ShopRoleSchema extends BaseModel {
   declare updatedAt: DateTime | null
 }
 
-export class ShopStaffRoleSchema extends BaseModel {
+export class ShopStaffAssignmentSchema extends BaseModel {
   static $columns = ['joinedAt', 'shopId', 'shopRoleId', 'userId'] as const
-  $columns = ShopStaffRoleSchema.$columns
+  $columns = ShopStaffAssignmentSchema.$columns
   @column.dateTime()
   declare joinedAt: DateTime
   @column()
@@ -423,15 +436,6 @@ export class UserAddressSchema extends BaseModel {
   declare streetAddress: string
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime | null
-  @column()
-  declare userId: string
-}
-
-export class UserRoleSchema extends BaseModel {
-  static $columns = ['roleId', 'userId'] as const
-  $columns = UserRoleSchema.$columns
-  @column()
-  declare roleId: string
   @column()
   declare userId: string
 }

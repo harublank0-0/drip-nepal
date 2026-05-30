@@ -14,6 +14,7 @@ export default class extends BaseSchema {
       table.string('description', 255).nullable()
 
       table.timestamp('created_at').notNullable()
+
       table.timestamp('updated_at').nullable()
     })
   }

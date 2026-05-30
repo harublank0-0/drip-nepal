@@ -1,19 +1,20 @@
 import { BaseSchema } from '@adonisjs/lucid/schema'
 
 export default class extends BaseSchema {
-  protected tableName = 'role_permissions'
+  protected tableName = 'global_roles'
 
   async up() {
     this.schema.createTable(this.tableName, (table) => {
-      table.uuid('role_id').notNullable()
-      table.foreign('role_id').references('roles.id').onDelete('CASCADE')
+      table.uuid('id').primary().defaultTo(this.raw('gen_random_uuid()'))
 
-      table.uuid('permission_id').notNullable()
-      table.foreign('permission_id').references('permissions.id').onDelete('CASCADE')
+      table.string('name', 50).notNullable()
 
-      table.unique(['role_id', 'permission_id'])
+      table.string('slug', 50).notNullable().unique()
+
+      table.string('description').nullable()
 
       table.timestamp('created_at').notNullable()
+
       table.timestamp('updated_at').nullable()
     })
   }

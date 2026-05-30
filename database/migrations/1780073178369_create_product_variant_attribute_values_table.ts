@@ -5,10 +5,10 @@ export default class extends BaseSchema {
 
   async up() {
     this.schema.createTable(this.tableName, (table) => {
-      table.uuid('product_variant_id').notNullable()
+      table.uuid('product_variant_id').notNullable().index()
       table.foreign('product_variant_id').references('product_variants.id').onDelete('CASCADE')
 
-      table.uuid('attribute_value_id').notNullable()
+      table.uuid('attribute_value_id').notNullable().index()
       table.foreign('attribute_value_id').references('attribute_values.id').onDelete('CASCADE')
 
       table.unique(['product_variant_id', 'attribute_value_id'])

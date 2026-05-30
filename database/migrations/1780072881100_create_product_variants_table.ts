@@ -7,7 +7,7 @@ export default class extends BaseSchema {
     this.schema.createTable(this.tableName, (table) => {
       table.uuid('id').primary().defaultTo(this.raw('gen_random_uuid()'))
 
-      table.uuid('product_id').notNullable()
+      table.uuid('product_id').notNullable().index()
       table.foreign('product_id').references('products.id').onDelete('CASCADE')
 
       table.string('sku', 100).notNullable().unique()

@@ -7,10 +7,10 @@ export default class extends BaseSchema {
     this.schema.createTable(this.tableName, (table) => {
       table.uuid('id').primary().defaultTo(this.raw('gen_random_uuid()'))
 
-      table.uuid('shop_id').notNullable()
+      table.uuid('shop_id').notNullable().index()
       table.foreign('shop_id').references('shops.id').onDelete('CASCADE')
 
-      table.uuid('category_id').notNullable()
+      table.uuid('category_id').notNullable().index()
       table.foreign('category_id').references('categories.id').onDelete('CASCADE')
 
       table.string('name', 100).notNullable().unique()
@@ -27,8 +27,9 @@ export default class extends BaseSchema {
 
       table.string('published_at').nullable()
 
-      table.timestamp('created_at')
-      table.timestamp('updated_at')
+      table.timestamp('created_at').notNullable()
+
+      table.timestamp('updated_at').nullable()
 
       table.timestamp('deleted_at').nullable()
     })

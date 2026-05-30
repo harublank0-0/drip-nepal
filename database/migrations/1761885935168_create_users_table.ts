@@ -32,6 +32,7 @@ export default class extends BaseSchema {
       table.timestamp('deleted_at').nullable().comment('soft delete')
 
       table.timestamp('created_at').notNullable()
+
       table.timestamp('updated_at').nullable()
 
       table.index(['status', 'email'])

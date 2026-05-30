@@ -5,11 +5,11 @@ import { withAuthFinder } from '@adonisjs/auth/mixins/lucid'
 import { hasMany, manyToMany } from '@adonisjs/lucid/orm'
 import Shop from './shop.ts'
 import type { HasMany, ManyToMany } from '@adonisjs/lucid/types/relations'
-import Role from './role.ts'
-import ShopStaffRole from './shop_staff_role.ts'
 import UserAddress from './user_address.ts'
 import Cart from './cart.ts'
 import Order from './order.ts'
+import GlobalRole from './global_role.ts'
+import ShopStaffAssignment from './shop_staff_assignment.ts'
 
 export default class User extends compose(UserSchema, withAuthFinder(hash)) {
   get initials() {
@@ -23,13 +23,13 @@ export default class User extends compose(UserSchema, withAuthFinder(hash)) {
   @hasMany(() => Shop)
   declare shops: HasMany<typeof Shop>
 
-  @manyToMany(() => Role, {
+  @manyToMany(() => GlobalRole, {
     pivotTable: 'user_roles',
   })
-  declare roles: ManyToMany<typeof Role>
+  declare roles: ManyToMany<typeof GlobalRole>
 
-  @hasMany(() => ShopStaffRole)
-  declare shopStaffRoles: HasMany<typeof ShopStaffRole>
+  @hasMany(() => ShopStaffAssignment)
+  declare shopStaffRoles: HasMany<typeof ShopStaffAssignment>
 
   @hasMany(() => UserAddress)
   declare addresses: HasMany<typeof UserAddress>

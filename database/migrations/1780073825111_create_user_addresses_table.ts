@@ -7,7 +7,7 @@ export default class extends BaseSchema {
     this.schema.createTable(this.tableName, (table) => {
       table.uuid('id').primary().defaultTo(this.raw('gen_random_uuid()'))
 
-      table.uuid('user_id').notNullable()
+      table.uuid('user_id').notNullable().index()
       table.foreign('user_id').references('users.id').onDelete('CASCADE')
 
       table.string('label', 50).nullable()

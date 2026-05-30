@@ -1,11 +1,11 @@
-import { ShopStaffRoleSchema } from '#database/schema'
 import { belongsTo } from '@adonisjs/lucid/orm'
 import Shop from './shop.ts'
 import type { BelongsTo } from '@adonisjs/lucid/types/relations'
 import ShopRole from './shop_role.ts'
 import User from './user.ts'
+import { ShopStaffAssignmentSchema } from '#database/schema'
 
-export default class ShopStaffRole extends ShopStaffRoleSchema {
+export default class ShopStaffAssignment extends ShopStaffAssignmentSchema {
   @belongsTo(() => Shop)
   declare shop: BelongsTo<typeof Shop>
 
