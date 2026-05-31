@@ -59,7 +59,7 @@ Global platform roles.
 **Why it exists**
 Defines:
 
-*broad platform-level access*
+_broad platform-level access_
 Example:
 
 - admins access moderation
@@ -88,7 +88,7 @@ Connects:
 
 Example:
 admin
-  └── users.suspend
+└── users.suspend
 
 ### user_roles
 
@@ -118,7 +118,7 @@ Examples:
 - Kathmandu Kicks
 - NepThreads
 
-*Why it exists*
+_Why it exists_
 Products belong to shops.
 Not directly to users.
 
@@ -156,7 +156,7 @@ Connects:
 
 Example:
 inventory_staff
-  └── products.update
+└── products.update
 
 ### shop_staff_roles
 
@@ -181,10 +181,10 @@ Hierarchical product organization.
 Examples:
 "```
 Men
-  └── Hoodies
+└── Hoodies
 
 Women
-  └── Dresses```
+└── Dresses```
 
 **Why it exists**
 Enables:
@@ -194,7 +194,7 @@ Enables:
 - organization
 - SEO structure
 
-*parent_id* creates **nested categories**, without hardcoding category levels.
+_parent_id_ creates **nested categories**, without hardcoding category levels.
 
 ### products
 
@@ -218,7 +218,7 @@ But not:
 
 - stock
 - purchasable combinations
-they will be available in product variants
+  they will be available in product variants
 
 products are **marketing entities**.
 variants are **purchasable entities**.
@@ -278,7 +278,7 @@ Possible values:
 Connects:
 `variant` <-> `attribute_value`
 
-```drip
+````drip
 Example:
 Variant:
 Black Hoodie / M
@@ -391,3 +391,4 @@ Because payments are:
 - retryable
 - provider-specific
 
+````

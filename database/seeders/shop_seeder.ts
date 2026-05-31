@@ -29,8 +29,8 @@ export default class extends BaseSeeder {
   async run() {
     const owner = await User.findBy('email', 'shopowner1@dripnepal.com')
     if (!owner) {
-      for (const owner of demoShopOwners) {
-        const user = await UserFactory.merge(owner).create()
+      for (const demoShopOwner of demoShopOwners) {
+        const user = await UserFactory.merge(demoShopOwner).create()
         const shop = await ShopFactory.merge({ ownerId: user.id }).create()
 
         const categories = await Category.all()

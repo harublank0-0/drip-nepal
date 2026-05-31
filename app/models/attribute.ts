@@ -6,4 +6,3 @@ export default class Attribute extends AttributeSchema {
   @hasMany(() => Attribute)
   declare attributes: HasMany<typeof Attribute>
 }
-

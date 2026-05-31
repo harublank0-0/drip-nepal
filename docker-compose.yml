@@ -8,7 +8,7 @@ services:
       POSTGRES_PASSWORD: secret
       POSTGRES_DB: dripnepal
     ports:
-      - "5432:5432"
+      - '5432:5432'
     volumes:
       - postgres_data:/var/lib/postgresql
 
@@ -17,16 +17,15 @@ services:
     container_name: dripnepal-redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - '6379:6379'
 
   mailpit:
     image: docker.io/axllent/mailpit:latest
     container_name: dripnepal-mailpit
     restart: unless-stopped
     ports:
-      - "8025:8025"
-      - "1025:1025"
+      - '8025:8025'
+      - '1025:1025'
 
 volumes:
   postgres_data:
-

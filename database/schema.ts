@@ -42,7 +42,14 @@ export class AttributeSchema extends BaseModel {
 }
 
 export class CartItemSchema extends BaseModel {
-  static $columns = ['cartId', 'createdAt', 'id', 'productVariantId', 'quantity', 'updatedAt'] as const
+  static $columns = [
+    'cartId',
+    'createdAt',
+    'id',
+    'productVariantId',
+    'quantity',
+    'updatedAt',
+  ] as const
   $columns = CartItemSchema.$columns
   @column()
   declare cartId: string
@@ -74,7 +81,17 @@ export class CartSchema extends BaseModel {
 }
 
 export class CategorySchema extends BaseModel {
-  static $columns = ['createdAt', 'description', 'id', 'image', 'isActive', 'name', 'parentId', 'slug', 'updatedAt'] as const
+  static $columns = [
+    'createdAt',
+    'description',
+    'id',
+    'image',
+    'isActive',
+    'name',
+    'parentId',
+    'slug',
+    'updatedAt',
+  ] as const
   $columns = CategorySchema.$columns
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
@@ -136,7 +153,20 @@ export class GlobalUserRoleSchema extends BaseModel {
 }
 
 export class OrderItemSchema extends BaseModel {
-  static $columns = ['createdAt', 'id', 'orderId', 'productId', 'productNameSnapshot', 'productVariantId', 'productVariantSnapshot', 'quantity', 'shopId', 'skuSnapshot', 'subTotal', 'unitPrice'] as const
+  static $columns = [
+    'createdAt',
+    'id',
+    'orderId',
+    'productId',
+    'productNameSnapshot',
+    'productVariantId',
+    'productVariantSnapshot',
+    'quantity',
+    'shopId',
+    'skuSnapshot',
+    'subTotal',
+    'unitPrice',
+  ] as const
   $columns = OrderItemSchema.$columns
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
@@ -165,7 +195,22 @@ export class OrderItemSchema extends BaseModel {
 }
 
 export class OrderSchema extends BaseModel {
-  static $columns = ['createdAt', 'discountTotal', 'grandTotal', 'id', 'notes', 'orderNumber', 'paymentStatus', 'placedAt', 'shippingTotal', 'status', 'subtotal', 'updatedAt', 'userAddressId', 'userId'] as const
+  static $columns = [
+    'createdAt',
+    'discountTotal',
+    'grandTotal',
+    'id',
+    'notes',
+    'orderNumber',
+    'paymentStatus',
+    'placedAt',
+    'shippingTotal',
+    'status',
+    'subtotal',
+    'updatedAt',
+    'userAddressId',
+    'userId',
+  ] as const
   $columns = OrderSchema.$columns
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
@@ -198,7 +243,18 @@ export class OrderSchema extends BaseModel {
 }
 
 export class PaymentSchema extends BaseModel {
-  static $columns = ['amount', 'createdAt', 'gatewayResponse', 'id', 'orderId', 'paidAt', 'provider', 'status', 'transactionReference', 'updatedAt'] as const
+  static $columns = [
+    'amount',
+    'createdAt',
+    'gatewayResponse',
+    'id',
+    'orderId',
+    'paidAt',
+    'provider',
+    'status',
+    'transactionReference',
+    'updatedAt',
+  ] as const
   $columns = PaymentSchema.$columns
   @column()
   declare amount: string
@@ -240,7 +296,19 @@ export class PermissionSchema extends BaseModel {
 }
 
 export class ProductMediaSchema extends BaseModel {
-  static $columns = ['altText', 'createdAt', 'id', 'metadata', 'productId', 'provider', 'sortOrder', 'thumbnailUrl', 'type', 'url', 'variantId'] as const
+  static $columns = [
+    'altText',
+    'createdAt',
+    'id',
+    'metadata',
+    'productId',
+    'provider',
+    'sortOrder',
+    'thumbnailUrl',
+    'type',
+    'url',
+    'variantId',
+  ] as const
   $columns = ProductMediaSchema.$columns
   @column()
   declare altText: string | null
@@ -276,7 +344,18 @@ export class ProductVariantAttributeValueSchema extends BaseModel {
 }
 
 export class ProductVariantSchema extends BaseModel {
-  static $columns = ['comparePrice', 'createdAt', 'id', 'price', 'productId', 'quantity', 'sku', 'status', 'updatedAt', 'weight'] as const
+  static $columns = [
+    'comparePrice',
+    'createdAt',
+    'id',
+    'price',
+    'productId',
+    'quantity',
+    'sku',
+    'status',
+    'updatedAt',
+    'weight',
+  ] as const
   $columns = ProductVariantSchema.$columns
   @column()
   declare comparePrice: string | null
@@ -301,7 +380,21 @@ export class ProductVariantSchema extends BaseModel {
 }
 
 export class ProductSchema extends BaseModel {
-  static $columns = ['brand', 'categoryId', 'createdAt', 'deletedAt', 'description', 'id', 'isFeatured', 'name', 'publishedAt', 'shopId', 'slug', 'status', 'updatedAt'] as const
+  static $columns = [
+    'brand',
+    'categoryId',
+    'createdAt',
+    'deletedAt',
+    'description',
+    'id',
+    'isFeatured',
+    'name',
+    'publishedAt',
+    'shopId',
+    'slug',
+    'status',
+    'updatedAt',
+  ] as const
   $columns = ProductSchema.$columns
   @column()
   declare brand: string | null
@@ -371,7 +464,22 @@ export class ShopStaffAssignmentSchema extends BaseModel {
 }
 
 export class ShopSchema extends BaseModel {
-  static $columns = ['banner', 'createdAt', 'deletedAt', 'description', 'email', 'id', 'logo', 'name', 'ownerId', 'phone', 'slug', 'status', 'updatedAt', 'verifiedAt'] as const
+  static $columns = [
+    'banner',
+    'createdAt',
+    'deletedAt',
+    'description',
+    'email',
+    'id',
+    'logo',
+    'name',
+    'ownerId',
+    'phone',
+    'slug',
+    'status',
+    'updatedAt',
+    'verifiedAt',
+  ] as const
   $columns = ShopSchema.$columns
   @column()
   declare banner: string | null
@@ -404,7 +512,24 @@ export class ShopSchema extends BaseModel {
 }
 
 export class UserAddressSchema extends BaseModel {
-  static $columns = ['area', 'city', 'country', 'createdAt', 'district', 'id', 'isDefault', 'label', 'municipality', 'postalCode', 'province', 'recipientName', 'recipientPhone', 'streetAddress', 'updatedAt', 'userId'] as const
+  static $columns = [
+    'area',
+    'city',
+    'country',
+    'createdAt',
+    'district',
+    'id',
+    'isDefault',
+    'label',
+    'municipality',
+    'postalCode',
+    'province',
+    'recipientName',
+    'recipientPhone',
+    'streetAddress',
+    'updatedAt',
+    'userId',
+  ] as const
   $columns = UserAddressSchema.$columns
   @column()
   declare area: string | null
@@ -441,7 +566,21 @@ export class UserAddressSchema extends BaseModel {
 }
 
 export class UserSchema extends BaseModel {
-  static $columns = ['avatar', 'createdAt', 'deletedAt', 'email', 'emailVerifiedAt', 'fullName', 'id', 'lastLoginAt', 'password', 'phone', 'status', 'updatedAt', 'username'] as const
+  static $columns = [
+    'avatar',
+    'createdAt',
+    'deletedAt',
+    'email',
+    'emailVerifiedAt',
+    'fullName',
+    'id',
+    'lastLoginAt',
+    'password',
+    'phone',
+    'status',
+    'updatedAt',
+    'username',
+  ] as const
   $columns = UserSchema.$columns
   @column()
   declare avatar: string | null

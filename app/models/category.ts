@@ -7,4 +7,3 @@ export default class Category extends CategorySchema {
   @hasMany(() => Product)
   declare products: HasMany<typeof Product>
 }
-
