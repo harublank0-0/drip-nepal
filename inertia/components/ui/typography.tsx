@@ -1,10 +1,17 @@
-function Typography({ children }: { children: React.ReactNode }) {
+import { cn } from '~/lib/utils'
+
+export function Typography({ children }: { children: React.ReactNode }) {
   return <p className="leading-7 [&:not(:first-child)]:mt-6">{children}</p>
 }
 
-Typography.H1 = ({ children }: { children: React.ReactNode }) => {
+Typography.H1 = ({ children, className }: { children: React.ReactNode; className?: string }) => {
   return (
-    <h1 className="scroll-m-20 text-center text-4xl font-extrabold tracking-tight text-balance">
+    <h1
+      className={cn(
+        'scroll-m-20 text-center text-4xl font-extrabold tracking-tight text-balance',
+        className
+      )}
+    >
       {children}
     </h1>
   )
