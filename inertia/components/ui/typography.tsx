@@ -1,10 +1,14 @@
 import { cn } from '~/lib/utils'
 
-export function Typography({ children }: { children: React.ReactNode }) {
-  return <p className="leading-7 [&:not(:first-child)]:mt-6">{children}</p>
+type TypographyProps = {
+  children: React.ReactNode
+  className?: string
+}
+export function Typography({ children, className }: TypographyProps) {
+  return <p className={cn('leading-7 [&:not(:first-child)]:mt-6', className)}>{children}</p>
 }
 
-Typography.H1 = ({ children, className }: { children: React.ReactNode; className?: string }) => {
+Typography.H1 = ({ children, className }: TypographyProps) => {
   return (
     <h1
       className={cn(
@@ -17,54 +21,76 @@ Typography.H1 = ({ children, className }: { children: React.ReactNode; className
   )
 }
 
-Typography.H2 = ({ children }: { children: React.ReactNode }) => {
+Typography.H2 = ({ children, className }: TypographyProps) => {
   return (
-    <h2 className="scroll-m-20 border-b pb-2 text-3xl font-semibold tracking-tight first:mt-0">
+    <h2
+      className={cn(
+        'scroll-m-20 border-b pb-2 text-3xl font-semibold tracking-tight first:mt-0',
+        className
+      )}
+    >
       {children}
     </h2>
   )
 }
 
-Typography.H3 = ({ children }: { children: React.ReactNode }) => {
-  return <h3 className="scroll-m-20 text-2xl font-semibold tracking-tight">{children}</h3>
-}
-
-Typography.H4 = ({ children }: { children: React.ReactNode }) => {
-  return <h4 className="scroll-m-20 text-xl font-semibold tracking-tight">{children}</h4>
-}
-
-Typography.P = ({ children }: { children: React.ReactNode }) => {
-  return <p className="leading-7 [&:not(:first-child)]:mt-6">{children}</p>
-}
-
-Typography.BlockQuote = ({ children }: { children: React.ReactNode }) => {
-  return <blockquote className="mt-6 border-l-2 pl-6 italic">&quot;{children}&quot;</blockquote>
-}
-
-Typography.List = ({ children }: { children: React.ReactNode }) => {
-  return <ul className="my-6 ml-6 list-disc [&>li]:mt-2">{children}</ul>
-}
-
-Typography.InlineCode = ({ children }: { children: React.ReactNode }) => {
+Typography.H3 = ({ children, className }: TypographyProps) => {
   return (
-    <code className="relative rounded bg-muted px-[0.3rem] py-[0.2rem] font-mono text-sm font-semibold">
+    <h3 className={cn('scroll-m-20 text-2xl font-semibold tracking-tight', className)}>
+      {children}
+    </h3>
+  )
+}
+
+Typography.H4 = ({ children, className }: TypographyProps) => {
+  return (
+    <h4 className={cn('scroll-m-20 text-xl font-semibold tracking-tight', className)}>
+      {children}
+    </h4>
+  )
+}
+
+Typography.P = ({ children, className }: TypographyProps) => {
+  return <p className={cn('leading-7 [&:not(:first-child)]:mt-6', className)}>{children}</p>
+}
+
+Typography.BlockQuote = ({ children, className }: TypographyProps) => {
+  return (
+    <blockquote className={cn('mt-6 border-l-2 pl-6 italic', className)}>
+      &quot;{children}&quot;
+    </blockquote>
+  )
+}
+
+Typography.List = ({ children, className }: TypographyProps) => {
+  return <ul className={cn('my-6 ml-6 list-disc [&>li]:mt-2', className)}>{children}</ul>
+}
+
+Typography.InlineCode = ({ children, className }: TypographyProps) => {
+  return (
+    <code
+      className={cn(
+        'relative rounded bg-muted px-[0.3rem] py-[0.2rem] font-mono text-sm font-semibold',
+        className
+      )}
+    >
       {children}
     </code>
   )
 }
 
-Typography.Lead = ({ children }: { children: React.ReactNode }) => {
-  return <p className="text-xl text-muted-foreground">{children}</p>
+Typography.Lead = ({ children, className }: TypographyProps) => {
+  return <p className={cn('text-xl text-muted-foreground', className)}>{children}</p>
 }
 
-Typography.Large = ({ children }: { children: React.ReactNode }) => {
-  return <div className="text-lg font-semibold">{children}</div>
+Typography.Large = ({ children, className }: TypographyProps) => {
+  return <div className={cn('text-lg font-semibold', className)}>{children}</div>
 }
 
-Typography.Small = ({ children }: { children: React.ReactNode }) => {
-  return <small className="text-sm leading-none font-medium">{children}</small>
+Typography.Small = ({ children, className }: TypographyProps) => {
+  return <small className={cn('text-sm leading-none font-medium', className)}>{children}</small>
 }
 
-Typography.Muted = ({ children }: { children: React.ReactNode }) => {
-  return <p className="text-sm text-muted-foreground">{children}</p>
+Typography.Muted = ({ children, className }: TypographyProps) => {
+  return <p className={cn('text-sm text-muted-foreground', className)}>{children}</p>
 }

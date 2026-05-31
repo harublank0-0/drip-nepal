@@ -1,4 +1,5 @@
 import './css/app.css'
+import './css/style.css'
 import { type ReactElement } from 'react'
 import { client } from './client'
 import Layout from '~/layouts/default'

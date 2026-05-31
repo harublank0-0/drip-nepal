@@ -1,0 +1,9 @@
+/* This css file is when we target specific elements through classess or id */
+
+#signup-desktop-bg {
+  background-image: url('../assets/background/signup-desktop-bg.webp');
+}
+
+#signup-mobile-bg {
+  background-image: url('../assets/background/signup-mobile-bg.webp')
+}
