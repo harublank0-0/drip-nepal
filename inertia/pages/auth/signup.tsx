@@ -1,6 +1,7 @@
 import { Form } from '@adonisjs/inertia/react'
 
 export default function Signup() {
+  return <div></div>
   return (
     <div className="form-container">
       <div>
