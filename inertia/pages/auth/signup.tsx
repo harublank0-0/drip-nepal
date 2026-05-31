@@ -1,6 +1,6 @@
 import { Typography } from '~/components/ui/typography'
 import DripNepalLogo from '~/assets/logo/drip-nepal.png'
-import { LucideTag } from 'lucide-react'
+import { LucidePackage, LucideTag, LucideVan } from 'lucide-react'
 import { DripCircleIcon } from '~/components/ui/drip-circle-icon'
 import { Field, FieldError, FieldLabel, FieldSet } from '~/components/ui/field'
 import { Input } from '~/components/ui/input'
@@ -37,7 +37,7 @@ export default function Signup() {
 
           <div className="flex flex-col items-center">
             <DripCircleIcon>
-              <LucideTag />
+              <LucidePackage />
             </DripCircleIcon>
 
             <Typography.P className="text-sm">Easily tracked deliviries and returns</Typography.P>
@@ -45,7 +45,7 @@ export default function Signup() {
 
           <div className="flex flex-col items-center">
             <DripCircleIcon>
-              <LucideTag />
+              <LucideVan />
             </DripCircleIcon>
 
             <Typography.P className="text-sm">Speedy checkout</Typography.P>

@@ -11,7 +11,7 @@ export default class extends BaseSchema {
 
       table.string('username', 100).nullable().unique()
 
-      table.string('email', 100).notNullable().unique()
+      table.string('email', 100).nullable().unique()
 
       table.string('password').nullable().comment('nullable for OAuth')
 

@@ -16,3 +16,11 @@ export const signupValidator = vine.create({
     confirmationField: 'passwordConfirmation',
   }),
 })
+
+/**
+ * Validator to use when performing login
+ */
+export const loginValidator = vine.create({
+  email: email(),
+  password: password(),
+})

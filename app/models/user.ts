@@ -11,7 +11,12 @@ import Order from './order.ts'
 import GlobalRole from './global_role.ts'
 import ShopStaffAssignment from './shop_staff_assignment.ts'
 
-export default class User extends compose(UserSchema, withAuthFinder(hash)) {
+const AuthFinder = withAuthFinder(() => hash.use('scrypt'), {
+  uids: ['email'],
+  passwordColumnName: 'password',
+})
+
+export default class User extends compose(UserSchema, AuthFinder) {
   get initials() {
     const [first, last] = this.fullName ? this.fullName.split(' ') : this.email.split('@')
     if (first && last) {
@@ -39,4 +44,8 @@ export default class User extends compose(UserSchema, withAuthFinder(hash)) {
 
   @hasMany(() => Order)
   declare orders: HasMany<typeof Order>
+
+  isVerified() {
+    return this.emailVerifiedAt !== null
+  }
 }
