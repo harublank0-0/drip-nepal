@@ -74,6 +74,8 @@
     "@adonisjs/static": "^2.0.1",
     "@adonisjs/vite": "^5.1.1",
     "@fontsource-variable/geist": "^5.2.9",
+    "@fontsource-variable/lora": "^5.2.8",
+    "@fontsource-variable/noto-sans": "^5.2.10",
     "@inertiajs/react": "^2.3.24",
     "@tailwindcss/vite": "^4.3.0",
     "@tuyau/core": "^1.2.2",
