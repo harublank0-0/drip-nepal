@@ -1,5 +1,5 @@
 import { ShopSchema } from '#database/schema'
-import { belongsTo, hasMany } from '@adonisjs/lucid/orm'
+import { belongsTo, column, hasMany } from '@adonisjs/lucid/orm'
 import User from './user.ts'
 import type { BelongsTo, HasMany } from '@adonisjs/lucid/types/relations'
 import ShopRole from './shop_role.ts'
@@ -8,7 +8,9 @@ import OrderItem from './order_item.ts'
 import ShopStaffAssignment from './shop_staff_assignment.ts'
 
 export default class Shop extends ShopSchema {
-  @belongsTo(() => User)
+  @belongsTo(() => User, {
+    foreignKey: 'ownerId',
+  })
   declare owner: BelongsTo<typeof User>
 
   @hasMany(() => ShopRole)
