@@ -20,6 +20,18 @@ router
 
     router.get('login', [controllers.Session, 'create'])
     router.post('login', [controllers.Session, 'store'])
+
+    router
+      .get('men', ({ inertia }) => {
+        return inertia.render('commerce/men', {})
+      })
+      .as('men')
+
+    router
+      .get('women', ({ inertia }) => {
+        return inertia.render('commerce/women', {})
+      })
+      .as('women')
   })
   .use(middleware.guest())
 

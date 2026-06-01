@@ -18,6 +18,8 @@ declare module '@adonisjs/inertia/types' {
     'errors/server_error': ExtractProps<(typeof import('../../inertia/pages/errors/server_error.tsx'))['default']>
     'home/index': ExtractProps<(typeof import('../../inertia/pages/home/index.tsx'))['default']>
     'home/components/hero/index': ExtractProps<(typeof import('../../inertia/pages/home/components/hero/index.tsx'))['default']>
-    'home/components/hero/hero-panel': ExtractProps<(typeof import('../../inertia/pages/home/components/hero/hero-panel.tsx'))['default']>
+    'commerce/men': ExtractProps<(typeof import('../../inertia/pages/commerce/men.tsx'))['default']>
+    'commerce/women': ExtractProps<(typeof import('../../inertia/pages/commerce/women.tsx'))['default']>
+    'home/components/hero/hero_panel': ExtractProps<(typeof import('../../inertia/pages/home/components/hero/hero_panel.tsx'))['default']>
   }
 }

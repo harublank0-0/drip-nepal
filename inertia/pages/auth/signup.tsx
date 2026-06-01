@@ -1,7 +1,7 @@
 import { Typography } from '~/components/ui/typography'
 import DripNepalLogo from '~/assets/logo/drip-nepal.png'
 import { LucidePackage, LucideTag, LucideVan } from 'lucide-react'
-import { DripCircleIcon } from '~/components/ui/drip-circle-icon'
+import { DripCircleIcon } from '~/components/ui/drip_circle_icon'
 import { Field, FieldError, FieldLabel, FieldSet } from '~/components/ui/field'
 import { Input } from '~/components/ui/input'
 import { Button } from '~/components/ui/button'

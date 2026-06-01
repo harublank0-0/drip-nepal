@@ -12,4 +12,6 @@ export interface ApiDefinition {
     store: typeof routes['session.store']
     destroy: typeof routes['session.destroy']
   }
+  men: typeof routes['men']
+  women: typeof routes['women']
 }

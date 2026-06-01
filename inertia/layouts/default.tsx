@@ -4,8 +4,14 @@ import { usePage } from '@inertiajs/react'
 import { type ReactElement, useEffect } from 'react'
 import { Link } from '@adonisjs/inertia/react'
 import { Button } from '~/components/ui/button'
+import { NavBar } from '~/components/navbar'
 
-export default function Layout({ children }: { children: ReactElement<Data.SharedProps> }) {
+export default function Layout({
+  children,
+  ...rest
+}: {
+  children: ReactElement<Data.SharedProps>
+}) {
   const { url } = usePage()
   useEffect(() => {
     toast.dismiss()
@@ -20,11 +26,14 @@ export default function Layout({ children }: { children: ReactElement<Data.Share
     }
   })
 
+  console.log({ rest })
+
   return (
     <>
       {/* <Button asChild className="absolute"> */}
       {/*   <Link route="session.destroy">logout</Link> */}
       {/* </Button> */}
+      <NavBar />
       <main>{children}</main>
       <Toaster position="top-center" richColors />
     </>

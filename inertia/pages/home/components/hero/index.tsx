@@ -1,8 +1,7 @@
 import ManImage from '~/assets/hero-image/man.png'
 import WomanImage from '~/assets/hero-image/woman.png'
-import { Button } from '~/components/ui/button'
 import { Typography } from '~/components/ui/typography'
-import { HeroPanel, HeroPanelProps } from './hero-panel'
+import { HeroPanel, HeroPanelProps } from './hero_panel'
 
 const manPanel: HeroPanelProps = {
   image: {
@@ -30,7 +29,7 @@ const womanPanel: HeroPanelProps = {
 
 export const Hero = () => {
   return (
-    <div className="flex h-screen w-screen cursor-pointer">
+    <div className="flex h-[90vh] cursor-pointer bg-black">
       <HeroPanel {...manPanel}>
         <div className="absolute top-1/2 left-0 rotate-90 -translate-x-1/3">
           <Typography.Muted className="uppercase tracking-wider text-lg">
@@ -42,7 +41,7 @@ export const Hero = () => {
       <HeroPanel {...womanPanel}>
         <div className="absolute top-8 right-8">
           <Typography.Muted className="uppercase tracking-wider text-lg">
-            KTM 27.7172 N, 85.3240 E
+            KTM 27.7172&deg;N, 85.3240&deg;E
           </Typography.Muted>
         </div>
       </HeroPanel>
