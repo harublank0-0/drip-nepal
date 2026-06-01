@@ -5,6 +5,7 @@ import { type ReactElement, useEffect } from 'react'
 import { Link } from '@adonisjs/inertia/react'
 import { Button } from '~/components/ui/button'
 import { NavBar } from '~/components/navbar'
+import { ThemeProvider } from '~/components/providers/theme_provider'
 
 export default function Layout({
   children,
@@ -33,9 +34,11 @@ export default function Layout({
       {/* <Button asChild className="absolute"> */}
       {/*   <Link route="session.destroy">logout</Link> */}
       {/* </Button> */}
-      <NavBar />
-      <main>{children}</main>
-      <Toaster position="top-center" richColors />
+      <ThemeProvider defaultTheme="dark">
+        <NavBar />
+        <main>{children}</main>
+        <Toaster position="top-center" richColors />
+      </ThemeProvider>
     </>
   )
 }
