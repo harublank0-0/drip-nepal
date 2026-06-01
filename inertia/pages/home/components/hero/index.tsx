@@ -10,7 +10,7 @@ const manPanel: HeroPanelProps = {
   },
   title: 'men',
   cta: {
-    route: 'home',
+    route: 'men',
     label: 'shop for men',
   },
 }
@@ -22,7 +22,7 @@ const womanPanel: HeroPanelProps = {
   },
   title: 'women',
   cta: {
-    route: 'home',
+    route: 'women',
     label: 'shop for women',
   },
 }
