@@ -1,4 +1,4 @@
-import { LucideCircle, LucideProps } from 'lucide-react'
+import { LucideCircle, type LucideProps } from 'lucide-react'
 
 type DripCircleIconProps = LucideProps & {
   children: React.ReactNode

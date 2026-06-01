@@ -1,5 +1,5 @@
 import { Link } from '@adonisjs/inertia/react'
-import { routes } from '@generated/registry'
+import type { routes } from '@generated/registry'
 import { Button } from '~/components/ui/button'
 import { Typography } from '~/components/ui/typography'
 
@@ -33,7 +33,7 @@ export const HeroPanel = (props: HeroPanelProps & { children: React.ReactNode })
 
           <Button
             asChild
-            variant={'outline'}
+            variant="outline"
             className="bg-transparent capitalize cursor-pointer rounded-none text-lg px-8 py-6 opacity-0 group-hover:opacity-100 transition-all duration-600 translate-y-10 group-hover:translate-y-0"
           >
             <Link route={cta.route}>{cta.label}</Link>

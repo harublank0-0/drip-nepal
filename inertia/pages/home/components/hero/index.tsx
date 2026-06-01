@@ -1,7 +1,7 @@
 import ManImage from '~/assets/hero-image/man.png'
 import WomanImage from '~/assets/hero-image/woman.png'
 import { Typography } from '~/components/ui/typography'
-import { HeroPanel, HeroPanelProps } from './hero_panel'
+import { HeroPanel, type HeroPanelProps } from './hero_panel'
 
 const manPanel: HeroPanelProps = {
   image: {

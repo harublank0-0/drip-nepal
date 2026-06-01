@@ -8,7 +8,7 @@ export function Typography({ children, className }: TypographyProps) {
   return <p className={cn('leading-7 [&:not(:first-child)]:mt-6', className)}>{children}</p>
 }
 
-Typography.H1 = ({ children, className }: TypographyProps) => {
+function H1({ children, className }: TypographyProps) {
   return (
     <h1
       className={cn(
@@ -20,8 +20,9 @@ Typography.H1 = ({ children, className }: TypographyProps) => {
     </h1>
   )
 }
+Typography.H1 = H1
 
-Typography.H2 = ({ children, className }: TypographyProps) => {
+function H2({ children, className }: TypographyProps) {
   return (
     <h2
       className={cn(
@@ -33,40 +34,46 @@ Typography.H2 = ({ children, className }: TypographyProps) => {
     </h2>
   )
 }
+Typography.H2 = H2
 
-Typography.H3 = ({ children, className }: TypographyProps) => {
+function H3({ children, className }: TypographyProps) {
   return (
     <h3 className={cn('scroll-m-20 text-2xl font-semibold tracking-tight', className)}>
       {children}
     </h3>
   )
 }
+Typography.H3 = H3
 
-Typography.H4 = ({ children, className }: TypographyProps) => {
+function H4({ children, className }: TypographyProps) {
   return (
     <h4 className={cn('scroll-m-20 text-xl font-semibold tracking-tight', className)}>
       {children}
     </h4>
   )
 }
+Typography.H4 = H4
 
-Typography.P = ({ children, className }: TypographyProps) => {
+function P({ children, className }: TypographyProps) {
   return <p className={cn('leading-7 [&:not(:first-child)]:mt-6', className)}>{children}</p>
 }
+Typography.P = P
 
-Typography.BlockQuote = ({ children, className }: TypographyProps) => {
+function BlockQuote({ children, className }: TypographyProps) {
   return (
     <blockquote className={cn('mt-6 border-l-2 pl-6 italic', className)}>
       &quot;{children}&quot;
     </blockquote>
   )
 }
+Typography.BlockQuote = BlockQuote
 
-Typography.List = ({ children, className }: TypographyProps) => {
+function List({ children, className }: TypographyProps) {
   return <ul className={cn('my-6 ml-6 list-disc [&>li]:mt-2', className)}>{children}</ul>
 }
+Typography.List = List
 
-Typography.InlineCode = ({ children, className }: TypographyProps) => {
+function InlineCode({ children, className }: TypographyProps) {
   return (
     <code
       className={cn(
@@ -78,19 +85,24 @@ Typography.InlineCode = ({ children, className }: TypographyProps) => {
     </code>
   )
 }
+Typography.InlineCode = InlineCode
 
-Typography.Lead = ({ children, className }: TypographyProps) => {
+function Lead({ children, className }: TypographyProps) {
   return <p className={cn('text-xl text-muted-foreground', className)}>{children}</p>
 }
+Typography.Lead = Lead
 
-Typography.Large = ({ children, className }: TypographyProps) => {
+function Large({ children, className }: TypographyProps) {
   return <div className={cn('text-lg font-semibold', className)}>{children}</div>
 }
+Typography.Large = Large
 
-Typography.Small = ({ children, className }: TypographyProps) => {
+function Small({ children, className }: TypographyProps) {
   return <small className={cn('text-sm leading-none font-medium', className)}>{children}</small>
 }
+Typography.Small = Small
 
-Typography.Muted = ({ children, className }: TypographyProps) => {
+function Muted({ children, className }: TypographyProps) {
   return <p className={cn('text-sm text-muted-foreground', className)}>{children}</p>
 }
+Typography.Muted = Muted

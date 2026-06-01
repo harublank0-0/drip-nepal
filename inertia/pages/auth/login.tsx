@@ -78,7 +78,7 @@ export default function Login({ error }: { error?: string }) {
               </Field>
 
               {error && <FieldError>{error}</FieldError>}
-              <Button size={'lg'}>Login</Button>
+              <Button size="lg">Login</Button>
             </FieldSet>
           )}
         </Form>
