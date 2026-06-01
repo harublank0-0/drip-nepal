@@ -22,9 +22,9 @@ export default function Layout({ children }: { children: ReactElement<Data.Share
 
   return (
     <>
-      <Button asChild className="absolute">
-        <Link route="session.destroy">logout</Link>
-      </Button>
+      {/* <Button asChild className="absolute"> */}
+      {/*   <Link route="session.destroy">logout</Link> */}
+      {/* </Button> */}
       <main>{children}</main>
       <Toaster position="top-center" richColors />
     </>
