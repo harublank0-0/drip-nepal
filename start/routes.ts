@@ -23,7 +23,7 @@ router
 
     router
       .get('men', ({ inertia }) => {
-        return inertia.render('commerce/men', {})
+        return inertia.render('commerce/men/index', {})
       })
       .as('men')
 
