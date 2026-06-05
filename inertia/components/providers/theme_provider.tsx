@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react'
+import { isBrowser } from '~/lib/utils'
 
 type Theme = 'dark' | 'light' | 'system'
 
@@ -22,15 +23,17 @@ const ThemeProviderContext = createContext<ThemeProviderState>(initialState)
 
 export function ThemeProvider({
   children,
-  defaultTheme = 'system',
+  defaultTheme = 'dark',
   storageKey = 'drip-ui-theme',
   ...props
 }: ThemeProviderProps) {
   const [theme, setTheme] = useState<Theme>(
-    () => (localStorage.getItem(storageKey) as Theme) || defaultTheme
+    () => (isBrowser && (localStorage.getItem(storageKey) as Theme)) || defaultTheme
   )
 
   useEffect(() => {
+    if (!isBrowser) return
+
     const root = window.document.documentElement
 
     root.classList.remove('light', 'dark')
