@@ -8,12 +8,12 @@ type PageProps = InertiaProps<{}>
 export default function Index({}: PageProps) {
   return (
     <div className="container mx-auto">
-      <div className="flex gap-4">
-        <div className="w-1/2">
+      <div className="flex gap-4 flex-col lg:flex-row">
+        <div className="flex-1 lg:basis-1/2">
           <ProductMediaGallery />
         </div>
 
-        <div className="w-1/2">
+        <div className="flex-1 lg:basis-1/2">
           <Typography.H1> Products details </Typography.H1>
         </div>
       </div>

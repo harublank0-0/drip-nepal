@@ -1,102 +1,49 @@
 import { useState } from 'react'
-import {
-  Carousel,
-  type CarouselApi,
-  CarouselContent,
-  CarouselItem,
-  CarouselNext,
-  CarouselPrevious,
-} from '~/components/ui/carousel'
-import { cn } from '~/lib/utils'
-import CarouselFade from 'embla-carousel-fade'
+import { type CarouselApi } from '~/components/ui/carousel'
+import { ProductImageDialog } from './product_image_dialog'
+import { ProductImagesThumbnail } from './product_images_thumbnail'
+import { ProductMainImage } from './product_main_image'
+import { Show } from '~/components/ui/show'
 
 export function ProductMediaGallery() {
   const [mainImageCarousel, setMainImageCarousel] = useState<CarouselApi>()
   const [activeImageIndex, setActiveImageIndex] = useState(0)
+  const [showImageDialog, setShowImageDialog] = useState(false)
 
   const onGoToImage = (newIndex: number) => {
     mainImageCarousel?.scrollTo(newIndex)
     setActiveImageIndex(newIndex)
   }
 
-  const onCycleImage = (role: 'prev' | 'next') => {
-    const newIndex =
-      role === 'next'
-        ? (activeImageIndex + 1) % productImages.length
-        : (activeImageIndex - 1 + productImages.length) % productImages.length
-
-    mainImageCarousel?.scrollTo(newIndex)
-    setActiveImageIndex(newIndex)
-  }
-
   return (
-    <div className="flex gap-4">
-      {/* Thumbnails    */}
-      <Carousel orientation="vertical" className="" opts={{}}>
-        <CarouselContent className="">
-          {productImages.map((productImage, index) => (
-            <CarouselItem
-              role="button"
-              key={productImage.id}
-              className={cn('basis-1/5 p-0 cursor-pointer first:mt-0 mt-2', {
-                'border-2 border-white': activeImageIndex === index,
-              })}
-              onMouseEnter={() => onGoToImage(index)}
-              onClick={() => onGoToImage(index)}
-            >
-              <figure className="aspect-4/5 w-24 border">
-                <img
-                  loading={index === 0 ? 'eager' : 'lazy'}
-                  src={productImage.src}
-                  alt={productImage.alt}
-                  className="object-cover h-full w-full"
-                />
-              </figure>
-            </CarouselItem>
-          ))}
-        </CarouselContent>
+    <>
+      <Show when={showImageDialog}>
+        <ProductImageDialog
+          open={showImageDialog}
+          onOpenChange={setShowImageDialog}
+          productImages={productImages}
+          initialIndex={activeImageIndex}
+        />
+      </Show>
 
-        {/* <div className="py-4 relative flex gap-2 justify-center items-center"> */}
-        {/*   <CarouselPrevious */}
-        {/*     className="static translate-0 cursor-pointer" */}
-        {/*     disabled={false} */}
-        {/*     onClick={() => onCycleImage('prev')} */}
-        {/*   /> */}
-        {/*   <CarouselNext */}
-        {/*     className="static translate-0 cursor-pointer" */}
-        {/*     disabled={false} */}
-        {/*     onClick={() => onCycleImage('next')} */}
-        {/*   /> */}
-        {/* </div> */}
-      </Carousel>
-
-      {/* Main Image */}
-
-      <Carousel
-        plugins={[CarouselFade()]}
-        setApi={setMainImageCarousel}
-        opts={{
-          align: 'center',
-          watchDrag: false, // disable dragging the main carousel
-        }}
-        className="w-full h-full flex-1"
-      >
-        <CarouselContent>
-          {productImages.map((productImage, index) => (
-            <CarouselItem key={productImage.id} className={cn('basis-full p-2 cursor-pointer', {})}>
-              <figure className="h-full w-full border">
-                <img
-                  loading={index === 0 ? 'eager' : 'lazy'}
-                  src={productImage.src}
-                  alt={productImage.alt}
-                  className="object-cover h-full w-full"
-                />
-              </figure>
-            </CarouselItem>
-          ))}
-        </CarouselContent>
-      </Carousel>
-    </div>
+      <div className="flex gap-4">
+        {/* Thumbnails    */}
+        <div className="w-24">
+          <ProductImagesThumbnail
+            productImages={productImages}
+            activeImageIndex={activeImageIndex}
+            onGoToImage={onGoToImage}
+          />
+        </div>
+        {/* Main Image */}
+        <ProductMainImage
+          fade
+          productImages={productImages}
+          setShowImageDialog={setShowImageDialog}
+          setMainImageCarousel={setMainImageCarousel}
+        />
+      </div>
+    </>
   )
 }
 

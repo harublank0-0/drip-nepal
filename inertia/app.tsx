@@ -1,6 +1,6 @@
 import './css/app.css'
 import './css/style.css'
-import { type ReactElement } from 'react'
+import { StrictMode, type ReactElement } from 'react'
 import { client } from './client'
 import Layout from '~/layouts/default'
 import { type Data } from '@generated/data'
@@ -22,9 +22,11 @@ createInertiaApp({
   },
   setup({ el, App, props }) {
     createRoot(el).render(
-      <TuyauProvider client={client}>
-        <App {...props} />
-      </TuyauProvider>
+      <StrictMode>
+        <TuyauProvider client={client}>
+          <App {...props} />
+        </TuyauProvider>
+      </StrictMode>
     )
   },
   progress: {

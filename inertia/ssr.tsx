@@ -1,5 +1,5 @@
 import { client } from '~/client'
-import { type ReactElement } from 'react'
+import { StrictMode, type ReactElement } from 'react'
 import Layout from '~/layouts/default'
 import { type Data } from '@generated/data'
 import ReactDOMServer from 'react-dom/server'
@@ -20,9 +20,11 @@ export default function render(page: any) {
     },
     setup: ({ App, props }) => {
       return (
-        <TuyauProvider client={client}>
-          <App {...props} />
-        </TuyauProvider>
+        <StrictMode>
+          <TuyauProvider client={client}>
+            <App {...props} />
+          </TuyauProvider>
+        </StrictMode>
       )
     },
   })
