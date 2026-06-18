@@ -41,6 +41,14 @@ router
   })
   .use(middleware.guest())
 
+// DEBUGS ROUTES
+router
+  .get('/design-system', ({ inertia }) => {
+    return inertia.render('design_system/index', {})
+  })
+  .as('design-system')
+  .use(middleware.guest())
+
 router
   .group(() => {
     router.post('logout', [controllers.Session, 'destroy'])

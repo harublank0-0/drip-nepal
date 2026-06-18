@@ -103,6 +103,18 @@ export interface Registry {
       errorResponse: unknown
     }
   }
+  'design-system': {
+    methods: ["GET","HEAD"]
+    pattern: '/design-system'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: unknown
+      errorResponse: unknown
+    }
+  }
   'session.destroy': {
     methods: ["POST"]
     pattern: '/logout'

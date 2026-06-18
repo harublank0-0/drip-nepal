@@ -54,6 +54,12 @@ const routes = {
     tokens: [{"old":"/:attributeValue/:productSlug","type":1,"val":"attributeValue","end":""},{"old":"/:attributeValue/:productSlug","type":1,"val":"productSlug","end":""}],
     types: placeholder as Registry['men_product_detail']['types'],
   },
+  'design-system': {
+    methods: ["GET","HEAD"],
+    pattern: '/design-system',
+    tokens: [{"old":"/design-system","type":0,"val":"design-system","end":""}],
+    types: placeholder as Registry['design-system']['types'],
+  },
   'session.destroy': {
     methods: ["POST"],
     pattern: '/logout',

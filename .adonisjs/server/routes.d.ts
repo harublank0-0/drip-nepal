@@ -12,6 +12,7 @@ export type ScannedRoutes = {
     'men': { paramsTuple?: []; params?: {} }
     'women': { paramsTuple?: []; params?: {} }
     'men_product_detail': { paramsTuple: [ParamValue,ParamValue]; params: {'attributeValue': ParamValue,'productSlug': ParamValue} }
+    'design-system': { paramsTuple?: []; params?: {} }
     'session.destroy': { paramsTuple?: []; params?: {} }
   }
   GET: {
@@ -21,6 +22,7 @@ export type ScannedRoutes = {
     'men': { paramsTuple?: []; params?: {} }
     'women': { paramsTuple?: []; params?: {} }
     'men_product_detail': { paramsTuple: [ParamValue,ParamValue]; params: {'attributeValue': ParamValue,'productSlug': ParamValue} }
+    'design-system': { paramsTuple?: []; params?: {} }
   }
   HEAD: {
     'home': { paramsTuple?: []; params?: {} }
@@ -29,6 +31,7 @@ export type ScannedRoutes = {
     'men': { paramsTuple?: []; params?: {} }
     'women': { paramsTuple?: []; params?: {} }
     'men_product_detail': { paramsTuple: [ParamValue,ParamValue]; params: {'attributeValue': ParamValue,'productSlug': ParamValue} }
+    'design-system': { paramsTuple?: []; params?: {} }
   }
   POST: {
     'new_account.store': { paramsTuple?: []; params?: {} }

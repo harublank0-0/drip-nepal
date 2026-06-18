@@ -15,4 +15,5 @@ export interface ApiDefinition {
   men: typeof routes['men']
   women: typeof routes['women']
   menProductDetail: typeof routes['men_product_detail']
+  designSystem: typeof routes['design-system']
 }
