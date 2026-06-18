@@ -32,6 +32,12 @@ router
         return inertia.render('commerce/women', {})
       })
       .as('women')
+
+    router
+      .get(':attributeValue/:productSlug', ({ inertia }) => {
+        return inertia.render('commerce/product_detail/index', {})
+      })
+      .as('men_product_detail')
   })
   .use(middleware.guest())
 

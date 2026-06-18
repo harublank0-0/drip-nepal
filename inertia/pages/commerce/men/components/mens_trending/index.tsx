@@ -8,39 +8,45 @@ import {
 import AutoScroll from 'embla-carousel-auto-scroll'
 import WheelGesture from 'embla-carousel-wheel-gestures'
 import { DripProductCard } from '~/components/commerce/drip_product_card'
+import { Link } from '@adonisjs/inertia/react'
 
 export function MensTrending() {
   return (
     <>
       <div className="container mx-auto py-12">
-        <Carousel
-          plugins={[
-            WheelGesture({
-              active: true,
-            }),
-            AutoScroll({
-              active: false,
-            }),
-          ]}
-          // setApi={setCarouselApi}
-          opts={{
-            loop: true,
-            containScroll: 'trimSnaps',
-            dragFree: true,
-            slidesToScroll: 5,
-          }}
+        <Link
+          route="men_product_detail"
+          routeParams={{ attributeValue: 'men', productSlug: 'product_detail_test' }}
         >
-          <CarouselContent className="">
-            {products.map((product) => (
-              <CarouselItem className="md:basis-1/5" key={product.name}>
-                <DripProductCard {...product} />
-              </CarouselItem>
-            ))}
-          </CarouselContent>
+          <Carousel
+            plugins={[
+              WheelGesture({
+                active: true,
+              }),
+              AutoScroll({
+                active: false,
+              }),
+            ]}
+            // setApi={setCarouselApi}
+            opts={{
+              loop: true,
+              containScroll: 'trimSnaps',
+              dragFree: true,
+              slidesToScroll: 5,
+            }}
+          >
+            <CarouselContent className="">
+              {products.map((product) => (
+                <CarouselItem className="md:basis-1/5" key={product.name}>
+                  <DripProductCard {...product} />
+                </CarouselItem>
+              ))}
+            </CarouselContent>
 
-          <CarouselPrevious size="lg" className="cursor-pointer" />
-          <CarouselNext size="lg" className="cursor-pointer" />
-        </Carousel>
+            <CarouselPrevious size="lg" className="cursor-pointer" />
+            <CarouselNext size="lg" className="cursor-pointer" />
+          </Carousel>
+        </Link>
       </div>
     </>
   )

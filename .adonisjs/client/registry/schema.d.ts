@@ -91,6 +91,18 @@ export interface Registry {
       errorResponse: unknown
     }
   }
+  'men_product_detail': {
+    methods: ["GET","HEAD"]
+    pattern: '/:attributeValue/:productSlug'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue, ParamValue]
+      params: { attributeValue: ParamValue; productSlug: ParamValue }
+      query: {}
+      response: unknown
+      errorResponse: unknown
+    }
+  }
   'session.destroy': {
     methods: ["POST"]
     pattern: '/logout'

@@ -48,6 +48,12 @@ const routes = {
     tokens: [{"old":"/women","type":0,"val":"women","end":""}],
     types: placeholder as Registry['women']['types'],
   },
+  'men_product_detail': {
+    methods: ["GET","HEAD"],
+    pattern: '/:attributeValue/:productSlug',
+    tokens: [{"old":"/:attributeValue/:productSlug","type":1,"val":"attributeValue","end":""},{"old":"/:attributeValue/:productSlug","type":1,"val":"productSlug","end":""}],
+    types: placeholder as Registry['men_product_detail']['types'],
+  },
   'session.destroy': {
     methods: ["POST"],
     pattern: '/logout',
