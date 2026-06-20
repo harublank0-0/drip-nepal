@@ -29,30 +29,33 @@ export function ProductImageDialog(props: ProductImageDialogProps) {
   }, [mainImageCarousel, activeImageIndex])
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        showCloseButton={false}
-        className="sm:max-w-none w-screen min-h-screen h-screen rounded-none p-0 overflow-y-scroll"
-        aria-describedby="dialog-content"
-      >
-        <VisuallyHidden.VisuallyHidden asChild>
-          <DialogTitle>Product Image Detail</DialogTitle>
-        </VisuallyHidden.VisuallyHidden>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent
+          showCloseButton={false}
+          className="sm:max-w-none w-screen min-h-screen h-screen rounded-none p-0 overflow-y-scroll group"
+          aria-describedby="dialog-content"
+        >
+          <VisuallyHidden.VisuallyHidden asChild>
+            <DialogTitle>Product Image Detail</DialogTitle>
+          </VisuallyHidden.VisuallyHidden>
 
-        <aside className="fixed w-24 top-1/2 left-8 -translate-y-1/2 z-10 self-start shrink-0">
-          <ProductImagesThumbnail
+          <aside className="fixed w-24 top-1/2 left-8 -translate-y-1/2 z-10 self-start shrink-0">
+            <ProductImagesThumbnail
+              productImages={productImages}
+              activeImageIndex={activeImageIndex}
+              onGoToImage={onGoToImage}
+            />
+          </aside>
+
+          <ProductMainImage
+            isFullScreen
             productImages={productImages}
-            activeImageIndex={activeImageIndex}
-            onGoToImage={onGoToImage}
+            setMainImageCarousel={setMainImageCarousel}
+            setShowImageDialog={() => onOpenChange(false)}
           />
-        </aside>
-
-        <ProductMainImage
-          productImages={productImages}
-          setMainImageCarousel={setMainImageCarousel}
-          setShowImageDialog={() => onOpenChange(false)}
-        />
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }

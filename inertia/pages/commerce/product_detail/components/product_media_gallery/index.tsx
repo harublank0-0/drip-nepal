@@ -38,6 +38,7 @@ export function ProductMediaGallery() {
         {/* Main Image */}
         <ProductMainImage
           fade
+          isFullScreen={false}
           productImages={productImages}
           setShowImageDialog={setShowImageDialog}
           setMainImageCarousel={setMainImageCarousel}
