@@ -106,3 +106,13 @@ function Muted({ children, className }: TypographyProps) {
   return <p className={cn('text-sm text-muted-foreground', className)}>{children}</p>
 }
 Typography.Muted = Muted
+
+function Strike({ children, className }: TypographyProps) {
+  return <del className={cn('text-sm text-muted-foreground', className)}>{children}</del>
+}
+Typography.Strike = Strike
+
+function Strong({ children, className }: TypographyProps) {
+  return <strong className={cn('text-sm font-semibold', className)}>{children}</strong>
+}
+Typography.Strong = Strong
