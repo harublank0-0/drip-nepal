@@ -5,6 +5,8 @@ import { type ReactElement, useEffect } from 'react'
 import { NavBar } from '~/components/navbar'
 import { Footer } from '~/components/footer'
 import { ThemeProvider } from '~/components/providers/theme_provider'
+import { CartProvider } from '~/hooks/use_cart'
+import { CartDrawer } from '~/components/commerce/cart/cart_drawer'
 
 export default function Layout({
   children,
@@ -37,9 +39,12 @@ export default function Layout({
         Skip to content
       </a>
       <ThemeProvider defaultTheme="dark">
-        <NavBar />
-        <main id="main-content">{children}</main>
-        <Footer />
+        <CartProvider>
+          <NavBar />
+          <main id="main-content">{children}</main>
+          <Footer />
+          <CartDrawer />
+        </CartProvider>
         <Toaster position="top-center" richColors />
       </ThemeProvider>
     </>

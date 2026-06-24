@@ -20,6 +20,7 @@ import { Dialog, DialogContent, DialogTitle } from '~/components/ui/dialog'
 import { VisuallyHidden } from 'radix-ui'
 import { motion, AnimatePresence } from 'framer-motion'
 import { SearchModal } from '~/components/search/search_modal'
+import { useCart } from '~/hooks/use_cart'
 
 export const NavBar = () => {
   const { url } = usePage()
@@ -31,6 +32,8 @@ export const NavBar = () => {
 
   const user = (usePage().props as { user?: { fullName: string; email: string; initials: string } })
     .user
+
+  const { openDrawer, itemCount } = useCart()
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 80)
@@ -115,10 +118,16 @@ export const NavBar = () => {
               <Button
                 variant="ghost"
                 size="icon-sm"
-                aria-label="Shopping bag"
-                className="cursor-pointer"
+                aria-label={`Shopping bag${itemCount > 0 ? `, ${itemCount} items` : ''}`}
+                onClick={openDrawer}
+                className="relative cursor-pointer"
               >
                 <LucideShoppingBag className="size-5" />
+                {itemCount > 0 && (
+                  <span className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
+                    {itemCount > 9 ? '9+' : itemCount}
+                  </span>
+                )}
               </Button>
             </li>
 

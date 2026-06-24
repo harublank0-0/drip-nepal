@@ -64,5 +64,6 @@ declare module '@adonisjs/inertia/types' {
     'commerce/categories/components/recently_viewed': ExtractProps<(typeof import('../../inertia/pages/commerce/categories/components/recently_viewed.tsx'))['default']>
     'commerce/categories/components/recommended_products': ExtractProps<(typeof import('../../inertia/pages/commerce/categories/components/recommended_products.tsx'))['default']>
     'commerce/categories/show': ExtractProps<(typeof import('../../inertia/pages/commerce/categories/show.tsx'))['default']>
+    'commerce/cart/index': ExtractProps<(typeof import('../../inertia/pages/commerce/cart/index.tsx'))['default']>
   }
 }

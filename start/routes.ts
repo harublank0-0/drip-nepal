@@ -49,6 +49,13 @@ router
 
 // DEBUGS ROUTES
 router
+  .get('/cart', ({ inertia }) => {
+    return inertia.render('commerce/cart/index', {})
+  })
+  .as('cart')
+  .use(middleware.guest())
+
+router
   .get('/design-system', ({ inertia }) => {
     return inertia.render('design_system/index', {})
   })

@@ -115,6 +115,18 @@ export interface Registry {
       errorResponse: unknown
     }
   }
+  'cart': {
+    methods: ["GET","HEAD"]
+    pattern: '/cart'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: unknown
+      errorResponse: unknown
+    }
+  }
   'design-system': {
     methods: ["GET","HEAD"]
     pattern: '/design-system'
