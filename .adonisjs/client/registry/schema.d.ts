@@ -91,6 +91,18 @@ export interface Registry {
       errorResponse: unknown
     }
   }
+  'categories.show': {
+    methods: ["GET","HEAD"]
+    pattern: '/categories/:slug'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { slug: ParamValue }
+      query: {}
+      response: unknown
+      errorResponse: unknown
+    }
+  }
   'men_product_detail': {
     methods: ["GET","HEAD"]
     pattern: '/:attributeValue/:productSlug'

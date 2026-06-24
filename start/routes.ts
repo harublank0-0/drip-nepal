@@ -34,6 +34,12 @@ router
       .as('women')
 
     router
+      .get('categories/:slug', ({ inertia, params }) => {
+        return inertia.render('commerce/categories/show', { slug: params.slug })
+      })
+      .as('categories.show')
+
+    router
       .get(':attributeValue/:productSlug', ({ inertia }) => {
         return inertia.render('commerce/product_detail/index', {})
       })

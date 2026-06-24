@@ -50,5 +50,19 @@ declare module '@adonisjs/inertia/types' {
     'commerce/product_detail/components/review_section': ExtractProps<(typeof import('../../inertia/pages/commerce/product_detail/components/review_section.tsx'))['default']>
     'commerce/product_detail/components/related_products': ExtractProps<(typeof import('../../inertia/pages/commerce/product_detail/components/related_products.tsx'))['default']>
     'commerce/product_detail/components/recently_viewed': ExtractProps<(typeof import('../../inertia/pages/commerce/product_detail/components/recently_viewed.tsx'))['default']>
+    'commerce/categories/mock': ExtractProps<(typeof import('../../inertia/pages/commerce/categories/mock.ts'))['default']>
+    'commerce/categories/components/pagination': ExtractProps<(typeof import('../../inertia/pages/commerce/categories/components/pagination.tsx'))['default']>
+    'commerce/categories/components/breadcrumb': ExtractProps<(typeof import('../../inertia/pages/commerce/categories/components/breadcrumb.tsx'))['default']>
+    'commerce/categories/components/category_hero': ExtractProps<(typeof import('../../inertia/pages/commerce/categories/components/category_hero.tsx'))['default']>
+    'commerce/categories/components/sort_dropdown': ExtractProps<(typeof import('../../inertia/pages/commerce/categories/components/sort_dropdown.tsx'))['default']>
+    'commerce/categories/components/filter_group': ExtractProps<(typeof import('../../inertia/pages/commerce/categories/components/filter_group.tsx'))['default']>
+    'commerce/categories/components/filter_sidebar': ExtractProps<(typeof import('../../inertia/pages/commerce/categories/components/filter_sidebar.tsx'))['default']>
+    'commerce/categories/components/mobile_filter_drawer': ExtractProps<(typeof import('../../inertia/pages/commerce/categories/components/mobile_filter_drawer.tsx'))['default']>
+    'commerce/categories/components/applied_filters': ExtractProps<(typeof import('../../inertia/pages/commerce/categories/components/applied_filters.tsx'))['default']>
+    'commerce/categories/components/quick_add_modal': ExtractProps<(typeof import('../../inertia/pages/commerce/categories/components/quick_add_modal.tsx'))['default']>
+    'commerce/categories/components/empty_state': ExtractProps<(typeof import('../../inertia/pages/commerce/categories/components/empty_state.tsx'))['default']>
+    'commerce/categories/components/recently_viewed': ExtractProps<(typeof import('../../inertia/pages/commerce/categories/components/recently_viewed.tsx'))['default']>
+    'commerce/categories/components/recommended_products': ExtractProps<(typeof import('../../inertia/pages/commerce/categories/components/recommended_products.tsx'))['default']>
+    'commerce/categories/show': ExtractProps<(typeof import('../../inertia/pages/commerce/categories/show.tsx'))['default']>
   }
 }

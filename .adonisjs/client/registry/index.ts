@@ -48,6 +48,12 @@ const routes = {
     tokens: [{"old":"/women","type":0,"val":"women","end":""}],
     types: placeholder as Registry['women']['types'],
   },
+  'categories.show': {
+    methods: ["GET","HEAD"],
+    pattern: '/categories/:slug',
+    tokens: [{"old":"/categories/:slug","type":0,"val":"categories","end":""},{"old":"/categories/:slug","type":1,"val":"slug","end":""}],
+    types: placeholder as Registry['categories.show']['types'],
+  },
   'men_product_detail': {
     methods: ["GET","HEAD"],
     pattern: '/:attributeValue/:productSlug',
