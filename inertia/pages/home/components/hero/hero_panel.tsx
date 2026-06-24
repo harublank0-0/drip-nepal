@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { Link } from '@adonisjs/inertia/react'
 import type { routes } from '@generated/registry'
+import { motion } from 'framer-motion'
 import { Button } from '~/components/ui/button'
 import { Typography } from '~/components/ui/typography'
 
@@ -14,34 +16,83 @@ export type HeroPanelProps = {
     label: string
   }
 }
+
+const textVariants = {
+  hidden: { y: 40, opacity: 0 },
+  visible: {
+    y: 0,
+    opacity: 1,
+    transition: { duration: 0.7, ease: [0.25, 0.1, 0.25, 1] },
+  },
+}
+
+const buttonVariants = {
+  hidden: { y: 30, opacity: 0 },
+  visible: {
+    y: 0,
+    opacity: 1,
+    transition: { duration: 0.6, delay: 0.3, ease: [0.25, 0.1, 0.25, 1] },
+  },
+}
+
 export const HeroPanel = (props: HeroPanelProps & { children: React.ReactNode }) => {
   const { image, title, cta, children } = props
+  const [isHovered, setIsHovered] = useState(false)
+
   return (
-    <div className="w-1/2 hover:w-2/3 transition-all duration-700 ease-in-out group relative">
+    <motion.div
+      className="group relative cursor-pointer overflow-hidden"
+      animate={{ flex: isHovered ? 2 : 1 }}
+      transition={{ duration: 0.7, ease: [0.25, 0.1, 0.25, 1] }}
+      onHoverStart={() => setIsHovered(true)}
+      onHoverEnd={() => setIsHovered(false)}
+      role="region"
+      aria-label={`${title} collection`}
+    >
       <figure className="h-full overflow-hidden relative">
-        <img
+        <motion.img
           src={image.src}
           alt={image.alt}
-          className="h-full w-full object-cover grayscale group-hover:filter-none"
+          className="h-full w-full object-cover"
+          animate={{ filter: isHovered ? 'grayscale(0%)' : 'grayscale(100%)' }}
+          transition={{ duration: 0.7, ease: [0.25, 0.1, 0.25, 1] }}
         />
-        <div className="absolute top-0 left-0 w-full h-full bg-black/50 group-hover:bg-black/10 transition-colors duration-700 ease-in-out" />
 
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 uppercase text-secondary text-center">
-          <Typography.Large className="text-8xl mb-4 group-hover:-translate-y-4 transition-all duration-600">
-            {title}
-          </Typography.Large>
+        <motion.div
+          className="absolute inset-0 bg-black/50"
+          animate={{ backgroundColor: isHovered ? 'rgba(0,0,0,0.1)' : 'rgba(0,0,0,0.5)' }}
+          transition={{ duration: 0.7, ease: [0.25, 0.1, 0.25, 1] }}
+        />
 
-          <Button
-            asChild
-            variant="outline"
-            className="bg-transparent capitalize cursor-pointer rounded-none text-lg px-8 py-6 opacity-0 group-hover:opacity-100 transition-all duration-600 translate-y-10 group-hover:translate-y-0 hover:bg-primary hover:border-primary"
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-white text-center">
+          <motion.h2
+            className="text-6xl md:text-8xl lg:text-9xl font-heading font-bold uppercase tracking-wider mb-6"
+            variants={textVariants}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true }}
           >
-            <Link route={cta.route}>{cta.label}</Link>
-          </Button>
+            {title}
+          </motion.h2>
+
+          <motion.div
+            variants={buttonVariants}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true }}
+          >
+            <Button
+              asChild
+              variant="outline"
+              className="bg-transparent text-white capitalize cursor-pointer rounded-none text-sm md:text-lg px-6 md:px-8 py-5 md:py-6 border-2 border-white/30 hover:bg-primary hover:border-primary transition-colors duration-300"
+            >
+              <Link route={cta.route}>{cta.label}</Link>
+            </Button>
+          </motion.div>
         </div>
       </figure>
 
       {children}
-    </div>
+    </motion.div>
   )
 }

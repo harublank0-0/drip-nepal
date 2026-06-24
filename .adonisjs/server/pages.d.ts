@@ -37,5 +37,8 @@ declare module '@adonisjs/inertia/types' {
     'home/components/hero/hero_panel': ExtractProps<(typeof import('../../inertia/pages/home/components/hero/hero_panel.tsx'))['default']>
     'home/components/hero/index': ExtractProps<(typeof import('../../inertia/pages/home/components/hero/index.tsx'))['default']>
     'home/index': ExtractProps<(typeof import('../../inertia/pages/home/index.tsx'))['default']>
+    'home/components/categories/category_cards': ExtractProps<(typeof import('../../inertia/pages/home/components/categories/category_cards.tsx'))['default']>
+    'home/components/featured/featured_products': ExtractProps<(typeof import('../../inertia/pages/home/components/featured/featured_products.tsx'))['default']>
+    'home/components/featured/featured_stores': ExtractProps<(typeof import('../../inertia/pages/home/components/featured/featured_stores.tsx'))['default']>
   }
 }

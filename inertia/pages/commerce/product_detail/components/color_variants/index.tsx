@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Card, CardContent } from '~/components/ui/card'
 import { Typography } from '~/components/ui/typography'
+import { cn } from '~/lib/utils'
 
 type ColorVariant = {
   color: string
@@ -10,11 +11,14 @@ type ColorVariantsProps = {
   colors: ColorVariant[]
 }
 export function ColorVariants(props: ColorVariantsProps) {
-  const [currentColorIndex, setCurrentColorIndex] = useState(0)
+  const [currentColor, setCurrentColor] = useState({
+    color: null,
+    thumbnailUrl: null,
+  })
   const [showAllVariants, setShowAllVariants] = useState(false)
   const { colors } = props
 
-  const currentColor = colors[currentColorIndex].color
+  // const currentColor = colors[currentColorIndex].color
 
   const onToggleRemainingVariants = () => setShowAllVariants((o) => !o)
 
@@ -34,6 +38,7 @@ export function ColorVariants(props: ColorVariantsProps) {
             setCurrentColorIndex={setCurrentColorIndex}
             onToggleRemainingVariants={onToggleRemainingVariants}
             showAllVariants={showAllVariants}
+            totalVariants={colors.length}
           />
         </div>
       </div>
@@ -47,6 +52,7 @@ type ColorVariantsCardMapperProps = {
   setCurrentColorIndex: (index: number) => void
   onToggleRemainingVariants: () => void
   showAllVariants: boolean
+  totalVariants: number
 }
 function ColorVariantsCardMapper(props: ColorVariantsCardMapperProps) {
   const {
@@ -55,14 +61,14 @@ function ColorVariantsCardMapper(props: ColorVariantsCardMapperProps) {
     setCurrentColorIndex,
     onToggleRemainingVariants,
     showAllVariants,
+    totalVariants,
   } = props
 
   return colorVariants.map((colorVariant, index) => {
     const isThePerfectFifth = (index + 1) % 5 === 0
 
-    const remainingVariants = colorVariants.length - index
-
     if (isThePerfectFifth && !showAllVariants) {
+      const remainingVariants = totalVariants - index
       return (
         <ShowAllVariantsCard
           numberOfHiddenVariants={remainingVariants}
@@ -93,14 +99,15 @@ function ColorVariantCard(props: ColorVariantCardProps) {
   return (
     <Card className="border-2 border-transparent p-0 hover:border-black hover:dark:border-white cursor-pointer">
       <CardContent className="p-0">
-        <figure>
-          <img
-            src={thumbnailUrl}
-            alt={color}
-            className={currentColor === color ? 'border-2 border-black' : ''}
-            onClick={() => setCurrentColorIndex(index)}
-          />
-        </figure>
+        <img
+          src={thumbnailUrl}
+          alt={color}
+          className={cn(
+            currentColor === color ? 'border-2 border-black' : '',
+            'block object-cover w-full'
+          )}
+          onClick={() => setCurrentColorIndex(index)}
+        />
       </CardContent>
     </Card>
   )

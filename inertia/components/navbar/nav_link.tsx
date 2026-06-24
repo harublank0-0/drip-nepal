@@ -18,7 +18,7 @@ export const NavLink = (props: NavLinkProps & { children: React.ReactNode }) => 
     <Link
       route={route}
       className={cn(
-        'border-b-2 border-transparent hover:border-primary text-secondary hover:text-primary',
+        'border-b-2 border-transparent hover:border-primary text-white/80 hover:text-white',
         {
           'border-primary text-primary': isActive,
         }

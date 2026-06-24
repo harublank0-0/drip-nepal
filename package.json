@@ -88,6 +88,7 @@
     "embla-carousel-fade": "^8.6.0",
     "embla-carousel-react": "^8.6.0",
     "embla-carousel-wheel-gestures": "^8.1.0",
+    "framer-motion": "^12.41.0",
     "lucide-react": "^1.17.0",
     "luxon": "^3.7.2",
     "pg": "^8.21.0",

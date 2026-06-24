@@ -2,9 +2,8 @@ import { type Data } from '@generated/data'
 import { toast, Toaster } from 'sonner'
 import { usePage } from '@inertiajs/react'
 import { type ReactElement, useEffect } from 'react'
-import { Link } from '@adonisjs/inertia/react'
-import { Button } from '~/components/ui/button'
 import { NavBar } from '~/components/navbar'
+import { Footer } from '~/components/footer'
 import { ThemeProvider } from '~/components/providers/theme_provider'
 
 export default function Layout({
@@ -31,12 +30,16 @@ export default function Layout({
 
   return (
     <>
-      {/* <Button asChild className="absolute"> */}
-      {/*   <Link route="session.destroy">logout</Link> */}
-      {/* </Button> */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-primary focus:text-primary-foreground focus:rounded-lg focus:outline-none"
+      >
+        Skip to content
+      </a>
       <ThemeProvider defaultTheme="dark">
         <NavBar />
-        <main>{children}</main>
+        <main id="main-content">{children}</main>
+        <Footer />
         <Toaster position="top-center" richColors />
       </ThemeProvider>
     </>
