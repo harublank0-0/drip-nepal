@@ -18,7 +18,6 @@ declare module '@adonisjs/inertia/types' {
     'commerce/men/components/mens_trending/index': ExtractProps<(typeof import('../../inertia/pages/commerce/men/components/mens_trending/index.tsx'))['default']>
     'commerce/men/index': ExtractProps<(typeof import('../../inertia/pages/commerce/men/index.tsx'))['default']>
     'commerce/product_detail/components/color_variants/index': ExtractProps<(typeof import('../../inertia/pages/commerce/product_detail/components/color_variants/index.tsx'))['default']>
-    'commerce/product_detail/components/product_desc/index': ExtractProps<(typeof import('../../inertia/pages/commerce/product_detail/components/product_desc/index.tsx'))['default']>
     'commerce/product_detail/components/product_media_gallery/index': ExtractProps<(typeof import('../../inertia/pages/commerce/product_detail/components/product_media_gallery/index.tsx'))['default']>
     'commerce/product_detail/components/product_media_gallery/product_image_dialog': ExtractProps<(typeof import('../../inertia/pages/commerce/product_detail/components/product_media_gallery/product_image_dialog.tsx'))['default']>
     'commerce/product_detail/components/product_media_gallery/product_images_thumbnail': ExtractProps<(typeof import('../../inertia/pages/commerce/product_detail/components/product_media_gallery/product_images_thumbnail.tsx'))['default']>
@@ -40,5 +39,16 @@ declare module '@adonisjs/inertia/types' {
     'home/components/categories/category_cards': ExtractProps<(typeof import('../../inertia/pages/home/components/categories/category_cards.tsx'))['default']>
     'home/components/featured/featured_products': ExtractProps<(typeof import('../../inertia/pages/home/components/featured/featured_products.tsx'))['default']>
     'home/components/featured/featured_stores': ExtractProps<(typeof import('../../inertia/pages/home/components/featured/featured_stores.tsx'))['default']>
+    'commerce/product_detail/mock': ExtractProps<(typeof import('../../inertia/pages/commerce/product_detail/mock.ts'))['default']>
+    'commerce/product_detail/components/product_gallery': ExtractProps<(typeof import('../../inertia/pages/commerce/product_detail/components/product_gallery.tsx'))['default']>
+    'commerce/product_detail/components/product_info': ExtractProps<(typeof import('../../inertia/pages/commerce/product_detail/components/product_info.tsx'))['default']>
+    'commerce/product_detail/components/variant_selector': ExtractProps<(typeof import('../../inertia/pages/commerce/product_detail/components/variant_selector.tsx'))['default']>
+    'commerce/product_detail/components/store_card': ExtractProps<(typeof import('../../inertia/pages/commerce/product_detail/components/store_card.tsx'))['default']>
+    'commerce/product_detail/components/product_description': ExtractProps<(typeof import('../../inertia/pages/commerce/product_detail/components/product_description.tsx'))['default']>
+    'commerce/product_detail/components/rating_summary': ExtractProps<(typeof import('../../inertia/pages/commerce/product_detail/components/rating_summary.tsx'))['default']>
+    'commerce/product_detail/components/review_card': ExtractProps<(typeof import('../../inertia/pages/commerce/product_detail/components/review_card.tsx'))['default']>
+    'commerce/product_detail/components/review_section': ExtractProps<(typeof import('../../inertia/pages/commerce/product_detail/components/review_section.tsx'))['default']>
+    'commerce/product_detail/components/related_products': ExtractProps<(typeof import('../../inertia/pages/commerce/product_detail/components/related_products.tsx'))['default']>
+    'commerce/product_detail/components/recently_viewed': ExtractProps<(typeof import('../../inertia/pages/commerce/product_detail/components/recently_viewed.tsx'))['default']>
   }
 }

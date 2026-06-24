@@ -1,90 +1,57 @@
 import type { InertiaProps } from '~/types'
-import type { Data } from '@generated/data'
-import { ProductMediaGallery } from './components/product_media_gallery/index'
-import { ProductDesc } from '~/pages/commerce/product_detail/components/product_desc'
+import { Separator } from '~/components/ui/separator'
+import { ProductGallery } from './components/product_gallery'
+import { ProductInfo } from './components/product_info'
+import { ProductDescription } from './components/product_description'
+import { ReviewSection } from './components/review_section'
+import { RelatedProducts } from './components/related_products'
+import { RecentlyViewed } from './components/recently_viewed'
+import { mockProduct } from './mock'
 
 type PageProps = InertiaProps<{}>
 
-const PRODUCT_DESC = {
-  title: 'UNISEX 2 PACK RELAXED FIT HOODIE - Hoodie - beige/turquoise',
-  price: {
-    currency: 'Rs',
-    listAmount: 499,
-    sellingPrice: 400,
-  },
-  variants: {
-    colors: [
-      {
-        color: 'beige/turquoise',
-        thumbnailUrl:
-          'https://img01.ztat.net/article/spp-media-p1/05669b61005f44f6ae7add976256df45/c1399a059ca7418eb25ae18f863f6980.jpg?imwidth=156&filter=packshot',
-      },
-      {
-        color: 'black',
-        thumbnailUrl:
-          'https://img01.ztat.net/article/spp-media-p1/000fe4b97a1c4008ad1f53fbbf83bdae/0cbff5c62ec94fb681065e107e2ca9b2.jpg?imwidth=156&filter=packshot',
-      },
-      {
-        color: 'motteled gray',
-        thumbnailUrl:
-          'https://img01.ztat.net/article/spp-media-p1/b7b3c72b5e3144a29f13e68400c9c415/c20f630c1fe84dfaac37a767c7562803.jpg?imwidth=156&filter=packshot',
-      },
-
-      {
-        color: 'moonbeam',
-        thumbnailUrl:
-          'https://img01.ztat.net/article/spp-media-p1/55b75746b5e9415dbea30f4167df6c80/a2b18fa62877439798b5a7b5fdfd5109.jpg?imwidth=156&filter=packshot',
-      },
-      {
-        color: 'beige/turquoise',
-        thumbnailUrl:
-          'https://img01.ztat.net/article/spp-media-p1/05669b61005f44f6ae7add976256df45/c1399a059ca7418eb25ae18f863f6980.jpg?imwidth=156&filter=packshot',
-      },
-      {
-        color: 'black',
-        thumbnailUrl:
-          'https://img01.ztat.net/article/spp-media-p1/000fe4b97a1c4008ad1f53fbbf83bdae/0cbff5c62ec94fb681065e107e2ca9b2.jpg?imwidth=156&filter=packshot',
-      },
-      {
-        color: 'motteled gray',
-        thumbnailUrl:
-          'https://img01.ztat.net/article/spp-media-p1/b7b3c72b5e3144a29f13e68400c9c415/c20f630c1fe84dfaac37a767c7562803.jpg?imwidth=156&filter=packshot',
-      },
-
-      {
-        color: 'moonbeam',
-        thumbnailUrl:
-          'https://img01.ztat.net/article/spp-media-p1/55b75746b5e9415dbea30f4167df6c80/a2b18fa62877439798b5a7b5fdfd5109.jpg?imwidth=156&filter=packshot',
-      },
-    ],
-    sizes: [
-      {
-        label: 'small',
-        slug: 'sm',
-      },
-      {
-        label: 'medium',
-        slug: 'm',
-      },
-      {
-        label: 'large',
-        slug: 'l',
-      },
-    ],
-  },
-}
-
 export default function Index({}: PageProps) {
+  const product = mockProduct
+
   return (
-    <div className="container mx-auto">
-      <div className="flex gap-4 flex-col lg:flex-row">
-        <div className="flex-1 lg:basis-1/2">
-          <ProductMediaGallery />
+    <div className="min-h-screen">
+      {/* Main content */}
+      <div className="max-w-7xl mx-auto px-4 md:px-8 pt-20 md:pt-24">
+        <div className="flex flex-col lg:flex-row lg:gap-10 xl:gap-16">
+          {/* Gallery — 60% on desktop */}
+          <div className="w-full lg:w-[60%] lg:flex-shrink-0">
+            <ProductGallery images={product.images} />
+          </div>
+
+          {/* Product Info — 40% on desktop, sticky */}
+          <div className="w-full lg:w-[40%] mt-8 lg:mt-0">
+            <div className="lg:sticky lg:top-28 lg:self-start">
+              <ProductInfo product={product} />
+            </div>
+          </div>
         </div>
 
-        <div className="flex-1 lg:basis-1/2">
-          <ProductDesc {...PRODUCT_DESC} />
-        </div>
+        <Separator className="my-4 md:my-8" />
+
+        {/* Description tabs */}
+        <ProductDescription product={product} />
+
+        <Separator className="my-4 md:my-8" />
+
+        {/* Reviews */}
+        <ReviewSection
+          reviews={product.reviews}
+          rating={product.rating}
+          reviewCount={product.reviewCount}
+        />
+
+        <Separator className="my-4 md:my-8" />
+
+        {/* Related Products */}
+        <RelatedProducts products={product.relatedProducts} />
+
+        {/* Recently Viewed */}
+        <RecentlyViewed products={product.relatedProducts.slice(0, 4)} />
       </div>
     </div>
   )
