@@ -21,9 +21,7 @@ export function PaymentStep({ methods, selectedMethodId, onSelect, isLoading }: 
     >
       <div className="mb-6">
         <h2 className="text-lg font-semibold font-heading">Payment</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Choose your preferred payment method.
-        </p>
+        <p className="mt-1 text-sm text-muted-foreground">Choose your preferred payment method.</p>
       </div>
 
       <div className="space-y-2" role="radiogroup" aria-label="Payment methods">

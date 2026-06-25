@@ -4,12 +4,12 @@ import { cn } from '~/lib/utils'
 import type { PaymentMethod } from '~/types/checkout'
 
 const PAYMENT_ICONS: Record<string, React.ElementType> = {
-  cod: Banknote,
+  'cod': Banknote,
   'bank-transfer': Landmark,
-  esewa: Wallet,
-  khalti: Wallet,
+  'esewa': Wallet,
+  'khalti': Wallet,
   'ime-pay': Wallet,
-  stripe: CreditCard,
+  'stripe': CreditCard,
 }
 
 type PaymentMethodCardProps = {
@@ -64,9 +64,7 @@ export function PaymentMethodCard({ method, selected, onSelect }: PaymentMethodC
       <div
         className={cn(
           'flex size-4 shrink-0 items-center justify-center rounded-full border transition-colors',
-          selected
-            ? 'border-primary bg-primary'
-            : 'border-input bg-transparent'
+          selected ? 'border-primary bg-primary' : 'border-input bg-transparent'
         )}
       >
         {selected && (

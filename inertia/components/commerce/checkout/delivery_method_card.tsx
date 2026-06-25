@@ -28,9 +28,7 @@ export function DeliveryMethodCard({ method, selected, onSelect }: DeliveryMetho
       <div
         className={cn(
           'mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border transition-colors',
-          selected
-            ? 'border-primary bg-primary'
-            : 'border-input bg-transparent'
+          selected ? 'border-primary bg-primary' : 'border-input bg-transparent'
         )}
       >
         {selected && (
@@ -54,7 +52,8 @@ export function DeliveryMethodCard({ method, selected, onSelect }: DeliveryMetho
         </div>
         <p className="mt-0.5 text-xs text-muted-foreground">{method.description}</p>
         <p className="mt-1 text-xs text-muted-foreground">
-          Estimated Delivery: <span className="text-foreground font-medium">{method.estimatedDate}</span>
+          Estimated Delivery:{' '}
+          <span className="text-foreground font-medium">{method.estimatedDate}</span>
         </p>
       </div>
 
