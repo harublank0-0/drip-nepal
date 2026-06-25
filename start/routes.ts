@@ -22,7 +22,6 @@ router
     router.post('/shops/signup', [controllers.auth.ShopRegistrations, 'store'])
   })
   .as('shops')
-  .use(middleware.guest())
 
 router
   .group(() => {

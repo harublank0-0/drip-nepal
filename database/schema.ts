@@ -466,6 +466,7 @@ export class ShopStaffAssignmentSchema extends BaseModel {
 export class ShopSchema extends BaseModel {
   static $columns = [
     'banner',
+    'category',
     'createdAt',
     'deletedAt',
     'description',
@@ -483,6 +484,8 @@ export class ShopSchema extends BaseModel {
   $columns = ShopSchema.$columns
   @column()
   declare banner: string | null
+  @column()
+  declare category: string | null
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
   @column.dateTime()
@@ -509,6 +512,45 @@ export class ShopSchema extends BaseModel {
   declare updatedAt: DateTime | null
   @column.dateTime()
   declare verifiedAt: DateTime | null
+}
+
+export class ShopAddressSchema extends BaseModel {
+  static $columns = [
+    'address',
+    'city',
+    'createdAt',
+    'district',
+    'id',
+    'isDefault',
+    'label',
+    'province',
+    'shopId',
+    'type',
+    'updatedAt',
+  ] as const
+  $columns = ShopAddressSchema.$columns
+  @column()
+  declare address: string
+  @column()
+  declare city: string
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare district: string
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare isDefault: boolean
+  @column()
+  declare label: string | null
+  @column()
+  declare province: string
+  @column()
+  declare shopId: string
+  @column()
+  declare type: string
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
 }
 
 export class UserAddressSchema extends BaseModel {
