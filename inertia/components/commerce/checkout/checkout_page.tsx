@@ -27,7 +27,14 @@ import {
   PaymentSkeleton,
   SummarySkeleton,
 } from './checkout_skeleton'
-import type { CheckoutStep, Address, DeliveryMethod, AddressFormData, OrderConfirmation, OrderItem } from '~/types/checkout'
+import type {
+  CheckoutStep,
+  Address,
+  DeliveryMethod,
+  AddressFormData,
+  OrderConfirmation,
+  OrderItem,
+} from '~/types/checkout'
 
 const STEP_ORDER: CheckoutStep[] = ['address', 'delivery', 'payment', 'review']
 
@@ -61,7 +68,9 @@ export function CheckoutPage() {
 
   const [step, setStep] = useState<CheckoutStep>('address')
   const [addresses, setAddresses] = useState<Address[]>(MOCK_ADDRESSES)
-  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(MOCK_ADDRESSES[0]?.id ?? null)
+  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(
+    MOCK_ADDRESSES[0]?.id ?? null
+  )
   const [selectedDeliveryMethodId, setSelectedDeliveryMethodId] = useState<string | null>(null)
   const [storeDeliverySelections, setStoreDeliverySelections] = useState<Record<string, string>>({})
   const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState<string | null>(null)
@@ -124,8 +133,11 @@ export function CheckoutPage() {
   }, [usesStoreDelivery, groupedItems, storeDeliverySelections, selectedDeliveryMethodId])
 
   const appliedCoupon = coupon || localCoupon
-  const couponDiscountPercent = appliedCoupon ? (MOCK_COUPONS.find((c) => c.code === appliedCoupon)?.discountPercent ?? 0) : 0
-  const couponDiscountValue = couponDiscountPercent > 0 ? (subtotal * couponDiscountPercent) / 100 : 0
+  const couponDiscountPercent = appliedCoupon
+    ? (MOCK_COUPONS.find((c) => c.code === appliedCoupon)?.discountPercent ?? 0)
+    : 0
+  const couponDiscountValue =
+    couponDiscountPercent > 0 ? (subtotal * couponDiscountPercent) / 100 : 0
   const tax = Math.round((subtotal + deliveryTotal - couponDiscountValue) * TAX_RATE)
   const grandTotal = subtotal + deliveryTotal - couponDiscountValue + tax
 
@@ -190,8 +202,10 @@ export function CheckoutPage() {
   }
 
   const selectedAddress = addresses.find((a) => a.id === selectedAddressId) ?? null
-  const selectedDeliveryMethod = MOCK_DELIVERY_METHODS.find((m) => m.id === selectedDeliveryMethodId) ?? null
-  const selectedPaymentMethod = MOCK_PAYMENT_METHODS.find((m) => m.id === selectedPaymentMethodId) ?? null
+  const selectedDeliveryMethod =
+    MOCK_DELIVERY_METHODS.find((m) => m.id === selectedDeliveryMethodId) ?? null
+  const selectedPaymentMethod =
+    MOCK_PAYMENT_METHODS.find((m) => m.id === selectedPaymentMethodId) ?? null
 
   // Resolve store-specific delivery methods
   const resolvedStoreDeliveryMethods = useMemo(() => {
@@ -227,14 +241,17 @@ export function CheckoutPage() {
             .filter(Boolean)
             .map((m) => m!.estimatedDate)
             .join(', ')
-        : selectedDeliveryMethod?.estimatedDate ?? ''
+        : (selectedDeliveryMethod?.estimatedDate ?? '')
 
       setOrderConfirmation({
         orderNumber,
         estimatedDelivery: estimatedDate,
         items: orderItems,
         shippingAddress: selectedAddress!,
-        deliveryMethod: selectedDeliveryMethod || resolvedStoreDeliveryMethods[groupedItems[0]?.storeId] || MOCK_DELIVERY_METHODS[0],
+        deliveryMethod:
+          selectedDeliveryMethod ||
+          resolvedStoreDeliveryMethods[groupedItems[0]?.storeId] ||
+          MOCK_DELIVERY_METHODS[0],
         paymentMethod: selectedPaymentMethod!,
         subtotal,
         shipping: deliveryTotal,
@@ -460,8 +477,14 @@ export function CheckoutPage() {
                 <div className="space-y-3">
                   <TrustBadge icon={<Shield className="size-4" />} text="Secure Checkout" />
                   <TrustBadge icon={<RotateCcw className="size-4" />} text="Easy Returns" />
-                  <TrustBadge icon={<Package className="size-4" />} text="Cash on Delivery Available" />
-                  <TrustBadge icon={<HelpCircle className="size-4" />} text="24/7 Customer Support" />
+                  <TrustBadge
+                    icon={<Package className="size-4" />}
+                    text="Cash on Delivery Available"
+                  />
+                  <TrustBadge
+                    icon={<HelpCircle className="size-4" />}
+                    text="24/7 Customer Support"
+                  />
                 </div>
               </div>
             </>

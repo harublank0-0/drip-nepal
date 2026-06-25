@@ -38,11 +38,7 @@ export function CheckoutStepper({ currentStep }: CheckoutStepperProps) {
                   }`}
                   aria-current={isCurrent ? 'step' : undefined}
                 >
-                  {isCompleted ? (
-                    <Check className="size-3.5" />
-                  ) : (
-                    <span>{index + 1}</span>
-                  )}
+                  {isCompleted ? <Check className="size-3.5" /> : <span>{index + 1}</span>}
                 </div>
                 <span
                   className={`hidden text-xs font-medium sm:inline ${

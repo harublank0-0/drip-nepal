@@ -41,7 +41,9 @@ export default function Layout({
       <ThemeProvider defaultTheme="dark">
         <CartProvider>
           <NavBar />
-          <main id="main-content" className="pt-[72px]">{children}</main>
+          <main id="main-content" className="pt-[72px]">
+            {children}
+          </main>
           <Footer />
           <CartDrawer />
         </CartProvider>

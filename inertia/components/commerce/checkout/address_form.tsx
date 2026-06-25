@@ -299,7 +299,10 @@ export function AddressForm({ onSubmit, onCancel, initialData }: AddressFormProp
             checked={form.saveAddress}
             onCheckedChange={(checked) => set('saveAddress', checked === true)}
           />
-          <Label htmlFor="saveAddress" className="text-xs font-normal text-muted-foreground cursor-pointer">
+          <Label
+            htmlFor="saveAddress"
+            className="text-xs font-normal text-muted-foreground cursor-pointer"
+          >
             Save this address to my account
           </Label>
         </div>
@@ -310,7 +313,10 @@ export function AddressForm({ onSubmit, onCancel, initialData }: AddressFormProp
             checked={form.isDefault}
             onCheckedChange={(checked) => set('isDefault', checked === true)}
           />
-          <Label htmlFor="isDefault" className="text-xs font-normal text-muted-foreground cursor-pointer">
+          <Label
+            htmlFor="isDefault"
+            className="text-xs font-normal text-muted-foreground cursor-pointer"
+          >
             Set as default address
           </Label>
         </div>
