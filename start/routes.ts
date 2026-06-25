@@ -56,6 +56,13 @@ router
   .use(middleware.guest())
 
 router
+  .get('/checkout', ({ inertia }) => {
+    return inertia.render('commerce/checkout/index', {})
+  })
+  .as('checkout')
+  .use(middleware.guest())
+
+router
   .get('/design-system', ({ inertia }) => {
     return inertia.render('design_system/index', {})
   })

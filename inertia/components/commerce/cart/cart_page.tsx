@@ -176,8 +176,8 @@ export function CartPage() {
               Rs. {total.toLocaleString('ne-NP')}
             </span>
           </div>
-          <Button size="lg" className="w-full h-11 text-sm font-medium rounded-xl">
-            Proceed to Checkout
+          <Button size="lg" className="w-full h-11 text-sm font-medium rounded-xl" asChild>
+            <Link href="/checkout">Proceed to Checkout</Link>
           </Button>
         </div>
       </div>

@@ -1,0 +1,216 @@
+import type { Address, DeliveryMethod, PaymentMethod, Coupon } from '~/types/checkout'
+
+export const MOCK_ADDRESSES: Address[] = [
+  {
+    id: 'addr-1',
+    fullName: 'Aarav Sharma',
+    phoneNumber: '9841234567',
+    province: 'Bagmati',
+    district: 'Kathmandu',
+    city: 'Kathmandu',
+    area: 'Thamel, Chhetrapati',
+    landmark: 'Near ABC Mall',
+    postalCode: '44600',
+    isDefault: true,
+    label: 'Home',
+  },
+  {
+    id: 'addr-2',
+    fullName: 'Aarav Sharma',
+    phoneNumber: '9841234567',
+    province: 'Bagmati',
+    district: 'Lalitpur',
+    city: 'Lalitpur',
+    area: 'Pulchowk, Mangal Bazar',
+    postalCode: '44700',
+    isDefault: false,
+    label: 'Office',
+  },
+]
+
+export const MOCK_PROVINCES = [
+  'Koshi',
+  'Madhesh',
+  'Bagmati',
+  'Gandaki',
+  'Lumbini',
+  'Karnali',
+  'Sudurpashchim',
+]
+
+export const MOCK_DISTRICTS: Record<string, string[]> = {
+  Koshi: [
+    'Bhojpur',
+    'Dhankuta',
+    'Ilam',
+    'Jhapa',
+    'Khotang',
+    'Morang',
+    'Okhaldhunga',
+    'Panchthar',
+    'Sankhuwasabha',
+    'Solukhumbu',
+    'Sunsari',
+    'Taplejung',
+    'Terhathum',
+    'Udayapur',
+  ],
+  Madhesh: ['Bara', 'Dhanusa', 'Mahottari', 'Parsa', 'Rautahat', 'Saptari', 'Sarlahi', 'Siraha'],
+  Bagmati: [
+    'Bhaktapur',
+    'Chitwan',
+    'Dhading',
+    'Dolakha',
+    'Kathmandu',
+    'Kavrepalanchok',
+    'Lalitpur',
+    'Makwanpur',
+    'Nuwakot',
+    'Ramechhap',
+    'Rasuwa',
+    'Sindhuli',
+    'Sindhupalchok',
+  ],
+  Gandaki: ['Baglung', 'Gorkha', 'Kaski', 'Lamjung', 'Manang', 'Mustang', 'Myagdi', 'Nawalpur', 'Parbat', 'Syangja', 'Tanahun'],
+  Lumbini: ['Arghakhanchi', 'Banke', 'Bardiya', 'Dang', 'Gulmi', 'Kapilvastu', 'Parasi', 'Palpa', 'Pyuthan', 'Rolpa', 'Rupandehi'],
+  Karnali: ['Dailekh', 'Dolpa', 'Humla', 'Jajarkot', 'Jumla', 'Kalikot', 'Mugu', 'Salyan', 'Surkhet'],
+  Sudurpashchim: ['Achham', 'Baitadi', 'Bajhang', 'Bajura', 'Dadeldhura', 'Darchula', 'Doti', 'Kailali', 'Kanchanpur'],
+}
+
+export const MOCK_DELIVERY_METHODS: DeliveryMethod[] = [
+  {
+    id: 'standard',
+    name: 'Standard Delivery',
+    description: '2-4 business days',
+    price: 150,
+    estimatedDays: '2-4 business days',
+    estimatedDate: 'Friday, June 28',
+  },
+  {
+    id: 'express',
+    name: 'Express Delivery',
+    description: '1-2 business days',
+    price: 300,
+    estimatedDays: '1-2 business days',
+    estimatedDate: 'Wednesday, June 26',
+  },
+]
+
+export const MOCK_STORE_DELIVERY_METHODS: Record<string, DeliveryMethod[]> = {
+  'store-1': [
+    {
+      id: 's1-standard',
+      name: 'Standard Delivery',
+      description: '3-5 business days',
+      price: 100,
+      estimatedDays: '3-5 business days',
+      estimatedDate: 'Monday, June 30',
+      storeId: 'store-1',
+    },
+    {
+      id: 's1-express',
+      name: 'Express Delivery',
+      description: '1-2 business days',
+      price: 250,
+      estimatedDays: '1-2 business days',
+      estimatedDate: 'Wednesday, June 26',
+      storeId: 'store-1',
+    },
+  ],
+  'store-2': [
+    {
+      id: 's2-standard',
+      name: 'Standard Delivery',
+      description: '4-6 business days',
+      price: 200,
+      estimatedDays: '4-6 business days',
+      estimatedDate: 'Wednesday, July 2',
+      storeId: 'store-2',
+    },
+    {
+      id: 's2-express',
+      name: 'Express Delivery',
+      description: '2-3 business days',
+      price: 400,
+      estimatedDays: '2-3 business days',
+      estimatedDate: 'Friday, June 27',
+      storeId: 'store-2',
+    },
+  ],
+  'store-3': [
+    {
+      id: 's3-standard',
+      name: 'Standard Delivery',
+      description: '3-5 business days',
+      price: 150,
+      estimatedDays: '3-5 business days',
+      estimatedDate: 'Monday, June 30',
+      storeId: 'store-3',
+    },
+    {
+      id: 's3-express',
+      name: 'Express Delivery',
+      description: '1-2 business days',
+      price: 300,
+      estimatedDays: '1-2 business days',
+      estimatedDate: 'Thursday, June 26',
+      storeId: 'store-3',
+    },
+  ],
+}
+
+export const MOCK_PAYMENT_METHODS: PaymentMethod[] = [
+  {
+    id: 'cod',
+    name: 'Cash on Delivery',
+    description: 'Pay when your order arrives. No extra fees.',
+    enabled: true,
+  },
+  {
+    id: 'bank-transfer',
+    name: 'Bank Transfer',
+    description: 'Transfer directly to our bank account.',
+    enabled: true,
+    fee: 0,
+    feeLabel: 'No extra fees',
+  },
+  {
+    id: 'esewa',
+    name: 'eSewa',
+    description: 'Pay instantly via eSewa wallet',
+    enabled: false,
+  },
+  {
+    id: 'khalti',
+    name: 'Khalti',
+    description: 'Pay instantly via Khalti wallet',
+    enabled: false,
+  },
+  {
+    id: 'ime-pay',
+    name: 'IME Pay',
+    description: 'Pay via IME Pay mobile banking',
+    enabled: false,
+  },
+  {
+    id: 'stripe',
+    name: 'Credit / Debit Card',
+    description: 'Secure card payment via Stripe',
+    enabled: false,
+  },
+]
+
+export const MOCK_COUPONS: Coupon[] = [
+  {
+    code: 'WELCOME10',
+    discountPercent: 10,
+    description: '10% off your first order',
+  },
+  {
+    code: 'FREESHIP',
+    discountPercent: 0,
+    description: 'Free shipping on your order',
+  },
+]
+
+export const TAX_RATE = 0.13

@@ -19,5 +19,6 @@ export interface ApiDefinition {
   }
   menProductDetail: typeof routes['men_product_detail']
   cart: typeof routes['cart']
+  checkout: typeof routes['checkout']
   designSystem: typeof routes['design-system']
 }

@@ -127,6 +127,18 @@ export interface Registry {
       errorResponse: unknown
     }
   }
+  'checkout': {
+    methods: ["GET","HEAD"]
+    pattern: '/checkout'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: unknown
+      errorResponse: unknown
+    }
+  }
   'design-system': {
     methods: ["GET","HEAD"]
     pattern: '/design-system'

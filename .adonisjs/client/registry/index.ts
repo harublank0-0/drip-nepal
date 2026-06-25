@@ -66,6 +66,12 @@ const routes = {
     tokens: [{"old":"/cart","type":0,"val":"cart","end":""}],
     types: placeholder as Registry['cart']['types'],
   },
+  'checkout': {
+    methods: ["GET","HEAD"],
+    pattern: '/checkout',
+    tokens: [{"old":"/checkout","type":0,"val":"checkout","end":""}],
+    types: placeholder as Registry['checkout']['types'],
+  },
   'design-system': {
     methods: ["GET","HEAD"],
     pattern: '/design-system',
