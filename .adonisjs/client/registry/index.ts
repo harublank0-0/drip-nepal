@@ -12,6 +12,18 @@ const routes = {
     tokens: [{"old":"/","type":0,"val":"/","end":""}],
     types: placeholder as Registry['home']['types'],
   },
+  'shops.shop_registrations.create': {
+    methods: ["GET","HEAD"],
+    pattern: '/shops/signup',
+    tokens: [{"old":"/shops/signup","type":0,"val":"shops","end":""},{"old":"/shops/signup","type":0,"val":"signup","end":""}],
+    types: placeholder as Registry['shops.shop_registrations.create']['types'],
+  },
+  'shops.shop_registrations.store': {
+    methods: ["POST"],
+    pattern: '/shops/signup',
+    tokens: [{"old":"/shops/signup","type":0,"val":"shops","end":""},{"old":"/shops/signup","type":0,"val":"signup","end":""}],
+    types: placeholder as Registry['shops.shop_registrations.store']['types'],
+  },
   'new_account.create': {
     methods: ["GET","HEAD"],
     pattern: '/signup',

@@ -2,11 +2,7 @@ import { type Data } from '@generated/data'
 import { toast, Toaster } from 'sonner'
 import { usePage } from '@inertiajs/react'
 import { type ReactElement, useEffect } from 'react'
-import { NavBar } from '~/components/navbar'
-import { Footer } from '~/components/footer'
 import { ThemeProvider } from '~/components/providers/theme_provider'
-import { CartProvider } from '~/hooks/use_cart'
-import { CartDrawer } from '~/components/commerce/cart/cart_drawer'
 
 export default function Layout({
   children,
@@ -32,19 +28,8 @@ export default function Layout({
 
   return (
     <>
-      <a
-        href="#main-content"
-        className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-primary focus:text-primary-foreground focus:rounded-lg focus:outline-none"
-      >
-        Skip to content
-      </a>
       <ThemeProvider defaultTheme="dark">
-        <CartProvider>
-          <NavBar />
-          <main id="main-content" className="pt-[72px]">{children}</main>
-          <Footer />
-          <CartDrawer />
-        </CartProvider>
+        <main id="main-content">{children}</main>
         <Toaster position="top-center" richColors />
       </ThemeProvider>
     </>

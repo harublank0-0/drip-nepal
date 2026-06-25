@@ -1,3 +1,4 @@
+import { ShopStatuses } from '#constants/shop_status'
 import { BaseSchema } from '@adonisjs/lucid/schema'
 
 export default class extends BaseSchema {
@@ -27,7 +28,7 @@ export default class extends BaseSchema {
       table
         .string('status', 30)
         .notNullable()
-        .defaultTo('pending')
+        .defaultTo(ShopStatuses.PENDING)
         .comment('active, suspended, deleted, pending, rejected, etc')
 
       table.timestamp('verified_at').nullable()
