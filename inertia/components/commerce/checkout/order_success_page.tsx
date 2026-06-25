@@ -60,11 +60,7 @@ export function OrderSuccessPage({ order }: OrderSuccessPageProps) {
                     : 'bg-muted text-muted-foreground'
                 }`}
               >
-                {step.completed ? (
-                  <CheckCircle className="size-4" />
-                ) : (
-                  <span>{index + 1}</span>
-                )}
+                {step.completed ? <CheckCircle className="size-4" /> : <span>{index + 1}</span>}
               </div>
               <span
                 className={`mt-1.5 text-[10px] font-medium ${

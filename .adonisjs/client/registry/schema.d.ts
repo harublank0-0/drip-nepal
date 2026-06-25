@@ -35,12 +35,12 @@ export interface Registry {
     methods: ["POST"]
     pattern: '/shops/signup'
     types: {
-      body: {}
+      body: ExtractBody<InferInput<(typeof import('#validators/auth/shop').shopSignupValidator)>>
       paramsTuple: []
       params: {}
-      query: {}
+      query: ExtractQuery<InferInput<(typeof import('#validators/auth/shop').shopSignupValidator)>>
       response: ExtractResponse<Awaited<ReturnType<import('#controllers/auth/shop_registrations_controller').default['store']>>>
-      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/auth/shop_registrations_controller').default['store']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/auth/shop_registrations_controller').default['store']>>> | { status: 422; response: { errors: SimpleError[] } }
     }
   }
   'new_account.create': {

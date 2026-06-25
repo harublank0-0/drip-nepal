@@ -37,9 +37,7 @@ export function AddressStep({
     <div>
       <div className="mb-6">
         <h2 className="text-lg font-semibold font-heading">Shipping Address</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Where should we deliver your order?
-        </p>
+        <p className="mt-1 text-sm text-muted-foreground">Where should we deliver your order?</p>
       </div>
 
       <AnimatePresence mode="wait">
@@ -51,10 +49,7 @@ export function AddressStep({
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.2, ease: [0.32, 0.72, 0, 1] }}
           >
-            <AddressForm
-              onSubmit={handleAddAddress}
-              onCancel={() => setIsAdding(false)}
-            />
+            <AddressForm onSubmit={handleAddAddress} onCancel={() => setIsAdding(false)} />
           </motion.div>
         ) : (
           <motion.div

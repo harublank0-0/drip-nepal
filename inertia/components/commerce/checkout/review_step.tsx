@@ -82,9 +82,7 @@ export function ReviewStep({
                   <p className="text-sm text-muted-foreground">
                     {method.name} &middot; {method.description}
                   </p>
-                  <p className="text-xs text-muted-foreground">
-                    Estimated: {method.estimatedDate}
-                  </p>
+                  <p className="text-xs text-muted-foreground">Estimated: {method.estimatedDate}</p>
                 </div>
               )
             })}
@@ -107,9 +105,7 @@ export function ReviewStep({
         title="Payment Method"
         onEdit={onEditPayment}
       >
-        {paymentMethod && (
-          <p className="text-sm text-muted-foreground">{paymentMethod.name}</p>
-        )}
+        {paymentMethod && <p className="text-sm text-muted-foreground">{paymentMethod.name}</p>}
       </SectionCard>
 
       {/* Order Items */}
