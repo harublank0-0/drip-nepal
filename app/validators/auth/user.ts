@@ -7,6 +7,7 @@ import vine from '@vinejs/vine'
 export const signupValidator = vine.create({
   fullName: vine.string(),
   email: email().unique({ table: 'users', column: 'email' }),
+  phone: vine.string().optional(),
   password: password().confirmed({
     confirmationField: 'passwordConfirmation',
   }),
