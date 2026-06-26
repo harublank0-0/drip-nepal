@@ -9,7 +9,12 @@ import { createInertiaApp } from '@inertiajs/react'
 import { TuyauProvider } from '@adonisjs/inertia/react'
 import { resolvePageComponent } from '@adonisjs/inertia/helpers'
 
+import { TanStackDevtools } from '@tanstack/react-devtools'
+import { formDevtoolsPlugin } from '@tanstack/react-form-devtools'
+import { Show } from '~/components/ui/show'
+
 const appName = import.meta.env.VITE_APP_NAME || 'AdonisJS'
+const isDevMode = import.meta.env.DEV
 
 createInertiaApp({
   title: (title) => (title ? `${title} - ${appName}` : appName),
@@ -24,6 +29,9 @@ createInertiaApp({
     createRoot(el).render(
       <StrictMode>
         <TuyauProvider client={client}>
+          <Show when={isDevMode}>
+            <TanStackDevtools plugins={[formDevtoolsPlugin()]} />
+          </Show>
           <App {...props} />
         </TuyauProvider>
       </StrictMode>

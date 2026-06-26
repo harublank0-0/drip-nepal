@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
+import slugify from 'slugify'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -35,3 +36,34 @@ export const getDiscountedPrice = (listAmount: number, sellingPrice: number) => 
 
   return Math.abs(listAmount - sellingPrice)
 }
+
+/**
+ * just a simple function that returns true if array is empty
+ */
+export const isArrayEmpty = (array: unknown[]) => {
+  if (!Array.isArray(array)) throw new Error('Array is not an array')
+  return array.length === 0
+}
+
+/**
+ * Just a simple function to check if the object is empty
+ */
+export const isObjectEmpty = (obj: Record<string, unknown>) => {
+  return Object.keys(obj).length === 0
+}
+
+/*
+ * a util to check if the server has sent validation error
+ */
+export const hasValidationErrors = (errors: Record<string, string>) =>
+  Object.keys(errors).length > 0
+
+/*
+ * base slugify with default settings for slugifying labels
+ */
+export const dripSlugify = (label: string) =>
+  slugify(label, {
+    lower: true,
+    strict: true,
+    trim: true,
+  })

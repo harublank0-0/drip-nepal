@@ -1,3 +1,4 @@
+// TODO: move this to shared file
 export const Categories = [
   {
     name: 'Streetwear',
@@ -112,3 +113,5 @@ export const Categories = [
     isActive: true,
   },
 ] as const
+
+export type Category = (typeof Categories)[number]

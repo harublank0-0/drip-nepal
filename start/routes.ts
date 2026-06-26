@@ -13,6 +13,16 @@ import router from '@adonisjs/core/services/router'
 
 router.on('/').renderInertia('home/index', {}).as('home')
 
+/*
+ * Shops Routes
+ */
+router
+  .group(() => {
+    router.get('/shops/signup', [controllers.auth.ShopRegistrations, 'create'])
+    router.post('/shops/signup', [controllers.auth.ShopRegistrations, 'store'])
+  })
+  .as('shops')
+
 router
   .group(() => {
     router.get('signup', [controllers.NewAccount, 'create'])
