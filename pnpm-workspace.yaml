@@ -5,3 +5,5 @@ allowBuilds:
 minimumReleaseAgeExclude:
   - framer-motion@12.41.0
   - motion-dom@12.41.0
+overrides:
+  "eslint-plugin-react>eslint": "$eslint"
