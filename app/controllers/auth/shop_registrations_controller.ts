@@ -9,7 +9,7 @@ export default class ShopRegistrationController {
   async create({ inertia, auth, response, request }: HttpContext) {
     const success = request.input('success')
 
-    if (await auth.check() && !success) {
+    if ((await auth.check()) && !success) {
       return response.redirect().toPath('/')
     }
 

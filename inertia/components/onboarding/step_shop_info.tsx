@@ -14,6 +14,7 @@ import {
 } from '~/components/ui/select'
 import { SlugInput, generateSlug } from '~/components/onboarding/slug_input'
 import { cn } from '~/lib/utils'
+import { ShopCategories, type ShopCategory } from '#shared/shop_categories'
 
 const shopCategories = [
   'Fashion & Apparel',
@@ -42,7 +43,7 @@ const nepalProvinces = [
 ]
 
 type StepShopInfoProps = {
-  form: ReactFormApi<any, any, any, any, any, any, any, any, any, any>
+  form: ReactFormApi<any, any, any, any, any, any, any, any, any, any, any, any>
   isSubmitting: boolean
   onSubmit: () => void
   onBack: () => void
@@ -51,7 +52,7 @@ type StepShopInfoProps = {
 export function StepShopInfo({ form, isSubmitting, onSubmit, onBack }: StepShopInfoProps) {
   return (
     <div className="space-y-6">
-      <form.Field name="shopName" mode="blur">
+      <form.Field name="shopName">
         {(field) => {
           const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid
           return (
@@ -78,7 +79,7 @@ export function StepShopInfo({ form, isSubmitting, onSubmit, onBack }: StepShopI
         }}
       </form.Field>
 
-      <form.Field name="shopSlug" mode="blur">
+      <form.Field name="shopSlug">
         {(field) => {
           const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid
           const shopName = form.getFieldValue('shopName')

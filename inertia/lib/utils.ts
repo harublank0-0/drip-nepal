@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
+import slugify from 'slugify'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -56,3 +57,13 @@ export const isObjectEmpty = (obj: Record<string, unknown>) => {
  */
 export const hasValidationErrors = (errors: Record<string, string>) =>
   Object.keys(errors).length > 0
+
+/*
+ * base slugify with default settings for slugifying labels
+ */
+export const dripSlugify = (label: string) =>
+  slugify(label, {
+    lower: true,
+    strict: true,
+    trim: true,
+  })

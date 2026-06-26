@@ -1,9 +1,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import { useForm } from '@tanstack/react-form'
 import { AnimatePresence, motion } from 'framer-motion'
-import { router } from '@inertiajs/react'
-import { Link } from '@adonisjs/inertia/react'
-import { z } from 'zod'
+import { Link, useRouter } from '@adonisjs/inertia/react'
 import { XIcon } from 'lucide-react'
 import { BrandingPanel } from '~/components/onboarding/branding_panel'
 import { ProgressStepper } from '~/components/onboarding/progress_stepper'
@@ -11,53 +9,17 @@ import { StepAccount } from '~/components/onboarding/step_account'
 import { StepShopInfo } from '~/components/onboarding/step_shop_info'
 import { SuccessScreen } from '~/components/onboarding/success_screen'
 import { routes } from '@generated/registry'
+import { defaultOnboardingFormValues, type OnboardingForm, onboardingSchema } from './form'
+import { Show } from '~/components/ui/show'
 
 const steps = [
   { number: 1, label: 'Account' },
   { number: 2, label: 'Shop Information' },
 ]
 
-const onboardingSchema = z
-  .object({
-    fullName: z.string().min(1, 'Full name is required'),
-    email: z.email('Invalid email address'),
-    phone: z.string().min(7, 'Invalid phone number'),
-    password: z.string().min(8, 'Password must be at least 8 characters'),
-    confirmPassword: z.string(),
-    shopName: z.string().min(1, 'Shop name is required'),
-    shopSlug: z.string().min(1, 'Shop URL is required'),
-    category: z.string().min(1, 'Please select a category'),
-    description: z.string().optional(),
-    address: z.string().min(1, 'Address is required'),
-    city: z.string().min(1, 'City is required'),
-    district: z.string().min(1, 'District is required'),
-    province: z.string().min(1, 'Province is required'),
-  })
-  .refine((data) => data.password === data.confirmPassword, {
-    message: 'Passwords do not match',
-    path: ['confirmPassword'],
-  })
-
-type OnboardingForm = z.infer<typeof onboardingSchema>
-
-const defaultValues: OnboardingForm = {
-  fullName: '',
-  email: '',
-  phone: '',
-  password: '',
-  confirmPassword: '',
-  shopName: '',
-  shopSlug: '',
-  category: '',
-  description: '',
-  address: '',
-  city: '',
-  district: '',
-  province: '',
-}
-
 function getInitialSuccess(): boolean {
   if (typeof window === 'undefined') return false
+
   const params = new URLSearchParams(window.location.search)
   return params.get('success') === '1'
 }
@@ -66,49 +28,61 @@ export default function ShopSignupPage() {
   const [step, setStep] = useState(1)
   const [isSuccess] = useState(getInitialSuccess)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const router = useRouter()
 
   useEffect(() => {
     if (isSuccess) {
-      window.history.replaceState({}, '', '/shops/signup')
+      router.visit(
+        {
+          route: 'shops.shop_registrations.create',
+        },
+        {
+          replace: true,
+        }
+      )
     }
   }, [isSuccess])
 
-  const form = useForm({
-    defaultValues,
+  const shopRegisterForm = useForm({
+    defaultValues: defaultOnboardingFormValues,
     validators: {
-      onBlur: onboardingSchema,
+      onChange: onboardingSchema,
+      onSubmit: onboardingSchema,
     },
     onSubmit: async ({ value }) => {
       setIsSubmitting(true)
-      router.post(routes['shops.shop_registrations.create'].pattern, value)
+      // router.post(routes['shops.shop_registrations.create'].pattern, value)
     },
   })
 
   const validateStep1 = useCallback(async (): Promise<boolean> => {
     const fields = ['fullName', 'email', 'phone', 'password', 'confirmPassword']
+
     let valid = true
     for (const name of fields) {
-      await form.validateField(name as keyof OnboardingForm, 'change')
+      await shopRegisterForm.validateField(name as keyof OnboardingForm, 'change')
     }
+
     for (const name of fields) {
-      const meta = form.getFieldMeta(name as keyof OnboardingForm)
+      const meta = shopRegisterForm.getFieldMeta(name as keyof OnboardingForm)
       if (meta && meta.errors?.length > 0) {
         valid = false
       }
     }
     return valid
-  }, [form])
+  }, [shopRegisterForm])
 
   const handleContinue = useCallback(async () => {
     const valid = await validateStep1()
+
     if (valid) {
       setStep(2)
     }
   }, [validateStep1])
 
   const handleSubmit = useCallback(async () => {
-    await form.handleSubmit()
-  }, [form])
+    await shopRegisterForm.handleSubmit()
+  }, [shopRegisterForm])
 
   const handleBack = useCallback(() => {
     setStep(1)
@@ -149,7 +123,7 @@ export default function ShopSignupPage() {
         <div className="flex flex-1 items-center justify-center px-4 pb-8 pt-4 lg:px-8 lg:pb-12">
           <div className="w-full max-w-lg space-y-8">
             {/* header */}
-            {!isSuccess && (
+            <Show when={!isSuccess}>
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -161,10 +135,10 @@ export default function ShopSignupPage() {
                 </h1>
                 <p className="text-sm text-muted-foreground">Start selling on Drip Nepal today.</p>
               </motion.div>
-            )}
+            </Show>
 
             {/* progress stepper */}
-            {!isSuccess && (
+            <Show when={!isSuccess}>
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -172,11 +146,11 @@ export default function ShopSignupPage() {
               >
                 <ProgressStepper steps={steps} currentStep={step} />
               </motion.div>
-            )}
+            </Show>
 
             {/* step content with animated transitions */}
             <AnimatePresence mode="wait">
-              {isSuccess ? (
+              <Show when={isSuccess}>
                 <motion.div
                   key="success"
                   initial={{ opacity: 0, y: 20 }}
@@ -185,11 +159,21 @@ export default function ShopSignupPage() {
                   transition={{ duration: 0.4 }}
                 >
                   <SuccessScreen
-                    onGoToDashboard={() => router.visit('/')}
-                    onAddFirstProduct={() => router.visit('/')}
+                    onGoToDashboard={() =>
+                      router.visit({
+                        route: 'home',
+                      })
+                    }
+                    onAddFirstProduct={() =>
+                      router.visit({
+                        route: 'home',
+                      })
+                    }
                   />
                 </motion.div>
-              ) : step === 1 ? (
+              </Show>
+
+              <Show when={step === 1}>
                 <motion.div
                   key="step-1"
                   initial={{ opacity: 0, x: 20 }}
@@ -198,12 +182,14 @@ export default function ShopSignupPage() {
                   transition={{ duration: 0.3 }}
                 >
                   <StepAccount
-                    form={form as any}
+                    form={shopRegisterForm as any}
                     isSubmitting={isSubmitting}
                     onContinue={handleContinue}
                   />
                 </motion.div>
-              ) : (
+              </Show>
+
+              <Show when={step === 2}>
                 <motion.div
                   key="step-2"
                   initial={{ opacity: 0, x: 20 }}
@@ -212,13 +198,13 @@ export default function ShopSignupPage() {
                   transition={{ duration: 0.3 }}
                 >
                   <StepShopInfo
-                    form={form as any}
+                    form={shopRegisterForm as any}
                     isSubmitting={isSubmitting}
                     onSubmit={handleSubmit}
                     onBack={handleBack}
                   />
                 </motion.div>
-              )}
+              </Show>
             </AnimatePresence>
           </div>
         </div>
