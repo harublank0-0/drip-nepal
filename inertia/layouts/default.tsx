@@ -30,6 +30,14 @@ export default function Layout({
     <>
       <ThemeProvider defaultTheme="dark">
         <main id="main-content">{children}</main>
+        <CartProvider>
+          <NavBar />
+          <main id="main-content" className="pt-[72px]">
+            {children}
+          </main>
+          <Footer />
+          <CartDrawer />
+        </CartProvider>
         <Toaster position="top-center" richColors />
       </ThemeProvider>
     </>
