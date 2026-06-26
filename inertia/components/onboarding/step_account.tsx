@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { EyeIcon, EyeOffIcon, Loader2Icon } from 'lucide-react'
-import type { ReactFormApi } from '@tanstack/react-form'
+import { type ReactFormExtendedApi } from '@tanstack/react-form'
 import { Field, FieldError, FieldLabel } from '~/components/ui/field'
 import { Input } from '~/components/ui/input'
 import { Button } from '~/components/ui/button'
@@ -10,7 +10,7 @@ import { cn } from '~/lib/utils'
 import { Link } from '@adonisjs/inertia/react'
 
 type StepAccountProps = {
-  form: ReactFormApi<any, any, any, any, any, any, any, any, any, any>
+  form: ReactFormExtendedApi<any, any, any, any, any, any, any, any, any, any, any, any>
   isSubmitting: boolean
   onContinue: () => void
 }
@@ -21,7 +21,7 @@ export function StepAccount({ form, isSubmitting, onContinue }: StepAccountProps
 
   return (
     <div className="space-y-6">
-      <form.Field name="fullName" mode="blur">
+      <form.Field name="fullName">
         {(field) => {
           const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid
           return (
@@ -45,7 +45,7 @@ export function StepAccount({ form, isSubmitting, onContinue }: StepAccountProps
         }}
       </form.Field>
 
-      <form.Field name="email" mode="blur">
+      <form.Field name="email">
         {(field) => {
           const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid
           return (
@@ -69,7 +69,7 @@ export function StepAccount({ form, isSubmitting, onContinue }: StepAccountProps
         }}
       </form.Field>
 
-      <form.Field name="phone" mode="blur">
+      <form.Field name="phone">
         {(field) => {
           const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid
           return (
@@ -93,7 +93,7 @@ export function StepAccount({ form, isSubmitting, onContinue }: StepAccountProps
         }}
       </form.Field>
 
-      <form.Field name="password" mode="blur">
+      <form.Field name="password">
         {(field) => {
           const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid
           return (
@@ -137,7 +137,7 @@ export function StepAccount({ form, isSubmitting, onContinue }: StepAccountProps
         }}
       </form.Field>
 
-      <form.Field name="confirmPassword" mode="blur">
+      <form.Field name="confirmPassword">
         {(field) => {
           const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid
           return (

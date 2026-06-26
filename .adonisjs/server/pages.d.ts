@@ -66,7 +66,7 @@ declare module '@adonisjs/inertia/types' {
     'home/components/hero/hero_panel': ExtractProps<(typeof import('../../inertia/pages/home/components/hero/hero_panel.tsx'))['default']>
     'home/components/hero/index': ExtractProps<(typeof import('../../inertia/pages/home/components/hero/index.tsx'))['default']>
     'home/index': ExtractProps<(typeof import('../../inertia/pages/home/index.tsx'))['default']>
-    'shops/signup/index': ExtractProps<(typeof import('../../inertia/pages/shops/signup/index.tsx'))['default']>
     'shops/signup/form': ExtractProps<(typeof import('../../inertia/pages/shops/signup/form.ts'))['default']>
+    'shops/signup/index': ExtractProps<(typeof import('../../inertia/pages/shops/signup/index.tsx'))['default']>
   }
 }

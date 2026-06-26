@@ -121,10 +121,5 @@
       "eslint": "$eslint"
     }
   },
-  "pnpm": {
-    "overrides": {
-      "eslint-plugin-react>eslint": "$eslint"
-    }
-  },
   "prettier": "@adonisjs/prettier-config"
 }

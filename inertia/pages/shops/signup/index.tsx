@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback } from 'react'
 import { useForm } from '@tanstack/react-form'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Link, useRouter } from '@adonisjs/inertia/react'
@@ -8,7 +8,6 @@ import { ProgressStepper } from '~/components/onboarding/progress_stepper'
 import { StepAccount } from '~/components/onboarding/step_account'
 import { StepShopInfo } from '~/components/onboarding/step_shop_info'
 import { SuccessScreen } from '~/components/onboarding/success_screen'
-import { routes } from '@generated/registry'
 import { defaultOnboardingFormValues, type OnboardingForm, onboardingSchema } from './form'
 import { Show } from '~/components/ui/show'
 
@@ -30,19 +29,6 @@ export default function ShopSignupPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const router = useRouter()
 
-  useEffect(() => {
-    if (isSuccess) {
-      router.visit(
-        {
-          route: 'shops.shop_registrations.create',
-        },
-        {
-          replace: true,
-        }
-      )
-    }
-  }, [isSuccess])
-
   const shopRegisterForm = useForm({
     defaultValues: defaultOnboardingFormValues,
     validators: {
@@ -51,7 +37,26 @@ export default function ShopSignupPage() {
     },
     onSubmit: async ({ value }) => {
       setIsSubmitting(true)
-      // router.post(routes['shops.shop_registrations.create'].pattern, value)
+      router.visit(
+        {
+          route: 'shops.shop_registrations.create',
+        },
+        {
+          data: {
+            success: 1,
+          },
+        }
+      )
+
+      router.visit(
+        {
+          route: 'shops.shop_registrations.store',
+        },
+        {
+          method: 'post',
+          data: value,
+        }
+      )
     },
   })
 
@@ -173,37 +178,39 @@ export default function ShopSignupPage() {
                 </motion.div>
               </Show>
 
-              <Show when={step === 1}>
-                <motion.div
-                  key="step-1"
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  <StepAccount
-                    form={shopRegisterForm as any}
-                    isSubmitting={isSubmitting}
-                    onContinue={handleContinue}
-                  />
-                </motion.div>
-              </Show>
+              <Show when={!isSuccess}>
+                <Show when={step === 1}>
+                  <motion.div
+                    key="step-1"
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <StepAccount
+                      form={shopRegisterForm as any}
+                      isSubmitting={isSubmitting}
+                      onContinue={handleContinue}
+                    />
+                  </motion.div>
+                </Show>
 
-              <Show when={step === 2}>
-                <motion.div
-                  key="step-2"
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  <StepShopInfo
-                    form={shopRegisterForm as any}
-                    isSubmitting={isSubmitting}
-                    onSubmit={handleSubmit}
-                    onBack={handleBack}
-                  />
-                </motion.div>
+                <Show when={step === 2}>
+                  <motion.div
+                    key="step-2"
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <StepShopInfo
+                      form={shopRegisterForm as any}
+                      isSubmitting={isSubmitting}
+                      onSubmit={handleSubmit}
+                      onBack={handleBack}
+                    />
+                  </motion.div>
+                </Show>
               </Show>
             </AnimatePresence>
           </div>

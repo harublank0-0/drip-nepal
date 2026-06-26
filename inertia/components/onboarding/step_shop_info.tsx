@@ -1,5 +1,5 @@
 import { Loader2Icon, InfoIcon, UploadIcon } from 'lucide-react'
-import type { ReactFormApi } from '@tanstack/react-form'
+import { type ReactFormExtendedApi } from '@tanstack/react-form'
 import { Field, FieldError, FieldLabel, FieldDescription } from '~/components/ui/field'
 import { Input } from '~/components/ui/input'
 import { Textarea } from '~/components/ui/textarea'
@@ -15,22 +15,13 @@ import {
 import { SlugInput, generateSlug } from '~/components/onboarding/slug_input'
 import { cn } from '~/lib/utils'
 import { ShopCategories, type ShopCategory } from '#shared/shop_categories'
+import { MultiSelect } from '~/components/form_builder/multi_select'
+import { useCallback } from 'react'
 
-const shopCategories = [
-  'Fashion & Apparel',
-  'Electronics & Gadgets',
-  'Home & Living',
-  'Beauty & Personal Care',
-  'Food & Beverages',
-  'Sports & Outdoors',
-  'Books & Stationery',
-  'Handicrafts & Art',
-  'Health & Wellness',
-  'Jewelry & Accessories',
-  'Baby & Kids',
-  'Pet Supplies',
-  'Other',
-]
+const shopCategories = ShopCategories.map((shopCategory) => ({
+  label: shopCategory.name,
+  value: shopCategory.slug,
+}))
 
 const nepalProvinces = [
   'Koshi Province',
@@ -43,7 +34,7 @@ const nepalProvinces = [
 ]
 
 type StepShopInfoProps = {
-  form: ReactFormApi<any, any, any, any, any, any, any, any, any, any, any, any>
+  form: ReactFormExtendedApi<any, any, any, any, any, any, any, any, any, any, any, any>
   isSubmitting: boolean
   onSubmit: () => void
   onBack: () => void
@@ -102,35 +93,18 @@ export function StepShopInfo({ form, isSubmitting, onSubmit, onBack }: StepShopI
         }}
       </form.Field>
 
-      <form.Field name="category" mode="blur">
+      <form.Field name="category">
         {(field) => {
           const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid
           return (
             <Field data-invalid={isInvalid}>
               <FieldLabel htmlFor="category">Shop Category</FieldLabel>
-              <Select
-                value={field.state.value || ''}
-                onValueChange={(value) => field.handleChange(value)}
-              >
-                <SelectTrigger
-                  id="category"
-                  className={cn(
-                    'w-full',
-                    isInvalid &&
-                      'border-destructive ring-3 ring-destructive/20 dark:ring-destructive/40'
-                  )}
-                  aria-invalid={isInvalid}
-                >
-                  <SelectValue placeholder="Select a category" />
-                </SelectTrigger>
-                <SelectContent>
-                  {shopCategories.map((cat) => (
-                    <SelectItem key={cat} value={cat}>
-                      {cat}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <MultiSelect
+                options={shopCategories}
+                value={field.state.value || []}
+                onValueChange={field.handleChange}
+                ariaInvalid={isInvalid}
+              />
               <Show when={isInvalid}>
                 <FieldError errors={field.state.meta.errors} />
               </Show>
@@ -139,7 +113,7 @@ export function StepShopInfo({ form, isSubmitting, onSubmit, onBack }: StepShopI
         }}
       </form.Field>
 
-      <form.Field name="description" mode="blur">
+      <form.Field name="description">
         {(field) => {
           const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid
           return (
@@ -164,7 +138,7 @@ export function StepShopInfo({ form, isSubmitting, onSubmit, onBack }: StepShopI
       </form.Field>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <form.Field name="address" mode="blur">
+        <form.Field name="address">
           {(field) => {
             const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid
             return (
@@ -188,7 +162,7 @@ export function StepShopInfo({ form, isSubmitting, onSubmit, onBack }: StepShopI
           }}
         </form.Field>
 
-        <form.Field name="city" mode="blur">
+        <form.Field name="city">
           {(field) => {
             const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid
             return (
@@ -212,7 +186,7 @@ export function StepShopInfo({ form, isSubmitting, onSubmit, onBack }: StepShopI
           }}
         </form.Field>
 
-        <form.Field name="district" mode="blur">
+        <form.Field name="district">
           {(field) => {
             const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid
             return (
@@ -236,7 +210,7 @@ export function StepShopInfo({ form, isSubmitting, onSubmit, onBack }: StepShopI
           }}
         </form.Field>
 
-        <form.Field name="province" mode="blur">
+        <form.Field name="province">
           {(field) => {
             const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid
             return (
