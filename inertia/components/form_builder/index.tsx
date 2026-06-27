@@ -1,7 +1,7 @@
 import { Field, FieldDescription, FieldError, FieldLabel } from '~/components/ui/field'
 import { Input } from '~/components/ui/input'
 import { Show } from '~/components/ui/show'
-import { AnyFormApi, FormField } from './form.types'
+import { type AnyFormApi, type FormField } from './form.types'
 import { useEffect } from 'react'
 import { hasValidationErrors } from '~/lib/utils'
 import { usePage } from '@inertiajs/react'

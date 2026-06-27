@@ -40,9 +40,7 @@ export function PasswordStrength({ value }: { value: string }) {
           />
         ))}
       </div>
-      {strength > 0 && (
-        <p className="text-xs text-muted-foreground">{labels[strength]} password</p>
-      )}
+      {strength > 0 && <p className="text-xs text-muted-foreground">{labels[strength]} password</p>}
     </motion.div>
   )
 }

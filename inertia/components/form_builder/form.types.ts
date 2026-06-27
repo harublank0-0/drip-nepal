@@ -1,4 +1,4 @@
-import { DeepKeys, type ReactFormExtendedApi } from '@tanstack/react-form'
+import { type DeepKeys, type ReactFormExtendedApi } from '@tanstack/react-form'
 
 type BaseField<TFormData, TName extends DeepKeys<TFormData>> = {
   name: TName
