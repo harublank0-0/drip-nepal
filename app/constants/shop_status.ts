@@ -2,13 +2,14 @@
  * Shop Status for DripNepal
  * The status can be `active`, `suspended`, `deleted`, etc
  */
-export const ShopStatuses = {
+export const ShopStatus = {
   ACTIVE: 'active',
   SUSPENDED: 'suspended',
   DELETED: 'deleted',
   PENDING: 'pending',
+  CLOSED: 'closed',
 } as const
 
-export type ShopStatus = (typeof ShopStatuses)[keyof typeof ShopStatuses]
+export type ShopStatus = (typeof ShopStatus)[keyof typeof ShopStatus]
 
-export const ShopStatusValues = Object.values(ShopStatuses)
+export const ShopStatusValues = Object.values(ShopStatus)

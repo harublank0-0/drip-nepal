@@ -30,6 +30,7 @@ const demoUsers = [
 
 export default class extends BaseSeeder {
   async run() {
+    return
     for (const user of demoUsers) {
       const userExists = await User.findBy('email', user.email)
       if (!userExists) {

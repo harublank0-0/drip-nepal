@@ -3,11 +3,11 @@ import { useForm } from '@tanstack/react-form'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Link, useRouter } from '@adonisjs/inertia/react'
 import { XIcon } from 'lucide-react'
-import { BrandingPanel } from '~/components/onboarding/branding_panel'
-import { ProgressStepper } from '~/components/onboarding/progress_stepper'
-import { StepAccount } from '~/components/onboarding/step_account'
-import { StepShopInfo } from '~/components/onboarding/step_shop_info'
-import { SuccessScreen } from '~/components/onboarding/success_screen'
+import { BrandingPanel } from './components/branding_panel'
+import { ProgressStepper } from './components/progress_stepper'
+import { StepAccount } from './components/step_account'
+import { StepShopInfo } from './components/step_shop_info'
+import { SuccessScreen } from './components/success_screen'
 import { defaultOnboardingFormValues, type OnboardingForm, onboardingSchema } from './form'
 import { Show } from '~/components/ui/show'
 
@@ -39,22 +39,12 @@ export default function ShopSignupPage() {
       setIsSubmitting(true)
       router.visit(
         {
-          route: 'shops.shop_registrations.create',
-        },
-        {
-          data: {
-            success: 1,
-          },
-        }
-      )
-
-      router.visit(
-        {
           route: 'shops.shop_registrations.store',
         },
         {
           method: 'post',
           data: value,
+          onFinish: () => setIsSubmitting(false),
         }
       )
     },
@@ -154,10 +144,9 @@ export default function ShopSignupPage() {
             </Show>
 
             {/* step content with animated transitions */}
-            <AnimatePresence mode="wait">
-              <Show when={isSuccess}>
+            <AnimatePresence>
+              <Show when={isSuccess} key="success">
                 <motion.div
-                  key="success"
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
@@ -178,10 +167,9 @@ export default function ShopSignupPage() {
                 </motion.div>
               </Show>
 
-              <Show when={!isSuccess}>
-                <Show when={step === 1}>
+              <Show when={!isSuccess} key="steps">
+                <Show when={step === 1} key="step-1">
                   <motion.div
-                    key="step-1"
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: -20 }}
@@ -195,9 +183,8 @@ export default function ShopSignupPage() {
                   </motion.div>
                 </Show>
 
-                <Show when={step === 2}>
+                <Show when={step === 2} key="step-2">
                   <motion.div
-                    key="step-2"
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: -20 }}

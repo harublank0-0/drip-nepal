@@ -25,7 +25,9 @@ export default class User extends compose(UserSchema, AuthFinder) {
     return `${first.slice(0, 2)}`.toUpperCase()
   }
 
-  @hasMany(() => Shop)
+  @hasMany(() => Shop, {
+    foreignKey: 'owner_id',
+  })
   declare shops: HasMany<typeof Shop>
 
   @manyToMany(() => GlobalRole, {
@@ -45,7 +47,11 @@ export default class User extends compose(UserSchema, AuthFinder) {
   @hasMany(() => Order)
   declare orders: HasMany<typeof Order>
 
-  isVerified() {
+  isEmailVerified() {
     return this.emailVerifiedAt !== null
+  }
+
+  isPhoneVerified() {
+    return this.phoneVerifiedAt !== null
   }
 }

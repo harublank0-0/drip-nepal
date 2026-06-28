@@ -5,7 +5,7 @@ import { Field, FieldError, FieldLabel } from '~/components/ui/field'
 import { Input } from '~/components/ui/input'
 import { Button } from '~/components/ui/button'
 import { Show } from '~/components/ui/show'
-import { PasswordStrength } from '~/components/onboarding/password_strength'
+import { PasswordStrength } from './password_strength'
 import { cn } from '~/lib/utils'
 import { Link } from '@adonisjs/inertia/react'
 

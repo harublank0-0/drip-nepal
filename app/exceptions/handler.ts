@@ -31,9 +31,6 @@ export default class HttpExceptionHandler extends ExceptionHandler {
    * response to the client
    */
   async handle(error: unknown, ctx: HttpContext) {
-    // if (error instanceof ValidationError) {
-    //   return ctx.response.status(error.status).json(error)
-    // }
     return super.handle(error, ctx)
   }
 

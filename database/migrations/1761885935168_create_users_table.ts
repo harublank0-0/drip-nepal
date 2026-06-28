@@ -11,7 +11,7 @@ export default class extends BaseSchema {
 
       table.string('username', 100).nullable().unique()
 
-      table.string('email', 100).nullable().unique()
+      table.string('email', 100).unique()
 
       table.string('password').nullable().comment('nullable for OAuth')
 
@@ -26,6 +26,7 @@ export default class extends BaseSchema {
         .comment('active, suspended, deleted, pending_verification,etc')
 
       table.timestamp('email_verified_at').nullable()
+      table.timestamp('phone_verified_at').nullable()
 
       table.timestamp('last_login_at').nullable()
 
@@ -34,8 +35,6 @@ export default class extends BaseSchema {
       table.timestamp('created_at').notNullable()
 
       table.timestamp('updated_at').nullable()
-
-      table.index(['status', 'email'])
     })
   }
 

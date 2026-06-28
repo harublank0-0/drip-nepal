@@ -11,17 +11,8 @@ import { middleware } from '#start/kernel'
 import { controllers } from '#generated/controllers'
 import router from '@adonisjs/core/services/router'
 
+import './routes/shops.ts'
 router.on('/').renderInertia('customers/home/index', {}).as('home')
-
-/*
- * Shops Routes
- */
-router
-  .group(() => {
-    router.get('/shops/signup', [controllers.auth.ShopRegistrations, 'create'])
-    router.post('/shops/signup', [controllers.auth.ShopRegistrations, 'store'])
-  })
-  .as('shops')
 
 router
   .group(() => {

@@ -1,5 +1,5 @@
 import { Input } from '~/components/ui/input'
-import { cn } from '~/lib/utils'
+import { cn, dripSlugify } from '~/lib/utils'
 
 type SlugInputProps = {
   value: string
@@ -8,15 +8,6 @@ type SlugInputProps = {
   isInvalid?: boolean
   error?: string
   shopName: string
-}
-
-function generateSlug(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, '')
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
-    .trim()
 }
 
 export function SlugInput({ value, onChange, onBlur, isInvalid, error, shopName }: SlugInputProps) {
@@ -35,14 +26,14 @@ export function SlugInput({ value, onChange, onBlur, isInvalid, error, shopName 
           aria-invalid={isInvalid}
           aria-describedby={error ? 'slug-error' : undefined}
           className={cn(
-            'pl-[9.5rem]',
+            'pl-38',
             isInvalid && 'border-destructive ring-3 ring-destructive/20 dark:ring-destructive/40'
           )}
         />
       </div>
       {shopName && !value && (
         <p className="text-xs text-muted-foreground">
-          Auto-generated: {generateSlug(shopName) || 'your-shop'}
+          Auto-generated: {dripSlugify(shopName) || 'your-shop'}
         </p>
       )}
       {error && (
@@ -53,5 +44,3 @@ export function SlugInput({ value, onChange, onBlur, isInvalid, error, shopName 
     </div>
   )
 }
-
-export { generateSlug }

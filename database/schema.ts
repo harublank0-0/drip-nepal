@@ -424,6 +424,71 @@ export class ProductSchema extends BaseModel {
   declare updatedAt: DateTime | null
 }
 
+export class ShopAddressSchema extends BaseModel {
+  static $columns = [
+    'address',
+    'city',
+    'createdAt',
+    'district',
+    'id',
+    'isDefault',
+    'label',
+    'province',
+    'shopId',
+    'type',
+    'updatedAt',
+  ] as const
+  $columns = ShopAddressSchema.$columns
+  @column()
+  declare address: string
+  @column()
+  declare city: string
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare district: string
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare isDefault: boolean
+  @column()
+  declare label: string | null
+  @column()
+  declare province: string
+  @column()
+  declare shopId: string
+  @column()
+  declare type: string
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+}
+
+export class ShopCategorySchema extends BaseModel {
+  static $columns = ['createdAt', 'description', 'id', 'label', 'slug', 'updatedAt'] as const
+  $columns = ShopCategorySchema.$columns
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare description: string | null
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare label: string
+  @column()
+  declare slug: string
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+}
+
+export class ShopCategoriesShopSchema extends BaseModel {
+  static $columns = ['shopCategoryId', 'shopId'] as const
+  $columns = ShopCategoriesShopSchema.$columns
+  @column()
+  declare shopCategoryId: string
+  @column()
+  declare shopId: string
+}
+
 export class ShopRolePermissionSchema extends BaseModel {
   static $columns = ['permissionId', 'shopRoleId'] as const
   $columns = ShopRolePermissionSchema.$columns
@@ -466,7 +531,6 @@ export class ShopStaffAssignmentSchema extends BaseModel {
 export class ShopSchema extends BaseModel {
   static $columns = [
     'banner',
-    'category',
     'createdAt',
     'deletedAt',
     'description',
@@ -484,8 +548,6 @@ export class ShopSchema extends BaseModel {
   $columns = ShopSchema.$columns
   @column()
   declare banner: string | null
-  @column()
-  declare category: string | null
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
   @column.dateTime()
@@ -512,45 +574,6 @@ export class ShopSchema extends BaseModel {
   declare updatedAt: DateTime | null
   @column.dateTime()
   declare verifiedAt: DateTime | null
-}
-
-export class ShopAddressSchema extends BaseModel {
-  static $columns = [
-    'address',
-    'city',
-    'createdAt',
-    'district',
-    'id',
-    'isDefault',
-    'label',
-    'province',
-    'shopId',
-    'type',
-    'updatedAt',
-  ] as const
-  $columns = ShopAddressSchema.$columns
-  @column()
-  declare address: string
-  @column()
-  declare city: string
-  @column.dateTime({ autoCreate: true })
-  declare createdAt: DateTime
-  @column()
-  declare district: string
-  @column({ isPrimary: true })
-  declare id: string
-  @column()
-  declare isDefault: boolean
-  @column()
-  declare label: string | null
-  @column()
-  declare province: string
-  @column()
-  declare shopId: string
-  @column()
-  declare type: string
-  @column.dateTime({ autoCreate: true, autoUpdate: true })
-  declare updatedAt: DateTime | null
 }
 
 export class UserAddressSchema extends BaseModel {
@@ -619,6 +642,7 @@ export class UserSchema extends BaseModel {
     'lastLoginAt',
     'password',
     'phone',
+    'phoneVerifiedAt',
     'status',
     'updatedAt',
     'username',
@@ -631,7 +655,7 @@ export class UserSchema extends BaseModel {
   @column.dateTime()
   declare deletedAt: DateTime | null
   @column()
-  declare email: string
+  declare email: string | null
   @column.dateTime()
   declare emailVerifiedAt: DateTime | null
   @column()
@@ -644,6 +668,8 @@ export class UserSchema extends BaseModel {
   declare password: string | null
   @column()
   declare phone: string | null
+  @column.dateTime()
+  declare phoneVerifiedAt: DateTime | null
   @column()
   declare status: string
   @column.dateTime({ autoCreate: true, autoUpdate: true })

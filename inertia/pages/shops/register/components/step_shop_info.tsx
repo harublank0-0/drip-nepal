@@ -12,25 +12,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from '~/components/ui/select'
-import { SlugInput, generateSlug } from '~/components/onboarding/slug_input'
-import { cn } from '~/lib/utils'
-import { ShopCategories, type ShopCategory } from '#shared/shop_categories'
+import { SlugInput } from './slug_input'
+import { cn, dripSlugify } from '~/lib/utils'
+import { ShopCategories } from '#shared/constants/shop_categories'
 import { MultiSelect } from '~/components/form_builder/multi_select'
-import { useCallback } from 'react'
 
 const shopCategories = ShopCategories.map((shopCategory) => ({
-  label: shopCategory.name,
+  label: shopCategory.label,
   value: shopCategory.slug,
 }))
 
 const nepalProvinces = [
-  'Koshi Province',
-  'Madhesh Province',
-  'Bagmati Province',
-  'Gandaki Province',
-  'Lumbini Province',
-  'Karnali Province',
-  'Sudurpashchim Province',
+  {
+    label: 'Bagmati Province',
+    value: 'bagmati-province',
+  },
 ]
 
 type StepShopInfoProps = {
@@ -56,7 +52,7 @@ export function StepShopInfo({ form, isSubmitting, onSubmit, onBack }: StepShopI
                 onBlur={field.handleBlur}
                 onChange={(e) => {
                   field.handleChange(e.target.value)
-                  form.setFieldValue('shopSlug' as any, generateSlug(e.target.value))
+                  form.setFieldValue('shopSlug', dripSlugify(e.target.value))
                 }}
                 placeholder="My Awesome Shop"
                 autoComplete="off"
@@ -93,12 +89,12 @@ export function StepShopInfo({ form, isSubmitting, onSubmit, onBack }: StepShopI
         }}
       </form.Field>
 
-      <form.Field name="category">
+      <form.Field name="categories">
         {(field) => {
           const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid
           return (
             <Field data-invalid={isInvalid}>
-              <FieldLabel htmlFor="category">Shop Category</FieldLabel>
+              <FieldLabel htmlFor="categories">Shop Category</FieldLabel>
               <MultiSelect
                 options={shopCategories}
                 value={field.state.value || []}
@@ -232,9 +228,9 @@ export function StepShopInfo({ form, isSubmitting, onSubmit, onBack }: StepShopI
                     <SelectValue placeholder="Select province" />
                   </SelectTrigger>
                   <SelectContent>
-                    {nepalProvinces.map((prov) => (
-                      <SelectItem key={prov} value={prov}>
-                        {prov}
+                    {nepalProvinces.map(({ label, value }) => (
+                      <SelectItem key={value} value={value}>
+                        {label}
                       </SelectItem>
                     ))}
                   </SelectContent>
