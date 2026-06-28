@@ -27,6 +27,7 @@ const demoShopOwners = [
 
 export default class extends BaseSeeder {
   async run() {
+    return
     const owner = await User.findBy('email', 'shopowner1@dripnepal.com')
     if (!owner) {
       for (const demoShopOwner of demoShopOwners) {

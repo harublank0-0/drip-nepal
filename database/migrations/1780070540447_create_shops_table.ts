@@ -1,4 +1,4 @@
-import { ShopStatuses } from '#constants/shop_status'
+import { ShopStatus } from '#constants/shop_status'
 import { BaseSchema } from '@adonisjs/lucid/schema'
 
 export default class extends BaseSchema {
@@ -9,7 +9,7 @@ export default class extends BaseSchema {
       table.uuid('id').primary().defaultTo(this.raw('gen_random_uuid()'))
 
       table.uuid('owner_id').notNullable()
-      table.foreign('owner_id').references('users.id')
+      table.foreign('owner_id').references('users.id').onDelete('RESTRICT')
 
       table.string('name', 100).notNullable().unique()
 
@@ -28,7 +28,7 @@ export default class extends BaseSchema {
       table
         .string('status', 30)
         .notNullable()
-        .defaultTo(ShopStatuses.PENDING)
+        .defaultTo(ShopStatus.PENDING)
         .comment('active, suspended, deleted, pending, rejected, etc')
 
       table.timestamp('verified_at').nullable()
