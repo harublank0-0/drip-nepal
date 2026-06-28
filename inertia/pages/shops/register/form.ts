@@ -13,7 +13,7 @@ export const onboardingSchema = z
     email: z.email('Invalid email address'),
 
     // owner's phone number
-    phone: z.string().min(7, 'Invalid phone number'),
+    phone: z.string().min(7, 'Invalid phone number').max(15, 'Invalid phone number'),
 
     password: z.string().min(8, 'Password must be at least 8 characters'),
     confirmPassword: z.string(),
@@ -26,7 +26,7 @@ export const onboardingSchema = z
     shopSlug: z.string().min(1, 'Shop URL is required'),
 
     // a shop can have multiple categories
-    category: z.string().array().min(1, 'Select at least one category'),
+    categories: z.string().array().min(1, 'Select at least one category'),
 
     // description of the shop
     description: z.string().optional(),
@@ -52,7 +52,7 @@ export const defaultOnboardingFormValues: OnboardingForm = {
   confirmPassword: '',
   shopName: '',
   shopSlug: '',
-  category: [],
+  categories: [],
   description: '',
   address: '',
   city: '',
