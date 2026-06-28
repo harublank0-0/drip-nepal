@@ -13,7 +13,7 @@ export default class ShopRegistrationController {
       return response.redirect().toPath('/')
     }
 
-    return inertia.render('shops/signup/index', {})
+    return inertia.render('shops/register/index', {})
   }
 
   async store({ request, response, auth }: HttpContext) {
