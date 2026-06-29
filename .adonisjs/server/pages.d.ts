@@ -66,7 +66,14 @@ declare module '@adonisjs/inertia/types' {
     'design_system/theme_section': ExtractProps<(typeof import('../../inertia/pages/design_system/theme_section.tsx'))['default']>
     'errors/not_found': ExtractProps<(typeof import('../../inertia/pages/errors/not_found.tsx'))['default']>
     'errors/server_error': ExtractProps<(typeof import('../../inertia/pages/errors/server_error.tsx'))['default']>
-    'shops/signup/form': ExtractProps<(typeof import('../../inertia/pages/shops/signup/form.ts'))['default']>
-    'shops/signup/index': ExtractProps<(typeof import('../../inertia/pages/shops/signup/index.tsx'))['default']>
+    'shops/register/components/branding_panel': ExtractProps<(typeof import('../../inertia/pages/shops/register/components/branding_panel.tsx'))['default']>
+    'shops/register/components/password_strength': ExtractProps<(typeof import('../../inertia/pages/shops/register/components/password_strength.tsx'))['default']>
+    'shops/register/components/progress_stepper': ExtractProps<(typeof import('../../inertia/pages/shops/register/components/progress_stepper.tsx'))['default']>
+    'shops/register/components/slug_input': ExtractProps<(typeof import('../../inertia/pages/shops/register/components/slug_input.tsx'))['default']>
+    'shops/register/components/step_account': ExtractProps<(typeof import('../../inertia/pages/shops/register/components/step_account.tsx'))['default']>
+    'shops/register/components/step_shop_info': ExtractProps<(typeof import('../../inertia/pages/shops/register/components/step_shop_info.tsx'))['default']>
+    'shops/register/components/success_screen': ExtractProps<(typeof import('../../inertia/pages/shops/register/components/success_screen.tsx'))['default']>
+    'shops/register/form': ExtractProps<(typeof import('../../inertia/pages/shops/register/form.ts'))['default']>
+    'shops/register/index': ExtractProps<(typeof import('../../inertia/pages/shops/register/index.tsx'))['default']>
   }
 }
