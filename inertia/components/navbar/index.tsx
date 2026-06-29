@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { usePage, router } from '@inertiajs/react'
+import { usePage } from '@inertiajs/react'
+import { useRouter } from '@adonisjs/inertia/react'
 import {
   LucideSearch,
   LucideShoppingBag,
@@ -21,7 +22,14 @@ import { VisuallyHidden } from 'radix-ui'
 import { motion, AnimatePresence } from 'framer-motion'
 import { SearchModal } from '~/components/search/search_modal'
 import { useCart } from '~/hooks/use_cart'
+import { Data } from '@generated/data'
+import { Show } from '~/components/ui/show'
 
+type User = {
+  fullName: string
+  email: string
+  initials: string
+}
 export const NavBar = () => {
   const { url } = usePage()
   const isHomePage = routes.home.pattern === url
@@ -29,9 +37,9 @@ export const NavBar = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [searchModalOpen, setSearchModalOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
+  const router = useRouter()
 
-  const user = (usePage().props as { user?: { fullName: string; email: string; initials: string } })
-    .user
+  const user = (usePage().props as { user?: User }).user
 
   const { openDrawer, itemCount } = useCart()
 
@@ -59,7 +67,9 @@ export const NavBar = () => {
   }, [])
 
   const handleLogout = () => {
-    router.post('/logout')
+    router.visit({
+      route: 'session.destroy',
+    })
   }
 
   const handleSearchOpen = () => setSearchModalOpen(true)
@@ -132,92 +142,95 @@ export const NavBar = () => {
             </li>
 
             {/* Profile */}
-            <li className="relative hidden sm:block">
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={profileOpen ? 'Close user menu' : 'User account'}
-                onClick={() => setProfileOpen(!profileOpen)}
-                className={cn('cursor-pointer', profileOpen && 'bg-white/10')}
-              >
-                {user?.initials ? (
-                  <span className="size-5 rounded-full bg-primary text-primary-foreground text-xs font-bold flex items-center justify-center">
-                    {user.initials}
-                  </span>
-                ) : (
-                  <LucideUser className="size-5" />
-                )}
-              </Button>
+            <Show when={!!user}>
+              <li className="relative hidden sm:block">
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={profileOpen ? 'Close user menu' : 'User account'}
+                  onClick={() => setProfileOpen(!profileOpen)}
+                  className={cn('cursor-pointer', profileOpen && 'bg-white/10')}
+                >
+                  {user?.initials ? (
+                    <span className="size-5 rounded-full bg-primary text-primary-foreground text-xs font-bold flex items-center justify-center">
+                      {user.initials}
+                    </span>
+                  ) : (
+                    <LucideUser className="size-5" />
+                  )}
+                </Button>
 
-              {profileOpen && (
-                <div className="fixed inset-0 z-40" onClick={() => setProfileOpen(false)} />
-              )}
-              <AnimatePresence>
                 {profileOpen && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -8, scale: 0.96 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: -8, scale: 0.96 }}
-                    transition={{ duration: 0.15, ease: 'easeOut' }}
-                    className="absolute right-0 top-full mt-2 w-56 rounded-xl bg-black/95 backdrop-blur-xl border border-white/10 shadow-xl shadow-black/40 overflow-hidden z-50"
-                  >
-                    {user ? (
-                      <>
-                        <div className="px-4 py-3 border-b border-white/10">
-                          <p className="text-sm font-medium text-white truncate">{user.fullName}</p>
-                          <p className="text-xs text-white/50 truncate mt-0.5">{user.email}</p>
-                        </div>
-                        <div className="py-1">
-                          <button
+                  <div className="fixed inset-0 z-40" onClick={() => setProfileOpen(false)} />
+                )}
+                <AnimatePresence>
+                  {profileOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -8, scale: 0.96 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -8, scale: 0.96 }}
+                      transition={{ duration: 0.15, ease: 'easeOut' }}
+                      className="absolute right-0 top-full mt-2 w-56 rounded-xl bg-black/95 backdrop-blur-xl border border-white/10 shadow-xl shadow-black/40 overflow-hidden z-50"
+                    >
+                      {user ? (
+                        <>
+                          <div className="px-4 py-3 border-b border-white/10">
+                            <p className="text-sm font-medium text-white truncate">
+                              {user.fullName}
+                            </p>
+                            <p className="text-xs text-white/50 truncate mt-0.5">{user.email}</p>
+                          </div>
+                          <div className="py-1">
+                            <button
+                              onClick={() => setProfileOpen(false)}
+                              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-colors"
+                            >
+                              <LucideUserCircle className="size-4" />
+                              Profile
+                            </button>
+                            <button
+                              onClick={() => setProfileOpen(false)}
+                              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-colors"
+                            >
+                              <LucideSettings className="size-4" />
+                              Settings
+                            </button>
+                          </div>
+                          <div className="border-t border-white/10 py-1">
+                            <button
+                              onClick={handleLogout}
+                              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-400 hover:text-red-300 hover:bg-white/5 transition-colors"
+                            >
+                              <LucideLogOut className="size-4" />
+                              Logout
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="py-2">
+                          <Link
+                            route="login"
+                            className="flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-colors"
                             onClick={() => setProfileOpen(false)}
-                            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-colors"
+                          >
+                            <LucideArrowRight className="size-4" />
+                            Sign In
+                          </Link>
+                          <Link
+                            route="signup"
+                            className="flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-colors"
+                            onClick={() => setProfileOpen(false)}
                           >
                             <LucideUserCircle className="size-4" />
-                            Profile
-                          </button>
-                          <button
-                            onClick={() => setProfileOpen(false)}
-                            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-colors"
-                          >
-                            <LucideSettings className="size-4" />
-                            Settings
-                          </button>
+                            Create Account
+                          </Link>
                         </div>
-                        <div className="border-t border-white/10 py-1">
-                          <button
-                            onClick={handleLogout}
-                            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-400 hover:text-red-300 hover:bg-white/5 transition-colors"
-                          >
-                            <LucideLogOut className="size-4" />
-                            Logout
-                          </button>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="py-2">
-                        <Link
-                          route="login"
-                          className="flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-colors"
-                          onClick={() => setProfileOpen(false)}
-                        >
-                          <LucideArrowRight className="size-4" />
-                          Sign In
-                        </Link>
-                        <Link
-                          route="signup"
-                          className="flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-colors"
-                          onClick={() => setProfileOpen(false)}
-                        >
-                          <LucideUserCircle className="size-4" />
-                          Create Account
-                        </Link>
-                      </div>
-                    )}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </li>
-
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </li>
+            </Show>
             {/* Mobile menu toggle */}
             <li className="md:hidden">
               <Button

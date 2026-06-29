@@ -4,7 +4,12 @@ import { usePage } from '@inertiajs/react'
 import { type ReactElement, useEffect } from 'react'
 import { ThemeProvider } from '~/components/providers/theme_provider'
 
-export default function RootLayout({ children }: { children: ReactElement<Data.SharedProps> }) {
+export default function RootLayout({
+  children,
+  ...rest
+}: {
+  children: ReactElement<Data.SharedProps>
+}) {
   const { url } = usePage()
   useEffect(() => {
     toast.dismiss()
@@ -19,6 +24,7 @@ export default function RootLayout({ children }: { children: ReactElement<Data.S
     }
   })
 
+  console.info({ pageProps: rest })
   return (
     <>
       <ThemeProvider defaultTheme="dark">
