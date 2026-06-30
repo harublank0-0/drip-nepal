@@ -655,7 +655,7 @@ export class UserSchema extends BaseModel {
   @column.dateTime()
   declare deletedAt: DateTime | null
   @column()
-  declare email: string | null
+  declare email: string
   @column.dateTime()
   declare emailVerifiedAt: DateTime | null
   @column()
