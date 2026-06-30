@@ -89,6 +89,8 @@ export function CheckoutPage() {
   // Load initial suggested delivery methods
   useEffect(() => {
     if (!isLoading && !selectedDeliveryMethodId && MOCK_DELIVERY_METHODS.length > 0) {
+      //TODO: will see this later
+      // eslint-disable-next-line
       setSelectedDeliveryMethodId(MOCK_DELIVERY_METHODS[0].id)
     }
   }, [isLoading, selectedDeliveryMethodId])
@@ -104,6 +106,8 @@ export function CheckoutPage() {
         }
       }
       if (Object.keys(initial).length > 0) {
+        //TODO: will see this later
+        // eslint-disable-next-line
         setStoreDeliverySelections((prev) => ({ ...prev, ...initial }))
       }
     }

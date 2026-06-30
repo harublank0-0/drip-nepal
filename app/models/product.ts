@@ -1,11 +1,11 @@
 import { ProductSchema } from '#database/schema'
 import { belongsTo, hasMany } from '@adonisjs/lucid/orm'
-import Shop from './shop.ts'
+import Shop from './shop.js'
 import type { BelongsTo, HasMany } from '@adonisjs/lucid/types/relations'
-import Category from './category.ts'
-import ProductVariant from './product_variant.ts'
-import ProductMedia from './product_media.ts'
-import OrderItem from './order_item.ts'
+import Category from './category.js'
+import ProductVariant from './product_variant.js'
+import ProductMedia from './product_media.js'
+import OrderItem from './order_item.js'
 
 export default class Product extends ProductSchema {
   @belongsTo(() => Shop)

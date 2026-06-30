@@ -4,9 +4,11 @@
     "module": "ESNext",
     "jsx": "react-jsx",
     "baseUrl": ".",
+    "ignoreDeprecations": "6.0",
     "paths": {
       "~/*": ["./*"],
-      "@generated/*": ["../.adonisjs/client/*"]
+      "@generated/*": ["../.adonisjs/client/*"],
+      "@shared/*": ["../shared/*"]
     }
   },
   "include": [

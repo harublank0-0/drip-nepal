@@ -1,7 +1,6 @@
 import factory from '@adonisjs/lucid/factories'
 import Shop from '#models/shop'
 import { ShopStatusValues } from '#constants/shop_status'
-import User from '#models/user'
 
 export const ShopFactory = factory
   .define(Shop, async ({ faker }) => {

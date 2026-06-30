@@ -1,7 +1,7 @@
 import { Carousel, type CarouselApi, CarouselContent, CarouselItem } from '~/components/ui/carousel'
 import { cn } from '~/lib/utils'
 import CarouselFade from 'embla-carousel-fade'
-import { useMousePosition } from '~/pages/commerce/product_detail/hooks/useMousePosition'
+import { useMousePosition } from '~/pages/commerce/product_detail/hooks/use_mouse_position'
 import { LucideExpand, LucideX } from 'lucide-react'
 import { Show } from '~/components/ui/show'
 
