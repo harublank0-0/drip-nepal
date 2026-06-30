@@ -6,24 +6,24 @@
 // import { random } from '#utils/random'
 import { BaseSeeder } from '@adonisjs/lucid/seeders'
 
-const demoShopOwners = [
-  {
-    fullName: 'shop owner 1',
-    email: 'shopowner1@dripnepal.com',
-    password: 'shopowner1',
-  },
-
-  {
-    fullName: 'shop owner 2',
-    email: 'shopowner2@dripnepal.com',
-    password: 'shopowner2',
-  },
-  {
-    fullName: 'shop owner 3',
-    email: 'shopowner3@dripnepal.com',
-    password: 'shopowner3',
-  },
-]
+// const demoShopOwners = [
+//   {
+//     fullName: 'shop owner 1',
+//     email: 'shopowner1@dripnepal.com',
+//     password: 'shopowner1',
+//   },
+//
+//   {
+//     fullName: 'shop owner 2',
+//     email: 'shopowner2@dripnepal.com',
+//     password: 'shopowner2',
+//   },
+//   {
+//     fullName: 'shop owner 3',
+//     email: 'shopowner3@dripnepal.com',
+//     password: 'shopowner3',
+//   },
+// ]
 
 export default class extends BaseSeeder {
   async run() {
