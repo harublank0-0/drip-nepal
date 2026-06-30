@@ -48,7 +48,6 @@ declare module '@adonisjs/inertia/types' {
     'commerce/product_detail/components/review_section': ExtractProps<(typeof import('../../inertia/pages/commerce/product_detail/components/review_section.tsx'))['default']>
     'commerce/product_detail/components/store_card': ExtractProps<(typeof import('../../inertia/pages/commerce/product_detail/components/store_card.tsx'))['default']>
     'commerce/product_detail/components/variant_selector': ExtractProps<(typeof import('../../inertia/pages/commerce/product_detail/components/variant_selector.tsx'))['default']>
-    'commerce/product_detail/hooks/useMousePosition': ExtractProps<(typeof import('../../inertia/pages/commerce/product_detail/hooks/useMousePosition.ts'))['default']>
     'commerce/product_detail/index': ExtractProps<(typeof import('../../inertia/pages/commerce/product_detail/index.tsx'))['default']>
     'commerce/product_detail/mock': ExtractProps<(typeof import('../../inertia/pages/commerce/product_detail/mock.ts'))['default']>
     'commerce/women': ExtractProps<(typeof import('../../inertia/pages/commerce/women.tsx'))['default']>
@@ -75,5 +74,6 @@ declare module '@adonisjs/inertia/types' {
     'shops/register/components/success_screen': ExtractProps<(typeof import('../../inertia/pages/shops/register/components/success_screen.tsx'))['default']>
     'shops/register/form': ExtractProps<(typeof import('../../inertia/pages/shops/register/form.ts'))['default']>
     'shops/register/index': ExtractProps<(typeof import('../../inertia/pages/shops/register/index.tsx'))['default']>
+    'commerce/product_detail/hooks/use_mouse_position': ExtractProps<(typeof import('../../inertia/pages/commerce/product_detail/hooks/use_mouse_position.ts'))['default']>
   }
 }

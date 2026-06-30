@@ -14,8 +14,8 @@ import {
 } from '~/components/ui/select'
 import { SlugInput } from './slug_input'
 import { cn, dripSlugify } from '~/lib/utils'
-import { ShopCategories } from '#shared/constants/shop_categories'
 import { MultiSelect } from '~/components/form_builder/multi_select'
+import { ShopCategories } from '@shared/constants/shop_categories'
 
 const shopCategories = ShopCategories.map((shopCategory) => ({
   label: shopCategory.label,

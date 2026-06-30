@@ -1,4 +1,4 @@
-import { Data } from '@generated/data'
+import { type Data } from '@generated/data'
 import { Toaster } from 'sonner'
 import { CartDrawer } from '~/components/commerce/cart/cart_drawer'
 import { Footer } from '~/components/footer'

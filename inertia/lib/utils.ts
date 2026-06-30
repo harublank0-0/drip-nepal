@@ -19,7 +19,7 @@ export const isBrowser = typeof window !== 'undefined'
  * it's the price at which vendor is selling
  */
 export const getDiscountPercentage = (listAmount: number, sellingPrice: number) => {
-  if (isNaN(listAmount) || isNaN(sellingPrice)) return 0
+  if (Number.isNaN(listAmount) || Number.isNaN(sellingPrice)) return 0
 
   return Math.round(((listAmount - sellingPrice) / listAmount) * 100)
 }
@@ -32,7 +32,7 @@ export const getDiscountPercentage = (listAmount: number, sellingPrice: number) 
  * it's the price at which vendor is selling
  */
 export const getDiscountedPrice = (listAmount: number, sellingPrice: number) => {
-  if (isNaN(listAmount) || isNaN(sellingPrice)) return 0
+  if (Number.isNaN(listAmount) || Number.isNaN(sellingPrice)) return 0
 
   return Math.abs(listAmount - sellingPrice)
 }

@@ -11,14 +11,11 @@ type ColorVariantsProps = {
   colors: ColorVariant[]
 }
 export function ColorVariants(props: ColorVariantsProps) {
-  const [currentColor, setCurrentColor] = useState({
-    color: null,
-    thumbnailUrl: null,
-  })
+  const [currentColorIndex, setCurrentColorIndex] = useState(0)
   const [showAllVariants, setShowAllVariants] = useState(false)
   const { colors } = props
 
-  // const currentColor = colors[currentColorIndex].color
+  const currentColor = colors[currentColorIndex].color
 
   const onToggleRemainingVariants = () => setShowAllVariants((o) => !o)
 
@@ -71,6 +68,7 @@ function ColorVariantsCardMapper(props: ColorVariantsCardMapperProps) {
       const remainingVariants = totalVariants - index
       return (
         <ShowAllVariantsCard
+          key={colorVariant.color}
           numberOfHiddenVariants={remainingVariants}
           onToggleRemainingVariants={onToggleRemainingVariants}
         />

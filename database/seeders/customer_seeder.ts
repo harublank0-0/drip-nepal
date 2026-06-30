@@ -1,5 +1,5 @@
-import { UserFactory } from '#database/factories/user_factory'
-import User from '#models/user'
+// import { UserFactory } from '#database/factories/user_factory'
+// import User from '#models/user'
 import { BaseSeeder } from '@adonisjs/lucid/seeders'
 
 const demoUsers = [
@@ -30,14 +30,13 @@ const demoUsers = [
 
 export default class extends BaseSeeder {
   async run() {
-    return
-    for (const user of demoUsers) {
-      const userExists = await User.findBy('email', user.email)
-      if (!userExists) {
-        await UserFactory.merge(user).create()
-      }
-    }
-
-    await UserFactory.createMany(10)
+    // for (const user of demoUsers) {
+    //   const userExists = await User.findBy('email', user.email)
+    //   if (!userExists) {
+    //     await UserFactory.merge(user).create()
+    //   }
+    // }
+    //
+    // await UserFactory.createMany(10)
   }
 }
