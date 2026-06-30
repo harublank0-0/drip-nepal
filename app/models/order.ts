@@ -1,10 +1,10 @@
 import { OrderSchema } from '#database/schema'
 import { belongsTo, hasMany } from '@adonisjs/lucid/orm'
-import User from './user.ts'
+import User from './user.js'
 import type { BelongsTo, HasMany } from '@adonisjs/lucid/types/relations'
-import UserAddress from './user_address.ts'
-import OrderItem from './order_item.ts'
-import Payment from './payment.ts'
+import UserAddress from './user_address.js'
+import OrderItem from './order_item.js'
+import Payment from './payment.js'
 
 export default class Order extends OrderSchema {
   @belongsTo(() => User)

@@ -1,8 +1,8 @@
 import { GlobalRoleSchema } from '#database/schema'
 import { manyToMany } from '@adonisjs/lucid/orm'
-import Permission from './permission.ts'
+import Permission from './permission.js'
 import type { ManyToMany } from '@adonisjs/lucid/types/relations'
-import User from './user.ts'
+import User from './user.js'
 
 export default class GlobalRole extends GlobalRoleSchema {
   @manyToMany(() => User, {

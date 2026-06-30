@@ -1,8 +1,8 @@
 import { ProductMediaSchema } from '#database/schema'
 import { belongsTo } from '@adonisjs/lucid/orm'
 import type { BelongsTo } from '@adonisjs/lucid/types/relations'
-import Product from './product.ts'
-import ProductVariant from './product_variant.ts'
+import Product from './product.js'
+import ProductVariant from './product_variant.js'
 
 export default class ProductMedia extends ProductMediaSchema {
   @belongsTo(() => Product)

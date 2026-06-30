@@ -1,8 +1,8 @@
 import { CartSchema } from '#database/schema'
 import { belongsTo, hasMany } from '@adonisjs/lucid/orm'
-import User from './user.ts'
+import User from './user.js'
 import type { BelongsTo, HasMany } from '@adonisjs/lucid/types/relations'
-import CartItem from './cart_item.ts'
+import CartItem from './cart_item.js'
 
 export default class Cart extends CartSchema {
   @belongsTo(() => User)

@@ -1,8 +1,8 @@
 import { AttributeValueSchema } from '#database/schema'
 import { belongsTo, manyToMany } from '@adonisjs/lucid/orm'
-import Attribute from './attribute.ts'
+import Attribute from './attribute.js'
 import type { BelongsTo, ManyToMany } from '@adonisjs/lucid/types/relations'
-import ProductVariant from './product_variant.ts'
+import ProductVariant from './product_variant.js'
 
 export default class AttributeValue extends AttributeValueSchema {
   @belongsTo(() => Attribute)
