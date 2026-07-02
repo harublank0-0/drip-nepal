@@ -18,6 +18,12 @@ const routes = {
     tokens: [{"old":"/shops/register","type":0,"val":"shops","end":""},{"old":"/shops/register","type":0,"val":"register","end":""}],
     types: placeholder as Registry['shops.shop_registrations.store']['types'],
   },
+  'shops.shop_dashboard.create': {
+    methods: ["GET","HEAD"],
+    pattern: '/shops/dashboard',
+    tokens: [{"old":"/shops/dashboard","type":0,"val":"shops","end":""},{"old":"/shops/dashboard","type":0,"val":"dashboard","end":""}],
+    types: placeholder as Registry['shops.shop_dashboard.create']['types'],
+  },
   'home': {
     methods: ["GET","HEAD"],
     pattern: '/',

@@ -66,6 +66,56 @@ declare module '@adonisjs/inertia/types' {
     'design_system/theme_section': ExtractProps<(typeof import('../../inertia/pages/design_system/theme_section.tsx'))['default']>
     'errors/not_found': ExtractProps<(typeof import('../../inertia/pages/errors/not_found.tsx'))['default']>
     'errors/server_error': ExtractProps<(typeof import('../../inertia/pages/errors/server_error.tsx'))['default']>
+    'landing/components/AnimatedCounter': ExtractProps<(typeof import('../../inertia/pages/landing/components/AnimatedCounter.tsx'))['default']>
+    'landing/components/BackgroundEffects': ExtractProps<(typeof import('../../inertia/pages/landing/components/BackgroundEffects.tsx'))['default']>
+    'landing/components/BenefitsSection': ExtractProps<(typeof import('../../inertia/pages/landing/components/BenefitsSection.tsx'))['default']>
+    'landing/components/CommandPalette': ExtractProps<(typeof import('../../inertia/pages/landing/components/CommandPalette.tsx'))['default']>
+    'landing/components/CTASection': ExtractProps<(typeof import('../../inertia/pages/landing/components/CTASection.tsx'))['default']>
+    'landing/components/CursorGlow': ExtractProps<(typeof import('../../inertia/pages/landing/components/CursorGlow.tsx'))['default']>
+    'landing/components/DashboardMockup': ExtractProps<(typeof import('../../inertia/pages/landing/components/DashboardMockup.tsx'))['default']>
+    'landing/components/DashboardPreview': ExtractProps<(typeof import('../../inertia/pages/landing/components/DashboardPreview.tsx'))['default']>
+    'landing/components/FAQ': ExtractProps<(typeof import('../../inertia/pages/landing/components/FAQ.tsx'))['default']>
+    'landing/components/FeaturesSection': ExtractProps<(typeof import('../../inertia/pages/landing/components/FeaturesSection.tsx'))['default']>
+    'landing/components/Footer': ExtractProps<(typeof import('../../inertia/pages/landing/components/Footer.tsx'))['default']>
+    'landing/components/HeroSection': ExtractProps<(typeof import('../../inertia/pages/landing/components/HeroSection.tsx'))['default']>
+    'landing/components/PricingSection': ExtractProps<(typeof import('../../inertia/pages/landing/components/PricingSection.tsx'))['default']>
+    'landing/components/ScrollProgress': ExtractProps<(typeof import('../../inertia/pages/landing/components/ScrollProgress.tsx'))['default']>
+    'landing/components/StatisticsSection': ExtractProps<(typeof import('../../inertia/pages/landing/components/StatisticsSection.tsx'))['default']>
+    'landing/components/Testimonials': ExtractProps<(typeof import('../../inertia/pages/landing/components/Testimonials.tsx'))['default']>
+    'landing/components/TrustedBy': ExtractProps<(typeof import('../../inertia/pages/landing/components/TrustedBy.tsx'))['default']>
+    'shops/dashboard/index': ExtractProps<(typeof import('../../inertia/pages/shops/dashboard/index.tsx'))['default']>
+    'shops/dashboard/shop_management/components/analytics_summary': ExtractProps<(typeof import('../../inertia/pages/shops/dashboard/shop_management/components/analytics_summary.tsx'))['default']>
+    'shops/dashboard/shop_management/components/branding_settings': ExtractProps<(typeof import('../../inertia/pages/shops/dashboard/shop_management/components/branding_settings.tsx'))['default']>
+    'shops/dashboard/shop_management/components/business_hours': ExtractProps<(typeof import('../../inertia/pages/shops/dashboard/shop_management/components/business_hours.tsx'))['default']>
+    'shops/dashboard/shop_management/components/danger_zone': ExtractProps<(typeof import('../../inertia/pages/shops/dashboard/shop_management/components/danger_zone.tsx'))['default']>
+    'shops/dashboard/shop_management/components/notification_settings': ExtractProps<(typeof import('../../inertia/pages/shops/dashboard/shop_management/components/notification_settings.tsx'))['default']>
+    'shops/dashboard/shop_management/components/onboarding_empty_state': ExtractProps<(typeof import('../../inertia/pages/shops/dashboard/shop_management/components/onboarding_empty_state.tsx'))['default']>
+    'shops/dashboard/shop_management/components/page_header': ExtractProps<(typeof import('../../inertia/pages/shops/dashboard/shop_management/components/page_header.tsx'))['default']>
+    'shops/dashboard/shop_management/components/payment_settings': ExtractProps<(typeof import('../../inertia/pages/shops/dashboard/shop_management/components/payment_settings.tsx'))['default']>
+    'shops/dashboard/shop_management/components/performance_insights': ExtractProps<(typeof import('../../inertia/pages/shops/dashboard/shop_management/components/performance_insights.tsx'))['default']>
+    'shops/dashboard/shop_management/components/policies_section': ExtractProps<(typeof import('../../inertia/pages/shops/dashboard/shop_management/components/policies_section.tsx'))['default']>
+    'shops/dashboard/shop_management/components/section_nav': ExtractProps<(typeof import('../../inertia/pages/shops/dashboard/shop_management/components/section_nav.tsx'))['default']>
+    'shops/dashboard/shop_management/components/security_settings': ExtractProps<(typeof import('../../inertia/pages/shops/dashboard/shop_management/components/security_settings.tsx'))['default']>
+    'shops/dashboard/shop_management/components/seo_settings': ExtractProps<(typeof import('../../inertia/pages/shops/dashboard/shop_management/components/seo_settings.tsx'))['default']>
+    'shops/dashboard/shop_management/components/shared/auto_save_indicator': ExtractProps<(typeof import('../../inertia/pages/shops/dashboard/shop_management/components/shared/auto_save_indicator.tsx'))['default']>
+    'shops/dashboard/shop_management/components/shared/color_input': ExtractProps<(typeof import('../../inertia/pages/shops/dashboard/shop_management/components/shared/color_input.tsx'))['default']>
+    'shops/dashboard/shop_management/components/shared/confirm_dialog': ExtractProps<(typeof import('../../inertia/pages/shops/dashboard/shop_management/components/shared/confirm_dialog.tsx'))['default']>
+    'shops/dashboard/shop_management/components/shared/image_upload': ExtractProps<(typeof import('../../inertia/pages/shops/dashboard/shop_management/components/shared/image_upload.tsx'))['default']>
+    'shops/dashboard/shop_management/components/shared/policy_editor': ExtractProps<(typeof import('../../inertia/pages/shops/dashboard/shop_management/components/shared/policy_editor.tsx'))['default']>
+    'shops/dashboard/shop_management/components/shared/section_card': ExtractProps<(typeof import('../../inertia/pages/shops/dashboard/shop_management/components/shared/section_card.tsx'))['default']>
+    'shops/dashboard/shop_management/components/shared/sparkline': ExtractProps<(typeof import('../../inertia/pages/shops/dashboard/shop_management/components/shared/sparkline.tsx'))['default']>
+    'shops/dashboard/shop_management/components/shared/stat_card': ExtractProps<(typeof import('../../inertia/pages/shops/dashboard/shop_management/components/shared/stat_card.tsx'))['default']>
+    'shops/dashboard/shop_management/components/shipping_settings': ExtractProps<(typeof import('../../inertia/pages/shops/dashboard/shop_management/components/shipping_settings.tsx'))['default']>
+    'shops/dashboard/shop_management/components/shop_information_form': ExtractProps<(typeof import('../../inertia/pages/shops/dashboard/shop_management/components/shop_information_form.tsx'))['default']>
+    'shops/dashboard/shop_management/components/shop_overview_card': ExtractProps<(typeof import('../../inertia/pages/shops/dashboard/shop_management/components/shop_overview_card.tsx'))['default']>
+    'shops/dashboard/shop_management/components/social_links': ExtractProps<(typeof import('../../inertia/pages/shops/dashboard/shop_management/components/social_links.tsx'))['default']>
+    'shops/dashboard/shop_management/components/sticky_save_bar': ExtractProps<(typeof import('../../inertia/pages/shops/dashboard/shop_management/components/sticky_save_bar.tsx'))['default']>
+    'shops/dashboard/shop_management/constants': ExtractProps<(typeof import('../../inertia/pages/shops/dashboard/shop_management/constants.ts'))['default']>
+    'shops/dashboard/shop_management/format': ExtractProps<(typeof import('../../inertia/pages/shops/dashboard/shop_management/format.ts'))['default']>
+    'shops/dashboard/shop_management/mock_data': ExtractProps<(typeof import('../../inertia/pages/shops/dashboard/shop_management/mock_data.ts'))['default']>
+    'shops/dashboard/shop_management/types': ExtractProps<(typeof import('../../inertia/pages/shops/dashboard/shop_management/types.ts'))['default']>
+    'shops/dashboard/shop_management/use_section_form': ExtractProps<(typeof import('../../inertia/pages/shops/dashboard/shop_management/use_section_form.ts'))['default']>
+    'shops/dashboard/shop_management/use_shop_management': ExtractProps<(typeof import('../../inertia/pages/shops/dashboard/shop_management/use_shop_management.ts'))['default']>
     'shops/register/components/branding_panel': ExtractProps<(typeof import('../../inertia/pages/shops/register/components/branding_panel.tsx'))['default']>
     'shops/register/components/password_strength': ExtractProps<(typeof import('../../inertia/pages/shops/register/components/password_strength.tsx'))['default']>
     'shops/register/components/progress_stepper': ExtractProps<(typeof import('../../inertia/pages/shops/register/components/progress_stepper.tsx'))['default']>

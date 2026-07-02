@@ -10,5 +10,8 @@ export const controllers = {
     auth: {
       ShopRegistrations: () => import('#controllers/shops/auth/shop_registrations_controller'),
     },
+    dashboard: {
+      ShopDashboard: () => import('#controllers/shops/dashboard/shop_dashboard_controller'),
+    },
   },
 }

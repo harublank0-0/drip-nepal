@@ -7,6 +7,9 @@ export interface ApiDefinition {
       create: typeof routes['shops.shop_registrations.create']
       store: typeof routes['shops.shop_registrations.store']
     }
+    shopDashboard: {
+      create: typeof routes['shops.shop_dashboard.create']
+    }
   }
   home: typeof routes['home']
   newAccount: {

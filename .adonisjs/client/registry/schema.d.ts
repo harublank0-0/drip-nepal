@@ -31,6 +31,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/shops/auth/shop_registrations_controller').default['store']>>> | { status: 422; response: { errors: SimpleError[] } }
     }
   }
+  'shops.shop_dashboard.create': {
+    methods: ["GET","HEAD"]
+    pattern: '/shops/dashboard'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/shops/dashboard/shop_dashboard_controller').default['create']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/shops/dashboard/shop_dashboard_controller').default['create']>>>
+    }
+  }
   'home': {
     methods: ["GET","HEAD"]
     pattern: '/'

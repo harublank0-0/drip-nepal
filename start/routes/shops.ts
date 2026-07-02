@@ -10,3 +10,10 @@ router
   })
   .as('shops')
   .middleware(middleware.guest())
+
+router
+  .group(() => {
+    router.get('/shops/dashboard', [controllers.shops.dashboard.ShopDashboard, 'create'])
+  })
+  .as('shops.dashboard')
+  .middleware(middleware.auth())
