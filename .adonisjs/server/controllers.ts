@@ -12,6 +12,7 @@ export const controllers = {
     },
     dashboard: {
       ShopDashboard: () => import('#controllers/shops/dashboard/shop_dashboard_controller'),
+      ShopSettings: () => import('#controllers/shops/dashboard/shop_settings_controller'),
     },
   },
 }

@@ -31,7 +31,9 @@ export default class InertiaMiddleware extends BaseInertiaMiddleware {
         error,
         success,
       }),
-      user: ctx.inertia.always(auth?.user ? UserTransformer.transform(auth.user) : undefined),
+      user: ctx.inertia.always(
+        auth?.user?.related('shops') ? UserTransformer.transform(auth.user) : undefined
+      ),
     }
   }
 

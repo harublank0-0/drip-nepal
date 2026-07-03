@@ -31,7 +31,7 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/shops/auth/shop_registrations_controller').default['store']>>> | { status: 422; response: { errors: SimpleError[] } }
     }
   }
-  'shops.shop_dashboard.create': {
+  'shops.dashboard.shop_dashboard.create': {
     methods: ["GET","HEAD"]
     pattern: '/shops/dashboard'
     types: {
@@ -41,6 +41,162 @@ export interface Registry {
       query: {}
       response: ExtractResponse<Awaited<ReturnType<import('#controllers/shops/dashboard/shop_dashboard_controller').default['create']>>>
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/shops/dashboard/shop_dashboard_controller').default['create']>>>
+    }
+  }
+  'shop_settings.overview': {
+    methods: ["GET","HEAD"]
+    pattern: '/vendor/shop/overview'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/shops/dashboard/shop_settings_controller').default['overview']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/shops/dashboard/shop_settings_controller').default['overview']>>>
+    }
+  }
+  'shop_settings.general': {
+    methods: ["GET","HEAD"]
+    pattern: '/vendor/shop/general'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/shops/dashboard/shop_settings_controller').default['general']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/shops/dashboard/shop_settings_controller').default['general']>>>
+    }
+  }
+  'shop_settings.branding': {
+    methods: ["GET","HEAD"]
+    pattern: '/vendor/shop/branding'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/shops/dashboard/shop_settings_controller').default['branding']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/shops/dashboard/shop_settings_controller').default['branding']>>>
+    }
+  }
+  'shop_settings.business_hours': {
+    methods: ["GET","HEAD"]
+    pattern: '/vendor/shop/business-hours'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/shops/dashboard/shop_settings_controller').default['businessHours']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/shops/dashboard/shop_settings_controller').default['businessHours']>>>
+    }
+  }
+  'shop_settings.shipping': {
+    methods: ["GET","HEAD"]
+    pattern: '/vendor/shop/shipping'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/shops/dashboard/shop_settings_controller').default['shipping']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/shops/dashboard/shop_settings_controller').default['shipping']>>>
+    }
+  }
+  'shop_settings.payments': {
+    methods: ["GET","HEAD"]
+    pattern: '/vendor/shop/payments'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/shops/dashboard/shop_settings_controller').default['payments']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/shops/dashboard/shop_settings_controller').default['payments']>>>
+    }
+  }
+  'shop_settings.notifications': {
+    methods: ["GET","HEAD"]
+    pattern: '/vendor/shop/notifications'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/shops/dashboard/shop_settings_controller').default['notifications']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/shops/dashboard/shop_settings_controller').default['notifications']>>>
+    }
+  }
+  'shop_settings.seo': {
+    methods: ["GET","HEAD"]
+    pattern: '/vendor/shop/seo'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/shops/dashboard/shop_settings_controller').default['seo']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/shops/dashboard/shop_settings_controller').default['seo']>>>
+    }
+  }
+  'shop_settings.policies': {
+    methods: ["GET","HEAD"]
+    pattern: '/vendor/shop/policies'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/shops/dashboard/shop_settings_controller').default['policies']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/shops/dashboard/shop_settings_controller').default['policies']>>>
+    }
+  }
+  'shop_settings.social': {
+    methods: ["GET","HEAD"]
+    pattern: '/vendor/shop/social'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/shops/dashboard/shop_settings_controller').default['social']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/shops/dashboard/shop_settings_controller').default['social']>>>
+    }
+  }
+  'shop_settings.analytics': {
+    methods: ["GET","HEAD"]
+    pattern: '/vendor/shop/analytics'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/shops/dashboard/shop_settings_controller').default['analytics']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/shops/dashboard/shop_settings_controller').default['analytics']>>>
+    }
+  }
+  'shop_settings.security': {
+    methods: ["GET","HEAD"]
+    pattern: '/vendor/shop/security'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/shops/dashboard/shop_settings_controller').default['security']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/shops/dashboard/shop_settings_controller').default['security']>>>
+    }
+  }
+  'shop_settings.danger': {
+    methods: ["GET","HEAD"]
+    pattern: '/vendor/shop/danger'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/shops/dashboard/shop_settings_controller').default['danger']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/shops/dashboard/shop_settings_controller').default['danger']>>>
     }
   }
   'home': {
