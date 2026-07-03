@@ -22,7 +22,6 @@ import { VisuallyHidden } from 'radix-ui'
 import { motion, AnimatePresence } from 'framer-motion'
 import { SearchModal } from '~/components/search/search_modal'
 import { useCart } from '~/hooks/use_cart'
-import { Data } from '@generated/data'
 
 type User = {
   fullName: string
@@ -285,14 +284,14 @@ export const NavBar = () => {
               ) : (
                 <div className="border-t border-white/10 px-6 py-4 flex items-center gap-6 text-sm font-medium">
                   <Link
-                    route="login"
+                    route="session.create"
                     className="text-white/70 hover:text-white transition-colors"
                     onClick={() => setMobileMenuOpen(false)}
                   >
                     Sign In
                   </Link>
                   <Link
-                    route="signup"
+                    route="new_account.create"
                     className="text-white/70 hover:text-white transition-colors"
                     onClick={() => setMobileMenuOpen(false)}
                   >
