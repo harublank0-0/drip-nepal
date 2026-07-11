@@ -1,10 +1,8 @@
-import { useEffect } from 'react'
-import { router } from '@inertiajs/react'
+import RootLayout from '~/layouts/root_layout'
+import { ShopDashboardLayout } from '~/layouts/shop_dashboard_layout'
 
 export default function ShopDashboardPage() {
-  useEffect(() => {
-    router.visit('/vendor/shop/overview', { replace: true })
-  }, [])
-
-  return null
+  return <h1> hello</h1>
 }
+
+ShopDashboardPage.layout = [RootLayout, ShopDashboardLayout]

@@ -13,6 +13,9 @@ export interface ApiDefinition {
       }
     }
   }
+  shopDashboard: {
+    create: typeof routes['shop_dashboard.create']
+  }
   shopSettings: {
     overview: typeof routes['shop_settings.overview']
     general: typeof routes['shop_settings.general']

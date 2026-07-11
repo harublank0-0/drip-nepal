@@ -43,6 +43,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/shops/dashboard/shop_dashboard_controller').default['create']>>>
     }
   }
+  'shop_dashboard.create': {
+    methods: ["GET","HEAD"]
+    pattern: '/vendor/shop'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/shops/dashboard/shop_dashboard_controller').default['create']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/shops/dashboard/shop_dashboard_controller').default['create']>>>
+    }
+  }
   'shop_settings.overview': {
     methods: ["GET","HEAD"]
     pattern: '/vendor/shop/overview'

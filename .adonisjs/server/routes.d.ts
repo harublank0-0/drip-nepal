@@ -7,6 +7,7 @@ export type ScannedRoutes = {
     'shops.shop_registrations.create': { paramsTuple?: []; params?: {} }
     'shops.shop_registrations.store': { paramsTuple?: []; params?: {} }
     'shops.dashboard.shop_dashboard.create': { paramsTuple?: []; params?: {} }
+    'shop_dashboard.create': { paramsTuple?: []; params?: {} }
     'shop_settings.overview': { paramsTuple?: []; params?: {} }
     'shop_settings.general': { paramsTuple?: []; params?: {} }
     'shop_settings.branding': { paramsTuple?: []; params?: {} }
@@ -37,6 +38,7 @@ export type ScannedRoutes = {
   GET: {
     'shops.shop_registrations.create': { paramsTuple?: []; params?: {} }
     'shops.dashboard.shop_dashboard.create': { paramsTuple?: []; params?: {} }
+    'shop_dashboard.create': { paramsTuple?: []; params?: {} }
     'shop_settings.overview': { paramsTuple?: []; params?: {} }
     'shop_settings.general': { paramsTuple?: []; params?: {} }
     'shop_settings.branding': { paramsTuple?: []; params?: {} }
@@ -64,6 +66,7 @@ export type ScannedRoutes = {
   HEAD: {
     'shops.shop_registrations.create': { paramsTuple?: []; params?: {} }
     'shops.dashboard.shop_dashboard.create': { paramsTuple?: []; params?: {} }
+    'shop_dashboard.create': { paramsTuple?: []; params?: {} }
     'shop_settings.overview': { paramsTuple?: []; params?: {} }
     'shop_settings.general': { paramsTuple?: []; params?: {} }
     'shop_settings.branding': { paramsTuple?: []; params?: {} }

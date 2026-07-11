@@ -19,7 +19,7 @@ router
   .middleware(middleware.auth())
 
 router.group(() => {
-  router.get('/vendor/shop', ({ response }) => response.redirect().toPath('/vendor/shop/overview'))
+  router.get('/vendor/shop', [controllers.shops.dashboard.ShopDashboard, 'create'])
   router.get('/vendor/shop/overview', [controllers.shops.dashboard.ShopSettings, 'overview'])
   router.get('/vendor/shop/general', [controllers.shops.dashboard.ShopSettings, 'general'])
   router.get('/vendor/shop/branding', [controllers.shops.dashboard.ShopSettings, 'branding'])
