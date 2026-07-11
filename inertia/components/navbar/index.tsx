@@ -66,9 +66,14 @@ export const NavBar = () => {
   }, [])
 
   const handleLogout = () => {
-    router.visit({
-      route: 'session.destroy',
-    })
+    router.visit(
+      {
+        route: 'api.auth.logout',
+      },
+      {
+        method: 'post',
+      }
+    )
   }
 
   const handleSearchOpen = () => setSearchModalOpen(true)
@@ -230,7 +235,7 @@ export const NavBar = () => {
                     ) : (
                       <div className="py-2">
                         <Link
-                          route="session.create"
+                          route="ui.auth.session.create"
                           className="flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-colors"
                           onClick={() => setProfileOpen(false)}
                         >
@@ -238,7 +243,7 @@ export const NavBar = () => {
                           Sign In
                         </Link>
                         <Link
-                          route="new_account.create"
+                          route="ui.auth.registration.create"
                           className="flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-colors"
                           onClick={() => setProfileOpen(false)}
                         >
@@ -332,14 +337,14 @@ export const NavBar = () => {
               ) : (
                 <div className="border-t border-white/10 px-6 py-4 flex items-center gap-6 text-sm font-medium">
                   <Link
-                    route="session.create"
+                    route="ui.auth.registration.create"
                     className="text-white/70 hover:text-white transition-colors"
                     onClick={() => setMobileMenuOpen(false)}
                   >
                     Sign In
                   </Link>
                   <Link
-                    route="new_account.create"
+                    route="ui.auth.session.create"
                     className="text-white/70 hover:text-white transition-colors"
                     onClick={() => setMobileMenuOpen(false)}
                   >

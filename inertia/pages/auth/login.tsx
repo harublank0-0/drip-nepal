@@ -39,7 +39,7 @@ export default function Login() {
       right={
         <div className="flex w-full items-center justify-center px-5 py-12 lg:px-8 lg:py-16">
           <motion.div
-            className="w-full max-w-[460px] rounded-3xl border border-border/50 bg-card p-8 shadow-xl sm:p-10"
+            className="w-full max-w-115 rounded-3xl border border-border/50 bg-card p-8 shadow-xl sm:p-10"
             initial={{ opacity: 0, y: 40 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, ease: [0.32, 0.72, 0, 1] }}
@@ -82,7 +82,7 @@ export default function Login() {
               <div className="h-px flex-1 bg-border" />
             </div>
 
-            <Form route="session.store">
+            <Form route="api.auth.session.store">
               {({ errors, processing }) => (
                 <div className="flex flex-col gap-4">
                   <Field>
@@ -176,9 +176,9 @@ export default function Login() {
             </Form>
 
             <p className="mt-6 text-center text-sm text-muted-foreground">
-              Don&apos;t have an account?
+              Don&apos;t have an account?{' '}
               <Link
-                route="new_account.create"
+                route="ui.auth.registration.create"
                 className="font-semibold text-foreground underline-offset-2 hover:underline"
               >
                 Create account

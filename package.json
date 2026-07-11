@@ -40,7 +40,8 @@
     "#tests/*": "./tests/*.js",
     "#start/*": "./start/*.js",
     "#config/*": "./config/*.js",
-    "#shared/*": "./shared/*.js"
+    "#shared/*": "./shared/*.js",
+    "#modules/*": "./app/modules/*.js"
   },
   "devDependencies": {
     "@adonisjs/assembler": "^8.4.0",

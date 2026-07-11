@@ -7,11 +7,12 @@ export type ScannedRoutes = {
     'shops.register.shop_registrations.create': { paramsTuple?: []; params?: {} }
     'shops.register.shop_registrations.store': { paramsTuple?: []; params?: {} }
     'shop.shop_dashboard.create': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
+    'ui.auth.registration.create': { paramsTuple?: []; params?: {} }
+    'ui.auth.session.create': { paramsTuple?: []; params?: {} }
+    'api.auth.registration.store': { paramsTuple?: []; params?: {} }
+    'api.auth.session.store': { paramsTuple?: []; params?: {} }
+    'api.auth.logout': { paramsTuple?: []; params?: {} }
     'home': { paramsTuple?: []; params?: {} }
-    'new_account.create': { paramsTuple?: []; params?: {} }
-    'new_account.store': { paramsTuple?: []; params?: {} }
-    'session.create': { paramsTuple?: []; params?: {} }
-    'session.store': { paramsTuple?: []; params?: {} }
     'men': { paramsTuple?: []; params?: {} }
     'women': { paramsTuple?: []; params?: {} }
     'categories.show': { paramsTuple: [ParamValue]; params: {'slug': ParamValue} }
@@ -19,14 +20,13 @@ export type ScannedRoutes = {
     'cart': { paramsTuple?: []; params?: {} }
     'checkout': { paramsTuple?: []; params?: {} }
     'design-system': { paramsTuple?: []; params?: {} }
-    'session.destroy': { paramsTuple?: []; params?: {} }
   }
   GET: {
     'shops.register.shop_registrations.create': { paramsTuple?: []; params?: {} }
     'shop.shop_dashboard.create': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
+    'ui.auth.registration.create': { paramsTuple?: []; params?: {} }
+    'ui.auth.session.create': { paramsTuple?: []; params?: {} }
     'home': { paramsTuple?: []; params?: {} }
-    'new_account.create': { paramsTuple?: []; params?: {} }
-    'session.create': { paramsTuple?: []; params?: {} }
     'men': { paramsTuple?: []; params?: {} }
     'women': { paramsTuple?: []; params?: {} }
     'categories.show': { paramsTuple: [ParamValue]; params: {'slug': ParamValue} }
@@ -38,9 +38,9 @@ export type ScannedRoutes = {
   HEAD: {
     'shops.register.shop_registrations.create': { paramsTuple?: []; params?: {} }
     'shop.shop_dashboard.create': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
+    'ui.auth.registration.create': { paramsTuple?: []; params?: {} }
+    'ui.auth.session.create': { paramsTuple?: []; params?: {} }
     'home': { paramsTuple?: []; params?: {} }
-    'new_account.create': { paramsTuple?: []; params?: {} }
-    'session.create': { paramsTuple?: []; params?: {} }
     'men': { paramsTuple?: []; params?: {} }
     'women': { paramsTuple?: []; params?: {} }
     'categories.show': { paramsTuple: [ParamValue]; params: {'slug': ParamValue} }
@@ -51,9 +51,9 @@ export type ScannedRoutes = {
   }
   POST: {
     'shops.register.shop_registrations.store': { paramsTuple?: []; params?: {} }
-    'new_account.store': { paramsTuple?: []; params?: {} }
-    'session.store': { paramsTuple?: []; params?: {} }
-    'session.destroy': { paramsTuple?: []; params?: {} }
+    'api.auth.registration.store': { paramsTuple?: []; params?: {} }
+    'api.auth.session.store': { paramsTuple?: []; params?: {} }
+    'api.auth.logout': { paramsTuple?: []; params?: {} }
   }
 }
 declare module '@adonisjs/core/types/http' {

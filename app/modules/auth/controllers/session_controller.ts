@@ -4,10 +4,15 @@ import { errors } from '@adonisjs/auth'
 import type { HttpContext } from '@adonisjs/core/http'
 
 export default class SessionController {
+  /*
+   * A user login page
+   */
   async create({ inertia }: HttpContext) {
     return inertia.render('auth/login', {})
   }
 
+  /* Endpoint to login user
+   */
   async store({ request, auth, response, inertia }: HttpContext) {
     const { email, password } = await request.validateUsing(loginValidator)
 
@@ -18,13 +23,16 @@ export default class SessionController {
     } catch (e) {
       if (e instanceof errors.E_INVALID_CREDENTIALS) {
         return inertia.render('auth/login', { error: e.message })
-        // return inertia.render('auth/login', { flash: { error: e.message }, error: e.message })
       }
     }
   }
 
+  /*
+   * Endpoint to logout the logged in user
+   */
   async destroy({ auth, response }: HttpContext) {
+    console.log('delete user. i mean logout user.')
     await auth.use('web').logout()
-    response.redirect().toRoute('session.create')
+    response.redirect().toRoute('home')
   }
 }

@@ -15,16 +15,28 @@ export interface ApiDefinition {
       create: typeof routes['shop.shop_dashboard.create']
     }
   }
+  ui: {
+    auth: {
+      registration: {
+        create: typeof routes['ui.auth.registration.create']
+      }
+      session: {
+        create: typeof routes['ui.auth.session.create']
+      }
+    }
+  }
+  api: {
+    auth: {
+      registration: {
+        store: typeof routes['api.auth.registration.store']
+      }
+      session: {
+        store: typeof routes['api.auth.session.store']
+      }
+      logout: typeof routes['api.auth.logout']
+    }
+  }
   home: typeof routes['home']
-  newAccount: {
-    create: typeof routes['new_account.create']
-    store: typeof routes['new_account.store']
-  }
-  session: {
-    create: typeof routes['session.create']
-    store: typeof routes['session.store']
-    destroy: typeof routes['session.destroy']
-  }
   men: typeof routes['men']
   women: typeof routes['women']
   categories: {
