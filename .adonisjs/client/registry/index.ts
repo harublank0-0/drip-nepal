@@ -24,6 +24,12 @@ const routes = {
     tokens: [{"old":"/shops/dashboard","type":0,"val":"shops","end":""},{"old":"/shops/dashboard","type":0,"val":"dashboard","end":""}],
     types: placeholder as Registry['shops.dashboard.shop_dashboard.create']['types'],
   },
+  'shop_dashboard.create': {
+    methods: ["GET","HEAD"],
+    pattern: '/vendor/shop',
+    tokens: [{"old":"/vendor/shop","type":0,"val":"vendor","end":""},{"old":"/vendor/shop","type":0,"val":"shop","end":""}],
+    types: placeholder as Registry['shop_dashboard.create']['types'],
+  },
   'shop_settings.overview': {
     methods: ["GET","HEAD"],
     pattern: '/vendor/shop/overview',
