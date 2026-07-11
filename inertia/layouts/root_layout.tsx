@@ -3,6 +3,7 @@ import { toast, Toaster } from 'sonner'
 import { usePage } from '@inertiajs/react'
 import { type ReactElement, useEffect } from 'react'
 import { ThemeProvider } from '~/components/providers/theme_provider'
+import { TooltipProvider } from '~/components/ui/tooltip'
 
 export default function RootLayout({
   children,
@@ -28,8 +29,10 @@ export default function RootLayout({
   return (
     <>
       <ThemeProvider defaultTheme="dark">
-        {children}
-        <Toaster position="top-center" richColors />
+        <TooltipProvider>
+          {children}
+          <Toaster position="top-center" richColors />
+        </TooltipProvider>
       </ThemeProvider>
     </>
   )

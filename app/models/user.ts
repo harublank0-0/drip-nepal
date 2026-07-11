@@ -26,7 +26,7 @@ export default class User extends compose(UserSchema, AuthFinder) {
   }
 
   @hasMany(() => Shop, {
-    foreignKey: 'owner_id',
+    foreignKey: 'ownerId',
   })
   declare shops: HasMany<typeof Shop>
 
