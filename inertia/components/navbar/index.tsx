@@ -11,6 +11,7 @@ import {
   LucideSettings,
   LucideUserCircle,
   LucideArrowRight,
+  LucideStore,
 } from 'lucide-react'
 import { NavLink } from './nav_link'
 import { Link } from '@adonisjs/inertia/react'
@@ -22,6 +23,8 @@ import { VisuallyHidden } from 'radix-ui'
 import { motion, AnimatePresence } from 'framer-motion'
 import { SearchModal } from '~/components/search/search_modal'
 import { useCart } from '~/hooks/use_cart'
+import { Data } from '@generated/data'
+import { Show } from '~/components/ui/show'
 
 type User = {
   fullName: string
@@ -29,15 +32,16 @@ type User = {
   initials: string
 }
 export const NavBar = () => {
-  const { url } = usePage()
+  const {
+    url,
+    props: { user, shops },
+  } = usePage<Data.SharedProps>()
   const isHomePage = routes.home.pattern === url
   const [scrolled, setScrolled] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [searchModalOpen, setSearchModalOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
   const router = useRouter()
-
-  const user = (usePage().props as { user?: User }).user
 
   const { openDrawer, itemCount } = useCart()
 
@@ -190,6 +194,16 @@ export const NavBar = () => {
                             <LucideSettings className="size-4" />
                             Settings
                           </button>
+
+                          <Show when={shops.length > 0}>
+                            <Link
+                              route="shops.dashboard.shop_dashboard.create"
+                              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-colors"
+                            >
+                              <LucideStore className="size-4" />
+                              View Shops
+                            </Link>
+                          </Show>
                         </div>
                         <div className="border-t border-white/10 py-1">
                           <button
@@ -263,13 +277,25 @@ export const NavBar = () => {
                 </li>
               </ul>
               {user ? (
-                <div className="border-t border-white/10 px-6 py-4 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
+                <div className="border-t border-white/10 px-6 py-4">
+                  <div className="flex items-center gap-3 mb-3">
                     <span className="size-8 rounded-full bg-primary text-primary-foreground text-xs font-bold flex items-center justify-center">
                       {user.initials}
                     </span>
                     <span className="text-sm text-white/70">{user.fullName}</span>
                   </div>
+                  <Link
+                    route="shops.dashboard.shop_dashboard.create"
+                    className="flex items-center gap-3 text-sm text-white/70 hover:text-white transition-colors mb-3"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    {shops.length > 0 && (
+                      <>
+                        <LucideStore className="size-4" />
+                        View Shops
+                      </>
+                    )}
+                  </Link>
                   <button
                     onClick={() => {
                       setMobileMenuOpen(false)
