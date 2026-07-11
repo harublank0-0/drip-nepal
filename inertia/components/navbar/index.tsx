@@ -25,12 +25,9 @@ import { SearchModal } from '~/components/search/search_modal'
 import { useCart } from '~/hooks/use_cart'
 import { Data } from '@generated/data'
 import { Show } from '~/components/ui/show'
+import { Typography } from '~/components/ui/typography'
+import { Avatar, AvatarFallback, AvatarImage } from '~/components/ui/avatar'
 
-type User = {
-  fullName: string
-  email: string
-  initials: string
-}
 export const NavBar = () => {
   const {
     url,
@@ -196,13 +193,28 @@ export const NavBar = () => {
                           </button>
 
                           <Show when={shops.length > 0}>
-                            <Link
-                              route="shops.dashboard.shop_dashboard.create"
-                              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-colors"
-                            >
+                            <Typography.Strong className="px-4 py-2.5 text-xs text-white/50 flex gap-2">
                               <LucideStore className="size-4" />
-                              View Shops
-                            </Link>
+                              Shops
+                            </Typography.Strong>
+                            {shops.map((shop) => (
+                              <Link
+                                key={shop.id}
+                                route="shop.shop_dashboard.create"
+                                routeParams={{
+                                  shopSlug: shop.slug,
+                                }}
+                                className="capitalize w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-colors"
+                              >
+                                <Avatar>
+                                  <AvatarImage src={shop.logo ?? undefined} alt={shop.name} />
+                                  <AvatarFallback>
+                                    <LucideStore className="size-4" />
+                                  </AvatarFallback>
+                                </Avatar>
+                                {shop.name}
+                              </Link>
+                            ))}
                           </Show>
                         </div>
                         <div className="border-t border-white/10 py-1">
@@ -284,18 +296,28 @@ export const NavBar = () => {
                     </span>
                     <span className="text-sm text-white/70">{user.fullName}</span>
                   </div>
-                  <Link
-                    route="shops.dashboard.shop_dashboard.create"
-                    className="flex items-center gap-3 text-sm text-white/70 hover:text-white transition-colors mb-3"
-                    onClick={() => setMobileMenuOpen(false)}
-                  >
-                    {shops.length > 0 && (
-                      <>
-                        <LucideStore className="size-4" />
-                        View Shops
-                      </>
-                    )}
-                  </Link>
+                  <Show when={shops.length > 0}>
+                    <Typography.Strong className="px-4 py-2.5 text-xs text-white/50 flex gap-2">
+                      <LucideStore className="size-4" />
+                      View Shops
+                    </Typography.Strong>
+                    {shops.map((shop) => (
+                      <Link
+                        route="shop.shop_dashboard.create"
+                        routeParams={{ shopSlug: shop.slug }}
+                        className="flex items-center gap-3 text-sm text-white/70 hover:text-white transition-colors mb-3"
+                        onClick={() => setMobileMenuOpen(false)}
+                      >
+                        <Avatar>
+                          <AvatarImage src={shop.logo ?? undefined} alt={shop.name} />
+                          <AvatarFallback>
+                            <LucideStore className="size-4" />
+                          </AvatarFallback>
+                        </Avatar>
+                        {shop.name}
+                      </Link>
+                    ))}
+                  </Show>
                   <button
                     onClick={() => {
                       setMobileMenuOpen(false)
