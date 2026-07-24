@@ -20,6 +20,7 @@ export default class SessionController {
     try {
       const user = await User.verifyCredentials(email, password)
       await auth.use('web').login(user)
+
       response.redirect().toRoute('home')
     } catch (e) {
       if (e instanceof errors.E_INVALID_CREDENTIALS) {

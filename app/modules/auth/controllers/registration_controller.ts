@@ -8,7 +8,14 @@ export default class NewAccountController {
    * Renders the signup page to register new user
    */
   async create({ inertia }: HttpContext) {
-    return inertia.render('auth/signup', {})
+    return inertia.render(
+      'auth/signup',
+      {},
+      {
+        title: 'Sign Up',
+        description: 'Create a new account',
+      }
+    )
   }
 
   /*

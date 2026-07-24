@@ -4,8 +4,12 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title inertia>
-      Drip Nepal
+      {{title  ?? "Drip Nepal"}}
     </title>
+
+    @if(description)
+        <meta name="description" content="{{ description }}">
+    @end
 
     @viteReactRefresh()
     @vite(['inertia/app.tsx'])
