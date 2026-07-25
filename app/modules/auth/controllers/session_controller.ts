@@ -1,5 +1,5 @@
 import User from '#models/user'
-import { loginValidator } from '#modules/auth/validators/user'
+import { userLoginValidator } from '#modules/auth/validators/user'
 import { errors } from '@adonisjs/auth'
 
 import type { HttpContext } from '@adonisjs/core/http'
@@ -15,7 +15,7 @@ export default class SessionController {
   /* Endpoint to login user
    */
   async store({ request, auth, response, inertia }: HttpContext) {
-    const { email, password } = await request.validateUsing(loginValidator)
+    const { email, password } = await request.validateUsing(userLoginValidator)
 
     try {
       const user = await User.verifyCredentials(email, password)

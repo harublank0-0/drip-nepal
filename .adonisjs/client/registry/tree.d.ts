@@ -2,19 +2,6 @@
 import type { routes } from './index.ts'
 
 export interface ApiDefinition {
-  shops: {
-    register: {
-      shopRegistrations: {
-        create: typeof routes['shops.register.shop_registrations.create']
-        store: typeof routes['shops.register.shop_registrations.store']
-      }
-    }
-  }
-  shop: {
-    shopDashboard: {
-      create: typeof routes['shop.shop_dashboard.create']
-    }
-  }
   ui: {
     auth: {
       registration: {

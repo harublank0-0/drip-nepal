@@ -7,42 +7,6 @@ import type { InferInput, SimpleError } from '@vinejs/vine/types'
 export type ParamValue = string | number | bigint | boolean
 
 export interface Registry {
-  'shops.register.shop_registrations.create': {
-    methods: ["GET","HEAD"]
-    pattern: '/shops/register'
-    types: {
-      body: {}
-      paramsTuple: []
-      params: {}
-      query: {}
-      response: ExtractResponse<Awaited<ReturnType<import('#controllers/shops/auth/shop_registrations_controller').default['create']>>>
-      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/shops/auth/shop_registrations_controller').default['create']>>>
-    }
-  }
-  'shops.register.shop_registrations.store': {
-    methods: ["POST"]
-    pattern: '/shops/register'
-    types: {
-      body: ExtractBody<InferInput<(typeof import('#validators/auth/shop').shopSignupValidator)>>
-      paramsTuple: []
-      params: {}
-      query: ExtractQuery<InferInput<(typeof import('#validators/auth/shop').shopSignupValidator)>>
-      response: ExtractResponse<Awaited<ReturnType<import('#controllers/shops/auth/shop_registrations_controller').default['store']>>>
-      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/shops/auth/shop_registrations_controller').default['store']>>> | { status: 422; response: { errors: SimpleError[] } }
-    }
-  }
-  'shop.shop_dashboard.create': {
-    methods: ["GET","HEAD"]
-    pattern: '/shop/:shopSlug/dashboard'
-    types: {
-      body: {}
-      paramsTuple: [ParamValue]
-      params: { shopSlug: ParamValue }
-      query: {}
-      response: ExtractResponse<Awaited<ReturnType<import('#controllers/shops/dashboard/shop_dashboard_controller').default['create']>>>
-      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/shops/dashboard/shop_dashboard_controller').default['create']>>>
-    }
-  }
   'ui.auth.registration.create': {
     methods: ["GET","HEAD"]
     pattern: '/auth/signup'
@@ -71,10 +35,10 @@ export interface Registry {
     methods: ["POST"]
     pattern: '/api/v1/signup'
     types: {
-      body: ExtractBody<InferInput<(typeof import('#modules/auth/validators/user').signupValidator)>>
+      body: ExtractBody<InferInput<(typeof import('#modules/auth/validators/user').userSignupValidator)>>
       paramsTuple: []
       params: {}
-      query: ExtractQuery<InferInput<(typeof import('#modules/auth/validators/user').signupValidator)>>
+      query: ExtractQuery<InferInput<(typeof import('#modules/auth/validators/user').userSignupValidator)>>
       response: ExtractResponse<Awaited<ReturnType<import('#modules/auth/controllers/registration_controller').default['store']>>>
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#modules/auth/controllers/registration_controller').default['store']>>> | { status: 422; response: { errors: SimpleError[] } }
     }
@@ -83,10 +47,10 @@ export interface Registry {
     methods: ["POST"]
     pattern: '/api/v1/login'
     types: {
-      body: ExtractBody<InferInput<(typeof import('#modules/auth/validators/user').loginValidator)>>
+      body: ExtractBody<InferInput<(typeof import('#modules/auth/validators/user').userLoginValidator)>>
       paramsTuple: []
       params: {}
-      query: ExtractQuery<InferInput<(typeof import('#modules/auth/validators/user').loginValidator)>>
+      query: ExtractQuery<InferInput<(typeof import('#modules/auth/validators/user').userLoginValidator)>>
       response: ExtractResponse<Awaited<ReturnType<import('#modules/auth/controllers/session_controller').default['store']>>>
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#modules/auth/controllers/session_controller').default['store']>>> | { status: 422; response: { errors: SimpleError[] } }
     }

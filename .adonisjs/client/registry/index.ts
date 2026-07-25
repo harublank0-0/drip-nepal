@@ -6,24 +6,6 @@ import type { ApiDefinition } from './tree.d.ts'
 const placeholder: any = {}
 
 const routes = {
-  'shops.register.shop_registrations.create': {
-    methods: ["GET","HEAD"],
-    pattern: '/shops/register',
-    tokens: [{"old":"/shops/register","type":0,"val":"shops","end":""},{"old":"/shops/register","type":0,"val":"register","end":""}],
-    types: placeholder as Registry['shops.register.shop_registrations.create']['types'],
-  },
-  'shops.register.shop_registrations.store': {
-    methods: ["POST"],
-    pattern: '/shops/register',
-    tokens: [{"old":"/shops/register","type":0,"val":"shops","end":""},{"old":"/shops/register","type":0,"val":"register","end":""}],
-    types: placeholder as Registry['shops.register.shop_registrations.store']['types'],
-  },
-  'shop.shop_dashboard.create': {
-    methods: ["GET","HEAD"],
-    pattern: '/shop/:shopSlug/dashboard',
-    tokens: [{"old":"/shop/:shopSlug/dashboard","type":0,"val":"shop","end":""},{"old":"/shop/:shopSlug/dashboard","type":1,"val":"shopSlug","end":""},{"old":"/shop/:shopSlug/dashboard","type":0,"val":"dashboard","end":""}],
-    types: placeholder as Registry['shop.shop_dashboard.create']['types'],
-  },
   'ui.auth.registration.create': {
     methods: ["GET","HEAD"],
     pattern: '/auth/signup',

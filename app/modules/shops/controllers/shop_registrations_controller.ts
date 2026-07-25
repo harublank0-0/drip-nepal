@@ -14,7 +14,6 @@ export default class ShopRegistrationController {
 
   async store({ request, response, auth }: HttpContext) {
     const data = await request.validateUsing(shopSignupValidator)
-
     const user = await db.transaction(async (trx) => {
       const newUser = await User.create(
         {
@@ -62,8 +61,5 @@ export default class ShopRegistrationController {
     })
 
     await auth.use('web').login(user)
-    return response.redirect().toRoute('shops.shop_registrations.create', {
-      data: { success: 1 },
-    })
   }
 }

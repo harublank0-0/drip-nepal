@@ -10,8 +10,6 @@
 import { middleware } from '#start/kernel'
 import router from '@adonisjs/core/services/router'
 
-import './routes/shops.js'
-
 import '#modules/auth/routes'
 
 router.on('/').renderInertia('customers/home/index', {}).as('home')
