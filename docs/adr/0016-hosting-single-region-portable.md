@@ -4,18 +4,19 @@ Status: Draft v1 (2026-09-25)
 
 ## Status
 
-| Field | Value |
-|---|---|
-| Decision status | **Proposed.** Blocked on **VX-09** (does DCCS Directive 2081 cl. 8(1) bind private clients?) and **OD-09** (production provider and region). Development and staging proceed on the provisional choice. The portability requirement (Decision 4) is binding now. This ADR makes no compliance claim for any option. |
-| Date | 2026-09-25 |
-| Deciders | Tech lead (lead developer) and legal counsel (VX-09). The product owner approves the running cost. |
-| Supersedes | — |
-| Superseded by | — |
-| Related open items | **VX-09**, **OD-09**, OD-26 (e-invoicing), VX-15 (hosting prices, regions, latency), VX-14 (static egress IP); risks R-08, R-09 |
+| Field              | Value                                                                                                                                                                                                                                                                                                               |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Decision status    | **Proposed.** Blocked on **VX-09** (does DCCS Directive 2081 cl. 8(1) bind private clients?) and **OD-09** (production provider and region). Development and staging proceed on the provisional choice. The portability requirement (Decision 4) is binding now. This ADR makes no compliance claim for any option. |
+| Date               | 2026-09-25                                                                                                                                                                                                                                                                                                          |
+| Deciders           | Tech lead (lead developer) and legal counsel (VX-09). The product owner approves the running cost.                                                                                                                                                                                                                  |
+| Supersedes         | —                                                                                                                                                                                                                                                                                                                   |
+| Superseded by      | —                                                                                                                                                                                                                                                                                                                   |
+| Related open items | **VX-09**, **OD-09**, OD-26 (e-invoicing), VX-15 (hosting prices, regions, latency), VX-14 (static egress IP); risks R-08, R-09                                                                                                                                                                                     |
 
 ## Context
 
 **What must be hosted** (ADR-0002, ADR-0010, ADR-0013):
+
 - one Docker image with two process types, `web` and `worker`;
 - PostgreSQL 18 with PITR, which is the only stateful service;
 - S3-compatible object storage with a CDN.
@@ -23,6 +24,7 @@ Status: Draft v1 (2026-09-25)
 It is run by 1–2 developers for users in Nepal, many of them on slow mobile networks.
 
 **Where data may live** [Verified-doc; applicability **Open, VX-09**]. Source: DCCS Directive 2081, https://doit.gov.np/content/12100/data-center-and-cloud-service--operation-and/ and the unofficial translation https://giwmscdnone.gov.np/media/pdf_upload/data%20center%20translation_bhnhhri.pdf, accessed 2026-09-25.
+
 - Cl. 3(1): cloud providers must be listed with the Department of Information Technology (DoIT).
 - Cl. 8(1): "any client" must use only listed providers, and "client" is not defined.
 - Cl. 8(2): a client must move if its provider is delisted.
@@ -33,6 +35,7 @@ Law firms find no explicit offshore ban but say clients must use DoIT-enrolled p
 Separately, the Electronic Invoice Procedure 2082 s7 requires invoicing servers to be in Nepal, with a Nepal-registered cloud provider and a tripartite agreement (https://ird.gov.np/category/electronic-invoice/, accessed 2026-09-25). That applies only if OD-26 makes DripNepal an e-invoice issuer.
 
 **Provider facts** [Verified-doc, `infra_ops` research, accessed 2026-09-25]:
+
 - **DigitalOcean BLR1** has Droplets, Managed PostgreSQL and Spaces (https://docs.digitalocean.com/platform/regional-availability/).
 - **DigitalOcean Managed PostgreSQL** (https://docs.digitalocean.com/products/databases/postgresql/details/limits/):
   - supports v18, with daily backups kept 7 days and 7-day PITR;
@@ -46,13 +49,13 @@ Separately, the Electronic Invoice Procedure 2082 s7 requires invoicing servers 
 
 1. **Provisional topology** (diagram in [docs/03 §5](../03-system-architecture.md)). Prices are as published on 2026-09-25. Sizes are [Assumption] until memory use is measured.
 
-   | Component | Provisional choice | Published price |
-   |---|---|---|
-   | Production host | DigitalOcean BLR1 Basic Droplet, 4 GB / 2 vCPU. Docker Compose runs the reverse proxy, `web`, `worker` and the one-off release container. | $24/mo; overage $0.01/GiB |
-   | Database | DO Managed PostgreSQL 18, 1 GiB single node, private VPC, TLS | $15.15/mo on the pricing page vs "begin at $15.00" in the docs (VX-15) |
-   | Staging | Droplet 2 GB / 1 vCPU with a PostgreSQL 18.4 container | $12/mo |
-   | Objects | Cloudflare R2, private and public buckets per environment, `apac` hint (best effort, not residency) | $0.015/GB-month; egress free |
-   | Edge | Cloudflare DNS, proxy, CDN and WAF for the app domain and a media custom domain; never `r2.dev` in production | Plan not priced [Verify-external VX-15] |
+   | Component       | Provisional choice                                                                                                                        | Published price                                                        |
+   | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+   | Production host | DigitalOcean BLR1 Basic Droplet, 4 GB / 2 vCPU. Docker Compose runs the reverse proxy, `web`, `worker` and the one-off release container. | $24/mo; overage $0.01/GiB                                              |
+   | Database        | DO Managed PostgreSQL 18, 1 GiB single node, private VPC, TLS                                                                             | $15.15/mo on the pricing page vs "begin at $15.00" in the docs (VX-15) |
+   | Staging         | Droplet 2 GB / 1 vCPU with a PostgreSQL 18.4 container                                                                                    | $12/mo                                                                 |
+   | Objects         | Cloudflare R2, private and public buckets per environment, `apac` hint (best effort, not residency)                                       | $0.015/GB-month; egress free                                           |
+   | Edge            | Cloudflare DNS, proxy, CDN and WAF for the app domain and a media custom domain; never `r2.dev` in production                             | Plan not priced [Verify-external VX-15]                                |
 
 2. **Database settings.**
    - Connections per canon §6.1: web 8, worker 4, pg-boss 4 (direct, never through a transaction-mode pool), admin 2, headroom 4.
@@ -79,32 +82,35 @@ Separately, the Electronic Invoice Procedure 2082 s7 requires invoicing servers 
 
 All prices are as published on 2026-09-25 [Verified-doc, `infra_ops` research].
 
-| Alternative | Key facts | Why not chosen now |
-|---|---|---|
-| DigitalOcean SGP1 | Same products; same bandwidth pricing | **Kept as OD-09 option (b)** if the latency test favours it. |
-| Render Singapore | Compute $7 (0.5c-512mb) / $25 (1c-2g); Postgres $19 (0.5c-1g); Pro workspace $25/mo; bandwidth $0.15/GB; dedicated IPs $100/mo | Costs more than one Droplet. Origin egress is 15× DigitalOcean's. A static IP is expensive. |
-| Railway Singapore | Pro $20 incl. usage; RAM $10/GB, CPU $20/vCPU per month; Postgres "unmanaged", no documented PITR | No managed PITR for order and payment data. |
-| Fly.io Mumbai / Singapore | Region markup 3× (bom) and 2× (sin); MPG $38/mo, only in `sin`; PostgreSQL 16–17 only | No PostgreSQL 18. A Mumbai app would use a Singapore database. |
-| AWS Lightsail Mumbai | DB 1 GB $15 ($30 HA); egress overage $0.1093/GB | The docs list PostgreSQL 12–16 only. |
-| AWS RDS Mumbai | PG 18.1+; retention up to 35 days; db.t4g.micro $0.021/hr Single-AZ | More to operate (IAM, VPC). Reconsider if more than 7 days of PITR is required. |
-| Akamai Chennai | Compute, managed DB and object storage together; DB $16 (1 node) / $37 (3 nodes); PG 18; 14-day backups | **Runner-up**: the cheapest HA found. PITR granularity is undocumented. Included in the latency test. |
-| Hetzner Singapore | CPX22 €26.49 ($30.99) from 15 June 2026; no managed PostgreSQL | The team would own HA, PITR and restores. |
-| DoIT-listed Nepal provider | Capabilities and prices not researched [Verify-external VX-15] | **Not rejected**: OD-09 option (c). |
+| Alternative                | Key facts                                                                                                                      | Why not chosen now                                                                                    |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| DigitalOcean SGP1          | Same products; same bandwidth pricing                                                                                          | **Kept as OD-09 option (b)** if the latency test favours it.                                          |
+| Render Singapore           | Compute $7 (0.5c-512mb) / $25 (1c-2g); Postgres $19 (0.5c-1g); Pro workspace $25/mo; bandwidth $0.15/GB; dedicated IPs $100/mo | Costs more than one Droplet. Origin egress is 15× DigitalOcean's. A static IP is expensive.           |
+| Railway Singapore          | Pro $20 incl. usage; RAM $10/GB, CPU $20/vCPU per month; Postgres "unmanaged", no documented PITR                              | No managed PITR for order and payment data.                                                           |
+| Fly.io Mumbai / Singapore  | Region markup 3× (bom) and 2× (sin); MPG $38/mo, only in `sin`; PostgreSQL 16–17 only                                          | No PostgreSQL 18. A Mumbai app would use a Singapore database.                                        |
+| AWS Lightsail Mumbai       | DB 1 GB $15 ($30 HA); egress overage $0.1093/GB                                                                                | The docs list PostgreSQL 12–16 only.                                                                  |
+| AWS RDS Mumbai             | PG 18.1+; retention up to 35 days; db.t4g.micro $0.021/hr Single-AZ                                                            | More to operate (IAM, VPC). Reconsider if more than 7 days of PITR is required.                       |
+| Akamai Chennai             | Compute, managed DB and object storage together; DB $16 (1 node) / $37 (3 nodes); PG 18; 14-day backups                        | **Runner-up**: the cheapest HA found. PITR granularity is undocumented. Included in the latency test. |
+| Hetzner Singapore          | CPX22 €26.49 ($30.99) from 15 June 2026; no managed PostgreSQL                                                                 | The team would own HA, PITR and restores.                                                             |
+| DoIT-listed Nepal provider | Capabilities and prices not researched [Verify-external VX-15]                                                                 | **Not rejected**: OD-09 option (c).                                                                   |
 
 ## Consequences
 
 **Positive**
+
 - About $51/mo of listed items (production Droplet, database and staging), as published on 2026-09-25. This excludes the Cloudflare plan, email, error tracking and reverse-charge VAT (VX-05).
 - Daily backups and 7-day PITR without a DBA; free media egress.
 - Under the portability rules, a forced move is a restore and a DNS change, not a rewrite.
 
 **Negative**
+
 - One Droplet and one database node are single points of failure, with no automatic failover. Deploys restart containers.
 - If VX-09 goes against offshore hosting, migration may land close to launch.
 
 **Risks**
-- *R-08, forced migration.* Mitigation: the portability rules, plus a T-OPS-001 restore on a second provider before launch.
-- *Gateways or SMS require IP allow-listing (VX-14).* The Droplet has a static IP, one reason a PaaS was not chosen.
+
+- _R-08, forced migration._ Mitigation: the portability rules, plus a T-OPS-001 restore on a second provider before launch.
+- _Gateways or SMS require IP allow-listing (VX-14)._ The Droplet has a static IP, one reason a PaaS was not chosen.
 
 ## When to revisit
 

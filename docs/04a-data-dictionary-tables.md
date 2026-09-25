@@ -6,19 +6,19 @@ This file is the table-by-table part of the domain model. It shares section numb
 
 Editor notes for these sections are consolidated at the end of [04](04-domain-model-and-data-dictionary.md).
 
-| Section | Module | Tables |
-|---|---|---|
-| §5 | identity | users, user_tokens, sessions, platform_staff, user_addresses |
-| §6 | shops | shops, shop_memberships, shop_invitations, shop_agreements, shop_review_decisions, shop_addresses, shop_payout_accounts, shop_categories, shop_category_assignments, slug_redirects |
-| §7 | catalog, media | categories, attributes, attribute_values, category_attributes, brands, products, product_attribute_values, product_option_axes, product_variants, variant_option_values, product_review_decisions, product_listings, media_assets, product_media, collections (R2) |
-| §8 | inventory | inventory_items, inventory_reservations, inventory_movements |
-| §9 | logistics | provinces, districts, local_levels, delivery_zones, delivery_zone_districts, shop_delivery_coverage, shop_shipping_rates |
-| §10 | cart | carts, cart_items |
-| §11 | orders | orders, shop_orders, order_items, order_events, shipments, shipment_events, return_requests, return_items |
-| §12 | payments | payments, payment_allocations, provider_events, refunds, refund_items |
-| §13 | ledger | ledger_entries, payouts, payout_entries, vendor_remittances |
-| §14 | notifications, platform | support_cases, support_case_messages, notification_deliveries |
-| §15 | platform, audit | platform_settings, idempotency_keys, audit_logs, rate_limits, pg-boss schema |
+| Section | Module                  | Tables                                                                                                                                                                                                                                                             |
+| ------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| §5      | identity                | users, user_tokens, sessions, platform_staff, user_addresses                                                                                                                                                                                                       |
+| §6      | shops                   | shops, shop_memberships, shop_invitations, shop_agreements, shop_review_decisions, shop_addresses, shop_payout_accounts, shop_categories, shop_category_assignments, slug_redirects                                                                                |
+| §7      | catalog, media          | categories, attributes, attribute_values, category_attributes, brands, products, product_attribute_values, product_option_axes, product_variants, variant_option_values, product_review_decisions, product_listings, media_assets, product_media, collections (R2) |
+| §8      | inventory               | inventory_items, inventory_reservations, inventory_movements                                                                                                                                                                                                       |
+| §9      | logistics               | provinces, districts, local_levels, delivery_zones, delivery_zone_districts, shop_delivery_coverage, shop_shipping_rates                                                                                                                                           |
+| §10     | cart                    | carts, cart_items                                                                                                                                                                                                                                                  |
+| §11     | orders                  | orders, shop_orders, order_items, order_events, shipments, shipment_events, return_requests, return_items                                                                                                                                                          |
+| §12     | payments                | payments, payment_allocations, provider_events, refunds, refund_items                                                                                                                                                                                              |
+| §13     | ledger                  | ledger_entries, payouts, payout_entries, vendor_remittances                                                                                                                                                                                                        |
+| §14     | notifications, platform | support_cases, support_case_messages, notification_deliveries                                                                                                                                                                                                      |
+| §15     | platform, audit         | platform_settings, idempotency_keys, audit_logs, rate_limits, pg-boss schema                                                                                                                                                                                       |
 
 ---
 
@@ -34,29 +34,29 @@ Two general notes for this section and the next two. First, a CHECK passes when 
 
 One row per person. A customer, a seller and a staff member are the same kind of row; what they may do comes from `shops.owner_user_id`, `shop_memberships` and `platform_staff` ([04 §3.1](04-domain-model-and-data-dictionary.md), [04 §3.2](04-domain-model-and-data-dictionary.md)).
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `id` | uuid | no | `uuidv7()` | |
-| `email` | citext | no | App | Login identifier. Trimmed and lower-cased before storage (RF-22). Replaced by a placeholder on anonymisation |
-| `email_verified_at` | timestamptz | yes | | Set by `confirmEmail`. Required for checkout and shop applications (FR-IAM-002) |
-| `password_hash` | text | yes | App | scrypt PHC string from the existing hash config. Null only when anonymised. The column is renamed from `password` [Verified-repo `database/migrations/1761885935168_create_users_table.ts:16`], so the model sets `passwordColumnName: 'passwordHash'` (today `'password'`, [Verified-repo `app/models/user.ts:14-17`]) |
-| `full_name` | text | yes | App | 1–100 characters, NFC. Null only when anonymised |
-| `phone_enc` | text | yes | | E.164 mobile number, encrypted ([04 §2.9](04-domain-model-and-data-dictionary.md)). Required before checkout (FR-CHK-001), checked by the action |
-| `phone_hash` | bytea | yes | | HMAC-SHA256 blind index ([04 §2.9](04-domain-model-and-data-dictionary.md)) |
-| `phone_last4` | char(4) | yes | | Masked display |
-| `phone_verified_at` | timestamptz | yes | | Phone OTP, R2 (FR-IAM-010). Always null in R1 |
-| `marketing_email_consent_at` | timestamptz | yes | | Opt-in time. Null means no consent (FR-IAM-013; Advertisement (Regulation) Act 2076 s10 [Verified-doc <https://lawcommission.gov.np/content/13398/ad--regulation--act-act--2076/>]) |
-| `marketing_sms_consent_at` | timestamptz | yes | | As above, for SMS (used from R2) |
-| `age_confirmed_at` | timestamptz | yes | | 18+ confirmation at signup [Assumption A-26; Open OD-24] |
-| `status` | text | no | `'pending_verification'` | Values in the CHECK below; what each state allows is in [07](07-security-threat-model-and-permissions.md) |
-| `security_stamp` | uuid | no | `gen_random_uuid()` | Random (v4), not time-ordered. Copied into the session at login and compared on every request. Rotated on password change, suspension and "log out everywhere" (ADR-0005, T-SEC-010) |
-| `mfa_totp_secret_enc` | text | yes | | TOTP secret, encrypted ([04 §2.9](04-domain-model-and-data-dictionary.md)). Written at `startTotpEnrollment` |
-| `mfa_enabled_at` | timestamptz | yes | | Set at `confirmTotpEnrollment`. Required for platform staff (FR-IAM-007) |
-| `mfa_last_used_step` | bigint | yes | | Last accepted TOTP time step. A code whose step is not greater is refused, so an intercepted code cannot be replayed within its window |
-| `last_login_at` | timestamptz | yes | | Written by the `session_auth:login_succeeded` listener |
-| `deletion_requested_at` | timestamptz | yes | | Set by `requestAccountDeletion` (FR-IAM-009) |
-| `anonymized_at` | timestamptz | yes | | Set by `anonymizeUser` ([04 §19.2](04-domain-model-and-data-dictionary.md)) |
-| `created_at`, `updated_at` | timestamptz | no | `now()` | `updated_at` by trigger ([04 §2.2](04-domain-model-and-data-dictionary.md)) |
+| Column                       | Type        | Null | Default                  | Notes                                                                                                                                                                                                                                                                                                                   |
+| ---------------------------- | ----------- | ---- | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                         | uuid        | no   | `uuidv7()`               |                                                                                                                                                                                                                                                                                                                         |
+| `email`                      | citext      | no   | App                      | Login identifier. Trimmed and lower-cased before storage (RF-22). Replaced by a placeholder on anonymisation                                                                                                                                                                                                            |
+| `email_verified_at`          | timestamptz | yes  |                          | Set by `confirmEmail`. Required for checkout and shop applications (FR-IAM-002)                                                                                                                                                                                                                                         |
+| `password_hash`              | text        | yes  | App                      | scrypt PHC string from the existing hash config. Null only when anonymised. The column is renamed from `password` [Verified-repo `database/migrations/1761885935168_create_users_table.ts:16`], so the model sets `passwordColumnName: 'passwordHash'` (today `'password'`, [Verified-repo `app/models/user.ts:14-17`]) |
+| `full_name`                  | text        | yes  | App                      | 1–100 characters, NFC. Null only when anonymised                                                                                                                                                                                                                                                                        |
+| `phone_enc`                  | text        | yes  |                          | E.164 mobile number, encrypted ([04 §2.9](04-domain-model-and-data-dictionary.md)). Required before checkout (FR-CHK-001), checked by the action                                                                                                                                                                        |
+| `phone_hash`                 | bytea       | yes  |                          | HMAC-SHA256 blind index ([04 §2.9](04-domain-model-and-data-dictionary.md))                                                                                                                                                                                                                                             |
+| `phone_last4`                | char(4)     | yes  |                          | Masked display                                                                                                                                                                                                                                                                                                          |
+| `phone_verified_at`          | timestamptz | yes  |                          | Phone OTP, R2 (FR-IAM-010). Always null in R1                                                                                                                                                                                                                                                                           |
+| `marketing_email_consent_at` | timestamptz | yes  |                          | Opt-in time. Null means no consent (FR-IAM-013; Advertisement (Regulation) Act 2076 s10 [Verified-doc <https://lawcommission.gov.np/content/13398/ad--regulation--act-act--2076/>])                                                                                                                                     |
+| `marketing_sms_consent_at`   | timestamptz | yes  |                          | As above, for SMS (used from R2)                                                                                                                                                                                                                                                                                        |
+| `age_confirmed_at`           | timestamptz | yes  |                          | 18+ confirmation at signup [Assumption A-26; Open OD-24]                                                                                                                                                                                                                                                                |
+| `status`                     | text        | no   | `'pending_verification'` | Values in the CHECK below; what each state allows is in [07](07-security-threat-model-and-permissions.md)                                                                                                                                                                                                               |
+| `security_stamp`             | uuid        | no   | `gen_random_uuid()`      | Random (v4), not time-ordered. Copied into the session at login and compared on every request. Rotated on password change, suspension and "log out everywhere" (ADR-0005, T-SEC-010)                                                                                                                                    |
+| `mfa_totp_secret_enc`        | text        | yes  |                          | TOTP secret, encrypted ([04 §2.9](04-domain-model-and-data-dictionary.md)). Written at `startTotpEnrollment`                                                                                                                                                                                                            |
+| `mfa_enabled_at`             | timestamptz | yes  |                          | Set at `confirmTotpEnrollment`. Required for platform staff (FR-IAM-007)                                                                                                                                                                                                                                                |
+| `mfa_last_used_step`         | bigint      | yes  |                          | Last accepted TOTP time step. A code whose step is not greater is refused, so an intercepted code cannot be replayed within its window                                                                                                                                                                                  |
+| `last_login_at`              | timestamptz | yes  |                          | Written by the `session_auth:login_succeeded` listener                                                                                                                                                                                                                                                                  |
+| `deletion_requested_at`      | timestamptz | yes  |                          | Set by `requestAccountDeletion` (FR-IAM-009)                                                                                                                                                                                                                                                                            |
+| `anonymized_at`              | timestamptz | yes  |                          | Set by `anonymizeUser` ([04 §19.2](04-domain-model-and-data-dictionary.md))                                                                                                                                                                                                                                             |
+| `created_at`, `updated_at`   | timestamptz | no   | `now()`                  | `updated_at` by trigger ([04 §2.2](04-domain-model-and-data-dictionary.md))                                                                                                                                                                                                                                             |
 
 **Keys and constraints**
 
@@ -77,11 +77,11 @@ One row per person. A customer, a seller and a staff member are the same kind of
 
 **Indexes**
 
-| Index | Query it serves |
-|---|---|
-| `users_email_key` (unique) | Login `WHERE email = ?` (auth finder); signup and invitation email match; admin exact-email search |
-| `users_phone_hash_idx ON (phone_hash) WHERE phone_hash IS NOT NULL` | COD fraud review "other accounts with this phone" and admin search by phone: `WHERE phone_hash = hmac(:e164)` |
-| `users_deletion_queue_idx ON (deletion_requested_at, id) WHERE status = 'deactivated'` | Admin deletion-request queue, oldest first (AC-FR-IAM-009-1) |
+| Index                                                                                  | Query it serves                                                                                               |
+| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `users_email_key` (unique)                                                             | Login `WHERE email = ?` (auth finder); signup and invitation email match; admin exact-email search            |
+| `users_phone_hash_idx ON (phone_hash) WHERE phone_hash IS NOT NULL`                    | COD fraud review "other accounts with this phone" and admin search by phone: `WHERE phone_hash = hmac(:e164)` |
+| `users_deletion_queue_idx ON (deletion_requested_at, id) WHERE status = 'deactivated'` | Admin deletion-request queue, oldest first (AC-FR-IAM-009-1)                                                  |
 
 The admin user list filtered by status or name is a sequential scan. That is acceptable up to about 100,000 users [Assumption]; past that, add a `pg_trgm` index on `full_name` rather than a guess now.
 
@@ -95,15 +95,15 @@ Verified by T-IAM-104 (proposed; `Ram@x.com` then `ram@x.com` returns 422 on `em
 
 Single-use tokens for email verification and password reset. Staff invitations have their own table (§6.3).
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `id` | uuid | no | `uuidv7()` | |
-| `user_id` | uuid | no | App | |
-| `purpose` | text | no | App | `email_verification` or `password_reset` |
-| `token_hash` | bytea | no | App | SHA-256 of the raw token (32 random bytes, base64url in the emailed link). The raw token is never stored |
-| `expires_at` | timestamptz | no | App | 24 h for email verification, 1 h for password reset [Assumption; [07](07-security-threat-model-and-permissions.md) owns the values] |
-| `consumed_at` | timestamptz | yes | | Set when used, or when a newer token, a password change or an email change invalidates it |
-| `created_at` | timestamptz | no | `now()` | |
+| Column        | Type        | Null | Default    | Notes                                                                                                                               |
+| ------------- | ----------- | ---- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `id`          | uuid        | no   | `uuidv7()` |                                                                                                                                     |
+| `user_id`     | uuid        | no   | App        |                                                                                                                                     |
+| `purpose`     | text        | no   | App        | `email_verification` or `password_reset`                                                                                            |
+| `token_hash`  | bytea       | no   | App        | SHA-256 of the raw token (32 random bytes, base64url in the emailed link). The raw token is never stored                            |
+| `expires_at`  | timestamptz | no   | App        | 24 h for email verification, 1 h for password reset [Assumption; [07](07-security-threat-model-and-permissions.md) owns the values] |
+| `consumed_at` | timestamptz | yes  |            | Set when used, or when a newer token, a password change or an email change invalidates it                                           |
+| `created_at`  | timestamptz | no   | `now()`    |                                                                                                                                     |
 
 **Keys and constraints**
 
@@ -116,11 +116,11 @@ Single-use tokens for email verification and password reset. Staff invitations h
 
 **Indexes**
 
-| Index | Query it serves |
-|---|---|
-| `user_tokens_token_hash_key` | Redeem in one statement: `UPDATE user_tokens SET consumed_at = now() WHERE token_hash = :h AND consumed_at IS NULL AND expires_at > now() RETURNING user_id, purpose`. Two concurrent redemptions cannot both succeed |
-| `user_tokens_live_key` | Invalidate before issuing: `UPDATE … SET consumed_at = now() WHERE user_id = ? AND purpose = ? AND consumed_at IS NULL` |
-| `user_tokens_expires_at_idx ON (expires_at)` | Purge: `DELETE FROM user_tokens WHERE expires_at < now() - interval '7 days'` in batches |
+| Index                                        | Query it serves                                                                                                                                                                                                       |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `user_tokens_token_hash_key`                 | Redeem in one statement: `UPDATE user_tokens SET consumed_at = now() WHERE token_hash = :h AND consumed_at IS NULL AND expires_at > now() RETURNING user_id, purpose`. Two concurrent redemptions cannot both succeed |
+| `user_tokens_live_key`                       | Invalidate before issuing: `UPDATE … SET consumed_at = now() WHERE user_id = ? AND purpose = ? AND consumed_at IS NULL`                                                                                               |
+| `user_tokens_expires_at_idx ON (expires_at)` | Purge: `DELETE FROM user_tokens WHERE expires_at < now() - interval '7 days'` in batches                                                                                                                              |
 
 **Lifecycle and retention.** Inserted by `signUp`, `resendEmailVerification` and `requestPasswordReset`. Consumed by `confirmEmail` and `resetPassword`. All live tokens of a user are consumed when the password or email changes, and at suspension or anonymisation. Rows are hard-deleted 7 days after expiry by a daily `identity.purge-expired-tokens` job ([04 §19.3](04-domain-model-and-data-dictionary.md)). Verified by T-IAM-105 (proposed; concurrent redemption of one token: exactly one succeeds).
 
@@ -130,12 +130,12 @@ Single-use tokens for email verification and password reset. Staff invitations h
 
 The server-side session store required by ADR-0005. It replaces the cookie store, which cannot revoke sessions (RF-04). The migration comes from `node ace make:session-table`, and the configuration uses `stores.database()` with its default table name `sessions` [Verified-doc `@adonisjs/session` 8.1.0 `build/make/migration/sessions.stub` and `build/database-CuWB6hfN.js`, <https://registry.npmjs.org/@adonisjs/session/-/session-8.1.0.tgz>].
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `id` | varchar(255) | no | package | Session ID, the value the session cookie carries. A bearer credential |
-| `data` | text | no | package | Session values serialised as a JSON message. **Not encrypted** by the database store |
-| `user_id` | varchar(255) | yes | | Written by `session.tag(String(user.id))` after login; text, not uuid |
-| `expires_at` | timestamptz | no | package | Last write plus the configured session `age` |
+| Column       | Type         | Null | Default | Notes                                                                                |
+| ------------ | ------------ | ---- | ------- | ------------------------------------------------------------------------------------ |
+| `id`         | varchar(255) | no   | package | Session ID, the value the session cookie carries. A bearer credential                |
+| `data`       | text         | no   | package | Session values serialised as a JSON message. **Not encrypted** by the database store |
+| `user_id`    | varchar(255) | yes  |         | Written by `session.tag(String(user.id))` after login; text, not uuid                |
+| `expires_at` | timestamptz  | no   | package | Last write plus the configured session `age`                                         |
 
 **Keys and constraints**
 
@@ -144,10 +144,10 @@ The server-side session store required by ADR-0005. It replaces the cookie store
 
 **Indexes** (both created by the stub)
 
-| Index | Query it serves |
-|---|---|
-| index on `user_id` | `SessionCollection.tagged(userId)`: `SELECT id, data FROM sessions WHERE user_id = ? AND expires_at > now()`, used by "log out everywhere", suspension and password change (job `identity.revoke-sessions`, [03 §9](03-system-architecture.md)) |
-| index on `expires_at` | Garbage collection: after a write, with probability `gcProbability` (default 2%), `DELETE FROM sessions WHERE expires_at <= now()` |
+| Index                 | Query it serves                                                                                                                                                                                                                                 |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| index on `user_id`    | `SessionCollection.tagged(userId)`: `SELECT id, data FROM sessions WHERE user_id = ? AND expires_at > now()`, used by "log out everywhere", suspension and password change (job `identity.revoke-sessions`, [03 §9](03-system-architecture.md)) |
+| index on `expires_at` | Garbage collection: after a write, with probability `gcProbability` (default 2%), `DELETE FROM sessions WHERE expires_at <= now()`                                                                                                              |
 
 **Lifecycle and retention.** One row per browser session. Login regenerates the ID, so the row is re-keyed, and the tag is applied after `login()`: a tag set before it would stay on the ID that `login()` destroys (read from the `@adonisjs/session` 8.1.0 source, not yet run; M1 confirms it). The database `age` is the longest idle period any user may have, 7 days for customers [Assumption A-23]. The shorter seller and admin idle limits and the 30-day absolute limit are enforced by middleware from timestamps in `data`, because the store has one `age` for everyone. Expired rows disappear through garbage collection.
 
@@ -159,15 +159,15 @@ The server-side session store required by ADR-0005. It replaces the cookie store
 
 Which users are DripNepal staff and with which fixed role ([07](07-security-threat-model-and-permissions.md), ADR-0006). Absence of a row means "not staff".
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `user_id` | uuid | no | App | Primary key; one row per person |
-| `role` | text | no | App | `platform_admin`, `support_agent`, `catalog_moderator`, `finance_officer`. Permission maps are in code ([07](07-security-threat-model-and-permissions.md)) |
-| `granted_by` | uuid | yes | | Null only for the production bootstrap command `platform:create-admin` (FR-ADM-005) |
-| `granted_at` | timestamptz | no | `now()` | Reset when a revoked person is granted again |
-| `revoked_at` | timestamptz | yes | | Null means active |
-| `revoked_by` | uuid | yes | | |
-| `created_at`, `updated_at` | timestamptz | no | `now()` | `updated_at` by trigger ([04 §2.2](04-domain-model-and-data-dictionary.md)) |
+| Column                     | Type        | Null | Default | Notes                                                                                                                                                      |
+| -------------------------- | ----------- | ---- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `user_id`                  | uuid        | no   | App     | Primary key; one row per person                                                                                                                            |
+| `role`                     | text        | no   | App     | `platform_admin`, `support_agent`, `catalog_moderator`, `finance_officer`. Permission maps are in code ([07](07-security-threat-model-and-permissions.md)) |
+| `granted_by`               | uuid        | yes  |         | Null only for the production bootstrap command `platform:create-admin` (FR-ADM-005)                                                                        |
+| `granted_at`               | timestamptz | no   | `now()` | Reset when a revoked person is granted again                                                                                                               |
+| `revoked_at`               | timestamptz | yes  |         | Null means active                                                                                                                                          |
+| `revoked_by`               | uuid        | yes  |         |                                                                                                                                                            |
+| `created_at`, `updated_at` | timestamptz | no   | `now()` | `updated_at` by trigger ([04 §2.2](04-domain-model-and-data-dictionary.md))                                                                                |
 
 **Keys and constraints**
 
@@ -187,24 +187,24 @@ Which users are DripNepal staff and with which fixed role ([07](07-security-thre
 
 The customer's address book. Checkout copies the chosen address into `orders.shipping_address` (§11.1), so orders never reference this table. Editing or archiving an address therefore cannot change or delete an order, which fixes RF-06 and the address IDOR of MISSED-schema-integrity.
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `id` | uuid | no | `uuidv7()` | |
-| `user_id` | uuid | no | App | |
-| `label` | text | yes | | "Home", "Office"; at most 30 characters |
-| `recipient_name_enc` | text | no | App | Encrypted ([04 §2.9](04-domain-model-and-data-dictionary.md)) |
-| `recipient_phone_enc` | text | no | App | Encrypted E.164 mobile. The same number may appear on addresses of different users (AC-FR-IAM-012-3; fixes RF-11) |
-| `recipient_phone_last4` | char(4) | no | App | Masked display in lists |
-| `province_code` | text | no | App | Reference to §9.1 |
-| `district_code` | text | no | App | Reference to §9.2 |
-| `local_level_code` | text | no | App | Nepal Post 5-digit local-level code, reference to §9.3 [Verify-external VX-10] |
-| `ward_no` | smallint | no | App | 1 to the local level's `ward_count` |
-| `area_tole_enc` | text | no | App | Area or tole, encrypted |
-| `street_landmark_enc` | text | yes | | Street and landmark, encrypted |
-| `postal_code` | text | no | generated | `GENERATED ALWAYS AS (local_level_code || lpad(ward_no::text, 2, '0')) STORED`: the 7-digit Nepal Post ward code, 5-digit local-level code plus 2-digit ward [Verified-doc <https://giwmscdnone.gov.np/media/pdf_upload/Postal%20Code_wteggid.pdf>]. Derived, so users are never asked for it |
-| `is_default` | boolean | no | `false` | |
-| `archived_at` | timestamptz | yes | | Set by `deleteAddress` |
-| `created_at`, `updated_at` | timestamptz | no | `now()` | |
+| Column                     | Type        | Null | Default    | Notes                                                                                                             |
+| -------------------------- | ----------- | ---- | ---------- | ----------------------------------------------------------------------------------------------------------------- | --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                       | uuid        | no   | `uuidv7()` |                                                                                                                   |
+| `user_id`                  | uuid        | no   | App        |                                                                                                                   |
+| `label`                    | text        | yes  |            | "Home", "Office"; at most 30 characters                                                                           |
+| `recipient_name_enc`       | text        | no   | App        | Encrypted ([04 §2.9](04-domain-model-and-data-dictionary.md))                                                     |
+| `recipient_phone_enc`      | text        | no   | App        | Encrypted E.164 mobile. The same number may appear on addresses of different users (AC-FR-IAM-012-3; fixes RF-11) |
+| `recipient_phone_last4`    | char(4)     | no   | App        | Masked display in lists                                                                                           |
+| `province_code`            | text        | no   | App        | Reference to §9.1                                                                                                 |
+| `district_code`            | text        | no   | App        | Reference to §9.2                                                                                                 |
+| `local_level_code`         | text        | no   | App        | Nepal Post 5-digit local-level code, reference to §9.3 [Verify-external VX-10]                                    |
+| `ward_no`                  | smallint    | no   | App        | 1 to the local level's `ward_count`                                                                               |
+| `area_tole_enc`            | text        | no   | App        | Area or tole, encrypted                                                                                           |
+| `street_landmark_enc`      | text        | yes  |            | Street and landmark, encrypted                                                                                    |
+| `postal_code`              | text        | no   | generated  | `GENERATED ALWAYS AS (local_level_code                                                                            |     | lpad(ward_no::text, 2, '0')) STORED`: the 7-digit Nepal Post ward code, 5-digit local-level code plus 2-digit ward [Verified-doc <https://giwmscdnone.gov.np/media/pdf_upload/Postal%20Code_wteggid.pdf>]. Derived, so users are never asked for it |
+| `is_default`               | boolean     | no   | `false`    |                                                                                                                   |
+| `archived_at`              | timestamptz | yes  |            | Set by `deleteAddress`                                                                                            |
+| `created_at`, `updated_at` | timestamptz | no   | `now()`    |                                                                                                                   |
 
 The generated column is declared `STORED` explicitly, because PostgreSQL 18 makes generated columns `VIRTUAL` by default, and its expression may use only immutable functions [Verified-doc <https://www.postgresql.org/docs/18/ddl-generated-columns.html>]. Application code never assigns it. If an assignment slips in, PostgreSQL rejects the write, because a generated column cannot be written to [Verified-doc same page], so the mistake fails in tests instead of storing a wrong code.
 
@@ -220,11 +220,11 @@ The generated column is declared `STORED` explicitly, because PostgreSQL 18 make
 
 **Indexes**
 
-| Index | Query it serves |
-|---|---|
+| Index                                                                               | Query it serves                                                                                                    |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | `user_addresses_user_active_idx ON (user_id, created_at) WHERE archived_at IS NULL` | Address book and checkout picker: `WHERE user_id = ? AND archived_at IS NULL ORDER BY is_default DESC, created_at` |
-| `user_addresses_one_default_key` | Default lookup for the checkout quote |
-| `user_addresses_archived_idx ON (archived_at) WHERE archived_at IS NOT NULL` | Purge of archived rows after the grace period |
+| `user_addresses_one_default_key`                                                    | Default lookup for the checkout quote                                                                              |
+| `user_addresses_archived_idx ON (archived_at) WHERE archived_at IS NOT NULL`        | Purge of archived rows after the grace period                                                                      |
 
 The location foreign keys get no index: reference rows are never deleted.
 
@@ -242,35 +242,35 @@ Owned by the `shops` module ([03 §4.4](03-system-architecture.md)). Shop status
 
 One row per shop, from application to closure. The application fields required by E-Commerce Act 2081 s16 (seller contract, registration evidence, PAN or VAT, grievance mechanism, return policy [Verified-doc <https://giwmscdnone.gov.np/media/files/E-Commerce%20Act%2C%202081_yr7k9o5.pdf>; VX-02]) are columns here. The contract acceptance is in `shop_agreements` (§6.4) and the documents are `media_assets` rows of kind `kyc_document` (§7.13).
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `id` | uuid | no | `uuidv7()` | |
-| `owner_user_id` | uuid | no | App | The single source of ownership ([04 §3.1](04-domain-model-and-data-dictionary.md)) |
-| `name` | text | no | App | 2–60 characters. Not unique (fixes IAM-08); the slug is the identifier |
-| `slug` | citext | no | App | [04 §2.8](04-domain-model-and-data-dictionary.md) pattern and reserved-word list. Changed by staff only (FR-SHOP-012) |
-| `status` | text | no | `'pending_review'` | CHECK below; transitions in [05 §6.10](05-order-payment-and-inventory-lifecycles.md) |
-| `suspension_mode` | text | yes | | `fulfill_existing` or `frozen`; set exactly when suspended |
-| `product_review_mode` | text | no | `'pre'` | `pre` or `post` [Assumption A-19; Open OD-20]. Staff-only |
-| `commission_rate_bp` | int | yes | | Null means the platform default `default_commission_rate_bp` (§15.1). Snapshotted per order line (§11.3) |
-| `contact_email` | text | no | App | Public shop contact, lower-cased. Entered separately, never copied from the owner (AC-FR-SHOP-001-4) |
-| `contact_phone_e164` | text | no | App | Public business number, mobile or landline ([04 §2.8](04-domain-model-and-data-dictionary.md)). Plaintext because it is published |
-| `description` | text | yes | | Up to 2,000 characters |
-| `logo_media_id` | uuid | yes | | `media_assets` row of kind `shop_logo` |
-| `banner_media_id` | uuid | yes | | Kind `shop_banner` |
-| `return_policy_text` | text | no | App | Shop's return terms shown on product pages next to the platform policy (AC-FR-CAT-012-2); up to 5,000 characters |
-| `business_type` | text | no | App | `individual` or `registered_business` |
-| `business_registration_number` | text | yes | | Required for `registered_business` |
-| `business_registration_authority` | text | yes | | For example the Office of the Company Registrar; required for `registered_business` |
-| `pan_vat_number` | text | yes | | Digits only. Required for `registered_business`; for `individual` it depends on OD-16 and VX-05. The validator requires 9 digits; the IRD format is not confirmed [Verify-external VX-05] |
-| `is_vat_registered` | boolean | no | `false` | Determines who may show VAT on invoices (OD-11, OD-26) |
-| `grievance_contact_name` | text | no | App | Seller's grievance contact (s16) |
-| `grievance_contact_phone_enc` | text | no | App | Encrypted ([04 §2.9](04-domain-model-and-data-dictionary.md)) |
-| `submitted_at` | timestamptz | no | `now()` | Set at application and at each resubmission; orders the review queue |
-| `approved_at` | timestamptz | yes | | First approval |
-| `approved_by` | uuid | yes | | Staff user |
-| `closed_at` | timestamptz | yes | | |
-| `version` | int | no | `1` | Optimistic concurrency ([04 §2.10](04-domain-model-and-data-dictionary.md)) |
-| `created_at`, `updated_at` | timestamptz | no | `now()` | |
+| Column                            | Type        | Null | Default            | Notes                                                                                                                                                                                     |
+| --------------------------------- | ----------- | ---- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                              | uuid        | no   | `uuidv7()`         |                                                                                                                                                                                           |
+| `owner_user_id`                   | uuid        | no   | App                | The single source of ownership ([04 §3.1](04-domain-model-and-data-dictionary.md))                                                                                                        |
+| `name`                            | text        | no   | App                | 2–60 characters. Not unique (fixes IAM-08); the slug is the identifier                                                                                                                    |
+| `slug`                            | citext      | no   | App                | [04 §2.8](04-domain-model-and-data-dictionary.md) pattern and reserved-word list. Changed by staff only (FR-SHOP-012)                                                                     |
+| `status`                          | text        | no   | `'pending_review'` | CHECK below; transitions in [05 §6.10](05-order-payment-and-inventory-lifecycles.md)                                                                                                      |
+| `suspension_mode`                 | text        | yes  |                    | `fulfill_existing` or `frozen`; set exactly when suspended                                                                                                                                |
+| `product_review_mode`             | text        | no   | `'pre'`            | `pre` or `post` [Assumption A-19; Open OD-20]. Staff-only                                                                                                                                 |
+| `commission_rate_bp`              | int         | yes  |                    | Null means the platform default `default_commission_rate_bp` (§15.1). Snapshotted per order line (§11.3)                                                                                  |
+| `contact_email`                   | text        | no   | App                | Public shop contact, lower-cased. Entered separately, never copied from the owner (AC-FR-SHOP-001-4)                                                                                      |
+| `contact_phone_e164`              | text        | no   | App                | Public business number, mobile or landline ([04 §2.8](04-domain-model-and-data-dictionary.md)). Plaintext because it is published                                                         |
+| `description`                     | text        | yes  |                    | Up to 2,000 characters                                                                                                                                                                    |
+| `logo_media_id`                   | uuid        | yes  |                    | `media_assets` row of kind `shop_logo`                                                                                                                                                    |
+| `banner_media_id`                 | uuid        | yes  |                    | Kind `shop_banner`                                                                                                                                                                        |
+| `return_policy_text`              | text        | no   | App                | Shop's return terms shown on product pages next to the platform policy (AC-FR-CAT-012-2); up to 5,000 characters                                                                          |
+| `business_type`                   | text        | no   | App                | `individual` or `registered_business`                                                                                                                                                     |
+| `business_registration_number`    | text        | yes  |                    | Required for `registered_business`                                                                                                                                                        |
+| `business_registration_authority` | text        | yes  |                    | For example the Office of the Company Registrar; required for `registered_business`                                                                                                       |
+| `pan_vat_number`                  | text        | yes  |                    | Digits only. Required for `registered_business`; for `individual` it depends on OD-16 and VX-05. The validator requires 9 digits; the IRD format is not confirmed [Verify-external VX-05] |
+| `is_vat_registered`               | boolean     | no   | `false`            | Determines who may show VAT on invoices (OD-11, OD-26)                                                                                                                                    |
+| `grievance_contact_name`          | text        | no   | App                | Seller's grievance contact (s16)                                                                                                                                                          |
+| `grievance_contact_phone_enc`     | text        | no   | App                | Encrypted ([04 §2.9](04-domain-model-and-data-dictionary.md))                                                                                                                             |
+| `submitted_at`                    | timestamptz | no   | `now()`            | Set at application and at each resubmission; orders the review queue                                                                                                                      |
+| `approved_at`                     | timestamptz | yes  |                    | First approval                                                                                                                                                                            |
+| `approved_by`                     | uuid        | yes  |                    | Staff user                                                                                                                                                                                |
+| `closed_at`                       | timestamptz | yes  |                    |                                                                                                                                                                                           |
+| `version`                         | int         | no   | `1`                | Optimistic concurrency ([04 §2.10](04-domain-model-and-data-dictionary.md))                                                                                                               |
+| `created_at`, `updated_at`        | timestamptz | no   | `now()`            |                                                                                                                                                                                           |
 
 **Keys and constraints**
 
@@ -293,9 +293,9 @@ One row per shop, from application to closure. The application fields required b
 
 **Indexes**
 
-| Index | Query it serves |
-|---|---|
-| `shops_slug_key` (unique) | Seller context resolution on every `/seller/{shopSlug}` and `/api/v1/seller/shops/{shopSlug}` request; public shop page `/shops/{shopSlug}` |
+| Index                                        | Query it serves                                                                                                                                                                   |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `shops_slug_key` (unique)                    | Seller context resolution on every `/seller/{shopSlug}` and `/api/v1/seller/shops/{shopSlug}` request; public shop page `/shops/{shopSlug}`                                       |
 | `shops_owner_idx ON (owner_user_id, status)` | Shop switcher (owned shops), the `max_shops_per_owner` count `WHERE owner_user_id = ? AND status IN ('pending_review','active','suspended')`, and the anonymisation blocker check |
 
 The admin application queue (`WHERE status = 'pending_review' ORDER BY submitted_at`) and shop list read fewer than 50 rows at launch (Q1) and get no index. Revisit above 5,000 shops.
@@ -308,17 +308,17 @@ The admin application queue (`WHERE status = 'pending_review' ORDER BY submitted
 
 Staff access to a shop ([04 §3.2](04-domain-model-and-data-dictionary.md)). The owner has no row here.
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `id` | uuid | no | `uuidv7()` | Used in `/members/{membershipId}` paths |
-| `shop_id` | uuid | no | App | |
-| `user_id` | uuid | no | App | |
-| `role` | text | no | App | `manager`, `catalog_editor`, `order_fulfiller`, `viewer` |
-| `status` | text | no | `'active'` | `active` or `removed` |
-| `invited_by` | uuid | yes | | Null only for an admin-assisted repair |
-| `removed_at` | timestamptz | yes | | |
-| `removed_by` | uuid | yes | | |
-| `created_at`, `updated_at` | timestamptz | no | `now()` | |
+| Column                     | Type        | Null | Default    | Notes                                                    |
+| -------------------------- | ----------- | ---- | ---------- | -------------------------------------------------------- |
+| `id`                       | uuid        | no   | `uuidv7()` | Used in `/members/{membershipId}` paths                  |
+| `shop_id`                  | uuid        | no   | App        |                                                          |
+| `user_id`                  | uuid        | no   | App        |                                                          |
+| `role`                     | text        | no   | App        | `manager`, `catalog_editor`, `order_fulfiller`, `viewer` |
+| `status`                   | text        | no   | `'active'` | `active` or `removed`                                    |
+| `invited_by`               | uuid        | yes  |            | Null only for an admin-assisted repair                   |
+| `removed_at`               | timestamptz | yes  |            |                                                          |
+| `removed_by`               | uuid        | yes  |            |                                                          |
+| `created_at`, `updated_at` | timestamptz | no   | `now()`    |                                                          |
 
 **Keys and constraints**
 
@@ -330,10 +330,10 @@ Staff access to a shop ([04 §3.2](04-domain-model-and-data-dictionary.md)). The
 
 **Indexes**
 
-| Index | Query it serves |
-|---|---|
-| `shop_memberships_shop_user_key` | Seller context resolution: `WHERE shop_id = ? AND user_id = ? AND status = 'active'` on every seller request after the owner check; member list `WHERE shop_id = ? ORDER BY created_at` |
-| `shop_memberships_user_active_idx ON (user_id) WHERE status = 'active'` | Shop switcher and shared props, "shops where I am staff" (fixes RF-44) |
+| Index                                                                   | Query it serves                                                                                                                                                                         |
+| ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `shop_memberships_shop_user_key`                                        | Seller context resolution: `WHERE shop_id = ? AND user_id = ? AND status = 'active'` on every seller request after the owner check; member list `WHERE shop_id = ? ORDER BY created_at` |
+| `shop_memberships_user_active_idx ON (user_id) WHERE status = 'active'` | Shop switcher and shared props, "shops where I am staff" (fixes RF-44)                                                                                                                  |
 
 **Lifecycle and retention.** Created on invitation acceptance. A role change updates the row. Removal sets `status = 'removed'` and keeps the row, so a former member's past actions stay attributable (IAM-13). Re-inviting a removed member reactivates the same row. Role history is in `audit_logs`. Rows are kept as long as the shop ([04 §19.3](04-domain-model-and-data-dictionary.md)).
 
@@ -343,19 +343,19 @@ Staff access to a shop ([04 §3.2](04-domain-model-and-data-dictionary.md)). The
 
 Email invitations to join a shop ([03 §7.6](03-system-architecture.md), FR-SHOP-005).
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `id` | uuid | no | `uuidv7()` | |
-| `shop_id` | uuid | no | App | |
-| `email` | citext | no | App | Invitee, lower-cased. Must equal the accepting user's verified email |
-| `role` | text | no | App | As `shop_memberships.role` |
-| `token_hash` | bytea | no | App | SHA-256 of the 32-byte random token |
-| `expires_at` | timestamptz | no | App | `created_at` + 7 days |
-| `accepted_at` | timestamptz | yes | | |
-| `accepted_by_user_id` | uuid | yes | | |
-| `revoked_at` | timestamptz | yes | | Revoked by a member with `shop.staff.manage`, or by a re-invite |
-| `invited_by` | uuid | no | App | |
-| `created_at` | timestamptz | no | `now()` | |
+| Column                | Type        | Null | Default    | Notes                                                                |
+| --------------------- | ----------- | ---- | ---------- | -------------------------------------------------------------------- |
+| `id`                  | uuid        | no   | `uuidv7()` |                                                                      |
+| `shop_id`             | uuid        | no   | App        |                                                                      |
+| `email`               | citext      | no   | App        | Invitee, lower-cased. Must equal the accepting user's verified email |
+| `role`                | text        | no   | App        | As `shop_memberships.role`                                           |
+| `token_hash`          | bytea       | no   | App        | SHA-256 of the 32-byte random token                                  |
+| `expires_at`          | timestamptz | no   | App        | `created_at` + 7 days                                                |
+| `accepted_at`         | timestamptz | yes  |            |                                                                      |
+| `accepted_by_user_id` | uuid        | yes  |            |                                                                      |
+| `revoked_at`          | timestamptz | yes  |            | Revoked by a member with `shop.staff.manage`, or by a re-invite      |
+| `invited_by`          | uuid        | no   | App        |                                                                      |
+| `created_at`          | timestamptz | no   | `now()`    |                                                                      |
 
 **Keys and constraints**
 
@@ -368,10 +368,10 @@ Email invitations to join a shop ([03 §7.6](03-system-architecture.md), FR-SHOP
 
 **Indexes**
 
-| Index | Query it serves |
-|---|---|
-| `shop_invitations_token_hash_key` | `GET /invitations/{token}` and `acceptShopInvitation`: `WHERE token_hash = ? … FOR UPDATE` |
-| `shop_invitations_pending_key` | Pending list and the limit of 20 pending invitations: `WHERE shop_id = ? AND accepted_at IS NULL AND revoked_at IS NULL` |
+| Index                             | Query it serves                                                                                                          |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `shop_invitations_token_hash_key` | `GET /invitations/{token}` and `acceptShopInvitation`: `WHERE token_hash = ? … FOR UPDATE`                               |
+| `shop_invitations_pending_key`    | Pending list and the limit of 20 pending invitations: `WHERE shop_id = ? AND accepted_at IS NULL AND revoked_at IS NULL` |
 
 **Lifecycle and retention.** Accepted or revoked by compare-and-set on the two nullable timestamps. Unknown, expired and revoked tokens all return 404. Application code never deletes rows ([04 §2.6](04-domain-model-and-data-dictionary.md)). The retention purge removes an invitation one year after it was accepted, revoked or expired ([04 §19.3](04-domain-model-and-data-dictionary.md)); the `audit_logs` rows record the event after that.
 
@@ -381,15 +381,15 @@ Email invitations to join a shop ([03 §7.6](03-system-architecture.md), FR-SHOP
 
 Evidence that the shop's owner accepted a version of the seller agreement, which E-Commerce Act 2081 s14 and s16 require before selling [Verified-doc <https://giwmscdnone.gov.np/media/files/E-Commerce%20Act%2C%202081_yr7k9o5.pdf>; VX-02] (FR-SHOP-013).
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `id` | uuid | no | `uuidv7()` | |
-| `shop_id` | uuid | no | App | |
-| `agreement_version` | text | no | App | Effective date of the text, `YYYY-MM-DD` |
-| `accepted_by_user_id` | uuid | no | App | The owner at the time of acceptance |
-| `accepted_at` | timestamptz | no | `now()` | |
-| `ip_hash` | bytea | no | App | Keyed HMAC-SHA256 of the client IP, computed as for `audit_logs.ip_hash` (§15.3). Unkeyed hashing would be pointless: all IPv4 addresses can be hashed in minutes |
-| `request_id` | text | no | App | Links to logs and the `audit_logs` row |
+| Column                | Type        | Null | Default    | Notes                                                                                                                                                             |
+| --------------------- | ----------- | ---- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                  | uuid        | no   | `uuidv7()` |                                                                                                                                                                   |
+| `shop_id`             | uuid        | no   | App        |                                                                                                                                                                   |
+| `agreement_version`   | text        | no   | App        | Effective date of the text, `YYYY-MM-DD`                                                                                                                          |
+| `accepted_by_user_id` | uuid        | no   | App        | The owner at the time of acceptance                                                                                                                               |
+| `accepted_at`         | timestamptz | no   | `now()`    |                                                                                                                                                                   |
+| `ip_hash`             | bytea       | no   | App        | Keyed HMAC-SHA256 of the client IP, computed as for `audit_logs.ip_hash` (§15.3). Unkeyed hashing would be pointless: all IPv4 addresses can be hashed in minutes |
+| `request_id`          | text        | no   | App        | Links to logs and the `audit_logs` row                                                                                                                            |
 
 Agreement texts are versioned files in the repository (`resources/legal/seller-agreement/<version>.md`), listed with their effective and "accepted until" dates in `app/modules/shops/domain/seller_agreements.ts`. A new version is therefore reviewed like code, and `getCurrentSellerAgreement` serves the file. `applyForShop` must carry `accepted_agreement_version` equal to the current version (AC-FR-SHOP-013-1).
 
@@ -411,15 +411,15 @@ Agreement texts are versioned files in the repository (`resources/legal/seller-a
 
 Staff decisions on a shop: application approval or rejection, suspension and reinstatement (AC-FR-SHOP-002-4, FR-SHOP-007). Closure (admin-only in R1) is recorded in `audit_logs` only.
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `id` | uuid | no | `uuidv7()` | |
-| `shop_id` | uuid | no | App | |
-| `decision` | text | no | App | `approved`, `rejected`, `suspended`, `reinstated` |
-| `reason` | text | yes | | Required for rejection and suspension; the applicant or owner sees it |
-| `suspension_mode` | text | yes | | Copy of the mode chosen, for suspension decisions |
-| `decided_by` | uuid | no | App | Staff user |
-| `created_at` | timestamptz | no | `now()` | |
+| Column            | Type        | Null | Default    | Notes                                                                 |
+| ----------------- | ----------- | ---- | ---------- | --------------------------------------------------------------------- |
+| `id`              | uuid        | no   | `uuidv7()` |                                                                       |
+| `shop_id`         | uuid        | no   | App        |                                                                       |
+| `decision`        | text        | no   | App        | `approved`, `rejected`, `suspended`, `reinstated`                     |
+| `reason`          | text        | yes  |            | Required for rejection and suspension; the applicant or owner sees it |
+| `suspension_mode` | text        | yes  |            | Copy of the mode chosen, for suspension decisions                     |
+| `decided_by`      | uuid        | no   | App        | Staff user                                                            |
+| `created_at`      | timestamptz | no   | `now()`    |                                                                       |
 
 **Keys and constraints**
 
@@ -439,22 +439,22 @@ Staff decisions on a shop: application approval or rejection, suspension and rei
 
 Pickup and return addresses. The layout matches `user_addresses` (§5.5), so the same address form and validator serve both.
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `id` | uuid | no | `uuidv7()` | |
-| `shop_id` | uuid | no | App | |
-| `purpose` | text | no | App | `pickup` or `return` |
-| `label` | text | yes | | At most 30 characters |
-| `contact_name` | text | no | App | Person the courier asks for, 2–100 characters |
-| `contact_phone_enc` | text | no | App | Encrypted ([04 §2.9](04-domain-model-and-data-dictionary.md)) |
-| `province_code`, `district_code`, `local_level_code` | text | no | App | As §5.5 |
-| `ward_no` | smallint | no | App | As §5.5 |
-| `area_tole_enc` | text | no | App | Encrypted |
-| `street_landmark_enc` | text | yes | | Encrypted |
-| `postal_code` | text | no | generated | As §5.5 |
-| `is_default` | boolean | no | `false` | Default per purpose |
-| `archived_at` | timestamptz | yes | | |
-| `created_at`, `updated_at` | timestamptz | no | `now()` | |
+| Column                                               | Type        | Null | Default    | Notes                                                         |
+| ---------------------------------------------------- | ----------- | ---- | ---------- | ------------------------------------------------------------- |
+| `id`                                                 | uuid        | no   | `uuidv7()` |                                                               |
+| `shop_id`                                            | uuid        | no   | App        |                                                               |
+| `purpose`                                            | text        | no   | App        | `pickup` or `return`                                          |
+| `label`                                              | text        | yes  |            | At most 30 characters                                         |
+| `contact_name`                                       | text        | no   | App        | Person the courier asks for, 2–100 characters                 |
+| `contact_phone_enc`                                  | text        | no   | App        | Encrypted ([04 §2.9](04-domain-model-and-data-dictionary.md)) |
+| `province_code`, `district_code`, `local_level_code` | text        | no   | App        | As §5.5                                                       |
+| `ward_no`                                            | smallint    | no   | App        | As §5.5                                                       |
+| `area_tole_enc`                                      | text        | no   | App        | Encrypted                                                     |
+| `street_landmark_enc`                                | text        | yes  |            | Encrypted                                                     |
+| `postal_code`                                        | text        | no   | generated  | As §5.5                                                       |
+| `is_default`                                         | boolean     | no   | `false`    | Default per purpose                                           |
+| `archived_at`                                        | timestamptz | yes  |            |                                                               |
+| `created_at`, `updated_at`                           | timestamptz | no   | `now()`    |                                                               |
 
 **Keys and constraints**
 
@@ -474,21 +474,21 @@ Pickup and return addresses. The layout matches `user_addresses` (§5.5), so the
 
 The bank or wallet account the platform pays the shop's balance to (FR-SHOP-010).
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `id` | uuid | no | `uuidv7()` | |
-| `shop_id` | uuid | no | App | |
-| `method` | text | no | App | `bank_transfer` or `wallet` |
-| `account_name` | text | no | App | Account holder name as the bank or wallet shows it |
-| `bank_name` | text | no | App | Bank name, or the wallet provider for `wallet` |
-| `branch_name` | text | yes | | Bank branch, when the bank needs it for transfers |
-| `account_number_enc` | text | no | App | Encrypted ([04 §2.9](04-domain-model-and-data-dictionary.md)); for wallets, the wallet ID |
-| `account_number_last4` | char(4) | no | App | The only part any response shows |
-| `created_by` | uuid | no | App | The owner who entered it |
-| `verified_at` | timestamptz | yes | | Set by a `finance_officer` |
-| `verified_by` | uuid | yes | | |
-| `replaced_at` | timestamptz | yes | | Set when a newer account replaces this one |
-| `created_at`, `updated_at` | timestamptz | no | `now()` | |
+| Column                     | Type        | Null | Default    | Notes                                                                                     |
+| -------------------------- | ----------- | ---- | ---------- | ----------------------------------------------------------------------------------------- |
+| `id`                       | uuid        | no   | `uuidv7()` |                                                                                           |
+| `shop_id`                  | uuid        | no   | App        |                                                                                           |
+| `method`                   | text        | no   | App        | `bank_transfer` or `wallet`                                                               |
+| `account_name`             | text        | no   | App        | Account holder name as the bank or wallet shows it                                        |
+| `bank_name`                | text        | no   | App        | Bank name, or the wallet provider for `wallet`                                            |
+| `branch_name`              | text        | yes  |            | Bank branch, when the bank needs it for transfers                                         |
+| `account_number_enc`       | text        | no   | App        | Encrypted ([04 §2.9](04-domain-model-and-data-dictionary.md)); for wallets, the wallet ID |
+| `account_number_last4`     | char(4)     | no   | App        | The only part any response shows                                                          |
+| `created_by`               | uuid        | no   | App        | The owner who entered it                                                                  |
+| `verified_at`              | timestamptz | yes  |            | Set by a `finance_officer`                                                                |
+| `verified_by`              | uuid        | yes  |            |                                                                                           |
+| `replaced_at`              | timestamptz | yes  |            | Set when a newer account replaces this one                                                |
+| `created_at`, `updated_at` | timestamptz | no   | `now()`    |                                                                                           |
 
 **Keys and constraints**
 
@@ -508,15 +508,15 @@ The bank or wallet account the platform pays the shop's balance to (FR-SHOP-010)
 
 Classification of shops (not products) for onboarding and future shop directories ([00 §5.5](00-context-assumptions-and-questions.md), item 7). It never drives product navigation.
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `code` | text | no | App | Primary key. Keeps today's ids (`mens-fashion`, `footwear`, …) [Verified-repo `shared/constants/shop_categories.ts`] |
-| `label` | text | no | App | Display name |
-| `description` | text | yes | | |
-| `icon` | text | yes | | Lucide icon name used by the onboarding UI |
-| `position` | smallint | no | `0` | Display order |
-| `is_active` | boolean | no | `true` | |
-| `created_at`, `updated_at` | timestamptz | no | `now()` | |
+| Column                     | Type        | Null | Default | Notes                                                                                                                |
+| -------------------------- | ----------- | ---- | ------- | -------------------------------------------------------------------------------------------------------------------- |
+| `code`                     | text        | no   | App     | Primary key. Keeps today's ids (`mens-fashion`, `footwear`, …) [Verified-repo `shared/constants/shop_categories.ts`] |
+| `label`                    | text        | no   | App     | Display name                                                                                                         |
+| `description`              | text        | yes  |         |                                                                                                                      |
+| `icon`                     | text        | yes  |         | Lucide icon name used by the onboarding UI                                                                           |
+| `position`                 | smallint    | no   | `0`     | Display order                                                                                                        |
+| `is_active`                | boolean     | no   | `true`  |                                                                                                                      |
+| `created_at`, `updated_at` | timestamptz | no   | `now()` |                                                                                                                      |
 
 **Keys and constraints.** `shop_categories_pkey PRIMARY KEY (code)`; `shop_categories_code_check CHECK (code ~ '^[a-z0-9]+(-[a-z0-9]+)*$' AND char_length(code) <= 50)`; `shop_categories_label_check CHECK (char_length(label) BETWEEN 2 AND 60)`.
 
@@ -530,11 +530,11 @@ Classification of shops (not products) for onboarding and future shop directorie
 
 Which shop categories a shop belongs to. Replaces `shop_categories_shop`.
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `shop_id` | uuid | no | App | |
-| `shop_category_code` | text | no | App | |
-| `created_at` | timestamptz | no | `now()` | |
+| Column               | Type        | Null | Default | Notes |
+| -------------------- | ----------- | ---- | ------- | ----- |
+| `shop_id`            | uuid        | no   | App     |       |
+| `shop_category_code` | text        | no   | App     |       |
+| `created_at`         | timestamptz | no   | `now()` |       |
 
 **Keys and constraints.** `shop_category_assignments_pkey PRIMARY KEY (shop_id, shop_category_code)`; `shop_category_assignments_shop_fkey` to `shops (id)` and `shop_category_assignments_category_fkey` to `shop_categories (code)`, both `ON DELETE RESTRICT`. Application-enforced: 1 to 3 categories per shop [Assumption], all active. Written with the query builder (composite primary key, [04 §2.15](04-domain-model-and-data-dictionary.md)).
 
@@ -548,13 +548,13 @@ Which shop categories a shop belongs to. Replaces `shop_categories_shop`.
 
 Old shop and category slugs, so that old URLs answer 301 ([04 §3.13](04-domain-model-and-data-dictionary.md), FR-SHOP-012, AC-FR-CAT-001-3).
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `entity_type` | text | no | App | `shop` or `category` |
-| `old_slug` | citext | no | App | The retired slug |
-| `entity_id` | uuid | no | App | `shops.id` or `categories.id` |
-| `created_by` | uuid | yes | | Staff user; null when written by the reference seeder |
-| `created_at` | timestamptz | no | `now()` | |
+| Column        | Type        | Null | Default | Notes                                                 |
+| ------------- | ----------- | ---- | ------- | ----------------------------------------------------- |
+| `entity_type` | text        | no   | App     | `shop` or `category`                                  |
+| `old_slug`    | citext      | no   | App     | The retired slug                                      |
+| `entity_id`   | uuid        | no   | App     | `shops.id` or `categories.id`                         |
+| `created_by`  | uuid        | yes  |         | Staff user; null when written by the reference seeder |
+| `created_at`  | timestamptz | no   | `now()` |                                                       |
 
 **Keys and constraints**
 
@@ -580,18 +580,18 @@ Owned by the `catalog` module, except `media_assets` and `product_media` (module
 
 The garment-type tree ([04 §3.6](04-domain-model-and-data-dictionary.md)).
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `id` | uuid | no | `uuidv7()` | |
-| `parent_id` | uuid | yes | | Null for top-level categories |
-| `slug` | citext | no | App | Globally unique; `/c/{slug}` |
-| `name` | text | no | App | 2–60 characters; unique among siblings only |
-| `description` | text | yes | | Category page copy for SEO (FR-SRCH-005) |
-| `path` | text | no | App | Materialised slug path, `'/clothing/tops/t-shirts/'` |
-| `depth` | smallint | no | App | 1 for top level |
-| `position` | smallint | no | `0` | Order among siblings |
-| `is_active` | boolean | no | `true` | |
-| `created_at`, `updated_at` | timestamptz | no | `now()` | |
+| Column                     | Type        | Null | Default    | Notes                                                |
+| -------------------------- | ----------- | ---- | ---------- | ---------------------------------------------------- |
+| `id`                       | uuid        | no   | `uuidv7()` |                                                      |
+| `parent_id`                | uuid        | yes  |            | Null for top-level categories                        |
+| `slug`                     | citext      | no   | App        | Globally unique; `/c/{slug}`                         |
+| `name`                     | text        | no   | App        | 2–60 characters; unique among siblings only          |
+| `description`              | text        | yes  |            | Category page copy for SEO (FR-SRCH-005)             |
+| `path`                     | text        | no   | App        | Materialised slug path, `'/clothing/tops/t-shirts/'` |
+| `depth`                    | smallint    | no   | App        | 1 for top level                                      |
+| `position`                 | smallint    | no   | `0`        | Order among siblings                                 |
+| `is_active`                | boolean     | no   | `true`     |                                                      |
+| `created_at`, `updated_at` | timestamptz | no   | `now()`    |                                                      |
 
 **Keys and constraints**
 
@@ -612,16 +612,16 @@ The garment-type tree ([04 §3.6](04-domain-model-and-data-dictionary.md)).
 
 Platform-defined properties (`audience`, `material`, `apparel_size`, `shoe_size_eu`, `waist_size_in`, `color`; catalogue in [04 §21.2](04-domain-model-and-data-dictionary.md)).
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `id` | uuid | no | `uuidv7()` | |
-| `code` | text | no | App | Immutable: used in option signatures and filter URLs |
-| `name` | text | no | App | Display name |
-| `scope` | text | no | App | `product` (values in `product_attribute_values`) or `variant` (values in `variant_option_values`) |
-| `input` | text | no | App | `single` or `multi` |
-| `is_filterable` | boolean | no | `false` | Shown as a storefront filter |
-| `position` | smallint | no | `0` | Filter and form order |
-| `created_at`, `updated_at` | timestamptz | no | `now()` | |
+| Column                     | Type        | Null | Default    | Notes                                                                                             |
+| -------------------------- | ----------- | ---- | ---------- | ------------------------------------------------------------------------------------------------- |
+| `id`                       | uuid        | no   | `uuidv7()` |                                                                                                   |
+| `code`                     | text        | no   | App        | Immutable: used in option signatures and filter URLs                                              |
+| `name`                     | text        | no   | App        | Display name                                                                                      |
+| `scope`                    | text        | no   | App        | `product` (values in `product_attribute_values`) or `variant` (values in `variant_option_values`) |
+| `input`                    | text        | no   | App        | `single` or `multi`                                                                               |
+| `is_filterable`            | boolean     | no   | `false`    | Shown as a storefront filter                                                                      |
+| `position`                 | smallint    | no   | `0`        | Filter and form order                                                                             |
+| `created_at`, `updated_at` | timestamptz | no   | `now()`    |                                                                                                   |
 
 **Keys and constraints.** `attributes_pkey PRIMARY KEY (id)`; `attributes_code_key UNIQUE (code)`; `attributes_code_check CHECK (code ~ '^[a-z][a-z0-9_]{1,39}$')`; `attributes_scope_check CHECK (scope IN ('product','variant'))`; `attributes_input_check CHECK (input IN ('single','multi'))`; `attributes_variant_single_check CHECK (scope <> 'variant' OR input = 'single')`, because a variant has exactly one value per axis.
 
@@ -635,16 +635,16 @@ Platform-defined properties (`audience`, `material`, `apparel_size`, `shoe_size_
 
 Allowed values of each attribute, unique per attribute rather than globally (fixes F12: shoe size 40 and waist 40 can coexist).
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `id` | uuid | no | `uuidv7()` | |
-| `attribute_id` | uuid | no | App | |
-| `code` | text | no | App | Immutable; `m`, `42`, `42-5`, `black` |
-| `label` | text | no | App | `M`, `42`, `42.5`, `Black` |
-| `position` | smallint | no | `0` | Picker and filter order (XS before S) |
-| `swatch_hex` | text | yes | | `color` only; null draws a pattern chip ([04 §3.9](04-domain-model-and-data-dictionary.md)) |
-| `is_active` | boolean | no | `true` | Inactive values leave pickers; existing products keep them |
-| `created_at`, `updated_at` | timestamptz | no | `now()` | |
+| Column                     | Type        | Null | Default    | Notes                                                                                       |
+| -------------------------- | ----------- | ---- | ---------- | ------------------------------------------------------------------------------------------- |
+| `id`                       | uuid        | no   | `uuidv7()` |                                                                                             |
+| `attribute_id`             | uuid        | no   | App        |                                                                                             |
+| `code`                     | text        | no   | App        | Immutable; `m`, `42`, `42-5`, `black`                                                       |
+| `label`                    | text        | no   | App        | `M`, `42`, `42.5`, `Black`                                                                  |
+| `position`                 | smallint    | no   | `0`        | Picker and filter order (XS before S)                                                       |
+| `swatch_hex`               | text        | yes  |            | `color` only; null draws a pattern chip ([04 §3.9](04-domain-model-and-data-dictionary.md)) |
+| `is_active`                | boolean     | no   | `true`     | Inactive values leave pickers; existing products keep them                                  |
+| `created_at`, `updated_at` | timestamptz | no   | `now()`    |                                                                                             |
 
 **Keys and constraints.** `attribute_values_pkey PRIMARY KEY (id)`; `attribute_values_attribute_fkey FOREIGN KEY (attribute_id) REFERENCES attributes (id) ON DELETE RESTRICT`; `attribute_values_attribute_code_key UNIQUE (attribute_id, code)`; `attribute_values_id_attribute_id_key UNIQUE (id, attribute_id)`, the target of the "value belongs to attribute" composite keys ([04 §2.5](04-domain-model-and-data-dictionary.md)); `attribute_values_code_check CHECK (code ~ '^[a-z0-9]+(?:[-_][a-z0-9]+)*$' AND char_length(code) <= 40)`; `attribute_values_label_check CHECK (char_length(label) BETWEEN 1 AND 40)`; `attribute_values_swatch_check CHECK (swatch_hex ~ '^#[0-9a-f]{6}$')`. That swatches appear only on `color` values is a seeder rule.
 
@@ -658,13 +658,13 @@ Allowed values of each attribute, unique per attribute rather than globally (fix
 
 Which attributes apply to a category and its descendants, and how ([04 §3.7](04-domain-model-and-data-dictionary.md)).
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `category_id` | uuid | no | App | |
-| `attribute_id` | uuid | no | App | |
-| `usage` | text | no | App | `product` (needs a product-scope attribute) or `variant_axis` (needs a variant-scope attribute) |
-| `is_required` | boolean | no | `false` | Required at submit and publish |
-| `position` | smallint | no | `0` | Form order |
+| Column         | Type     | Null | Default | Notes                                                                                           |
+| -------------- | -------- | ---- | ------- | ----------------------------------------------------------------------------------------------- |
+| `category_id`  | uuid     | no   | App     |                                                                                                 |
+| `attribute_id` | uuid     | no   | App     |                                                                                                 |
+| `usage`        | text     | no   | App     | `product` (needs a product-scope attribute) or `variant_axis` (needs a variant-scope attribute) |
+| `is_required`  | boolean  | no   | `false` | Required at submit and publish                                                                  |
+| `position`     | smallint | no   | `0`     | Form order                                                                                      |
 
 **Keys and constraints.** `category_attributes_pkey PRIMARY KEY (category_id, attribute_id)`; FKs to `categories (id)` and `attributes (id)`, `ON DELETE RESTRICT`; `category_attributes_usage_check CHECK (usage IN ('product','variant_axis'))`. The usage/scope match is a seeder check covered by T-CAT-104 (proposed). Written with the query builder ([04 §2.15](04-domain-model-and-data-dictionary.md)).
 
@@ -690,14 +690,14 @@ ORDER BY ca.attribute_id, c.depth DESC;
 
 Trademarks products are sold under ([04 §3.10](04-domain-model-and-data-dictionary.md)).
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `id` | uuid | no | `uuidv7()` | |
-| `slug` | citext | no | App | For brand filters now and brand pages later |
-| `name` | text | no | App | Canonical spelling |
-| `status` | text | no | `'active'` | `active`, `pending` (requested, not selectable), `rejected` |
-| `requires_moderation` | boolean | no | `false` | Watch-listed brand: products always need moderator approval (AC-FR-CAT-008-3) [Open OD-21] |
-| `created_at`, `updated_at` | timestamptz | no | `now()` | |
+| Column                     | Type        | Null | Default    | Notes                                                                                      |
+| -------------------------- | ----------- | ---- | ---------- | ------------------------------------------------------------------------------------------ |
+| `id`                       | uuid        | no   | `uuidv7()` |                                                                                            |
+| `slug`                     | citext      | no   | App        | For brand filters now and brand pages later                                                |
+| `name`                     | text        | no   | App        | Canonical spelling                                                                         |
+| `status`                   | text        | no   | `'active'` | `active`, `pending` (requested, not selectable), `rejected`                                |
+| `requires_moderation`      | boolean     | no   | `false`    | Watch-listed brand: products always need moderator approval (AC-FR-CAT-008-3) [Open OD-21] |
+| `created_at`, `updated_at` | timestamptz | no   | `now()`    |                                                                                            |
 
 **Keys and constraints.** `brands_pkey PRIMARY KEY (id)`; `brands_slug_key UNIQUE (slug)`; `brands_slug_check` with the shop slug pattern; `brands_name_lower_key UNIQUE (lower(name))` (unique index); `brands_name_check CHECK (char_length(name) BETWEEN 1 AND 80)`; `brands_status_check CHECK (status IN ('active','pending','rejected'))`.
 
@@ -711,29 +711,29 @@ Trademarks products are sold under ([04 §3.10](04-domain-model-and-data-diction
 
 The marketing entity: title, description, category, brand and the listing disclosures of E-Commerce Act 2081 s6 [Verified-doc <https://giwmscdnone.gov.np/media/files/E-Commerce%20Act%2C%202081_yr7k9o5.pdf>; VX-02] (FR-CAT-012). Price, SKU, weight and stock are on variants ([04 §3.4](04-domain-model-and-data-dictionary.md)).
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `id` | uuid | no | `uuidv7()` | Internal ID in seller and admin URLs |
-| `shop_id` | uuid | no | App | From the URL's shop, never from the body (T-SEC-003) |
-| `public_id` | char(8) | no | App | Crockford base32, immutable ([04 §2.1](04-domain-model-and-data-dictionary.md)) |
-| `slug` | text | no | App | Cosmetic; `slugify(title)`, or `product` when the title has no Latin letters or digits (for example a Devanagari-only title) |
-| `title` | text | no | App | 3–120 characters, NFC; not unique (fixes F10) |
-| `description` | text | yes | | Up to 5,000 characters [Assumption]; required at submit |
-| `category_id` | uuid | no | App | A leaf ([04 §3.6](04-domain-model-and-data-dictionary.md)) |
-| `brand_id` | uuid | yes | | Null = own label ([04 §3.10](04-domain-model-and-data-dictionary.md)) |
-| `manufacturer_name` | text | yes | | s6 "producer"; required at submit |
-| `is_imported` | boolean | no | `false` | |
-| `country_of_origin` | char(2) | yes | | ISO 3166-1 alpha-2; required when imported |
-| `warranty_text` | text | yes | | Warranty or guarantee terms, or "No warranty"; required at submit |
-| `care_and_precautions` | text | yes | | s6 "usage precautions"; required at submit |
-| `status` | text | no | `'draft'` | CHECK below |
-| `rejection_reason` | text | yes | | Latest moderator reason, shown to the shop; history in §7.11 |
-| `submitted_at` | timestamptz | yes | | Last submission for review; orders the moderation queue |
-| `published_at` | timestamptz | yes | | Last time it became `published` |
-| `first_published_at` | timestamptz | yes | | Never cleared; "new arrivals" and sitemap |
-| `version` | int | no | `1` | `If-Match` (FR-CAT-011) |
-| `created_by` | uuid | no | App | Member who created it |
-| `created_at`, `updated_at` | timestamptz | no | `now()` | |
+| Column                     | Type        | Null | Default    | Notes                                                                                                                        |
+| -------------------------- | ----------- | ---- | ---------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `id`                       | uuid        | no   | `uuidv7()` | Internal ID in seller and admin URLs                                                                                         |
+| `shop_id`                  | uuid        | no   | App        | From the URL's shop, never from the body (T-SEC-003)                                                                         |
+| `public_id`                | char(8)     | no   | App        | Crockford base32, immutable ([04 §2.1](04-domain-model-and-data-dictionary.md))                                              |
+| `slug`                     | text        | no   | App        | Cosmetic; `slugify(title)`, or `product` when the title has no Latin letters or digits (for example a Devanagari-only title) |
+| `title`                    | text        | no   | App        | 3–120 characters, NFC; not unique (fixes F10)                                                                                |
+| `description`              | text        | yes  |            | Up to 5,000 characters [Assumption]; required at submit                                                                      |
+| `category_id`              | uuid        | no   | App        | A leaf ([04 §3.6](04-domain-model-and-data-dictionary.md))                                                                   |
+| `brand_id`                 | uuid        | yes  |            | Null = own label ([04 §3.10](04-domain-model-and-data-dictionary.md))                                                        |
+| `manufacturer_name`        | text        | yes  |            | s6 "producer"; required at submit                                                                                            |
+| `is_imported`              | boolean     | no   | `false`    |                                                                                                                              |
+| `country_of_origin`        | char(2)     | yes  |            | ISO 3166-1 alpha-2; required when imported                                                                                   |
+| `warranty_text`            | text        | yes  |            | Warranty or guarantee terms, or "No warranty"; required at submit                                                            |
+| `care_and_precautions`     | text        | yes  |            | s6 "usage precautions"; required at submit                                                                                   |
+| `status`                   | text        | no   | `'draft'`  | CHECK below                                                                                                                  |
+| `rejection_reason`         | text        | yes  |            | Latest moderator reason, shown to the shop; history in §7.11                                                                 |
+| `submitted_at`             | timestamptz | yes  |            | Last submission for review; orders the moderation queue                                                                      |
+| `published_at`             | timestamptz | yes  |            | Last time it became `published`                                                                                              |
+| `first_published_at`       | timestamptz | yes  |            | Never cleared; "new arrivals" and sitemap                                                                                    |
+| `version`                  | int         | no   | `1`        | `If-Match` (FR-CAT-011)                                                                                                      |
+| `created_by`               | uuid        | no   | App        | Member who created it                                                                                                        |
+| `created_at`, `updated_at` | timestamptz | no   | `now()`    |                                                                                                                              |
 
 Material, the other s6 "substance" disclosure, is the `material` attribute (§7.7). Weight is `product_variants.weight_grams`. The delivery estimate, payment methods and tax-inclusive price come from shipping rates, platform settings and variant prices, and are shown on the product page (AC-FR-CAT-012-2).
 
@@ -750,13 +750,13 @@ Material, the other s6 "substance" disclosure, is the `material` attribute (§7.
 
 **Indexes**
 
-| Index | Query it serves |
-|---|---|
-| `products_public_id_key` | Product page `/p/{slug}-{publicId}` and `getProduct`: `WHERE public_id = ?`, then visibility check and 301 if the slug differs |
-| `products_seller_list_idx ON (shop_id, status, updated_at DESC, id)` | Seller product list `listShopProducts`: `WHERE shop_id = ? AND status = ? ORDER BY updated_at DESC, id` with cursor pagination |
-| `products_moderation_queue_idx ON (submitted_at, id) WHERE status = 'pending_review'` | `listModerationQueue`, oldest first (AC-FR-CAT-006-1) |
-| `products_category_idx ON (category_id)` | Seeder guard "does this category have products?" and the admin catalog view |
-| `products_brand_idx ON (brand_id) WHERE brand_id IS NOT NULL` | Re-queueing a brand's products when `requires_moderation` is switched on, and brand usage before a brand is rejected |
+| Index                                                                                 | Query it serves                                                                                                                |
+| ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `products_public_id_key`                                                              | Product page `/p/{slug}-{publicId}` and `getProduct`: `WHERE public_id = ?`, then visibility check and 301 if the slug differs |
+| `products_seller_list_idx ON (shop_id, status, updated_at DESC, id)`                  | Seller product list `listShopProducts`: `WHERE shop_id = ? AND status = ? ORDER BY updated_at DESC, id` with cursor pagination |
+| `products_moderation_queue_idx ON (submitted_at, id) WHERE status = 'pending_review'` | `listModerationQueue`, oldest first (AC-FR-CAT-006-1)                                                                          |
+| `products_category_idx ON (category_id)`                                              | Seeder guard "does this category have products?" and the admin catalog view                                                    |
+| `products_brand_idx ON (brand_id) WHERE brand_id IS NOT NULL`                         | Re-queueing a brand's products when `requires_moderation` is switched on, and brand usage before a brand is rejected           |
 
 Storefront listing and search read `product_listings` (§7.12), not this table.
 
@@ -768,13 +768,13 @@ Storefront listing and search read `product_listings` (§7.12), not this table.
 
 Product-scope attribute values, including multi-valued `audience` and `material`.
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `product_id` | uuid | no | App | |
-| `shop_id` | uuid | no | App | Copied from the product row |
-| `attribute_id` | uuid | no | App | |
-| `attribute_value_id` | uuid | no | App | |
-| `created_at` | timestamptz | no | `now()` | |
+| Column               | Type        | Null | Default | Notes                       |
+| -------------------- | ----------- | ---- | ------- | --------------------------- |
+| `product_id`         | uuid        | no   | App     |                             |
+| `shop_id`            | uuid        | no   | App     | Copied from the product row |
+| `attribute_id`       | uuid        | no   | App     |                             |
+| `attribute_value_id` | uuid        | no   | App     |                             |
+| `created_at`         | timestamptz | no   | `now()` |                             |
 
 **Keys and constraints.** `product_attribute_values_pkey PRIMARY KEY (product_id, attribute_value_id)`; `product_attribute_values_product_fkey FOREIGN KEY (product_id, shop_id) REFERENCES products (id, shop_id) ON DELETE RESTRICT`; `product_attribute_values_value_fkey FOREIGN KEY (attribute_value_id, attribute_id) REFERENCES attribute_values (id, attribute_id) ON DELETE RESTRICT`. Application-enforced ([04 §3.7](04-domain-model-and-data-dictionary.md)): the attribute is an effective `product` rule of the category, and a `single` attribute has at most one row per product. A composite key to `attributes (id, scope, input)` could enforce both, at the cost of two constant columns on every row; it was rejected as more machinery than the risk warrants, since one validated action writes these rows.
 
@@ -788,12 +788,12 @@ Product-scope attribute values, including multi-valued `audience` and `material`
 
 The variant attributes a product varies by: none, one or two in R1 (AC-FR-CAT-004-1).
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `product_id` | uuid | no | App | |
-| `attribute_id` | uuid | no | App | A variant-scope attribute that is an effective `variant_axis` rule |
-| `position` | smallint | no | App | 1 or 2: picker order on the product page |
-| `created_at` | timestamptz | no | `now()` | |
+| Column         | Type        | Null | Default | Notes                                                              |
+| -------------- | ----------- | ---- | ------- | ------------------------------------------------------------------ |
+| `product_id`   | uuid        | no   | App     |                                                                    |
+| `attribute_id` | uuid        | no   | App     | A variant-scope attribute that is an effective `variant_axis` rule |
+| `position`     | smallint    | no   | App     | 1 or 2: picker order on the product page                           |
+| `created_at`   | timestamptz | no   | `now()` |                                                                    |
 
 **Keys and constraints.** `product_option_axes_pkey PRIMARY KEY (product_id, attribute_id)`, the target of `variant_option_values_axis_fkey`; `product_option_axes_position_key UNIQUE (product_id, position)`; `product_option_axes_position_check CHECK (position BETWEEN 1 AND 2)`; FKs to `products (id)` and `attributes (id)`, `ON DELETE RESTRICT`.
 
@@ -809,21 +809,21 @@ The variant attributes a product varies by: none, one or two in R1 (AC-FR-CAT-00
 
 The purchasable unit: SKU, price, weight, options. Stock is in `inventory_items` (§8.1).
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `id` | uuid | no | `uuidv7()` | |
-| `shop_id` | uuid | no | App | Copied from the product |
-| `product_id` | uuid | no | App | |
-| `sku` | text | no | App | 1–64 characters; unique per shop among active variants (fixes F11's global SKU) |
-| `price_minor` | bigint | no | App | Paisa, tax-inclusive final price ([04 §18](04-domain-model-and-data-dictionary.md)) |
-| `compare_at_price_minor` | bigint | yes | | Earlier genuine price, shown struck through (FR-PROMO-001) |
-| `currency` | char(3) | no | `'NPR'` | |
-| `weight_grams` | int | yes | | Optional disclosure; `material` already satisfies s6 "weight or substance" [Verify-external VX-02] |
-| `is_default` | boolean | no | `false` | True exactly for the option-less default variant ([04 §3.4](04-domain-model-and-data-dictionary.md)) |
-| `option_signature` | text | no | App | Canonical combination ([04 §3.5](04-domain-model-and-data-dictionary.md)); `''` for the default variant |
-| `status` | text | no | `'active'` | `active` or `archived` |
-| `version` | int | no | `1` | |
-| `created_at`, `updated_at` | timestamptz | no | `now()` | |
+| Column                     | Type        | Null | Default    | Notes                                                                                                   |
+| -------------------------- | ----------- | ---- | ---------- | ------------------------------------------------------------------------------------------------------- |
+| `id`                       | uuid        | no   | `uuidv7()` |                                                                                                         |
+| `shop_id`                  | uuid        | no   | App        | Copied from the product                                                                                 |
+| `product_id`               | uuid        | no   | App        |                                                                                                         |
+| `sku`                      | text        | no   | App        | 1–64 characters; unique per shop among active variants (fixes F11's global SKU)                         |
+| `price_minor`              | bigint      | no   | App        | Paisa, tax-inclusive final price ([04 §18](04-domain-model-and-data-dictionary.md))                     |
+| `compare_at_price_minor`   | bigint      | yes  |            | Earlier genuine price, shown struck through (FR-PROMO-001)                                              |
+| `currency`                 | char(3)     | no   | `'NPR'`    |                                                                                                         |
+| `weight_grams`             | int         | yes  |            | Optional disclosure; `material` already satisfies s6 "weight or substance" [Verify-external VX-02]      |
+| `is_default`               | boolean     | no   | `false`    | True exactly for the option-less default variant ([04 §3.4](04-domain-model-and-data-dictionary.md))    |
+| `option_signature`         | text        | no   | App        | Canonical combination ([04 §3.5](04-domain-model-and-data-dictionary.md)); `''` for the default variant |
+| `status`                   | text        | no   | `'active'` | `active` or `archived`                                                                                  |
+| `version`                  | int         | no   | `1`        |                                                                                                         |
+| `created_at`, `updated_at` | timestamptz | no   | `now()`    |                                                                                                         |
 
 **Keys and constraints**
 
@@ -843,11 +843,11 @@ The purchasable unit: SKU, price, weight, options. Stock is in `inventory_items`
 
 **Indexes**
 
-| Index | Query it serves |
-|---|---|
+| Index                                                  | Query it serves                                                                                                                   |
+| ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
 | `product_variants_product_idx ON (product_id, status)` | Variants of a product for the product page, the seller editor and listing refresh: `WHERE product_id = ? [AND status = 'active']` |
-| `product_variants_shop_sku_key` | Seller inventory search by exact SKU: `WHERE shop_id = ? AND sku = ? AND status = 'active'` |
-| `product_variants_product_signature_key` | The duplicate-combination guard itself |
+| `product_variants_shop_sku_key`                        | Seller inventory search by exact SKU: `WHERE shop_id = ? AND sku = ? AND status = 'active'`                                       |
+| `product_variants_product_signature_key`               | The duplicate-combination guard itself                                                                                            |
 
 **Lifecycle and retention.** Written by `replaceProductVariants` with `If-Match` on the product. A variant that was never stocked or ordered (no inventory movement, no order line) is hard-deleted together with its zero `inventory_items` row, and its option values cascade ([04 §2.6](04-domain-model-and-data-dictionary.md)). Any other variant is archived, which removes it from carts at the next revalidation; open orders keep their snapshots. Kept as long as order lines reference it ([04 §19.3](04-domain-model-and-data-dictionary.md)).
 
@@ -857,13 +857,13 @@ The purchasable unit: SKU, price, weight, options. Stock is in `inventory_items`
 
 The value a variant has on each axis. Replaces `product_variant_attribute_values`, which had no `attribute_id` and so could not stop a variant being both Black and White (F11).
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `variant_id` | uuid | no | App | |
-| `product_id` | uuid | no | App | Carried so the axis key below can be enforced |
-| `attribute_id` | uuid | no | App | |
-| `attribute_value_id` | uuid | no | App | |
-| `created_at` | timestamptz | no | `now()` | |
+| Column               | Type        | Null | Default | Notes                                         |
+| -------------------- | ----------- | ---- | ------- | --------------------------------------------- |
+| `variant_id`         | uuid        | no   | App     |                                               |
+| `product_id`         | uuid        | no   | App     | Carried so the axis key below can be enforced |
+| `attribute_id`       | uuid        | no   | App     |                                               |
+| `attribute_value_id` | uuid        | no   | App     |                                               |
+| `created_at`         | timestamptz | no   | `now()` |                                               |
 
 **Keys and constraints**
 
@@ -895,16 +895,16 @@ VALUES (:v1, :p, :color_attr, :black);
 
 Moderation decisions (FR-CAT-006, AC-FR-CAT-006-5).
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `id` | uuid | no | `uuidv7()` | |
-| `product_id` | uuid | no | App | |
-| `shop_id` | uuid | no | App | |
-| `decision` | text | no | App | `approved`, `rejected`, `blocked`, `unblocked` |
-| `reason_code` | text | yes | | Required for `rejected` and `blocked` |
-| `note` | text | yes | | Moderator's explanation to the shop |
-| `decided_by` | uuid | no | App | Staff user with `platform.products.moderate` |
-| `created_at` | timestamptz | no | `now()` | |
+| Column        | Type        | Null | Default    | Notes                                          |
+| ------------- | ----------- | ---- | ---------- | ---------------------------------------------- |
+| `id`          | uuid        | no   | `uuidv7()` |                                                |
+| `product_id`  | uuid        | no   | App        |                                                |
+| `shop_id`     | uuid        | no   | App        |                                                |
+| `decision`    | text        | no   | App        | `approved`, `rejected`, `blocked`, `unblocked` |
+| `reason_code` | text        | yes  |            | Required for `rejected` and `blocked`          |
+| `note`        | text        | yes  |            | Moderator's explanation to the shop            |
+| `decided_by`  | uuid        | no   | App        | Staff user with `platform.products.moderate`   |
+| `created_at`  | timestamptz | no   | `now()`    |                                                |
 
 **Keys and constraints.** `product_review_decisions_pkey PRIMARY KEY (id)`; `product_review_decisions_product_fkey FOREIGN KEY (product_id, shop_id) REFERENCES products (id, shop_id) ON DELETE RESTRICT`; `product_review_decisions_decided_by_fkey` to `users (id) ON DELETE RESTRICT`; `product_review_decisions_decision_check CHECK (decision IN ('approved','rejected','blocked','unblocked'))`; `product_review_decisions_reason_code_check CHECK (reason_code IN ('counterfeit_suspected','misleading_claim','prohibited_item','missing_disclosure','poor_images','other'))`; `product_review_decisions_reason_required_check CHECK (decision NOT IN ('rejected','blocked') OR (reason_code IS NOT NULL AND note IS NOT NULL AND char_length(note) BETWEEN 10 AND 2000))`. Append-only ([04 §2.12](04-domain-model-and-data-dictionary.md)).
 
@@ -918,25 +918,25 @@ Moderation decisions (FR-CAT-006, AC-FR-CAT-006-5).
 
 One row per product that is visible on the storefront: product `published`, shop `active`, at least one `ready` image and at least one active variant. A product that stops being visible loses its row. Storefront listings, filters and search read only this table (ADR-0014), one query per page, with no joins. Staleness of a few seconds is accepted; checkout re-reads the source tables (AC-FR-CAT-005-3).
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `product_id` | uuid | no | App | Primary key |
-| `shop_id`, `shop_slug`, `shop_name` | uuid, citext, text | no | App | "Sold by" on cards; shop page filter |
-| `public_id`, `slug`, `title` | char(8), text, text | no | App | Card link and title |
-| `category_id`, `category_path` | uuid, text | no | App | Subtree filter by path prefix |
-| `category_names` | text | no | App | Names along the path, for search |
-| `brand_id`, `brand_name` | uuid, text | yes | | Brand filter and search |
-| `audience_value_ids` | uuid[] | no | `'{}'` | |
-| `size_value_ids` | uuid[] | no | `'{}'` | Values of every size system, from active variants with available stock only, so "size M" matches only products with M in stock |
-| `color_value_ids` | uuid[] | no | `'{}'` | Same rule |
-| `min_price_minor`, `max_price_minor` | bigint | no | App | Over active variants |
-| `compare_at_price_minor` | bigint | yes | | Compare-at price of the cheapest variant, for the card |
-| `currency` | char(3) | no | `'NPR'` | |
-| `in_stock` | boolean | no | App | Any active variant with `on_hand − reserved > 0` |
-| `primary_image_keys` | jsonb | no | App | Derived image keys of position 1 ([04 §2.11](04-domain-model-and-data-dictionary.md)) |
-| `published_at` | timestamptz | no | App | "Newest" sort |
-| `search_tsv` | tsvector | no | generated | `GENERATED ALWAYS AS (setweight(to_tsvector('simple', title), 'A') || setweight(to_tsvector('simple', coalesce(brand_name, '')), 'B') || setweight(to_tsvector('simple', category_names || ' ' || shop_name), 'C')) STORED` |
-| `refreshed_at` | timestamptz | no | `now()` | |
+| Column                               | Type                | Null | Default   | Notes                                                                                                                          |
+| ------------------------------------ | ------------------- | ---- | --------- | ------------------------------------------------------------------------------------------------------------------------------ | --- | --------------------------------------------------------------- | --- | ---------------------------------------------- | --- | --- | --- | ------------------------- |
+| `product_id`                         | uuid                | no   | App       | Primary key                                                                                                                    |
+| `shop_id`, `shop_slug`, `shop_name`  | uuid, citext, text  | no   | App       | "Sold by" on cards; shop page filter                                                                                           |
+| `public_id`, `slug`, `title`         | char(8), text, text | no   | App       | Card link and title                                                                                                            |
+| `category_id`, `category_path`       | uuid, text          | no   | App       | Subtree filter by path prefix                                                                                                  |
+| `category_names`                     | text                | no   | App       | Names along the path, for search                                                                                               |
+| `brand_id`, `brand_name`             | uuid, text          | yes  |           | Brand filter and search                                                                                                        |
+| `audience_value_ids`                 | uuid[]              | no   | `'{}'`    |                                                                                                                                |
+| `size_value_ids`                     | uuid[]              | no   | `'{}'`    | Values of every size system, from active variants with available stock only, so "size M" matches only products with M in stock |
+| `color_value_ids`                    | uuid[]              | no   | `'{}'`    | Same rule                                                                                                                      |
+| `min_price_minor`, `max_price_minor` | bigint              | no   | App       | Over active variants                                                                                                           |
+| `compare_at_price_minor`             | bigint              | yes  |           | Compare-at price of the cheapest variant, for the card                                                                         |
+| `currency`                           | char(3)             | no   | `'NPR'`   |                                                                                                                                |
+| `in_stock`                           | boolean             | no   | App       | Any active variant with `on_hand − reserved > 0`                                                                               |
+| `primary_image_keys`                 | jsonb               | no   | App       | Derived image keys of position 1 ([04 §2.11](04-domain-model-and-data-dictionary.md))                                          |
+| `published_at`                       | timestamptz         | no   | App       | "Newest" sort                                                                                                                  |
+| `search_tsv`                         | tsvector            | no   | generated | `GENERATED ALWAYS AS (setweight(to_tsvector('simple', title), 'A')                                                             |     | setweight(to_tsvector('simple', coalesce(brand_name, '')), 'B') |     | setweight(to_tsvector('simple', category_names |     | ' ' |     | shop_name), 'C')) STORED` |
+| `refreshed_at`                       | timestamptz         | no   | `now()`   |                                                                                                                                |
 
 The two-argument `to_tsvector` is required: only text search functions that name a configuration can be used in indexes and generated columns [Verified-doc <https://www.postgresql.org/docs/18/textsearch-tables.html>]. `simple` avoids English stemming of Nepali and romanised Nepali words (ADR-0014).
 
@@ -944,13 +944,13 @@ The two-argument `to_tsvector` is required: only text search functions that name
 
 **Indexes**
 
-| Index | Query it serves |
-|---|---|
-| Primary key | Refresh upsert `INSERT … ON CONFLICT (product_id) DO UPDATE`, and delete when a product stops being visible |
+| Index                                                                                              | Query it serves                                                                                                                                                                                                                                                                                                                                                                                                    |
+| -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Primary key                                                                                        | Refresh upsert `INSERT … ON CONFLICT (product_id) DO UPDATE`, and delete when a product stops being visible                                                                                                                                                                                                                                                                                                        |
 | `product_listings_category_idx ON (category_path text_pattern_ops, published_at DESC, product_id)` | Category page, newest first: `WHERE category_path LIKE '/clothing/tops/%' ORDER BY published_at DESC, product_id LIMIT 24 OFFSET :o`. `text_pattern_ops` is needed for `LIKE` prefix matching in a non-C locale [Verified-doc <https://www.postgresql.org/docs/18/indexes-opclass.html>]. For a leaf the scan is already in order; for a parent the matching rows are sorted, at most a few thousand at A-03 scale |
-| `product_listings_shop_idx ON (shop_id, published_at DESC, product_id)` | Shop page `/shops/{slug}` |
-| `product_listings_search_idx USING GIN (search_tsv)` | Keyword search: `WHERE search_tsv @@ websearch_to_tsquery('simple', :q)`, ranked with `ts_rank` |
-| `product_listings_title_trgm_idx USING GIN (title gin_trgm_ops)` | Typo-tolerant fallback when full-text search finds nothing: `WHERE title % :q ORDER BY similarity(title, :q) DESC` (pg_trgm, [04 §2.8](04-domain-model-and-data-dictionary.md)) |
+| `product_listings_shop_idx ON (shop_id, published_at DESC, product_id)`                            | Shop page `/shops/{slug}`                                                                                                                                                                                                                                                                                                                                                                                          |
+| `product_listings_search_idx USING GIN (search_tsv)`                                               | Keyword search: `WHERE search_tsv @@ websearch_to_tsquery('simple', :q)`, ranked with `ts_rank`                                                                                                                                                                                                                                                                                                                    |
+| `product_listings_title_trgm_idx USING GIN (title gin_trgm_ops)`                                   | Typo-tolerant fallback when full-text search finds nothing: `WHERE title % :q ORDER BY similarity(title, :q) DESC` (pg_trgm, [04 §2.8](04-domain-model-and-data-dictionary.md))                                                                                                                                                                                                                                    |
 
 Audience, size, colour, brand and price filters are applied to the rows selected by the category or shop index. At the launch catalog size (at most 5,000 products, A-03) that costs a few milliseconds. GIN indexes on the arrays are added only if T-PERF-001 shows listing p95 above 300 ms, which is also a trigger to revisit ADR-0014.
 
@@ -962,23 +962,23 @@ Audience, size, colour, brand and price filters are applied to the rows selected
 
 Every uploaded file: product images, shop logos and banners, and KYC documents. The upload pipeline is in [03 §7.5](03-system-architecture.md) and ADR-0013. Only object keys are stored, never URLs (fixes F15's 255-character URLs and missing storage key).
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `id` | uuid | no | `uuidv7()` | |
-| `shop_id` | uuid | no | App | Uploads are always on behalf of a shop, including an applicant shop in `pending_review` |
-| `kind` | text | no | App | `product_image`, `shop_logo`, `shop_banner`, `kyc_document` |
-| `document_type` | text | yes | | KYC only: `business_registration_certificate`, `pan_vat_certificate`, `owner_identity_document`, `other` [Open OD-16] |
-| `status` | text | no | `'pending_upload'` | `pending_upload`, `processing`, `ready`, `rejected`, `deleted` |
-| `original_key` | text | no | App | `originals/<shop_id>/<id>` in the private bucket ([03 §3.5](03-system-architecture.md)) |
-| `derived_keys` | jsonb | yes | | Width → public WebP key, for example `{"320": "p/<id>/<sha-prefix>-320.webp", …}`. Never set for KYC |
-| `mime` | text | no | App | Declared at creation; the worker rejects the file if its magic bytes disagree |
-| `bytes` | int | no | App | |
-| `width`, `height` | int | yes | | Set by the worker for images |
-| `sha256` | bytea | yes | | Of the original; set by the worker |
-| `rejection_reason` | text | yes | | Shown to the uploader |
-| `uploaded_by` | uuid | no | App | |
-| `processed_at` | timestamptz | yes | | |
-| `created_at`, `updated_at` | timestamptz | no | `now()` | |
+| Column                     | Type        | Null | Default            | Notes                                                                                                                 |
+| -------------------------- | ----------- | ---- | ------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| `id`                       | uuid        | no   | `uuidv7()`         |                                                                                                                       |
+| `shop_id`                  | uuid        | no   | App                | Uploads are always on behalf of a shop, including an applicant shop in `pending_review`                               |
+| `kind`                     | text        | no   | App                | `product_image`, `shop_logo`, `shop_banner`, `kyc_document`                                                           |
+| `document_type`            | text        | yes  |                    | KYC only: `business_registration_certificate`, `pan_vat_certificate`, `owner_identity_document`, `other` [Open OD-16] |
+| `status`                   | text        | no   | `'pending_upload'` | `pending_upload`, `processing`, `ready`, `rejected`, `deleted`                                                        |
+| `original_key`             | text        | no   | App                | `originals/<shop_id>/<id>` in the private bucket ([03 §3.5](03-system-architecture.md))                               |
+| `derived_keys`             | jsonb       | yes  |                    | Width → public WebP key, for example `{"320": "p/<id>/<sha-prefix>-320.webp", …}`. Never set for KYC                  |
+| `mime`                     | text        | no   | App                | Declared at creation; the worker rejects the file if its magic bytes disagree                                         |
+| `bytes`                    | int         | no   | App                |                                                                                                                       |
+| `width`, `height`          | int         | yes  |                    | Set by the worker for images                                                                                          |
+| `sha256`                   | bytea       | yes  |                    | Of the original; set by the worker                                                                                    |
+| `rejection_reason`         | text        | yes  |                    | Shown to the uploader                                                                                                 |
+| `uploaded_by`              | uuid        | no   | App                |                                                                                                                       |
+| `processed_at`             | timestamptz | yes  |                    |                                                                                                                       |
+| `created_at`, `updated_at` | timestamptz | no   | `now()`            |                                                                                                                       |
 
 **Keys and constraints**
 
@@ -994,10 +994,10 @@ Every uploaded file: product images, shop logos and banners, and KYC documents. 
 
 **Indexes**
 
-| Index | Query it serves |
-|---|---|
-| `media_assets_shop_kind_idx ON (shop_id, kind, created_at DESC)` | Seller media picker (`kind = 'product_image'`) and the KYC document list for the owner and reviewers |
-| `media_assets_cleanup_idx ON (created_at) WHERE status IN ('pending_upload','rejected')` | `media.cleanup-abandoned`: uploads never completed within 24 h, and originals of rejected files |
+| Index                                                                                    | Query it serves                                                                                      |
+| ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `media_assets_shop_kind_idx ON (shop_id, kind, created_at DESC)`                         | Seller media picker (`kind = 'product_image'`) and the KYC document list for the owner and reviewers |
+| `media_assets_cleanup_idx ON (created_at) WHERE status IN ('pending_upload','rejected')` | `media.cleanup-abandoned`: uploads never completed within 24 h, and originals of rejected files      |
 
 **Lifecycle and retention.** `pending_upload` → `processing` → `ready` or `rejected`, each step a compare-and-set by the web process or the worker. `deleted` means the stored objects were removed and the row is kept as a tombstone. Derived public images are content-addressed and never overwritten; in R1 they are not deleted either, because order snapshots may point at them (§11.3). Originals of rejected or abandoned uploads are deleted after 24 hours. KYC originals are kept while the shop exists plus the retention period in [04 §19.3](04-domain-model-and-data-dictionary.md); for an application that is rejected and not resubmitted, they are deleted one year after the rejection [Assumption]. Every staff view of a KYC document is audited (AC-FR-SHOP-014-2). T-MED-001 covers file validation; T-MED-103 (proposed) checks that no code path produces a public key for a `kyc_document`.
 
@@ -1007,16 +1007,16 @@ Every uploaded file: product images, shop logos and banners, and KYC documents. 
 
 Ordered product gallery, with optional colour links ([04 §3.9](04-domain-model-and-data-dictionary.md)).
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `product_id` | uuid | no | App | |
-| `shop_id` | uuid | no | App | |
-| `media_asset_id` | uuid | no | App | |
-| `media_kind` | text | no | `'product_image'` | Constant, carried only so the key below can check the asset's kind |
-| `color_value_id` | uuid | yes | | A `color` value used by the product's variants |
-| `position` | smallint | no | App | 1 = primary image (fixes F15's text sort order) |
-| `alt_text` | text | yes | | Up to 150 characters; empty means the storefront uses "{title}, {colour}" |
-| `created_at` | timestamptz | no | `now()` | |
+| Column           | Type        | Null | Default           | Notes                                                                     |
+| ---------------- | ----------- | ---- | ----------------- | ------------------------------------------------------------------------- |
+| `product_id`     | uuid        | no   | App               |                                                                           |
+| `shop_id`        | uuid        | no   | App               |                                                                           |
+| `media_asset_id` | uuid        | no   | App               |                                                                           |
+| `media_kind`     | text        | no   | `'product_image'` | Constant, carried only so the key below can check the asset's kind        |
+| `color_value_id` | uuid        | yes  |                   | A `color` value used by the product's variants                            |
+| `position`       | smallint    | no   | App               | 1 = primary image (fixes F15's text sort order)                           |
+| `alt_text`       | text        | yes  |                   | Up to 150 characters; empty means the storefront uses "{title}, {colour}" |
+| `created_at`     | timestamptz | no   | `now()`           |                                                                           |
 
 **Keys and constraints**
 
@@ -1056,15 +1056,15 @@ The `inventory` module is the only writer of the three tables in this section ([
 
 One row per variant: units on the shelf (`on_hand`) and units promised to open orders (`reserved`). Available stock, `on_hand − reserved`, is never stored. The table replaces the single unconstrained `product_variants.quantity` integer of RF-14 [Verified-repo `database/migrations/1780072881100_create_product_variants_table.ts:19`].
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `variant_id` | uuid | no | App | Primary key. Inserted in the transaction that creates the variant (§7.9), with `on_hand = 0` |
-| `shop_id` | uuid | no | App | Copied from the variant row the action has loaded, never from input ([04 §2.5](04-domain-model-and-data-dictionary.md)) |
-| `on_hand` | int | no | `0` | Units held by the shop and not yet shipped |
-| `reserved` | int | no | `0` | Σ `quantity` of the variant's `held` and `committed` reservations |
-| `version` | int | no | `1` | Incremented by every conditional update ([04 §2.10](04-domain-model-and-data-dictionary.md)) |
-| `created_at` | timestamptz | no | `now()` | |
-| `updated_at` | timestamptz | no | `now()` | Maintained by trigger ([04 §2.2](04-domain-model-and-data-dictionary.md)) |
+| Column       | Type        | Null | Default | Notes                                                                                                                   |
+| ------------ | ----------- | ---- | ------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `variant_id` | uuid        | no   | App     | Primary key. Inserted in the transaction that creates the variant (§7.9), with `on_hand = 0`                            |
+| `shop_id`    | uuid        | no   | App     | Copied from the variant row the action has loaded, never from input ([04 §2.5](04-domain-model-and-data-dictionary.md)) |
+| `on_hand`    | int         | no   | `0`     | Units held by the shop and not yet shipped                                                                              |
+| `reserved`   | int         | no   | `0`     | Σ `quantity` of the variant's `held` and `committed` reservations                                                       |
+| `version`    | int         | no   | `1`     | Incremented by every conditional update ([04 §2.10](04-domain-model-and-data-dictionary.md))                            |
+| `created_at` | timestamptz | no   | `now()` |                                                                                                                         |
+| `updated_at` | timestamptz | no   | `now()` | Maintained by trigger ([04 §2.2](04-domain-model-and-data-dictionary.md))                                               |
 
 **Keys and constraints.**
 
@@ -1081,10 +1081,10 @@ CONSTRAINT inventory_items_reserved_check CHECK (reserved >= 0 AND reserved <= o
 
 **Indexes.**
 
-| Index | Definition | Query served |
-|---|---|---|
-| `inventory_items_pkey` | `(variant_id)` | Checkout reserve: `UPDATE … WHERE variant_id = :v AND shop_id = :s AND on_hand - reserved >= :q`; PDP availability: `WHERE variant_id = ANY(:ids)`; listing refresh (`in_stock`) |
-| `inventory_items_variant_id_shop_id_key` | `(variant_id, shop_id)` | Foreign-key target only |
+| Index                                    | Definition              | Query served                                                                                                                                                                     |
+| ---------------------------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `inventory_items_pkey`                   | `(variant_id)`          | Checkout reserve: `UPDATE … WHERE variant_id = :v AND shop_id = :s AND on_hand - reserved >= :q`; PDP availability: `WHERE variant_id = ANY(:ids)`; listing refresh (`in_stock`) |
+| `inventory_items_variant_id_shop_id_key` | `(variant_id, shop_id)` | Foreign-key target only                                                                                                                                                          |
 
 There is no `shop_id` index. The seller inventory page (`listInventory`) is driven by the products index `(shop_id, status, updated_at)` of §7.6 and joins here by primary key.
 
@@ -1098,19 +1098,19 @@ There is no `shop_id` index. The seller inventory page (`listInventory`) is driv
 
 One row per order item, or per remainder after a partial release. COD reservations start `committed`. Gateway reservations start `held` with an expiry ([05 §5.3](05-order-payment-and-inventory-lifecycles.md#53-creating-reservations)).
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `id` | uuid | no | `uuidv7()` | |
-| `shop_id` | uuid | no | App | From the order item |
-| `variant_id` | uuid | no | App | |
-| `order_id` | uuid | no | App | Lets cancellation and the expiry job find an order's holds under the parent-row lock |
-| `order_item_id` | uuid | no | App | NOT NULL here: every R1 and R1.1 reservation comes from an order item |
-| `quantity` | int | no | App | Never changes. A partial release marks the row `released` and inserts a new row for the remainder ([05 §5.5](05-order-payment-and-inventory-lifecycles.md#55-release)) |
-| `status` | text | no | App | `held`, `committed`, `released`, `consumed` |
-| `expires_at` | timestamptz | yes | — | Only while `held`: provider session expiry + 10 minutes, capped at `orders.placed_at + 90 min` [Assumption, 05 §4.8]. Cleared on commit |
-| `resolved_at` | timestamptz | yes | — | Set on `released` or `consumed` |
-| `created_at` | timestamptz | no | `now()` | |
-| `updated_at` | timestamptz | no | `now()` | Trigger |
+| Column          | Type        | Null | Default    | Notes                                                                                                                                                                  |
+| --------------- | ----------- | ---- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`            | uuid        | no   | `uuidv7()` |                                                                                                                                                                        |
+| `shop_id`       | uuid        | no   | App        | From the order item                                                                                                                                                    |
+| `variant_id`    | uuid        | no   | App        |                                                                                                                                                                        |
+| `order_id`      | uuid        | no   | App        | Lets cancellation and the expiry job find an order's holds under the parent-row lock                                                                                   |
+| `order_item_id` | uuid        | no   | App        | NOT NULL here: every R1 and R1.1 reservation comes from an order item                                                                                                  |
+| `quantity`      | int         | no   | App        | Never changes. A partial release marks the row `released` and inserts a new row for the remainder ([05 §5.5](05-order-payment-and-inventory-lifecycles.md#55-release)) |
+| `status`        | text        | no   | App        | `held`, `committed`, `released`, `consumed`                                                                                                                            |
+| `expires_at`    | timestamptz | yes  | —          | Only while `held`: provider session expiry + 10 minutes, capped at `orders.placed_at + 90 min` [Assumption, 05 §4.8]. Cleared on commit                                |
+| `resolved_at`   | timestamptz | yes  | —          | Set on `released` or `consumed`                                                                                                                                        |
+| `created_at`    | timestamptz | no   | `now()`    |                                                                                                                                                                        |
+| `updated_at`    | timestamptz | no   | `now()`    | Trigger                                                                                                                                                                |
 
 **Keys and constraints.**
 
@@ -1143,12 +1143,12 @@ The partial release of [05 §5.5](05-order-payment-and-inventory-lifecycles.md#5
 
 **Indexes.**
 
-| Index | Definition | Query served |
-|---|---|---|
-| `inventory_reservations_open_item_key` | `(order_item_id) WHERE status IN ('held','committed')` | Shipment consume and item-level rejection: `WHERE order_item_id = ANY(:items) AND status IN ('held','committed')` |
-| `inventory_reservations_open_order_idx` | `(order_id) WHERE status IN ('held','committed')` | Release or commit for one order under the parent lock; the expiry job's `EXISTS (… WHERE r.order_id = p.order_id AND r.status = 'held' AND r.expires_at <= now())` ([05 §5.4](05-order-payment-and-inventory-lifecycles.md#54-expiration-job)) |
-| `inventory_reservations_held_expiry_idx` | `(expires_at) WHERE status = 'held'` | Expiry job cases A and C: `WHERE status = 'held' AND expires_at <= :cutoff` |
-| `inventory_reservations_open_variant_idx` | `(variant_id) INCLUDE (quantity) WHERE status IN ('held','committed')` | Drift check: `SUM(quantity) … GROUP BY variant_id`, index-only |
+| Index                                     | Definition                                                             | Query served                                                                                                                                                                                                                                   |
+| ----------------------------------------- | ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `inventory_reservations_open_item_key`    | `(order_item_id) WHERE status IN ('held','committed')`                 | Shipment consume and item-level rejection: `WHERE order_item_id = ANY(:items) AND status IN ('held','committed')`                                                                                                                              |
+| `inventory_reservations_open_order_idx`   | `(order_id) WHERE status IN ('held','committed')`                      | Release or commit for one order under the parent lock; the expiry job's `EXISTS (… WHERE r.order_id = p.order_id AND r.status = 'held' AND r.expires_at <= now())` ([05 §5.4](05-order-payment-and-inventory-lifecycles.md#54-expiration-job)) |
+| `inventory_reservations_held_expiry_idx`  | `(expires_at) WHERE status = 'held'`                                   | Expiry job cases A and C: `WHERE status = 'held' AND expires_at <= :cutoff`                                                                                                                                                                    |
+| `inventory_reservations_open_variant_idx` | `(variant_id) INCLUDE (quantity) WHERE status IN ('held','committed')` | Drift check: `SUM(quantity) … GROUP BY variant_id`, index-only                                                                                                                                                                                 |
 
 All four are partial. Only open reservations are indexed, and after a few weeks almost every row is closed, so the indexes stay small no matter how many orders accumulate.
 
@@ -1160,21 +1160,21 @@ All four are partial. Only open reservations are indexed, and after a few weeks 
 
 One row per change to `on_hand` or `reserved`, written in the same transaction as the change. Kinds, deltas and reason codes are listed in [05 §5.2](05-order-payment-and-inventory-lifecycles.md#52-movement-kinds). Rules in [05 §5.11](05-order-payment-and-inventory-lifecycles.md#511-rules-for-inventory_movements).
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `id` | uuid | no | `uuidv7()` | Time-ordered; tie-breaker for history pages |
-| `shop_id` | uuid | no | App | |
-| `variant_id` | uuid | no | App | |
-| `kind` | text | no | App | `reserve`, `release`, `commit`, `ship`, `return_restock`, `rto_restock`, `adjustment`, `stocktake`, `correction` |
-| `on_hand_delta` | int | no | App | Signed |
-| `reserved_delta` | int | no | App | Signed |
-| `reason_code` | text | no | App | Vocabulary per kind in `app/modules/inventory/domain/movement_reasons.ts`; vendors see a label |
-| `note` | text | yes | — | Vendor or admin text, at most 500 characters |
-| `actor_user_id` | uuid | yes | — | The person who caused it; null for jobs |
-| `reference_type` | text | no | App | `inventory_reservation`, `shipment`, `return_request`, `request`, `audit_log` |
-| `reference_id` | text | no | App | The referenced row's id as text: a UUID, or the `audit_logs.id` bigint for `correction`. For `request` it is the `idempotency_keys.id` of the adjustment call |
-| `request_id` | text | yes | — | `X-Request-Id` or the job's correlation id |
-| `created_at` | timestamptz | no | `now()` | |
+| Column           | Type        | Null | Default    | Notes                                                                                                                                                         |
+| ---------------- | ----------- | ---- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`             | uuid        | no   | `uuidv7()` | Time-ordered; tie-breaker for history pages                                                                                                                   |
+| `shop_id`        | uuid        | no   | App        |                                                                                                                                                               |
+| `variant_id`     | uuid        | no   | App        |                                                                                                                                                               |
+| `kind`           | text        | no   | App        | `reserve`, `release`, `commit`, `ship`, `return_restock`, `rto_restock`, `adjustment`, `stocktake`, `correction`                                              |
+| `on_hand_delta`  | int         | no   | App        | Signed                                                                                                                                                        |
+| `reserved_delta` | int         | no   | App        | Signed                                                                                                                                                        |
+| `reason_code`    | text        | no   | App        | Vocabulary per kind in `app/modules/inventory/domain/movement_reasons.ts`; vendors see a label                                                                |
+| `note`           | text        | yes  | —          | Vendor or admin text, at most 500 characters                                                                                                                  |
+| `actor_user_id`  | uuid        | yes  | —          | The person who caused it; null for jobs                                                                                                                       |
+| `reference_type` | text        | no   | App        | `inventory_reservation`, `shipment`, `return_request`, `request`, `audit_log`                                                                                 |
+| `reference_id`   | text        | no   | App        | The referenced row's id as text: a UUID, or the `audit_logs.id` bigint for `correction`. For `request` it is the `idempotency_keys.id` of the adjustment call |
+| `request_id`     | text        | yes  | —          | `X-Request-Id` or the job's correlation id                                                                                                                    |
+| `created_at`     | timestamptz | no   | `now()`    |                                                                                                                                                               |
 
 `reference_id` is polymorphic, so it has no foreign key. The two CHECKs below and the exactly-once index do the work a foreign key cannot.
 
@@ -1221,10 +1221,10 @@ pg-boss may run a job twice [Verified-doc <https://github.com/timgit/pg-boss/blo
 
 **Indexes.**
 
-| Index | Definition | Query served |
-|---|---|---|
+| Index                                     | Definition                                                                       | Query served                                                                                                                                                  |
+| ----------------------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `inventory_movements_variant_history_idx` | `(variant_id, created_at DESC, id DESC) INCLUDE (on_hand_delta, reserved_delta)` | Vendor stock history: `WHERE variant_id = :v AND shop_id = :s ORDER BY created_at DESC, id DESC LIMIT 50`; drift check sums per variant as an index-only scan |
-| `inventory_movements_reference_once_key` | above | Exactly-once guard; "was this return already restocked": `WHERE reference_type = 'return_request' AND reference_id = :r` |
+| `inventory_movements_reference_once_key`  | above                                                                            | Exactly-once guard; "was this return already restocked": `WHERE reference_type = 'return_request' AND reference_id = :r`                                      |
 
 **Lifecycle and retention.** Insert-only. Volume at the 10× design load of A-02 (20,000 orders a month, about 2 lines each, about 3 movements per line) is roughly 120,000 rows a month, about 7 million in five years. That needs no partitioning. Retained for at least 6 years with the order records they explain ([05 §5.11](05-order-payment-and-inventory-lifecycles.md#511-rules-for-inventory_movements), [04 §19.3](04-domain-model-and-data-dictionary.md), [Verify-external VX-08]). Only the retention maintenance command deletes rows ([04 §2.12](04-domain-model-and-data-dictionary.md)).
 
@@ -1246,13 +1246,13 @@ The location tables are tiny (at most 753 rows in a handful of 8 KB pages). They
 
 **Module** `logistics` · **Release** R1 · **Shop scope** none · **Lifecycle** Reference · **Sensitivity** Public
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `code` | text | no | App | Primary key, `1`–`7` |
-| `name_en` | text | no | App | `Koshi`, `Madhesh`, `Bagmati`, `Gandaki`, `Lumbini`, `Karnali`, `Sudurpashchim` |
-| `name_ne` | text | no | App | Devanagari, NFC-normalised ([04 §2.8](04-domain-model-and-data-dictionary.md)) |
-| `is_active` | boolean | no | `true` | |
-| `created_at`, `updated_at` | timestamptz | no | `now()` | |
+| Column                     | Type        | Null | Default | Notes                                                                           |
+| -------------------------- | ----------- | ---- | ------- | ------------------------------------------------------------------------------- |
+| `code`                     | text        | no   | App     | Primary key, `1`–`7`                                                            |
+| `name_en`                  | text        | no   | App     | `Koshi`, `Madhesh`, `Bagmati`, `Gandaki`, `Lumbini`, `Karnali`, `Sudurpashchim` |
+| `name_ne`                  | text        | no   | App     | Devanagari, NFC-normalised ([04 §2.8](04-domain-model-and-data-dictionary.md))  |
+| `is_active`                | boolean     | no   | `true`  |                                                                                 |
+| `created_at`, `updated_at` | timestamptz | no   | `now()` |                                                                                 |
 
 **Keys and constraints.** `provinces_pkey PRIMARY KEY (code)`; `provinces_code_check CHECK (code ~ '^[1-7]$')`; `provinces_name_check CHECK (char_length(name_en) BETWEEN 2 AND 60 AND char_length(name_ne) BETWEEN 1 AND 60)`.
 
@@ -1264,13 +1264,13 @@ The location tables are tiny (at most 753 rows in a handful of 8 KB pages). They
 
 **Module** `logistics` · **Release** R1 · **Shop scope** none · **Lifecycle** Reference · **Sensitivity** Public
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `code` | text | no | App | Primary key, 3 digits, for example `306` Kathmandu |
-| `province_code` | text | no | App | |
-| `name_en`, `name_ne` | text | no | App | Nawalparasi and Rukum are each two districts in different provinces (canon §17.8) |
-| `is_active` | boolean | no | `true` | |
-| `created_at`, `updated_at` | timestamptz | no | `now()` | |
+| Column                     | Type        | Null | Default | Notes                                                                             |
+| -------------------------- | ----------- | ---- | ------- | --------------------------------------------------------------------------------- |
+| `code`                     | text        | no   | App     | Primary key, 3 digits, for example `306` Kathmandu                                |
+| `province_code`            | text        | no   | App     |                                                                                   |
+| `name_en`, `name_ne`       | text        | no   | App     | Nawalparasi and Rukum are each two districts in different provinces (canon §17.8) |
+| `is_active`                | boolean     | no   | `true`  |                                                                                   |
+| `created_at`, `updated_at` | timestamptz | no   | `now()` |                                                                                   |
 
 **Keys and constraints.**
 
@@ -1289,15 +1289,15 @@ CONSTRAINT districts_code_province_code_key UNIQUE (code, province_code)   -- ta
 
 **Module** `logistics` · **Release** R1 · **Shop scope** none · **Lifecycle** Reference · **Sensitivity** Public
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `code` | text | no | App | Primary key, the Nepal Post 5-digit code |
-| `district_code` | text | no | App | |
-| `name_en`, `name_ne` | text | no | App | |
-| `type` | text | no | App | `metropolitan`, `sub_metropolitan`, `municipality`, `rural_municipality` (6 / 11 / 276 / 460 [Verified-doc Nepal Post list above]) |
-| `ward_count` | smallint | no | App | Address validators check `ward_no ≤ ward_count` (§5.5, §6.6) |
-| `is_active` | boolean | no | `true` | |
-| `created_at`, `updated_at` | timestamptz | no | `now()` | |
+| Column                     | Type        | Null | Default | Notes                                                                                                                              |
+| -------------------------- | ----------- | ---- | ------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `code`                     | text        | no   | App     | Primary key, the Nepal Post 5-digit code                                                                                           |
+| `district_code`            | text        | no   | App     |                                                                                                                                    |
+| `name_en`, `name_ne`       | text        | no   | App     |                                                                                                                                    |
+| `type`                     | text        | no   | App     | `metropolitan`, `sub_metropolitan`, `municipality`, `rural_municipality` (6 / 11 / 276 / 460 [Verified-doc Nepal Post list above]) |
+| `ward_count`               | smallint    | no   | App     | Address validators check `ward_no ≤ ward_count` (§5.5, §6.6)                                                                       |
+| `is_active`                | boolean     | no   | `true`  |                                                                                                                                    |
+| `created_at`, `updated_at` | timestamptz | no   | `now()` |                                                                                                                                    |
 
 **Keys and constraints.**
 
@@ -1321,14 +1321,14 @@ The ward's 7-digit postal code is `code || lpad(ward_no::text, 2, '0')`, so cust
 
 **Module** `logistics` · **Release** R1 · **Shop scope** none · **Lifecycle** Reference · **Sensitivity** Public
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `code` | text | no | App | Primary key: `ktm_valley`, `outside_valley` [Assumption A-27] ([04 §21.5](04-domain-model-and-data-dictionary.md)) |
-| `name_en` | text | no | App | |
-| `name_ne` | text | yes | — | Filled for the R2 Nepali UI |
-| `position` | smallint | no | `0` | Display order in the shop shipping editor |
-| `is_active` | boolean | no | `true` | |
-| `created_at`, `updated_at` | timestamptz | no | `now()` | |
+| Column                     | Type        | Null | Default | Notes                                                                                                              |
+| -------------------------- | ----------- | ---- | ------- | ------------------------------------------------------------------------------------------------------------------ |
+| `code`                     | text        | no   | App     | Primary key: `ktm_valley`, `outside_valley` [Assumption A-27] ([04 §21.5](04-domain-model-and-data-dictionary.md)) |
+| `name_en`                  | text        | no   | App     |                                                                                                                    |
+| `name_ne`                  | text        | yes  | —       | Filled for the R2 Nepali UI                                                                                        |
+| `position`                 | smallint    | no   | `0`     | Display order in the shop shipping editor                                                                          |
+| `is_active`                | boolean     | no   | `true`  |                                                                                                                    |
+| `created_at`, `updated_at` | timestamptz | no   | `now()` |                                                                                                                    |
 
 **Keys and constraints.** `delivery_zones_pkey PRIMARY KEY (code)`; `delivery_zones_code_check CHECK (code ~ '^[a-z][a-z0-9_]{1,31}$')`.
 
@@ -1340,11 +1340,11 @@ The ward's 7-digit postal code is `code || lpad(ward_no::text, 2, '0')`, so cust
 
 **Module** `logistics` · **Release** R1 · **Shop scope** none · **Lifecycle** Reference · **Sensitivity** Public
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `zone_code` | text | no | App | |
-| `district_code` | text | no | App | |
-| `created_at` | timestamptz | no | `now()` | |
+| Column          | Type        | Null | Default | Notes |
+| --------------- | ----------- | ---- | ------- | ----- |
+| `zone_code`     | text        | no   | App     |       |
+| `district_code` | text        | no   | App     |       |
+| `created_at`    | timestamptz | no   | `now()` |       |
 
 **Keys and constraints.**
 
@@ -1369,18 +1369,18 @@ CONSTRAINT delivery_zone_districts_district_fkey FOREIGN KEY (district_code)
 
 The districts a shop delivers to (FR-SHOP-004). Checkout refuses an address outside it with 422 `DELIVERY_NOT_AVAILABLE` ([05 §3.3](05-order-payment-and-inventory-lifecycles.md#33-shipping-fee-per-shop-order)).
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `shop_id` | uuid | no | App | Resolved from `{shopSlug}` |
-| `district_code` | text | no | App | |
-| `created_at` | timestamptz | no | `now()` | |
+| Column          | Type        | Null | Default | Notes                      |
+| --------------- | ----------- | ---- | ------- | -------------------------- |
+| `shop_id`       | uuid        | no   | App     | Resolved from `{shopSlug}` |
+| `district_code` | text        | no   | App     |                            |
+| `created_at`    | timestamptz | no   | `now()` |                            |
 
 **Keys and constraints.** `shop_delivery_coverage_pkey PRIMARY KEY (shop_id, district_code)`; `shop_delivery_coverage_shop_fkey FOREIGN KEY (shop_id) REFERENCES shops (id) ON DELETE RESTRICT`; `shop_delivery_coverage_district_fkey FOREIGN KEY (district_code) REFERENCES districts (code) ON DELETE RESTRICT`.
 
 **Indexes.**
 
-| Index | Definition | Query served |
-|---|---|---|
+| Index                         | Definition                 | Query served                                                                                                        |
+| ----------------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | `shop_delivery_coverage_pkey` | `(shop_id, district_code)` | Checkout coverage: `WHERE shop_id = ANY(:shops) AND district_code = :d`; seller shipping page: `WHERE shop_id = :s` |
 
 Not created: `(district_code, shop_id)` for a "shops that deliver to me" filter. That filter is R2.
@@ -1393,14 +1393,14 @@ Not created: `(district_code, shop_id)` for a "shops that deliver to me" filter.
 
 One flat fee and delivery estimate per shop per zone [Assumption A-27].
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `shop_id` | uuid | no | App | |
-| `zone_code` | text | no | App | |
-| `fee_minor` | bigint | no | App | Paisa. `0` means free delivery to that zone |
-| `currency` | char(3) | no | `'NPR'` | |
-| `est_min_days`, `est_max_days` | smallint | no | App | Delivery estimate in days |
-| `created_at`, `updated_at` | timestamptz | no | `now()` | |
+| Column                         | Type        | Null | Default | Notes                                       |
+| ------------------------------ | ----------- | ---- | ------- | ------------------------------------------- |
+| `shop_id`                      | uuid        | no   | App     |                                             |
+| `zone_code`                    | text        | no   | App     |                                             |
+| `fee_minor`                    | bigint      | no   | App     | Paisa. `0` means free delivery to that zone |
+| `currency`                     | char(3)     | no   | `'NPR'` |                                             |
+| `est_min_days`, `est_max_days` | smallint    | no   | App     | Delivery estimate in days                   |
+| `created_at`, `updated_at`     | timestamptz | no   | `now()` |                                             |
 
 **Keys and constraints.**
 
@@ -1431,15 +1431,15 @@ The `cart` module owns a server-side cart for guests and signed-in users (FR-CAR
 
 **Module** `cart` · **Release** R1 · **Shop scope** none · **Lifecycle** Ephemeral · **Sensitivity** Personal (`guest_token_hash` is Secret)
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `id` | uuid | no | `uuidv7()` | |
-| `user_id` | uuid | yes | — | Owner when signed in |
-| `guest_token_hash` | bytea | yes | — | SHA-256 of the 32 random bytes in the httpOnly `dripnepal_cart` cookie. Neither the raw token nor the session id is stored (fixes RF-19, IAM-19) |
-| `status` | text | no | `'active'` | `active`, `converted`, `abandoned`, `merged` |
-| `version` | int | no | `1` | Incremented on every line change. Checkout compares it with the quote's `cart_version` ([05 §4.3](05-order-payment-and-inventory-lifecycles.md#43-step-by-step), step 3) |
-| `expires_at` | timestamptz | no | App | Last activity + 30 days for guests (AC-FR-CART-001-1), + 90 days for signed-in users [Assumption]. Pushed forward by every mutation |
-| `created_at`, `updated_at` | timestamptz | no | `now()` | |
+| Column                     | Type        | Null | Default    | Notes                                                                                                                                                                    |
+| -------------------------- | ----------- | ---- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `id`                       | uuid        | no   | `uuidv7()` |                                                                                                                                                                          |
+| `user_id`                  | uuid        | yes  | —          | Owner when signed in                                                                                                                                                     |
+| `guest_token_hash`         | bytea       | yes  | —          | SHA-256 of the 32 random bytes in the httpOnly `dripnepal_cart` cookie. Neither the raw token nor the session id is stored (fixes RF-19, IAM-19)                         |
+| `status`                   | text        | no   | `'active'` | `active`, `converted`, `abandoned`, `merged`                                                                                                                             |
+| `version`                  | int         | no   | `1`        | Incremented on every line change. Checkout compares it with the quote's `cart_version` ([05 §4.3](05-order-payment-and-inventory-lifecycles.md#43-step-by-step), step 3) |
+| `expires_at`               | timestamptz | no   | App        | Last activity + 30 days for guests (AC-FR-CART-001-1), + 90 days for signed-in users [Assumption]. Pushed forward by every mutation                                      |
+| `created_at`, `updated_at` | timestamptz | no   | `now()`    |                                                                                                                                                                          |
 
 A plain SHA-256 is enough for the guest token because the token carries 256 bits of entropy and cannot be guessed. A keyed hash is needed only for low-entropy values such as phone numbers ([04 §2.9](04-domain-model-and-data-dictionary.md)).
 
@@ -1462,12 +1462,12 @@ One active cart per user and per guest token. Today nothing stops two tabs on a 
 
 **Indexes.**
 
-| Index | Definition | Query served |
-|---|---|---|
-| `carts_active_user_key` | above | `getCart` for a signed-in user; checkout step 3 `SELECT … WHERE user_id = :u AND status = 'active' FOR UPDATE` |
-| `carts_active_guest_key` | above | `getCart` for a guest: `WHERE guest_token_hash = :h AND status = 'active'` |
-| `carts_expiry_idx` | `(expires_at) WHERE status = 'active'` | `cart.expire-abandoned` ([03 §9](03-system-architecture.md#9-asynchronous-work)): `UPDATE … SET status = 'abandoned' WHERE status = 'active' AND expires_at < now()` |
-| `carts_purge_idx` | `(updated_at) WHERE status <> 'active'` | Purge: `DELETE FROM carts WHERE status <> 'active' AND updated_at < now() - interval '30 days'` |
+| Index                    | Definition                              | Query served                                                                                                                                                         |
+| ------------------------ | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `carts_active_user_key`  | above                                   | `getCart` for a signed-in user; checkout step 3 `SELECT … WHERE user_id = :u AND status = 'active' FOR UPDATE`                                                       |
+| `carts_active_guest_key` | above                                   | `getCart` for a guest: `WHERE guest_token_hash = :h AND status = 'active'`                                                                                           |
+| `carts_expiry_idx`       | `(expires_at) WHERE status = 'active'`  | `cart.expire-abandoned` ([03 §9](03-system-architecture.md#9-asynchronous-work)): `UPDATE … SET status = 'abandoned' WHERE status = 'active' AND expires_at < now()` |
+| `carts_purge_idx`        | `(updated_at) WHERE status <> 'active'` | Purge: `DELETE FROM carts WHERE status <> 'active' AND updated_at < now() - interval '30 days'`                                                                      |
 
 **Merge on login** (AC-FR-CART-001-3). In one transaction, both carts are locked `FOR UPDATE` in `id` order. Each guest line is upserted into the user's cart with `quantity = LEAST(10, a + b)`, within the 50-line cap, and the guest cart becomes `merged`. A second login finds no active guest cart, so merging is idempotent. If the user has no active cart, the guest cart is adopted instead: `user_id` is set and `guest_token_hash` cleared.
 
@@ -1477,15 +1477,15 @@ One active cart per user and per guest token. Today nothing stops two tabs on a 
 
 **Module** `cart` · **Release** R1 · **Shop scope** none (the variant's shop) · **Lifecycle** Ephemeral · **Sensitivity** Personal
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `id` | uuid | no | `uuidv7()` | The `{cartItemId}` of `updateCartItem` and `removeCartItem` |
-| `cart_id` | uuid | no | App | |
-| `variant_id` | uuid | no | App | |
-| `quantity` | int | no | App | 1–10 (AC-FR-CART-001-2) |
-| `unit_price_minor_at_add` | bigint | no | App | Read from `product_variants.price_minor` when the line is added, never from the request (T-SEC-003) |
-| `currency` | char(3) | no | `'NPR'` | |
-| `created_at`, `updated_at` | timestamptz | no | `now()` | |
+| Column                     | Type        | Null | Default    | Notes                                                                                               |
+| -------------------------- | ----------- | ---- | ---------- | --------------------------------------------------------------------------------------------------- |
+| `id`                       | uuid        | no   | `uuidv7()` | The `{cartItemId}` of `updateCartItem` and `removeCartItem`                                         |
+| `cart_id`                  | uuid        | no   | App        |                                                                                                     |
+| `variant_id`               | uuid        | no   | App        |                                                                                                     |
+| `quantity`                 | int         | no   | App        | 1–10 (AC-FR-CART-001-2)                                                                             |
+| `unit_price_minor_at_add`  | bigint      | no   | App        | Read from `product_variants.price_minor` when the line is added, never from the request (T-SEC-003) |
+| `currency`                 | char(3)     | no   | `'NPR'`    |                                                                                                     |
+| `created_at`, `updated_at` | timestamptz | no   | `now()`    |                                                                                                     |
 
 **Keys and constraints.**
 
@@ -1536,26 +1536,26 @@ END $$;
 
 The checkout the customer sees as "my order DN-4K7Q2M9": who ordered, how they pay, the totals as placed and the delivery address as it was. The parent status is derived from the shop orders ([05 §3.8](05-order-payment-and-inventory-lifecycles.md#38-parent-status-derivation)). This table replaces the current `orders`, which cascades from users and addresses (RF-06), mixes shops (RF-07) and has no idempotency (RF-15).
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `id` | uuid | no | `uuidv7()` | Supplied by the action so that step 8 can run before the insert ([05 §4.3](05-order-payment-and-inventory-lifecycles.md#43-step-by-step)) |
-| `number` | text | no | App | `DN-` + 7 Crockford base32 characters |
-| `customer_user_id` | uuid | no | App | The signed-in customer |
-| `status` | text | no | App | `awaiting_payment`, `placed`, `in_progress`, `completed`, `cancelled`. Written only by `recomputeOrderStatus`, in the transaction of a shop order change |
-| `payment_method` | text | no | App | `cod`, `esewa`, `khalti`. All three are in the CHECK from the baseline. The API offers only the enabled methods (R1: `cod`) |
-| `currency` | char(3) | no | `'NPR'` | |
-| `items_subtotal_minor` | bigint | no | App | Σ `shop_orders.items_subtotal_minor` |
-| `shipping_total_minor` | bigint | no | App | Σ `shop_orders.shipping_fee_minor` |
-| `discount_total_minor` | bigint | no | `0` | Σ `shop_orders.discount_minor`; 0 in R1 ([05 §3.4](05-order-payment-and-inventory-lifecycles.md#34-discount-allocation)) |
-| `grand_total_minor` | bigint | no | App | As placed. The request's `expected_grand_total_minor` is only compared with it (`PRICE_CHANGED`), never stored |
-| `shipping_address` | jsonb | no | App | Snapshot; shape below |
-| `shipping_district_code` | text | no | App | Copy of the snapshot's district for zone reports and filters |
-| `customer_email_snapshot` | text | no | App | The account email at placement, for receipts and support |
-| `customer_note` | text | yes | — | At most 500 characters |
-| `placed_at` | timestamptz | no | `now()` | |
-| `idempotency_key_id` | uuid | yes | — | The key row of the placing request; null once the key is purged |
-| `request_id` | text | yes | — | `X-Request-Id` of the placing request |
-| `created_at`, `updated_at` | timestamptz | no | `now()` | |
+| Column                     | Type        | Null | Default    | Notes                                                                                                                                                    |
+| -------------------------- | ----------- | ---- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                       | uuid        | no   | `uuidv7()` | Supplied by the action so that step 8 can run before the insert ([05 §4.3](05-order-payment-and-inventory-lifecycles.md#43-step-by-step))                |
+| `number`                   | text        | no   | App        | `DN-` + 7 Crockford base32 characters                                                                                                                    |
+| `customer_user_id`         | uuid        | no   | App        | The signed-in customer                                                                                                                                   |
+| `status`                   | text        | no   | App        | `awaiting_payment`, `placed`, `in_progress`, `completed`, `cancelled`. Written only by `recomputeOrderStatus`, in the transaction of a shop order change |
+| `payment_method`           | text        | no   | App        | `cod`, `esewa`, `khalti`. All three are in the CHECK from the baseline. The API offers only the enabled methods (R1: `cod`)                              |
+| `currency`                 | char(3)     | no   | `'NPR'`    |                                                                                                                                                          |
+| `items_subtotal_minor`     | bigint      | no   | App        | Σ `shop_orders.items_subtotal_minor`                                                                                                                     |
+| `shipping_total_minor`     | bigint      | no   | App        | Σ `shop_orders.shipping_fee_minor`                                                                                                                       |
+| `discount_total_minor`     | bigint      | no   | `0`        | Σ `shop_orders.discount_minor`; 0 in R1 ([05 §3.4](05-order-payment-and-inventory-lifecycles.md#34-discount-allocation))                                 |
+| `grand_total_minor`        | bigint      | no   | App        | As placed. The request's `expected_grand_total_minor` is only compared with it (`PRICE_CHANGED`), never stored                                           |
+| `shipping_address`         | jsonb       | no   | App        | Snapshot; shape below                                                                                                                                    |
+| `shipping_district_code`   | text        | no   | App        | Copy of the snapshot's district for zone reports and filters                                                                                             |
+| `customer_email_snapshot`  | text        | no   | App        | The account email at placement, for receipts and support                                                                                                 |
+| `customer_note`            | text        | yes  | —          | At most 500 characters                                                                                                                                   |
+| `placed_at`                | timestamptz | no   | `now()`    |                                                                                                                                                          |
+| `idempotency_key_id`       | uuid        | yes  | —          | The key row of the placing request; null once the key is purged                                                                                          |
+| `request_id`               | text        | yes  | —          | `X-Request-Id` of the placing request                                                                                                                    |
+| `created_at`, `updated_at` | timestamptz | no   | `now()`    |                                                                                                                                                          |
 
 **The `shipping_address` snapshot** (schema version 1):
 
@@ -1566,9 +1566,14 @@ The checkout the customer sees as "my order DN-4K7Q2M9": who ordered, how they p
   "recipient_name_enc": "v1.k2.<iv>.<ciphertext>.<tag>",
   "recipient_phone_enc": "v1.k2.<iv>.<ciphertext>.<tag>",
   "recipient_phone_last4": "4567",
-  "province_code": "3", "province_name_en": "Bagmati", "province_name_ne": "बागमती",
-  "district_code": "306", "district_name_en": "Kathmandu", "district_name_ne": "काठमाडौँ",
-  "local_level_code": "30608", "local_level_name_en": "Kathmandu Metropolitan City",
+  "province_code": "3",
+  "province_name_en": "Bagmati",
+  "province_name_ne": "बागमती",
+  "district_code": "306",
+  "district_name_en": "Kathmandu",
+  "district_name_ne": "काठमाडौँ",
+  "local_level_code": "30608",
+  "local_level_name_en": "Kathmandu Metropolitan City",
   "ward_no": 10,
   "postal_code": "3060810",
   "area_tole_enc": "v1.k2.<iv>.<ciphertext>.<tag>",
@@ -1617,15 +1622,15 @@ CREATE TRIGGER orders_guard BEFORE UPDATE ON orders FOR EACH ROW
 
 **Indexes.**
 
-| Index | Definition | Query served |
-|---|---|---|
-| `orders_number_key` | `(number)` | Order by number: `getMyOrder` (with `customer_user_id = :u`), `adminGetOrder`, support phone lookups |
-| `orders_customer_list_idx` | `(customer_user_id, placed_at DESC, id DESC)` | `listMyOrders`: `WHERE customer_user_id = :u ORDER BY placed_at DESC, id DESC` (cursor) |
-| `orders_admin_status_idx` | `(status, placed_at DESC, id DESC)` | `adminListOrders` filtered by status |
-| `orders_admin_recent_idx` | `(placed_at DESC, id DESC)` | `adminListOrders` unfiltered; "orders placed today" between two Kathmandu midnights ([04 §2.2](04-domain-model-and-data-dictionary.md)) |
-| `orders_cod_open_idx` | `(customer_user_id) WHERE payment_method = 'cod' AND status IN ('placed', 'in_progress')` | COD limit at checkout step 7: `count(*) … WHERE customer_user_id = :u AND payment_method = 'cod' AND status IN ('placed','in_progress')` |
-| `orders_idempotency_key_idx` | `(idempotency_key_id) WHERE idempotency_key_id IS NOT NULL` | The `SET NULL` action run by the hourly key purge. Without it, every purged key scans `orders` |
-| `orders_id_customer_user_id_key` | `(id, customer_user_id)` | Foreign-key target only |
+| Index                            | Definition                                                                                | Query served                                                                                                                             |
+| -------------------------------- | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `orders_number_key`              | `(number)`                                                                                | Order by number: `getMyOrder` (with `customer_user_id = :u`), `adminGetOrder`, support phone lookups                                     |
+| `orders_customer_list_idx`       | `(customer_user_id, placed_at DESC, id DESC)`                                             | `listMyOrders`: `WHERE customer_user_id = :u ORDER BY placed_at DESC, id DESC` (cursor)                                                  |
+| `orders_admin_status_idx`        | `(status, placed_at DESC, id DESC)`                                                       | `adminListOrders` filtered by status                                                                                                     |
+| `orders_admin_recent_idx`        | `(placed_at DESC, id DESC)`                                                               | `adminListOrders` unfiltered; "orders placed today" between two Kathmandu midnights ([04 §2.2](04-domain-model-and-data-dictionary.md))  |
+| `orders_cod_open_idx`            | `(customer_user_id) WHERE payment_method = 'cod' AND status IN ('placed', 'in_progress')` | COD limit at checkout step 7: `count(*) … WHERE customer_user_id = :u AND payment_method = 'cod' AND status IN ('placed','in_progress')` |
+| `orders_idempotency_key_idx`     | `(idempotency_key_id) WHERE idempotency_key_id IS NOT NULL`                               | The `SET NULL` action run by the hourly key purge. Without it, every purged key scans `orders`                                           |
+| `orders_id_customer_user_id_key` | `(id, customer_user_id)`                                                                  | Foreign-key target only                                                                                                                  |
 
 **Lifecycle and retention.** Inserted once by `placeOrder`. Afterwards only `status` changes (and, under [04 §19.2](04-domain-model-and-data-dictionary.md), the personal snapshot fields). Never deleted inside the retention period: at least 6 years after the end of the fiscal year in which the order's last shop order became terminal (VAT Rules 2053 r23(7) requires 6 years; E-Commerce Directive 2082 s14 at least 5 [Verify-external VX-08]; [04 §19.3](04-domain-model-and-data-dictionary.md)).
 
@@ -1635,28 +1640,28 @@ CREATE TRIGGER orders_guard BEFORE UPDATE ON orders FOR EACH ROW
 
 What a vendor accepts, ships and is settled for: one row per shop per order. Its status machine is [05 §6.1](05-order-payment-and-inventory-lifecycles.md#61-shoporder).
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `id` | uuid | no | `uuidv7()` | |
-| `order_id` | uuid | no | App | |
-| `shop_id` | uuid | no | App | From the cart line's variant, never from input |
-| `number` | text | no | App | Parent number + `-` + position ([04 §2.1](04-domain-model-and-data-dictionary.md)) |
-| `status` | text | no | App | `awaiting_payment`, `awaiting_acceptance`, `accepted`, `completed`, `cancelled`, `rejected` |
-| `cancel_reason` | text | yes | — | `customer_cancelled`, `payment_expired`, `acceptance_timeout`, `admin_cancelled`, `shop_frozen`, `undeliverable`, `stock_unavailable_after_payment` |
-| `rejection_reason` | text | yes | — | Whole rejection: `out_of_stock`, `cannot_fulfil`, `pricing_error`, `other` ([05 §6.1](05-order-payment-and-inventory-lifecycles.md#61-shoporder)). Item-level reasons go into the `order_events` row |
-| `currency` | char(3) | no | `'NPR'` | |
-| `items_subtotal_minor` | bigint | no | App | Σ `order_items.line_subtotal_minor` |
-| `shipping_fee_minor` | bigint | no | App | The shop's zone rate at checkout, fixed from then on ([05 §3.3](05-order-payment-and-inventory-lifecycles.md#33-shipping-fee-per-shop-order)) |
-| `discount_minor` | bigint | no | `0` | Σ `order_items.discount_minor` |
-| `total_minor` | bigint | no | App | As placed |
-| `commission_total_minor` | bigint | no | App | Σ `order_items.commission_minor` |
-| `delivery_zone_code_snapshot` | text | no | App | Zone that priced the fee |
-| `est_min_days_snapshot`, `est_max_days_snapshot` | smallint | no | App | The delivery promise shown at checkout. E-Commerce Act s9(1) requires delivery within the stated period [Verify-external VX-02], so the promise is kept as evidence |
-| `shop_name_snapshot` | text | no | App | Shop name at placement, for receipts |
-| `acceptance_due_at` | timestamptz | yes | — | `now() + vendor_acceptance_sla_hours` on entering `awaiting_acceptance` |
-| `accepted_at`, `completed_at`, `cancelled_at`, `rejected_at` | timestamptz | yes | — | Set by the transition that reaches the state |
-| `version` | int | no | `1` | [04 §2.10](04-domain-model-and-data-dictionary.md) |
-| `created_at`, `updated_at` | timestamptz | no | `now()` | |
+| Column                                                       | Type        | Null | Default    | Notes                                                                                                                                                                                                |
+| ------------------------------------------------------------ | ----------- | ---- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                                                         | uuid        | no   | `uuidv7()` |                                                                                                                                                                                                      |
+| `order_id`                                                   | uuid        | no   | App        |                                                                                                                                                                                                      |
+| `shop_id`                                                    | uuid        | no   | App        | From the cart line's variant, never from input                                                                                                                                                       |
+| `number`                                                     | text        | no   | App        | Parent number + `-` + position ([04 §2.1](04-domain-model-and-data-dictionary.md))                                                                                                                   |
+| `status`                                                     | text        | no   | App        | `awaiting_payment`, `awaiting_acceptance`, `accepted`, `completed`, `cancelled`, `rejected`                                                                                                          |
+| `cancel_reason`                                              | text        | yes  | —          | `customer_cancelled`, `payment_expired`, `acceptance_timeout`, `admin_cancelled`, `shop_frozen`, `undeliverable`, `stock_unavailable_after_payment`                                                  |
+| `rejection_reason`                                           | text        | yes  | —          | Whole rejection: `out_of_stock`, `cannot_fulfil`, `pricing_error`, `other` ([05 §6.1](05-order-payment-and-inventory-lifecycles.md#61-shoporder)). Item-level reasons go into the `order_events` row |
+| `currency`                                                   | char(3)     | no   | `'NPR'`    |                                                                                                                                                                                                      |
+| `items_subtotal_minor`                                       | bigint      | no   | App        | Σ `order_items.line_subtotal_minor`                                                                                                                                                                  |
+| `shipping_fee_minor`                                         | bigint      | no   | App        | The shop's zone rate at checkout, fixed from then on ([05 §3.3](05-order-payment-and-inventory-lifecycles.md#33-shipping-fee-per-shop-order))                                                        |
+| `discount_minor`                                             | bigint      | no   | `0`        | Σ `order_items.discount_minor`                                                                                                                                                                       |
+| `total_minor`                                                | bigint      | no   | App        | As placed                                                                                                                                                                                            |
+| `commission_total_minor`                                     | bigint      | no   | App        | Σ `order_items.commission_minor`                                                                                                                                                                     |
+| `delivery_zone_code_snapshot`                                | text        | no   | App        | Zone that priced the fee                                                                                                                                                                             |
+| `est_min_days_snapshot`, `est_max_days_snapshot`             | smallint    | no   | App        | The delivery promise shown at checkout. E-Commerce Act s9(1) requires delivery within the stated period [Verify-external VX-02], so the promise is kept as evidence                                  |
+| `shop_name_snapshot`                                         | text        | no   | App        | Shop name at placement, for receipts                                                                                                                                                                 |
+| `acceptance_due_at`                                          | timestamptz | yes  | —          | `now() + vendor_acceptance_sla_hours` on entering `awaiting_acceptance`                                                                                                                              |
+| `accepted_at`, `completed_at`, `cancelled_at`, `rejected_at` | timestamptz | yes  | —          | Set by the transition that reaches the state                                                                                                                                                         |
+| `version`                                                    | int         | no   | `1`        | [04 §2.10](04-domain-model-and-data-dictionary.md)                                                                                                                                                   |
+| `created_at`, `updated_at`                                   | timestamptz | no   | `now()`    |                                                                                                                                                                                                      |
 
 **Keys and constraints.**
 
@@ -1700,15 +1705,15 @@ CREATE TRIGGER shop_orders_guard BEFORE UPDATE ON shop_orders FOR EACH ROW
 
 **Indexes.**
 
-| Index | Definition | Query served |
-|---|---|---|
-| `shop_orders_order_shop_key` | `(order_id, shop_id)` | Shop orders of an order: customer order page, parent recompute, locking in `id` order ([05 §4.4](05-order-payment-and-inventory-lifecycles.md#44-global-lock-ordering)) |
-| `shop_orders_number_key` | `(number)` | `getShopOrder`: `WHERE number = :n AND shop_id = :resolved_shop` |
-| `shop_orders_seller_list_idx` | `(shop_id, status, created_at DESC, id DESC)` | Seller order list by tab: `WHERE shop_id = ? AND status = ? ORDER BY created_at DESC, id DESC` |
-| `shop_orders_seller_all_idx` | `(shop_id, created_at DESC, id DESC)` | Seller order list, "All" tab; admin view of one shop's orders |
-| `shop_orders_acceptance_due_idx` | `(acceptance_due_at) WHERE status = 'awaiting_acceptance'` | Acceptance-timeout sweeper: `WHERE status = 'awaiting_acceptance' AND acceptance_due_at <= now()` |
-| `shop_orders_accepted_idx` | `(id) WHERE status = 'accepted'` | Auto-complete sweep: accepted shop orders joined to delivered shipments past the return window. The partial index holds only open orders |
-| `shop_orders_id_shop_id_key`, `shop_orders_id_order_id_key` | | Foreign-key targets only |
+| Index                                                       | Definition                                                 | Query served                                                                                                                                                            |
+| ----------------------------------------------------------- | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `shop_orders_order_shop_key`                                | `(order_id, shop_id)`                                      | Shop orders of an order: customer order page, parent recompute, locking in `id` order ([05 §4.4](05-order-payment-and-inventory-lifecycles.md#44-global-lock-ordering)) |
+| `shop_orders_number_key`                                    | `(number)`                                                 | `getShopOrder`: `WHERE number = :n AND shop_id = :resolved_shop`                                                                                                        |
+| `shop_orders_seller_list_idx`                               | `(shop_id, status, created_at DESC, id DESC)`              | Seller order list by tab: `WHERE shop_id = ? AND status = ? ORDER BY created_at DESC, id DESC`                                                                          |
+| `shop_orders_seller_all_idx`                                | `(shop_id, created_at DESC, id DESC)`                      | Seller order list, "All" tab; admin view of one shop's orders                                                                                                           |
+| `shop_orders_acceptance_due_idx`                            | `(acceptance_due_at) WHERE status = 'awaiting_acceptance'` | Acceptance-timeout sweeper: `WHERE status = 'awaiting_acceptance' AND acceptance_due_at <= now()`                                                                       |
+| `shop_orders_accepted_idx`                                  | `(id) WHERE status = 'accepted'`                           | Auto-complete sweep: accepted shop orders joined to delivered shipments past the return window. The partial index holds only open orders                                |
+| `shop_orders_id_shop_id_key`, `shop_orders_id_order_id_key` |                                                            | Foreign-key targets only                                                                                                                                                |
 
 **Lifecycle and retention.** Inserted by checkout. Status and its timestamps change by compare-and-set; amounts never change. Retained as §11.1.
 
@@ -1718,31 +1723,31 @@ CREATE TRIGGER shop_orders_guard BEFORE UPDATE ON shop_orders FOR EACH ROW
 
 One line per variant per shop order, with everything needed to understand the sale after the catalog changes ([04 §2.13](04-domain-model-and-data-dictionary.md)): the product as it was, the price, discount, tax and the commission snapshot.
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `id` | uuid | no | `uuidv7()` | |
-| `order_id`, `shop_order_id`, `shop_id` | uuid | no | App | Tenant and parent keys ([04 §2.5](04-domain-model-and-data-dictionary.md)) |
-| `product_id`, `variant_id` | uuid | no | App | For navigation and reports; RESTRICT |
-| `product_title_snapshot` | text | no | App | Title at placement |
-| `variant_label_snapshot` | text | no | App | `"Size: M / Color: Black"`; empty string for a default variant |
-| `sku_snapshot` | text | no | App | |
-| `brand_name_snapshot` | text | yes | — | Brand at placement; null for own label. Kept because counterfeit disputes (OD-21) turn on what brand was sold |
-| `image_url_snapshot` | text | yes | — | HTTPS URL of the derived WebP at placement. Keys are content-addressed and never overwritten ([03 §3.5](03-system-architecture.md#35-object-storage-layout)); media cleanup must keep objects referenced here (§7.13) |
-| `category_path_snapshot` | text | no | App | `"Clothing > Tops > T-Shirts"` |
-| `currency` | char(3) | no | `'NPR'` | |
-| `unit_price_minor` | bigint | no | App | Selling price (tax-inclusive) read from the variant in the checkout transaction |
-| `compare_at_price_minor_snapshot` | bigint | yes | — | Reference price shown at the time (FR-PROMO-001); display only, never used in totals |
-| `quantity` | int | no | App | As placed |
-| `rejected_quantity`, `cancelled_quantity`, `returned_quantity` | int | no | `0` | Units removed later, consumed in that order by the cumulative rule ([05 §3.2](05-order-payment-and-inventory-lifecycles.md#32-amounts-as-placed-versus-effective)) |
-| `line_subtotal_minor` | bigint | no | App | `unit_price_minor × quantity` |
-| `discount_minor` | bigint | no | `0` | Allocated discount; 0 in R1, largest remainder in R2 ([04 §18](04-domain-model-and-data-dictionary.md)) |
-| `tax_minor` | bigint | no | `0` | 0 in R1: DripNepal computes no VAT, prices are tax-inclusive [Assumption A-16, OD-11, OD-26] |
-| `tax_rate_bp` | int | yes | — | Null in R1 |
-| `tax_inclusive` | boolean | no | `true` | [Verify-external VX-05] |
-| `line_total_minor` | bigint | no | App | What the customer pays for the line |
-| `commission_rate_bp` | int | no | App | Shop override, else platform default, read in the checkout transaction |
-| `commission_minor` | bigint | no | App | `roundHalfUp(base × rate / 10000)`; base per A-04 and [05 §3.5](05-order-payment-and-inventory-lifecycles.md#35-commission-allocation-per-item) |
-| `created_at`, `updated_at` | timestamptz | no | `now()` | |
+| Column                                                         | Type        | Null | Default    | Notes                                                                                                                                                                                                                 |
+| -------------------------------------------------------------- | ----------- | ---- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                                                           | uuid        | no   | `uuidv7()` |                                                                                                                                                                                                                       |
+| `order_id`, `shop_order_id`, `shop_id`                         | uuid        | no   | App        | Tenant and parent keys ([04 §2.5](04-domain-model-and-data-dictionary.md))                                                                                                                                            |
+| `product_id`, `variant_id`                                     | uuid        | no   | App        | For navigation and reports; RESTRICT                                                                                                                                                                                  |
+| `product_title_snapshot`                                       | text        | no   | App        | Title at placement                                                                                                                                                                                                    |
+| `variant_label_snapshot`                                       | text        | no   | App        | `"Size: M / Color: Black"`; empty string for a default variant                                                                                                                                                        |
+| `sku_snapshot`                                                 | text        | no   | App        |                                                                                                                                                                                                                       |
+| `brand_name_snapshot`                                          | text        | yes  | —          | Brand at placement; null for own label. Kept because counterfeit disputes (OD-21) turn on what brand was sold                                                                                                         |
+| `image_url_snapshot`                                           | text        | yes  | —          | HTTPS URL of the derived WebP at placement. Keys are content-addressed and never overwritten ([03 §3.5](03-system-architecture.md#35-object-storage-layout)); media cleanup must keep objects referenced here (§7.13) |
+| `category_path_snapshot`                                       | text        | no   | App        | `"Clothing > Tops > T-Shirts"`                                                                                                                                                                                        |
+| `currency`                                                     | char(3)     | no   | `'NPR'`    |                                                                                                                                                                                                                       |
+| `unit_price_minor`                                             | bigint      | no   | App        | Selling price (tax-inclusive) read from the variant in the checkout transaction                                                                                                                                       |
+| `compare_at_price_minor_snapshot`                              | bigint      | yes  | —          | Reference price shown at the time (FR-PROMO-001); display only, never used in totals                                                                                                                                  |
+| `quantity`                                                     | int         | no   | App        | As placed                                                                                                                                                                                                             |
+| `rejected_quantity`, `cancelled_quantity`, `returned_quantity` | int         | no   | `0`        | Units removed later, consumed in that order by the cumulative rule ([05 §3.2](05-order-payment-and-inventory-lifecycles.md#32-amounts-as-placed-versus-effective))                                                    |
+| `line_subtotal_minor`                                          | bigint      | no   | App        | `unit_price_minor × quantity`                                                                                                                                                                                         |
+| `discount_minor`                                               | bigint      | no   | `0`        | Allocated discount; 0 in R1, largest remainder in R2 ([04 §18](04-domain-model-and-data-dictionary.md))                                                                                                               |
+| `tax_minor`                                                    | bigint      | no   | `0`        | 0 in R1: DripNepal computes no VAT, prices are tax-inclusive [Assumption A-16, OD-11, OD-26]                                                                                                                          |
+| `tax_rate_bp`                                                  | int         | yes  | —          | Null in R1                                                                                                                                                                                                            |
+| `tax_inclusive`                                                | boolean     | no   | `true`     | [Verify-external VX-05]                                                                                                                                                                                               |
+| `line_total_minor`                                             | bigint      | no   | App        | What the customer pays for the line                                                                                                                                                                                   |
+| `commission_rate_bp`                                           | int         | no   | App        | Shop override, else platform default, read in the checkout transaction                                                                                                                                                |
+| `commission_minor`                                             | bigint      | no   | App        | `roundHalfUp(base × rate / 10000)`; base per A-04 and [05 §3.5](05-order-payment-and-inventory-lifecycles.md#35-commission-allocation-per-item)                                                                       |
+| `created_at`, `updated_at`                                     | timestamptz | no   | `now()`    |                                                                                                                                                                                                                       |
 
 **Keys and constraints.** The four foreign keys are those of the worked example in [04 §2.5](04-domain-model-and-data-dictionary.md).
 
@@ -1798,11 +1803,11 @@ The commission formula is not a CHECK. Its base depends on who funds an R2 disco
 
 **Indexes.**
 
-| Index | Definition | Query served |
-|---|---|---|
-| `order_items_shop_order_variant_key` | `(shop_order_id, variant_id)` | Lines of a shop order: seller and customer order detail, fulfilment, refund and return forms |
-| `order_items_variant_idx` | `(variant_id)` | `replaceProductVariants` deciding between hard delete and archive: `EXISTS (SELECT 1 FROM order_items WHERE variant_id = :v)`; also the RESTRICT check when a draft variant is deleted |
-| `order_items_id_shop_id_key`, `order_items_id_shop_order_id_key`, `order_items_reservation_ref_key` | | Foreign-key targets only |
+| Index                                                                                               | Definition                    | Query served                                                                                                                                                                           |
+| --------------------------------------------------------------------------------------------------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `order_items_shop_order_variant_key`                                                                | `(shop_order_id, variant_id)` | Lines of a shop order: seller and customer order detail, fulfilment, refund and return forms                                                                                           |
+| `order_items_variant_idx`                                                                           | `(variant_id)`                | `replaceProductVariants` deciding between hard delete and archive: `EXISTS (SELECT 1 FROM order_items WHERE variant_id = :v)`; also the RESTRICT check when a draft variant is deleted |
+| `order_items_id_shop_id_key`, `order_items_id_shop_order_id_key`, `order_items_reservation_ref_key` |                               | Foreign-key targets only                                                                                                                                                               |
 
 **Lifecycle and retention.** Inserted by checkout. Only the three removal counters change, and only upwards. Retained as §11.1.
 
@@ -1812,17 +1817,17 @@ The commission formula is not a CHECK. Its base depends on who funds an R2 disco
 
 The timeline of an order: what happened, who did it and who may see it. Admin notes (`addOrderNote`) are internal events. The `audit_logs` row of the same action (§15.3) is the accountability record. This table is the display record.
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `id` | uuid | no | `uuidv7()` | |
-| `order_id` | uuid | no | App | |
-| `shop_order_id` | uuid | yes | — | Null for order-level events |
-| `type` | text | no | App | `<subject>.<event>`: `order.placed`, `shop_order.accepted`, `shop_order.items_rejected`, `shipment.shipped`, `payment.cod_collected`, `order.note`, `order.status_changed` |
-| `visibility` | text | no | App | `customer`, `shop`, `internal` |
-| `data` | jsonb | no | `'{}'` | Small typed object, for example `{"from":"awaiting_acceptance","to":"accepted"}`. Never customer contact data |
-| `actor_type` | text | no | App | `customer`, `shop_member`, `platform_staff`, `system`, `provider` |
-| `actor_user_id` | uuid | yes | — | |
-| `created_at` | timestamptz | no | `now()` | |
+| Column          | Type        | Null | Default    | Notes                                                                                                                                                                      |
+| --------------- | ----------- | ---- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`            | uuid        | no   | `uuidv7()` |                                                                                                                                                                            |
+| `order_id`      | uuid        | no   | App        |                                                                                                                                                                            |
+| `shop_order_id` | uuid        | yes  | —          | Null for order-level events                                                                                                                                                |
+| `type`          | text        | no   | App        | `<subject>.<event>`: `order.placed`, `shop_order.accepted`, `shop_order.items_rejected`, `shipment.shipped`, `payment.cod_collected`, `order.note`, `order.status_changed` |
+| `visibility`    | text        | no   | App        | `customer`, `shop`, `internal`                                                                                                                                             |
+| `data`          | jsonb       | no   | `'{}'`     | Small typed object, for example `{"from":"awaiting_acceptance","to":"accepted"}`. Never customer contact data                                                              |
+| `actor_type`    | text        | no   | App        | `customer`, `shop_member`, `platform_staff`, `system`, `provider`                                                                                                          |
+| `actor_user_id` | uuid        | yes  | —          |                                                                                                                                                                            |
+| `created_at`    | timestamptz | no   | `now()`    |                                                                                                                                                                            |
 
 Who sees what: the customer sees `customer` events. A shop member sees `customer` and `shop` events of their own shop orders. Staff see everything. `internal` never leaves the admin surface ([07](07-security-threat-model-and-permissions.md)).
 
@@ -1845,10 +1850,10 @@ CONSTRAINT order_events_data_check CHECK (jsonb_typeof(data) = 'object')
 
 **Indexes.**
 
-| Index | Definition | Query served |
-|---|---|---|
-| `order_events_order_idx` | `(order_id, created_at, id)` | Customer and admin timeline: `WHERE order_id = :o [AND visibility = 'customer'] ORDER BY created_at, id` |
-| `order_events_shop_order_idx` | `(shop_order_id, created_at, id) WHERE shop_order_id IS NOT NULL` | Seller timeline: `WHERE shop_order_id = :so AND visibility IN ('customer','shop')` |
+| Index                         | Definition                                                        | Query served                                                                                             |
+| ----------------------------- | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `order_events_order_idx`      | `(order_id, created_at, id)`                                      | Customer and admin timeline: `WHERE order_id = :o [AND visibility = 'customer'] ORDER BY created_at, id` |
+| `order_events_shop_order_idx` | `(shop_order_id, created_at, id) WHERE shop_order_id IS NOT NULL` | Seller timeline: `WHERE shop_order_id = :so AND visibility IN ('customer','shop')`                       |
 
 **Lifecycle and retention.** Insert-only. Retained as §11.1.
 
@@ -1858,19 +1863,19 @@ CONSTRAINT order_events_data_check CHECK (jsonb_typeof(data) = 'object')
 
 The parcel of a shop order. R1 has exactly one shipment per shop order and no courier API: every transition is a vendor entry through `recordFulfillmentEvent` [Confirmed Q5]. The machine is [05 §6.3](05-order-payment-and-inventory-lifecycles.md#63-shipment-fulfillment).
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `id` | uuid | no | `uuidv7()` | |
-| `shop_order_id` | uuid | no | App | Unique in R1 |
-| `shop_id` | uuid | no | App | |
-| `status` | text | no | `'pending'` | `pending`, `packed`, `shipped`, `delivered`, `delivery_failed`, `returning`, `returned_to_origin` |
-| `courier_name` | text | yes | — | Free text in R1 (for example "Nepal Can Move", own rider). R3 courier APIs add a `courier_code` |
-| `tracking_number` | text | yes | — | |
-| `tracking_url` | text | yes | — | HTTPS only, so a vendor cannot plant a `javascript:` link on the customer's order page |
-| `shipped_at`, `delivered_at` | timestamptz | yes | — | `delivered_at` starts the return window and the ledger hold |
-| `attempt_count` | smallint | no | `0` | 1 at first shipment, +1 per reattempt |
-| `version` | int | no | `1` | |
-| `created_at`, `updated_at` | timestamptz | no | `now()` | |
+| Column                       | Type        | Null | Default     | Notes                                                                                             |
+| ---------------------------- | ----------- | ---- | ----------- | ------------------------------------------------------------------------------------------------- |
+| `id`                         | uuid        | no   | `uuidv7()`  |                                                                                                   |
+| `shop_order_id`              | uuid        | no   | App         | Unique in R1                                                                                      |
+| `shop_id`                    | uuid        | no   | App         |                                                                                                   |
+| `status`                     | text        | no   | `'pending'` | `pending`, `packed`, `shipped`, `delivered`, `delivery_failed`, `returning`, `returned_to_origin` |
+| `courier_name`               | text        | yes  | —           | Free text in R1 (for example "Nepal Can Move", own rider). R3 courier APIs add a `courier_code`   |
+| `tracking_number`            | text        | yes  | —           |                                                                                                   |
+| `tracking_url`               | text        | yes  | —           | HTTPS only, so a vendor cannot plant a `javascript:` link on the customer's order page            |
+| `shipped_at`, `delivered_at` | timestamptz | yes  | —           | `delivered_at` starts the return window and the ledger hold                                       |
+| `attempt_count`              | smallint    | no   | `0`         | 1 at first shipment, +1 per reattempt                                                             |
+| `version`                    | int         | no   | `1`         |                                                                                                   |
+| `created_at`, `updated_at`   | timestamptz | no   | `now()`     |                                                                                                   |
 
 **Keys and constraints.**
 
@@ -1898,11 +1903,11 @@ T-FUL-101 (proposed) sets each shipped status without the required fields and ex
 
 **Indexes.**
 
-| Index | Definition | Query served |
-|---|---|---|
-| `shipments_shop_order_key` | `(shop_order_id)` | Shipment of a shop order (every fulfilment action, order pages) |
-| `shipments_to_ship_idx` | `(shop_id, created_at) WHERE status IN ('pending', 'packed')` | Seller "ready to ship" list: `WHERE shop_id = ? AND status IN ('pending','packed') ORDER BY created_at` |
-| `shipments_delivered_at_idx` | `(delivered_at) WHERE status = 'delivered'` | COD outcome reminders (24 h and 72 h after delivery) and auto-complete: `WHERE status = 'delivered' AND delivered_at BETWEEN :from AND :to` |
+| Index                        | Definition                                                    | Query served                                                                                                                                |
+| ---------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `shipments_shop_order_key`   | `(shop_order_id)`                                             | Shipment of a shop order (every fulfilment action, order pages)                                                                             |
+| `shipments_to_ship_idx`      | `(shop_id, created_at) WHERE status IN ('pending', 'packed')` | Seller "ready to ship" list: `WHERE shop_id = ? AND status IN ('pending','packed') ORDER BY created_at`                                     |
+| `shipments_delivered_at_idx` | `(delivered_at) WHERE status = 'delivered'`                   | COD outcome reminders (24 h and 72 h after delivery) and auto-complete: `WHERE status = 'delivered' AND delivered_at BETWEEN :from AND :to` |
 
 **Lifecycle and retention.** Created in the accept transaction. Updated by fulfilment events. Never deleted. Retained as §11.1. R2 partial shipments (FR-FUL-005) drop `shipments_shop_order_key` and add a `shipment_items` table.
 
@@ -1912,17 +1917,17 @@ T-FUL-101 (proposed) sets each shipped status without the required fields and ex
 
 One row per fulfilment event recorded by the vendor (or by staff for a frozen shop).
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `id` | uuid | no | `uuidv7()` | |
-| `shipment_id`, `shop_id` | uuid | no | App | |
-| `event` | text | no | App | `packed`, `shipped`, `delivered`, `delivery_failed`, `reattempt`, `returning`, `returned_to_origin` (the `recordFulfillmentEvent` values) |
-| `status` | text | no | App | Shipment status after the event |
-| `reason_code` | text | yes | — | Only for `delivery_failed`: `customer_unreachable`, `refused`, `address_problem`, `other` |
-| `note` | text | yes | — | At most 500 characters |
-| `actor_type` | text | no | App | `shop_member`, `platform_staff`, `system` |
-| `actor_user_id` | uuid | yes | — | |
-| `created_at` | timestamptz | no | `now()` | |
+| Column                   | Type        | Null | Default    | Notes                                                                                                                                     |
+| ------------------------ | ----------- | ---- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                     | uuid        | no   | `uuidv7()` |                                                                                                                                           |
+| `shipment_id`, `shop_id` | uuid        | no   | App        |                                                                                                                                           |
+| `event`                  | text        | no   | App        | `packed`, `shipped`, `delivered`, `delivery_failed`, `reattempt`, `returning`, `returned_to_origin` (the `recordFulfillmentEvent` values) |
+| `status`                 | text        | no   | App        | Shipment status after the event                                                                                                           |
+| `reason_code`            | text        | yes  | —          | Only for `delivery_failed`: `customer_unreachable`, `refused`, `address_problem`, `other`                                                 |
+| `note`                   | text        | yes  | —          | At most 500 characters                                                                                                                    |
+| `actor_type`             | text        | no   | App        | `shop_member`, `platform_staff`, `system`                                                                                                 |
+| `actor_user_id`          | uuid        | yes  | —          |                                                                                                                                           |
+| `created_at`             | timestamptz | no   | `now()`    |                                                                                                                                           |
 
 **Keys and constraints.**
 
@@ -1952,23 +1957,23 @@ CONSTRAINT shipment_events_note_check CHECK (note IS NULL OR char_length(note) <
 
 A return of delivered units, created by support on the customer's behalf in R1 because the Consumer Protection Act 2075 s14 and E-Commerce Act s10 make returns an R1 obligation [Verify-external VX-04, VX-02] (canon §17.4). Machine: [05 §6.6](05-order-payment-and-inventory-lifecycles.md#66-returnrequest-r1-support-created-r2-self-serve).
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `id` | uuid | no | `uuidv7()` | |
-| `number` | text | no | App | `RT-` + 7 Crockford base32 |
-| `order_id`, `shop_order_id`, `shop_id` | uuid | no | App | |
-| `requested_by_user_id` | uuid | no | App | The customer. The composite FK below proves it is the order's customer |
-| `created_by_staff_id` | uuid | yes | — | The support agent. Always set in R1; null for R2 self-serve |
-| `support_case_id` | uuid | yes | — | The case the return came from, if any |
-| `reason_code` | text | no | App | `not_as_described`, `damaged`, `wrong_item`, `size_issue`, `changed_mind`, `other` |
-| `status` | text | no | `'requested'` | `requested`, `approved`, `rejected`, `in_transit`, `received`, `closed`, `rejected_after_inspection` |
-| `customer_note` | text | yes | — | At most 1,000 characters |
-| `resolution_note` | text | yes | — | Required when rejected; the customer sees it |
-| `approved_at` | timestamptz | yes | — | |
-| `refund_due_at` | timestamptz | yes | — | Set at approval: `approved_at + 7 days`, the conservative start of the Directive 2082 s9(3) refund clock ([05 §11](05-order-payment-and-inventory-lifecycles.md#11-legal-overlays); [Verify-external VX-02]) |
-| `received_at`, `closed_at` | timestamptz | yes | — | |
-| `version` | int | no | `1` | |
-| `created_at`, `updated_at` | timestamptz | no | `now()` | |
+| Column                                 | Type        | Null | Default       | Notes                                                                                                                                                                                                        |
+| -------------------------------------- | ----------- | ---- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `id`                                   | uuid        | no   | `uuidv7()`    |                                                                                                                                                                                                              |
+| `number`                               | text        | no   | App           | `RT-` + 7 Crockford base32                                                                                                                                                                                   |
+| `order_id`, `shop_order_id`, `shop_id` | uuid        | no   | App           |                                                                                                                                                                                                              |
+| `requested_by_user_id`                 | uuid        | no   | App           | The customer. The composite FK below proves it is the order's customer                                                                                                                                       |
+| `created_by_staff_id`                  | uuid        | yes  | —             | The support agent. Always set in R1; null for R2 self-serve                                                                                                                                                  |
+| `support_case_id`                      | uuid        | yes  | —             | The case the return came from, if any                                                                                                                                                                        |
+| `reason_code`                          | text        | no   | App           | `not_as_described`, `damaged`, `wrong_item`, `size_issue`, `changed_mind`, `other`                                                                                                                           |
+| `status`                               | text        | no   | `'requested'` | `requested`, `approved`, `rejected`, `in_transit`, `received`, `closed`, `rejected_after_inspection`                                                                                                         |
+| `customer_note`                        | text        | yes  | —             | At most 1,000 characters                                                                                                                                                                                     |
+| `resolution_note`                      | text        | yes  | —             | Required when rejected; the customer sees it                                                                                                                                                                 |
+| `approved_at`                          | timestamptz | yes  | —             |                                                                                                                                                                                                              |
+| `refund_due_at`                        | timestamptz | yes  | —             | Set at approval: `approved_at + 7 days`, the conservative start of the Directive 2082 s9(3) refund clock ([05 §11](05-order-payment-and-inventory-lifecycles.md#11-legal-overlays); [Verify-external VX-02]) |
+| `received_at`, `closed_at`             | timestamptz | yes  | —             |                                                                                                                                                                                                              |
+| `version`                              | int         | no   | `1`           |                                                                                                                                                                                                              |
+| `created_at`, `updated_at`             | timestamptz | no   | `now()`       |                                                                                                                                                                                                              |
 
 **Keys and constraints.**
 
@@ -2005,13 +2010,13 @@ CONSTRAINT return_requests_notes_check CHECK (char_length(coalesce(customer_note
 
 **Indexes.**
 
-| Index | Definition | Query served |
-|---|---|---|
-| `return_requests_number_key` | `(number)` | Lookup by `{returnNumber}` (seller with `shop_id = :resolved_shop`, admin) |
-| `return_requests_open_shop_order_idx` | `(shop_order_id) WHERE status IN ('requested','approved','in_transit','received')` | "Open return on this shop order" in auto-complete and payout eligibility ([05 §7.6](05-order-payment-and-inventory-lifecycles.md#76-payouts-and-netting-r11)) |
-| `return_requests_seller_list_idx` | `(shop_id, created_at DESC, id DESC)` | `listShopReturns` |
-| `return_requests_admin_queue_idx` | `(status, created_at) WHERE status IN ('requested','approved','in_transit','received')` | Admin returns queue by status |
-| `return_requests_refund_due_idx` | `(refund_due_at) WHERE status IN ('approved','in_transit','received')` | Refund SLA monitor before the refund exists: `WHERE refund_due_at < now() + interval '2 days'` |
+| Index                                 | Definition                                                                              | Query served                                                                                                                                                  |
+| ------------------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `return_requests_number_key`          | `(number)`                                                                              | Lookup by `{returnNumber}` (seller with `shop_id = :resolved_shop`, admin)                                                                                    |
+| `return_requests_open_shop_order_idx` | `(shop_order_id) WHERE status IN ('requested','approved','in_transit','received')`      | "Open return on this shop order" in auto-complete and payout eligibility ([05 §7.6](05-order-payment-and-inventory-lifecycles.md#76-payouts-and-netting-r11)) |
+| `return_requests_seller_list_idx`     | `(shop_id, created_at DESC, id DESC)`                                                   | `listShopReturns`                                                                                                                                             |
+| `return_requests_admin_queue_idx`     | `(status, created_at) WHERE status IN ('requested','approved','in_transit','received')` | Admin returns queue by status                                                                                                                                 |
+| `return_requests_refund_due_idx`      | `(refund_due_at) WHERE status IN ('approved','in_transit','received')`                  | Refund SLA monitor before the refund exists: `WHERE refund_due_at < now() + interval '2 days'`                                                                |
 
 **Lifecycle and retention.** Status changes by compare-and-set. Never deleted. The Directive s14 lists consumer complaints among the records to keep at least five years; returns are kept with the order record, at least 6 years ([04 §19.3](04-domain-model-and-data-dictionary.md), [Verify-external VX-08]).
 
@@ -2021,15 +2026,15 @@ CONSTRAINT return_requests_notes_check CHECK (char_length(coalesce(customer_note
 
 The lines and units of a return, with the shop's condition notes and support's restock decision.
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `return_request_id` | uuid | no | App | |
-| `order_item_id` | uuid | no | App | |
-| `shop_order_id` | uuid | no | App | Carried for the two composite FKs |
-| `quantity` | int | no | App | |
-| `condition_note` | text | yes | — | Written at receipt |
-| `restock` | boolean | yes | — | Decided at close: `true` writes a `return_restock` movement ([05 §5.7](05-order-payment-and-inventory-lifecycles.md#57-return-restock)) |
-| `created_at`, `updated_at` | timestamptz | no | `now()` | |
+| Column                     | Type        | Null | Default | Notes                                                                                                                                   |
+| -------------------------- | ----------- | ---- | ------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `return_request_id`        | uuid        | no   | App     |                                                                                                                                         |
+| `order_item_id`            | uuid        | no   | App     |                                                                                                                                         |
+| `shop_order_id`            | uuid        | no   | App     | Carried for the two composite FKs                                                                                                       |
+| `quantity`                 | int         | no   | App     |                                                                                                                                         |
+| `condition_note`           | text        | yes  | —       | Written at receipt                                                                                                                      |
+| `restock`                  | boolean     | yes  | —       | Decided at close: `true` writes a `return_restock` movement ([05 §5.7](05-order-payment-and-inventory-lifecycles.md#57-return-restock)) |
+| `created_at`, `updated_at` | timestamptz | no   | `now()` |                                                                                                                                         |
 
 **Keys and constraints.**
 
@@ -2058,12 +2063,12 @@ The `payments` module owns these tables. All of them are created in the R0 basel
 
 **Provider identifiers.** Each provider exposes different handles. They map to columns as follows:
 
-| Column | Khalti KPG-2 | eSewa ePay v2 |
-|---|---|---|
-| Our attempt key sent to the provider | `purchase_order_id = payments.id` | `transaction_uuid = payments.id` |
-| `provider_payment_id` | `pidx` from the initiate response | null (eSewa's session key is our `transaction_uuid`) |
-| `provider_reference` | `transaction_id` from lookup; the refund API needs it | `ref_id` from the status check (null while pending) |
-| `expires_at` | `expires_at` from the initiate response | form render + `reservation_ttl_minutes` [Assumption] |
+| Column                               | Khalti KPG-2                                          | eSewa ePay v2                                        |
+| ------------------------------------ | ----------------------------------------------------- | ---------------------------------------------------- |
+| Our attempt key sent to the provider | `purchase_order_id = payments.id`                     | `transaction_uuid = payments.id`                     |
+| `provider_payment_id`                | `pidx` from the initiate response                     | null (eSewa's session key is our `transaction_uuid`) |
+| `provider_reference`                 | `transaction_id` from lookup; the refund API needs it | `ref_id` from the status check (null while pending)  |
+| `expires_at`                         | `expires_at` from the initiate response               | form render + `reservation_ttl_minutes` [Assumption] |
 
 Sources: Khalti initiate, lookup and refund [Verified-doc <https://docs.khalti.com/khalti-epayment/>, <https://docs.khalti.com/api/refund/>]; eSewa form and status check [Verified-doc <https://developer.esewa.com.np/pages/Epay>].
 
@@ -2073,26 +2078,26 @@ Sources: Khalti initiate, lookup and refund [Verified-doc <https://docs.khalti.c
 
 One gateway attempt for a whole order, or one COD collection per shop order ([05 §2.3](05-order-payment-and-inventory-lifecycles.md#23-what-it-costs)).
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `id` | uuid | no | `uuidv7()` | Also the provider attempt key |
-| `order_id` | uuid | no | App | |
-| `shop_order_id` | uuid | yes | — | Set for COD (one payment per shop order), null for gateway |
-| `method` | text | no | App | `cod`, `esewa`, `khalti` |
-| `status` | text | no | App | COD: `awaiting_collection`, `collected`, `not_collected`, `cancelled`. Gateway: `initiated`, `pending`, `captured`, `failed`, `expired`, `cancelled`, `needs_review` |
-| `amount_minor` | bigint | no | App | To collect or capture. A COD amount only decreases, and only while `awaiting_collection` (item-level rejection) |
-| `currency` | char(3) | no | `'NPR'` | |
-| `captured_minor` | bigint | no | `0` | Equals `amount_minor` once `captured` or `collected` |
-| `refunded_minor` | bigint | no | `0` | Increased when a refund succeeds |
-| `captured_at` | timestamptz | yes | — | Capture or cash collection time |
-| `provider_payment_id`, `provider_reference` | text | yes | — | Table above |
-| `attempt_no` | smallint | no | `1` | Gateway retries create a new row with `attempt_no + 1` |
-| `expires_at` | timestamptz | yes | — | Gateway session expiry |
-| `verification_attempts` | int | no | `0` | Lookups made |
-| `next_verification_at` | timestamptz | yes | — | Schedule and lease for `payments.verify` ([05 §9.4](05-order-payment-and-inventory-lifecycles.md#94-reconciliation-schedule)) |
-| `last_provider_status` | text | yes | — | Raw status string from the last lookup, for the review queue |
-| `version` | int | no | `1` | |
-| `created_at`, `updated_at` | timestamptz | no | `now()` | |
+| Column                                      | Type        | Null | Default    | Notes                                                                                                                                                                |
+| ------------------------------------------- | ----------- | ---- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                                        | uuid        | no   | `uuidv7()` | Also the provider attempt key                                                                                                                                        |
+| `order_id`                                  | uuid        | no   | App        |                                                                                                                                                                      |
+| `shop_order_id`                             | uuid        | yes  | —          | Set for COD (one payment per shop order), null for gateway                                                                                                           |
+| `method`                                    | text        | no   | App        | `cod`, `esewa`, `khalti`                                                                                                                                             |
+| `status`                                    | text        | no   | App        | COD: `awaiting_collection`, `collected`, `not_collected`, `cancelled`. Gateway: `initiated`, `pending`, `captured`, `failed`, `expired`, `cancelled`, `needs_review` |
+| `amount_minor`                              | bigint      | no   | App        | To collect or capture. A COD amount only decreases, and only while `awaiting_collection` (item-level rejection)                                                      |
+| `currency`                                  | char(3)     | no   | `'NPR'`    |                                                                                                                                                                      |
+| `captured_minor`                            | bigint      | no   | `0`        | Equals `amount_minor` once `captured` or `collected`                                                                                                                 |
+| `refunded_minor`                            | bigint      | no   | `0`        | Increased when a refund succeeds                                                                                                                                     |
+| `captured_at`                               | timestamptz | yes  | —          | Capture or cash collection time                                                                                                                                      |
+| `provider_payment_id`, `provider_reference` | text        | yes  | —          | Table above                                                                                                                                                          |
+| `attempt_no`                                | smallint    | no   | `1`        | Gateway retries create a new row with `attempt_no + 1`                                                                                                               |
+| `expires_at`                                | timestamptz | yes  | —          | Gateway session expiry                                                                                                                                               |
+| `verification_attempts`                     | int         | no   | `0`        | Lookups made                                                                                                                                                         |
+| `next_verification_at`                      | timestamptz | yes  | —          | Schedule and lease for `payments.verify` ([05 §9.4](05-order-payment-and-inventory-lifecycles.md#94-reconciliation-schedule))                                        |
+| `last_provider_status`                      | text        | yes  | —          | Raw status string from the last lookup, for the review queue                                                                                                         |
+| `version`                                   | int         | no   | `1`        |                                                                                                                                                                      |
+| `created_at`, `updated_at`                  | timestamptz | no   | `now()`    |                                                                                                                                                                      |
 
 **Keys and constraints.**
 
@@ -2146,13 +2151,13 @@ CREATE TRIGGER payments_amount_guard BEFORE UPDATE OF amount_minor ON payments
 
 **Indexes.**
 
-| Index | Definition | Query served |
-|---|---|---|
-| `payments_order_idx` | `(order_id)` | Payments of an order: order pages, refund creation, capture |
-| `payments_verify_due_idx` | `(next_verification_at) WHERE method <> 'cod' AND status IN ('initiated','pending')` | Verify sweeper and the expiry job's lease: `WHERE method <> 'cod' AND status IN ('initiated','pending') AND next_verification_at <= now() … FOR UPDATE SKIP LOCKED` ([05 §5.4](05-order-payment-and-inventory-lifecycles.md#54-expiration-job)) |
-| `payments_needs_review_idx` | `(created_at) WHERE status = 'needs_review'` | Admin review queue sorted by age ([05 §9.5](05-order-payment-and-inventory-lifecycles.md#95-manual-review-queue-needs_review)) |
-| `payments_provider_payment_key` | `(method, provider_payment_id)` | Return handler and webhook: find our attempt by `pidx` |
-| the three partial unique indexes | above | COD payment of a shop order; live attempt of an order |
+| Index                            | Definition                                                                           | Query served                                                                                                                                                                                                                                    |
+| -------------------------------- | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `payments_order_idx`             | `(order_id)`                                                                         | Payments of an order: order pages, refund creation, capture                                                                                                                                                                                     |
+| `payments_verify_due_idx`        | `(next_verification_at) WHERE method <> 'cod' AND status IN ('initiated','pending')` | Verify sweeper and the expiry job's lease: `WHERE method <> 'cod' AND status IN ('initiated','pending') AND next_verification_at <= now() … FOR UPDATE SKIP LOCKED` ([05 §5.4](05-order-payment-and-inventory-lifecycles.md#54-expiration-job)) |
+| `payments_needs_review_idx`      | `(created_at) WHERE status = 'needs_review'`                                         | Admin review queue sorted by age ([05 §9.5](05-order-payment-and-inventory-lifecycles.md#95-manual-review-queue-needs_review))                                                                                                                  |
+| `payments_provider_payment_key`  | `(method, provider_payment_id)`                                                      | Return handler and webhook: find our attempt by `pidx`                                                                                                                                                                                          |
+| the three partial unique indexes | above                                                                                | COD payment of a shop order; live attempt of an order                                                                                                                                                                                           |
 
 **Lifecycle and retention.** Status by compare-and-set. Never deleted. Financial record: at least 6 years ([04 §19.3](04-domain-model-and-data-dictionary.md), [Verify-external VX-08]).
 
@@ -2162,14 +2167,14 @@ CREATE TRIGGER payments_amount_guard BEFORE UPDATE OF amount_minor ON payments
 
 How much of a payment belongs to each shop order. A gateway payment has one allocation per shop order; a COD payment has exactly one ([05 §4.3](05-order-payment-and-inventory-lifecycles.md#43-step-by-step)). Refunds are capped per allocation.
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `payment_id`, `shop_order_id` | uuid | no | App | Composite primary key |
-| `order_id` | uuid | no | App | Carried for the composite FKs |
-| `amount_minor` | bigint | no | App | `shop_orders.total_minor` at placement; reduced with the COD payment on item rejection |
-| `captured_minor`, `refunded_minor` | bigint | no | `0` | Mirror the payment per shop order |
-| `currency` | char(3) | no | `'NPR'` | |
-| `created_at`, `updated_at` | timestamptz | no | `now()` | |
+| Column                             | Type        | Null | Default | Notes                                                                                  |
+| ---------------------------------- | ----------- | ---- | ------- | -------------------------------------------------------------------------------------- |
+| `payment_id`, `shop_order_id`      | uuid        | no   | App     | Composite primary key                                                                  |
+| `order_id`                         | uuid        | no   | App     | Carried for the composite FKs                                                          |
+| `amount_minor`                     | bigint      | no   | App     | `shop_orders.total_minor` at placement; reduced with the COD payment on item rejection |
+| `captured_minor`, `refunded_minor` | bigint      | no   | `0`     | Mirror the payment per shop order                                                      |
+| `currency`                         | char(3)     | no   | `'NPR'` |                                                                                        |
+| `created_at`, `updated_at`         | timestamptz | no   | `now()` |                                                                                        |
 
 **Keys and constraints.**
 
@@ -2196,22 +2201,22 @@ The two FKs share `order_id`, so a payment can only be allocated to shop orders 
 
 Every message exchanged with a provider about a payment or refund: redirects to our return URL, webhooks, lookups, initiations and refund calls. It deduplicates inbound messages and is the evidence trail for the review queue. No state changes on a message alone: a verification lookup always decides (ADR-0012).
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `id` | uuid | no | `uuidv7()` | |
-| `provider` | text | no | App | `esewa`, `khalti` |
-| `provider_event_key` | text | no | App | Deterministic key, below |
-| `kind` | text | no | App | `initiate`, `return`, `webhook`, `lookup`, `refund`, `refund_lookup` |
-| `payment_id` | uuid | yes | — | Null when a forged or unknown return cannot be matched |
-| `refund_id` | uuid | yes | — | |
-| `payload` | jsonb | no | App | Redacted: the payer mobile number that Khalti returns becomes its last four digits; no names |
-| `raw_body_sha256` | bytea | yes | — | SHA-256 of the raw body as received, proving what arrived without keeping it |
-| `signature_valid` | boolean | yes | — | Null when the message is unsigned (Khalti's return URL carries no signature [Verified-doc Khalti docs above]) |
-| `received_at` | timestamptz | no | `now()` | |
-| `processed_at` | timestamptz | yes | — | |
-| `processing_status` | text | no | `'pending'` | `pending`, `processed`, `ignored`, `failed` |
-| `error` | text | yes | — | At most 2,000 characters, redacted |
-| `request_id` | text | yes | — | |
+| Column               | Type        | Null | Default     | Notes                                                                                                         |
+| -------------------- | ----------- | ---- | ----------- | ------------------------------------------------------------------------------------------------------------- |
+| `id`                 | uuid        | no   | `uuidv7()`  |                                                                                                               |
+| `provider`           | text        | no   | App         | `esewa`, `khalti`                                                                                             |
+| `provider_event_key` | text        | no   | App         | Deterministic key, below                                                                                      |
+| `kind`               | text        | no   | App         | `initiate`, `return`, `webhook`, `lookup`, `refund`, `refund_lookup`                                          |
+| `payment_id`         | uuid        | yes  | —           | Null when a forged or unknown return cannot be matched                                                        |
+| `refund_id`          | uuid        | yes  | —           |                                                                                                               |
+| `payload`            | jsonb       | no   | App         | Redacted: the payer mobile number that Khalti returns becomes its last four digits; no names                  |
+| `raw_body_sha256`    | bytea       | yes  | —           | SHA-256 of the raw body as received, proving what arrived without keeping it                                  |
+| `signature_valid`    | boolean     | yes  | —           | Null when the message is unsigned (Khalti's return URL carries no signature [Verified-doc Khalti docs above]) |
+| `received_at`        | timestamptz | no   | `now()`     |                                                                                                               |
+| `processed_at`       | timestamptz | yes  | —           |                                                                                                               |
+| `processing_status`  | text        | no   | `'pending'` | `pending`, `processed`, `ignored`, `failed`                                                                   |
+| `error`              | text        | yes  | —           | At most 2,000 characters, redacted                                                                            |
+| `request_id`         | text        | yes  | —           |                                                                                                               |
 
 **Event keys.** Return: `return:<attempt key>:<provider status>`. Webhook: the provider's event id, else `webhook:<hex sha256 of body>`. Initiate: `initiate:<payment id>`. Lookup: `lookup:<payment id>:<provider status>`. Refund call: `refund:<refund id>:<attempt>`; refund lookup `refund_lookup:<refund id>:<provider status>`. Keying lookups by status collapses the thirty "still Initiated" answers of the first half hour into one row, so the table grows by about three rows per payment instead of forty; `payments.verification_attempts` keeps the count.
 
@@ -2239,12 +2244,12 @@ The handler inserts with `ON CONFLICT (provider, provider_event_key) DO NOTHING`
 
 **Indexes.**
 
-| Index | Definition | Query served |
-|---|---|---|
-| `provider_events_key` | `(provider, provider_event_key)` | Dedupe on insert |
+| Index                         | Definition                                                      | Query served                                     |
+| ----------------------------- | --------------------------------------------------------------- | ------------------------------------------------ |
+| `provider_events_key`         | `(provider, provider_event_key)`                                | Dedupe on insert                                 |
 | `provider_events_pending_idx` | `(received_at) WHERE processing_status IN ('pending','failed')` | Processing sweeper for events whose job was lost |
-| `provider_events_payment_idx` | `(payment_id, received_at) WHERE payment_id IS NOT NULL` | Review queue: lookup history of a payment |
-| `provider_events_refund_idx` | `(refund_id, received_at) WHERE refund_id IS NOT NULL` | Refund review history |
+| `provider_events_payment_idx` | `(payment_id, received_at) WHERE payment_id IS NOT NULL`        | Review queue: lookup history of a payment        |
+| `provider_events_refund_idx`  | `(refund_id, received_at) WHERE refund_id IS NOT NULL`          | Refund review history                            |
 
 **Lifecycle and retention.** `payload` never changes; only the processing columns do. Retained with the payment, at least 6 years ([04 §19.3](04-domain-model-and-data-dictionary.md)), because it is the evidence in a payment dispute.
 
@@ -2254,29 +2259,29 @@ The handler inserts with `ON CONFLICT (provider, provider_event_key) DO NOTHING`
 
 Money returned to a customer for one shop order, from one payment allocation. Methods per canon §17.1: `gateway_api` (Khalti refund API), `gateway_manual` (eSewa, which documents no refund API: an operator refunds in the merchant portal and records the reference), `manual_transfer` (COD and any fallback). Machine: [05 §6.7](05-order-payment-and-inventory-lifecycles.md#67-refund).
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `id` | uuid | no | `uuidv7()` | |
-| `order_id`, `shop_order_id`, `shop_id`, `payment_id` | uuid | no | App | `shop_id` is copied from the locked shop order |
-| `return_request_id` | uuid | yes | — | Set when the refund closes a return |
-| `amount_minor` | bigint | no | App | Σ `refund_items.amount_minor` + shipping part ([05 §6.7](05-order-payment-and-inventory-lifecycles.md#67-refund)) |
-| `currency` | char(3) | no | `'NPR'` | |
-| `method` | text | no | App | `gateway_api`, `gateway_manual`, `manual_transfer` |
-| `status` | text | no | `'requested'` | `requested`, `approved`, `processing`, `succeeded`, `failed`, `cancelled`, `needs_review` |
-| `reason_code` | text | no | App | `order_cancelled`, `items_rejected`, `undeliverable`, `return_accepted`, `late_capture`, `stock_unavailable_after_payment`, `goodwill`, `other` |
-| `note` | text | yes | — | At most 2,000 characters |
-| `due_at` | timestamptz | no | App | 7-day deadline (Directive 2082 s9(3) [Verify-external VX-02]): the return's `refund_due_at` for return refunds, otherwise `created_at + 7 days` (AC-FR-RET-007-1) |
-| `provider_refund_id` | text | yes | — | Provider's refund reference, where one is returned |
-| `provider_idempotency_key` | text | no | App | `refunds.id` as text; sent wherever the provider accepts it ([05 §9.3](05-order-payment-and-inventory-lifecycles.md#93-provider-idempotency-keys)) |
-| `attempts` | int | no | `0` | Provider calls or transfer attempts |
-| `created_by` | uuid | yes | — | Null for system refunds (rejection, cancellation, late capture) |
-| `approved_by` | uuid | yes | — | Null for auto-approved system refunds |
-| `is_single_operator_approval` | boolean | no | `false` | True when `single_operator_mode` allowed self-approval with TOTP re-entry (OD-14); the audit row is flagged too |
-| `recipient_details_enc` | text | yes | — | `manual_transfer` only: encrypted JSON `{account_name, bank_or_wallet, account_number}` ([04 §2.9](04-domain-model-and-data-dictionary.md)) |
-| `paid_reference` | text | yes | — | Bank or wallet transfer reference; for `gateway_manual` the provider's reference |
-| `approved_at`, `succeeded_at` | timestamptz | yes | — | |
-| `version` | int | no | `1` | |
-| `created_at`, `updated_at` | timestamptz | no | `now()` | |
+| Column                                               | Type        | Null | Default       | Notes                                                                                                                                                             |
+| ---------------------------------------------------- | ----------- | ---- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                                                 | uuid        | no   | `uuidv7()`    |                                                                                                                                                                   |
+| `order_id`, `shop_order_id`, `shop_id`, `payment_id` | uuid        | no   | App           | `shop_id` is copied from the locked shop order                                                                                                                    |
+| `return_request_id`                                  | uuid        | yes  | —             | Set when the refund closes a return                                                                                                                               |
+| `amount_minor`                                       | bigint      | no   | App           | Σ `refund_items.amount_minor` + shipping part ([05 §6.7](05-order-payment-and-inventory-lifecycles.md#67-refund))                                                 |
+| `currency`                                           | char(3)     | no   | `'NPR'`       |                                                                                                                                                                   |
+| `method`                                             | text        | no   | App           | `gateway_api`, `gateway_manual`, `manual_transfer`                                                                                                                |
+| `status`                                             | text        | no   | `'requested'` | `requested`, `approved`, `processing`, `succeeded`, `failed`, `cancelled`, `needs_review`                                                                         |
+| `reason_code`                                        | text        | no   | App           | `order_cancelled`, `items_rejected`, `undeliverable`, `return_accepted`, `late_capture`, `stock_unavailable_after_payment`, `goodwill`, `other`                   |
+| `note`                                               | text        | yes  | —             | At most 2,000 characters                                                                                                                                          |
+| `due_at`                                             | timestamptz | no   | App           | 7-day deadline (Directive 2082 s9(3) [Verify-external VX-02]): the return's `refund_due_at` for return refunds, otherwise `created_at + 7 days` (AC-FR-RET-007-1) |
+| `provider_refund_id`                                 | text        | yes  | —             | Provider's refund reference, where one is returned                                                                                                                |
+| `provider_idempotency_key`                           | text        | no   | App           | `refunds.id` as text; sent wherever the provider accepts it ([05 §9.3](05-order-payment-and-inventory-lifecycles.md#93-provider-idempotency-keys))                |
+| `attempts`                                           | int         | no   | `0`           | Provider calls or transfer attempts                                                                                                                               |
+| `created_by`                                         | uuid        | yes  | —             | Null for system refunds (rejection, cancellation, late capture)                                                                                                   |
+| `approved_by`                                        | uuid        | yes  | —             | Null for auto-approved system refunds                                                                                                                             |
+| `is_single_operator_approval`                        | boolean     | no   | `false`       | True when `single_operator_mode` allowed self-approval with TOTP re-entry (OD-14); the audit row is flagged too                                                   |
+| `recipient_details_enc`                              | text        | yes  | —             | `manual_transfer` only: encrypted JSON `{account_name, bank_or_wallet, account_number}` ([04 §2.9](04-domain-model-and-data-dictionary.md))                       |
+| `paid_reference`                                     | text        | yes  | —             | Bank or wallet transfer reference; for `gateway_manual` the provider's reference                                                                                  |
+| `approved_at`, `succeeded_at`                        | timestamptz | yes  | —             |                                                                                                                                                                   |
+| `version`                                            | int         | no   | `1`           |                                                                                                                                                                   |
+| `created_at`, `updated_at`                           | timestamptz | no   | `now()`       |                                                                                                                                                                   |
 
 **Keys and constraints.**
 
@@ -2323,12 +2328,12 @@ CONSTRAINT refunds_attempts_check CHECK (attempts >= 0)
 
 **Indexes.**
 
-| Index | Definition | Query served |
-|---|---|---|
-| `refunds_shop_order_idx` | `(shop_order_id)` | Refundable amount; payout "held" check; order pages |
-| `refunds_queue_idx` | `(due_at) WHERE status IN ('requested','approved','processing','failed','needs_review')` | Admin refunds queue sorted by due date (AC-FR-RET-007-2) and the SLA monitor: `WHERE status IN (…) AND due_at < now() + interval '2 days'` |
-| `refunds_return_idx` | `(return_request_id) WHERE return_request_id IS NOT NULL` | Refund of a return (return close, SLA reporting) |
-| `refunds_provider_refund_key` | UNIQUE `(method, provider_refund_id) WHERE provider_refund_id IS NOT NULL` | Matching a provider refund status to our row; one provider refund cannot be recorded twice |
+| Index                         | Definition                                                                               | Query served                                                                                                                               |
+| ----------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `refunds_shop_order_idx`      | `(shop_order_id)`                                                                        | Refundable amount; payout "held" check; order pages                                                                                        |
+| `refunds_queue_idx`           | `(due_at) WHERE status IN ('requested','approved','processing','failed','needs_review')` | Admin refunds queue sorted by due date (AC-FR-RET-007-2) and the SLA monitor: `WHERE status IN (…) AND due_at < now() + interval '2 days'` |
+| `refunds_return_idx`          | `(return_request_id) WHERE return_request_id IS NOT NULL`                                | Refund of a return (return close, SLA reporting)                                                                                           |
+| `refunds_provider_refund_key` | UNIQUE `(method, provider_refund_id) WHERE provider_refund_id IS NOT NULL`               | Matching a provider refund status to our row; one provider refund cannot be recorded twice                                                 |
 
 **Lifecycle and retention.** Status by compare-and-set. Never deleted; a mistaken refund is `cancelled` before it is paid. Financial record, at least 6 years ([04 §19.3](04-domain-model-and-data-dictionary.md)). `recipient_details_enc` is needed only until the transfer succeeds; [04 §19.2](04-domain-model-and-data-dictionary.md) and [04 §19.3](04-domain-model-and-data-dictionary.md) decide when it is overwritten.
 
@@ -2338,14 +2343,14 @@ CONSTRAINT refunds_attempts_check CHECK (attempts >= 0)
 
 The units and amounts a refund covers per order line. The amount per line is the cumulative `A(k + r) − A(k)` of [05 §3.2](05-order-payment-and-inventory-lifecycles.md#32-amounts-as-placed-versus-effective).
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `refund_id`, `order_item_id` | uuid | no | App | Composite primary key |
-| `shop_order_id` | uuid | no | App | Carried for the two composite FKs |
-| `quantity` | int | no | App | |
-| `amount_minor` | bigint | no | App | |
-| `currency` | char(3) | no | `'NPR'` | |
-| `created_at` | timestamptz | no | `now()` | |
+| Column                       | Type        | Null | Default | Notes                             |
+| ---------------------------- | ----------- | ---- | ------- | --------------------------------- |
+| `refund_id`, `order_item_id` | uuid        | no   | App     | Composite primary key             |
+| `shop_order_id`              | uuid        | no   | App     | Carried for the two composite FKs |
+| `quantity`                   | int         | no   | App     |                                   |
+| `amount_minor`               | bigint      | no   | App     |                                   |
+| `currency`                   | char(3)     | no   | `'NPR'` |                                   |
+| `created_at`                 | timestamptz | no   | `now()` |                                   |
 
 **Keys and constraints.**
 
@@ -2376,20 +2381,20 @@ The `ledger` module owns the per-shop sub-ledger of what DripNepal and each vend
 
 **Module** `ledger` · **Release** R1 · **Shop scope** `shop_id`, composite FKs to every referenced row · **Lifecycle** Record, append-only ([04 §2.12](04-domain-model-and-data-dictionary.md)) · **Sensitivity** Financial
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `id` | uuid | no | `uuidv7()` | |
-| `shop_id` | uuid | no | App | From the locked shop order, payout or remittance row, never from input |
-| `entry_type` | text | no | App | `sale`, `shipping_income`, `commission`, `commission_reversal`, `cod_cash_held`, `refund`, `vendor_remittance`, `payout`, `payout_reversal`, `tax_withholding`, `adjustment` |
-| `amount_minor` | bigint | no | App | Signed: positive means the platform owes the vendor |
-| `currency` | char(3) | no | `'NPR'` | |
-| `shop_order_id`, `order_item_id`, `refund_id`, `payout_id`, `remittance_id` | uuid | yes | — | What the entry is about; which one is required depends on the type |
-| `reverses_entry_id` | uuid | yes | — | The entry this one reverses |
-| `available_at` | timestamptz | no | App | When the entry may be paid out ([05 §7.2](05-order-payment-and-inventory-lifecycles.md#72-entry-types-and-posting-rules) group rule) |
-| `description` | text | no | App | Statement text; for `adjustment`, the reason (at least 20 characters, AC-FR-LED-005-1) |
-| `created_by` | uuid | yes | — | Staff member for adjustments and remittances; null for system postings |
-| `dedupe_key` | text | no | App | Deterministic key, for example `delivery:<shop_order_id>:sale` |
-| `created_at` | timestamptz | no | `now()` | |
+| Column                                                                      | Type        | Null | Default    | Notes                                                                                                                                                                        |
+| --------------------------------------------------------------------------- | ----------- | ---- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                                                                        | uuid        | no   | `uuidv7()` |                                                                                                                                                                              |
+| `shop_id`                                                                   | uuid        | no   | App        | From the locked shop order, payout or remittance row, never from input                                                                                                       |
+| `entry_type`                                                                | text        | no   | App        | `sale`, `shipping_income`, `commission`, `commission_reversal`, `cod_cash_held`, `refund`, `vendor_remittance`, `payout`, `payout_reversal`, `tax_withholding`, `adjustment` |
+| `amount_minor`                                                              | bigint      | no   | App        | Signed: positive means the platform owes the vendor                                                                                                                          |
+| `currency`                                                                  | char(3)     | no   | `'NPR'`    |                                                                                                                                                                              |
+| `shop_order_id`, `order_item_id`, `refund_id`, `payout_id`, `remittance_id` | uuid        | yes  | —          | What the entry is about; which one is required depends on the type                                                                                                           |
+| `reverses_entry_id`                                                         | uuid        | yes  | —          | The entry this one reverses                                                                                                                                                  |
+| `available_at`                                                              | timestamptz | no   | App        | When the entry may be paid out ([05 §7.2](05-order-payment-and-inventory-lifecycles.md#72-entry-types-and-posting-rules) group rule)                                         |
+| `description`                                                               | text        | no   | App        | Statement text; for `adjustment`, the reason (at least 20 characters, AC-FR-LED-005-1)                                                                                       |
+| `created_by`                                                                | uuid        | yes  | —          | Staff member for adjustments and remittances; null for system postings                                                                                                       |
+| `dedupe_key`                                                                | text        | no   | App        | Deterministic key, for example `delivery:<shop_order_id>:sale`                                                                                                               |
+| `created_at`                                                                | timestamptz | no   | `now()`    |                                                                                                                                                                              |
 
 **Keys and constraints.**
 
@@ -2451,12 +2456,12 @@ CONSTRAINT ledger_entries_dedupe_key_check CHECK (dedupe_key ~
 
 **Indexes.**
 
-| Index | Definition | Query served |
-|---|---|---|
-| `ledger_entries_dedupe_key_key` | `(dedupe_key)` | Exactly-once insert; "does a delivery posting exist": `WHERE dedupe_key = 'delivery:' \|\| :so \|\| ':sale'` |
+| Index                               | Definition                                                                             | Query served                                                                                                                                                                                                                                                            |
+| ----------------------------------- | -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ledger_entries_dedupe_key_key`     | `(dedupe_key)`                                                                         | Exactly-once insert; "does a delivery posting exist": `WHERE dedupe_key = 'delivery:' \|\| :so \|\| ':sale'`                                                                                                                                                            |
 | `ledger_entries_shop_statement_idx` | `(shop_id, created_at DESC, id DESC) INCLUDE (amount_minor, available_at, entry_type)` | `listShopLedgerEntries` and statements by date range; `getShopBalance` sums (`SUM(amount_minor)`, `FILTER (WHERE available_at <= now())`) as an index-only scan ([05 §7.10](05-order-payment-and-inventory-lifecycles.md#710-balances-availability-and-payable-amount)) |
-| `ledger_entries_shop_available_idx` | `(shop_id, available_at)` | Payout eligibility: `WHERE shop_id = :s AND entry_type <> 'payout' AND available_at <= now() AND NOT EXISTS (payout_entries …)` ([05 §7.6](05-order-payment-and-inventory-lifecycles.md#76-payouts-and-netting-r11)) |
-| `ledger_entries_shop_order_idx` | `(shop_order_id) WHERE shop_order_id IS NOT NULL` | Integrity check "one delivery group per delivered shop order"; entries of an order on the admin page |
+| `ledger_entries_shop_available_idx` | `(shop_id, available_at)`                                                              | Payout eligibility: `WHERE shop_id = :s AND entry_type <> 'payout' AND available_at <= now() AND NOT EXISTS (payout_entries …)` ([05 §7.6](05-order-payment-and-inventory-lifecycles.md#76-payouts-and-netting-r11))                                                    |
+| `ledger_entries_shop_order_idx`     | `(shop_order_id) WHERE shop_order_id IS NOT NULL`                                      | Integrity check "one delivery group per delivered shop order"; entries of an order on the admin page                                                                                                                                                                    |
 
 **Lifecycle and retention.** Insert-only. A shop's balance is the sum of all its entries, so deleting old entries would change the balance. Entries are therefore kept for the life of the shop and purged, if at all, only for a closed shop with a zero balance, at least 6 years after the end of the fiscal year of its last entry ([04 §19.3](04-domain-model-and-data-dictionary.md), [Verify-external VX-08]).
 
@@ -2466,23 +2471,23 @@ CONSTRAINT ledger_entries_dedupe_key_check CHECK (dedupe_key ~
 
 A manual bank or wallet transfer from DripNepal to a vendor, covering a set of settled entries (FR-LED-004). Machine: [05 §6.8](05-order-payment-and-inventory-lifecycles.md#68-payout-and-settlement-r11). Gateway collection and payouts are blocked on [Open OD-02] and [Verify-external VX-01]; releases also wait for OD-27.
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `id` | uuid | no | `uuidv7()` | |
-| `shop_id` | uuid | no | App | |
-| `payout_account_id` | uuid | no | App | The verified, active payout account at creation (§6.7). Kept because the vendor may replace the account later |
-| `amount_minor` | bigint | no | App | Σ of the linked entries (§13.3) |
-| `currency` | char(3) | no | `'NPR'` | |
-| `status` | text | no | `'draft'` | `draft`, `approved`, `paid`, `failed`, `cancelled` |
-| `period_start`, `period_end` | timestamptz | no | App | Half-open statement period ([04 §2.2](04-domain-model-and-data-dictionary.md)): previous payout's `period_end` (or the shop's first entry) to creation time |
-| `bank_reference` | text | yes | — | Required for `paid` |
-| `failure_reason` | text | yes | — | Required for `failed` |
-| `created_by` | uuid | no | App | Finance officer |
-| `approved_by` | uuid | yes | — | |
-| `is_single_operator_approval` | boolean | no | `false` | As `refunds` |
-| `approved_at`, `paid_at`, `failed_at`, `cancelled_at` | timestamptz | yes | — | |
-| `version` | int | no | `1` | |
-| `created_at`, `updated_at` | timestamptz | no | `now()` | |
+| Column                                                | Type        | Null | Default    | Notes                                                                                                                                                       |
+| ----------------------------------------------------- | ----------- | ---- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                                                  | uuid        | no   | `uuidv7()` |                                                                                                                                                             |
+| `shop_id`                                             | uuid        | no   | App        |                                                                                                                                                             |
+| `payout_account_id`                                   | uuid        | no   | App        | The verified, active payout account at creation (§6.7). Kept because the vendor may replace the account later                                               |
+| `amount_minor`                                        | bigint      | no   | App        | Σ of the linked entries (§13.3)                                                                                                                             |
+| `currency`                                            | char(3)     | no   | `'NPR'`    |                                                                                                                                                             |
+| `status`                                              | text        | no   | `'draft'`  | `draft`, `approved`, `paid`, `failed`, `cancelled`                                                                                                          |
+| `period_start`, `period_end`                          | timestamptz | no   | App        | Half-open statement period ([04 §2.2](04-domain-model-and-data-dictionary.md)): previous payout's `period_end` (or the shop's first entry) to creation time |
+| `bank_reference`                                      | text        | yes  | —          | Required for `paid`                                                                                                                                         |
+| `failure_reason`                                      | text        | yes  | —          | Required for `failed`                                                                                                                                       |
+| `created_by`                                          | uuid        | no   | App        | Finance officer                                                                                                                                             |
+| `approved_by`                                         | uuid        | yes  | —          |                                                                                                                                                             |
+| `is_single_operator_approval`                         | boolean     | no   | `false`    | As `refunds`                                                                                                                                                |
+| `approved_at`, `paid_at`, `failed_at`, `cancelled_at` | timestamptz | yes  | —          |                                                                                                                                                             |
+| `version`                                             | int         | no   | `1`        |                                                                                                                                                             |
+| `created_at`, `updated_at`                            | timestamptz | no   | `now()`    |                                                                                                                                                             |
 
 **Keys and constraints.**
 
@@ -2517,11 +2522,11 @@ CREATE UNIQUE INDEX payouts_one_open_per_shop_key ON payouts (shop_id) WHERE sta
 
 **Indexes.**
 
-| Index | Definition | Query served |
-|---|---|---|
-| `payouts_shop_idx` | `(shop_id, created_at DESC, id DESC)` | `listShopPayouts` |
-| `payouts_admin_status_idx` | `(status, created_at DESC, id DESC)` | `listPayouts` filtered by status |
-| `payouts_one_open_per_shop_key` | above | "Is a payout already in flight for this shop" before `createPayout` |
+| Index                           | Definition                            | Query served                                                        |
+| ------------------------------- | ------------------------------------- | ------------------------------------------------------------------- |
+| `payouts_shop_idx`              | `(shop_id, created_at DESC, id DESC)` | `listShopPayouts`                                                   |
+| `payouts_admin_status_idx`      | `(status, created_at DESC, id DESC)`  | `listPayouts` filtered by status                                    |
+| `payouts_one_open_per_shop_key` | above                                 | "Is a payout already in flight for this shop" before `createPayout` |
 
 **Lifecycle and retention.** Status by compare-and-set. Never deleted. Financial record, at least 6 years ([04 §19.3](04-domain-model-and-data-dictionary.md)).
 
@@ -2531,11 +2536,11 @@ CREATE UNIQUE INDEX payouts_one_open_per_shop_key ON payouts (shop_id) WHERE sta
 
 Which ledger entries a payout settles. `UNIQUE (ledger_entry_id)` makes it impossible to pay the same entry twice.
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `payout_id`, `ledger_entry_id` | uuid | no | App | Composite primary key |
-| `shop_id` | uuid | no | App | Carried for the composite FKs |
-| `created_at` | timestamptz | no | `now()` | |
+| Column                         | Type        | Null | Default | Notes                         |
+| ------------------------------ | ----------- | ---- | ------- | ----------------------------- |
+| `payout_id`, `ledger_entry_id` | uuid        | no   | App     | Composite primary key         |
+| `shop_id`                      | uuid        | no   | App     | Carried for the composite FKs |
+| `created_at`                   | timestamptz | no   | `now()` |                               |
 
 **Keys and constraints.**
 
@@ -2583,18 +2588,18 @@ The only delete in the money tables is cancelling a draft payout, which removes 
 
 Money a vendor pays DripNepal, mostly COD commission (FR-LED-004 R1 part, [05 §7.5](05-order-payment-and-inventory-lifecycles.md#75-vendor-remittance-r1)). Each row posts one `vendor_remittance` ledger entry in the same transaction. Terms with vendors are [Open OD-05].
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `id` | uuid | no | `uuidv7()` | |
-| `shop_id` | uuid | no | App | |
-| `amount_minor` | bigint | no | App | At most what the shop owes at recording time |
-| `currency` | char(3) | no | `'NPR'` | |
-| `method` | text | no | App | `bank_transfer`, `wallet`, `cash`, `other` |
-| `reference` | text | no | App | Bank or wallet reference, or receipt number for cash |
-| `received_at` | timestamptz | no | App | When the money arrived, as entered by finance |
-| `recorded_by` | uuid | no | App | Finance officer |
-| `note` | text | yes | — | At most 500 characters |
-| `created_at` | timestamptz | no | `now()` | |
+| Column         | Type        | Null | Default    | Notes                                                |
+| -------------- | ----------- | ---- | ---------- | ---------------------------------------------------- |
+| `id`           | uuid        | no   | `uuidv7()` |                                                      |
+| `shop_id`      | uuid        | no   | App        |                                                      |
+| `amount_minor` | bigint      | no   | App        | At most what the shop owes at recording time         |
+| `currency`     | char(3)     | no   | `'NPR'`    |                                                      |
+| `method`       | text        | no   | App        | `bank_transfer`, `wallet`, `cash`, `other`           |
+| `reference`    | text        | no   | App        | Bank or wallet reference, or receipt number for cash |
+| `received_at`  | timestamptz | no   | App        | When the money arrived, as entered by finance        |
+| `recorded_by`  | uuid        | no   | App        | Finance officer                                      |
+| `note`         | text        | yes  | —          | At most 500 characters                               |
+| `created_at`   | timestamptz | no   | `now()`    |                                                      |
 
 **Keys and constraints.**
 
@@ -2628,22 +2633,22 @@ CONSTRAINT vendor_remittances_note_check CHECK (note IS NULL OR char_length(note
 
 The grievance and support register required by E-Commerce Act 2081 s33: a complaint is registered and acknowledged at once, decided within 15 days and answered in writing, through an online mechanism (FR-ADM-009) [Verified-doc <https://giwmscdnone.gov.np/media/files/E-Commerce%20Act%2C%202081_yr7k9o5.pdf>; obligations Verify-external VX-02]. Cases are also opened automatically by the system, for example after a second failed delivery or a disputed COD collection ([05 §6.3, §6.5](05-order-payment-and-inventory-lifecycles.md#63-shipment-fulfillment)).
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `id` | uuid | no | `uuidv7()` | |
-| `number` | text | no | App | `SC-` + 7 Crockford base32, shown to the customer at once (AC-FR-ADM-009-1) |
-| `opened_by_user_id` | uuid | yes | — | Customer, or staff member recording a phone or email complaint; null when the system opened it |
-| `customer_user_id` | uuid | yes | — | The customer the case concerns; null only for cases not about a customer (for example a vendor dispute) |
-| `order_id`, `shop_order_id`, `shop_id` | uuid | yes | — | What the case is about |
-| `category` | text | no | App | `order_issue`, `return_request`, `refund`, `delivery`, `product_complaint`, `account`, `other` |
-| `status` | text | no | `'open'` | `open`, `awaiting_customer`, `awaiting_shop`, `resolved`, `closed` |
-| `subject` | text | no | App | 3–150 characters, for lists |
-| `due_at` | timestamptz | no | `now() + interval '15 days'` | Same transaction timestamp as `created_at`, so it is exactly 15 days (s33) |
-| `resolution_summary` | text | yes | — | Required to resolve; the customer sees it. If unresolved, it gives the reasons and the DoCSCP escalation route (AC-FR-ADM-009-3) |
-| `assigned_to_user_id` | uuid | yes | — | Support agent |
-| `resolved_at`, `closed_at` | timestamptz | yes | — | |
-| `version` | int | no | `1` | |
-| `created_at`, `updated_at` | timestamptz | no | `now()` | |
+| Column                                 | Type        | Null | Default                      | Notes                                                                                                                            |
+| -------------------------------------- | ----------- | ---- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                                   | uuid        | no   | `uuidv7()`                   |                                                                                                                                  |
+| `number`                               | text        | no   | App                          | `SC-` + 7 Crockford base32, shown to the customer at once (AC-FR-ADM-009-1)                                                      |
+| `opened_by_user_id`                    | uuid        | yes  | —                            | Customer, or staff member recording a phone or email complaint; null when the system opened it                                   |
+| `customer_user_id`                     | uuid        | yes  | —                            | The customer the case concerns; null only for cases not about a customer (for example a vendor dispute)                          |
+| `order_id`, `shop_order_id`, `shop_id` | uuid        | yes  | —                            | What the case is about                                                                                                           |
+| `category`                             | text        | no   | App                          | `order_issue`, `return_request`, `refund`, `delivery`, `product_complaint`, `account`, `other`                                   |
+| `status`                               | text        | no   | `'open'`                     | `open`, `awaiting_customer`, `awaiting_shop`, `resolved`, `closed`                                                               |
+| `subject`                              | text        | no   | App                          | 3–150 characters, for lists                                                                                                      |
+| `due_at`                               | timestamptz | no   | `now() + interval '15 days'` | Same transaction timestamp as `created_at`, so it is exactly 15 days (s33)                                                       |
+| `resolution_summary`                   | text        | yes  | —                            | Required to resolve; the customer sees it. If unresolved, it gives the reasons and the DoCSCP escalation route (AC-FR-ADM-009-3) |
+| `assigned_to_user_id`                  | uuid        | yes  | —                            | Support agent                                                                                                                    |
+| `resolved_at`, `closed_at`             | timestamptz | yes  | —                            |                                                                                                                                  |
+| `version`                              | int         | no   | `1`                          |                                                                                                                                  |
+| `created_at`, `updated_at`             | timestamptz | no   | `now()`                      |                                                                                                                                  |
 
 **Keys and constraints.**
 
@@ -2680,12 +2685,12 @@ CONSTRAINT support_cases_text_check CHECK (char_length(subject) BETWEEN 3 AND 15
 
 **Indexes.**
 
-| Index | Definition | Query served |
-|---|---|---|
-| `support_cases_number_key` | `(number)` | `getMySupportCase` (with `customer_user_id = :u`), `adminGetSupportCase` |
-| `support_cases_customer_idx` | `(customer_user_id, created_at DESC, id DESC) WHERE customer_user_id IS NOT NULL` | `listMySupportCases` |
-| `support_cases_shop_idx` | `(shop_id, created_at DESC, id DESC) WHERE shop_id IS NOT NULL` | `listShopSupportCases` |
-| `support_cases_open_due_idx` | `(due_at) WHERE status IN ('open','awaiting_customer','awaiting_shop')` | Admin register sorted by due date; SLA job warning at `due_at − 3 days` and alerting when overdue (AC-FR-ADM-009-2) |
+| Index                               | Definition                                                                                                   | Query served                                                                                                                                                               |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `support_cases_number_key`          | `(number)`                                                                                                   | `getMySupportCase` (with `customer_user_id = :u`), `adminGetSupportCase`                                                                                                   |
+| `support_cases_customer_idx`        | `(customer_user_id, created_at DESC, id DESC) WHERE customer_user_id IS NOT NULL`                            | `listMySupportCases`                                                                                                                                                       |
+| `support_cases_shop_idx`            | `(shop_id, created_at DESC, id DESC) WHERE shop_id IS NOT NULL`                                              | `listShopSupportCases`                                                                                                                                                     |
+| `support_cases_open_due_idx`        | `(due_at) WHERE status IN ('open','awaiting_customer','awaiting_shop')`                                      | Admin register sorted by due date; SLA job warning at `due_at − 3 days` and alerting when overdue (AC-FR-ADM-009-2)                                                        |
 | `support_cases_open_shop_order_idx` | `(shop_order_id) WHERE shop_order_id IS NOT NULL AND status IN ('open','awaiting_customer','awaiting_shop')` | Payout "held" check for an open `order_issue` case ([05 §7.6](05-order-payment-and-inventory-lifecycles.md#76-payouts-and-netting-r11)); case list on the admin order page |
 
 **Lifecycle and retention.** Status by compare-and-set. Never deleted. E-Commerce Directive 2082 s14 requires consumer complaints and their hearing to be kept at least five years [Verified-doc <https://giwmscdnone.gov.np/media/pdf_upload/ecommerce-directives_8errkt4.pdf>]; DripNepal keeps them with the order records, at least 6 years ([04 §19.3](04-domain-model-and-data-dictionary.md), [Verify-external VX-08]).
@@ -2696,15 +2701,15 @@ CONSTRAINT support_cases_text_check CHECK (char_length(subject) BETWEEN 3 AND 15
 
 The written thread of a case. Answers "in writing" (s33) are the `customer`-visible messages plus the resolution summary.
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `id` | uuid | no | `uuidv7()` | |
-| `case_id` | uuid | no | App | |
-| `author_type` | text | no | App | `customer`, `shop_member`, `platform_staff`, `system` |
-| `author_user_id` | uuid | yes | — | Null for system messages such as the automatic acknowledgement |
-| `visibility` | text | no | App | `customer`, `shop`, `internal` |
-| `body` | text | no | App | 1–5,000 characters, NFC-normalised |
-| `created_at` | timestamptz | no | `now()` | |
+| Column           | Type        | Null | Default    | Notes                                                          |
+| ---------------- | ----------- | ---- | ---------- | -------------------------------------------------------------- |
+| `id`             | uuid        | no   | `uuidv7()` |                                                                |
+| `case_id`        | uuid        | no   | App        |                                                                |
+| `author_type`    | text        | no   | App        | `customer`, `shop_member`, `platform_staff`, `system`          |
+| `author_user_id` | uuid        | yes  | —          | Null for system messages such as the automatic acknowledgement |
+| `visibility`     | text        | no   | App        | `customer`, `shop`, `internal`                                 |
+| `body`           | text        | no   | App        | 1–5,000 characters, NFC-normalised                             |
+| `created_at`     | timestamptz | no   | `now()`    |                                                                |
 
 Who sees what (AC-FR-ADM-009-4): the customer sees `customer` messages. Shop members see only `shop` messages of cases whose `shop_id` is their shop. Staff see all and relay between the parties, so a customer's words reach the shop only as staff choose to relay them [Assumption; [07](07-security-threat-model-and-permissions.md) owns the rule].
 
@@ -2737,21 +2742,21 @@ CONSTRAINT support_case_messages_body_check CHECK (char_length(body) BETWEEN 1 A
 
 One row per message per recipient, created by `notifications.dispatch` and sent by `notifications.send-email` ([03 §9](03-system-architecture.md#9-asynchronous-work)). The unique `dedupe_key` makes a replayed event send nothing new. The body is not stored: it is re-rendered from the event and template, so personal data is not kept twice.
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `id` | uuid | no | `uuidv7()` | |
-| `dedupe_key` | text | no | App | `<event id>:<template>:<recipient id>` |
-| `channel` | text | no | `'email'` | `email`; `sms` is added in R2 by swapping the CHECK ([04 §2.4](04-domain-model-and-data-dictionary.md)) |
-| `template` | text | no | App | For example `order.placed.customer`, `shop_order.placed.shop` |
-| `recipient_user_id` | uuid | yes | — | A user recipient |
-| `shop_id` | uuid | yes | — | A shop's contact address as recipient |
-| `to_address_hash` | bytea | no | App | Keyed HMAC-SHA256 of the normalised address (key custody in [07](07-security-threat-model-and-permissions.md)); lets support confirm "sent to this address" without storing it |
-| `status` | text | no | `'queued'` | `queued`, `sent`, `failed` |
-| `attempts` | int | no | `0` | |
-| `provider_message_id` | text | yes | — | From the email provider (OD-08) |
-| `last_error` | text | yes | — | At most 1,000 characters, with addresses redacted |
-| `sent_at` | timestamptz | yes | — | |
-| `created_at`, `updated_at` | timestamptz | no | `now()` | |
+| Column                     | Type        | Null | Default    | Notes                                                                                                                                                                          |
+| -------------------------- | ----------- | ---- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `id`                       | uuid        | no   | `uuidv7()` |                                                                                                                                                                                |
+| `dedupe_key`               | text        | no   | App        | `<event id>:<template>:<recipient id>`                                                                                                                                         |
+| `channel`                  | text        | no   | `'email'`  | `email`; `sms` is added in R2 by swapping the CHECK ([04 §2.4](04-domain-model-and-data-dictionary.md))                                                                        |
+| `template`                 | text        | no   | App        | For example `order.placed.customer`, `shop_order.placed.shop`                                                                                                                  |
+| `recipient_user_id`        | uuid        | yes  | —          | A user recipient                                                                                                                                                               |
+| `shop_id`                  | uuid        | yes  | —          | A shop's contact address as recipient                                                                                                                                          |
+| `to_address_hash`          | bytea       | no   | App        | Keyed HMAC-SHA256 of the normalised address (key custody in [07](07-security-threat-model-and-permissions.md)); lets support confirm "sent to this address" without storing it |
+| `status`                   | text        | no   | `'queued'` | `queued`, `sent`, `failed`                                                                                                                                                     |
+| `attempts`                 | int         | no   | `0`        |                                                                                                                                                                                |
+| `provider_message_id`      | text        | yes  | —          | From the email provider (OD-08)                                                                                                                                                |
+| `last_error`               | text        | yes  | —          | At most 1,000 characters, with addresses redacted                                                                                                                              |
+| `sent_at`                  | timestamptz | yes  | —          |                                                                                                                                                                                |
+| `created_at`, `updated_at` | timestamptz | no   | `now()`    |                                                                                                                                                                                |
 
 **Keys and constraints.**
 
@@ -2772,11 +2777,11 @@ Marketing messages are checked against `users.marketing_email_consent_at` at sen
 
 **Indexes.**
 
-| Index | Definition | Query served |
-|---|---|---|
-| `notification_deliveries_dedupe_key_key` | `(dedupe_key)` | `INSERT … ON CONFLICT (dedupe_key) DO NOTHING` in dispatch |
-| `notification_deliveries_recipient_idx` | `(recipient_user_id, created_at DESC) WHERE recipient_user_id IS NOT NULL` | Support: "did the customer get the order email?" |
-| `notification_deliveries_unsent_idx` | `(created_at) WHERE status IN ('queued','failed')` | Email-outage monitoring and redrive ([05 §8.14](05-order-payment-and-inventory-lifecycles.md#814-email-outage)) |
+| Index                                    | Definition                                                                 | Query served                                                                                                    |
+| ---------------------------------------- | -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `notification_deliveries_dedupe_key_key` | `(dedupe_key)`                                                             | `INSERT … ON CONFLICT (dedupe_key) DO NOTHING` in dispatch                                                      |
+| `notification_deliveries_recipient_idx`  | `(recipient_user_id, created_at DESC) WHERE recipient_user_id IS NOT NULL` | Support: "did the customer get the order email?"                                                                |
+| `notification_deliveries_unsent_idx`     | `(created_at) WHERE status IN ('queued','failed')`                         | Email-outage monitoring and redrive ([05 §8.14](05-order-payment-and-inventory-lifecycles.md#814-email-outage)) |
 
 **Lifecycle and retention.** `queued → sent | failed`. Kept 12 months, then purged [Assumption; [04 §19.3](04-domain-model-and-data-dictionary.md)]. The records the law requires (complaint acknowledgements and answers) live in §14.1 and §14.2, not here.
 
@@ -2790,31 +2795,31 @@ Marketing messages are checked against `users.marketing_email_consent_at` at sen
 
 Business values that operators change at runtime without a deploy. Values that move money or deadlines (commission rate, COD limits, SLA hours) are read inside the transaction that uses them and copied onto the row they affect ([03 §12.6](03-system-architecture.md#126-configuration-and-secrets)), so a change never moves an existing deadline or amount. Other reads may be cached for at most 60 seconds (AC-FR-CHK-007-3).
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `key` | text | no | App | Primary key; closed list below |
-| `value` | jsonb | no | App | A JSON scalar or object, typed per key |
-| `updated_by` | uuid | yes | — | Null for seeded values |
-| `created_at`, `updated_at` | timestamptz | no | `now()` | |
+| Column                     | Type        | Null | Default | Notes                                  |
+| -------------------------- | ----------- | ---- | ------- | -------------------------------------- |
+| `key`                      | text        | no   | App     | Primary key; closed list below         |
+| `value`                    | jsonb       | no   | App     | A JSON scalar or object, typed per key |
+| `updated_by`               | uuid        | yes  | —       | Null for seeded values                 |
+| `created_at`, `updated_at` | timestamptz | no   | `now()` |                                        |
 
 **Every key.** All are edited only by `platform_admin` through `updatePlatformSetting` (`platform.settings.manage`), and every change writes an `audit_logs` row with the old and new value (AC-FR-ADM-011-2). "Decision owner" is who decides the value.
 
-| Key | Type | Seeded default | Allowed range | Decision owner | Source |
-|---|---|---|---|---|---|
-| `checkout_enabled` | boolean | `true` | `true`, `false` | Platform admin (incident lead) | Kill switch, FR-ADM-010; Directive 2082 s8(2) requires stopping transactions after a breach [Verify-external VX-02] |
-| `maintenance_banner` | string | `""` | ≤ 280 characters; empty means none | Platform admin | FR-ADM-010. Shown automatically while checkout is disabled |
-| `default_commission_rate_bp` | integer | `1000` (10%) | 0–5,000 | Product owner | [Open OD-04]; placeholder until decided, must be confirmed before M7 |
-| `cod_max_order_value_minor` | integer (paisa) | `2000000` (Rs 20,000) | 100,000–2,500,000 | Product owner | [Assumption A-08; Open OD-18]. The cap stays below the Rs 25,000 cash-transaction limit [Verify-external VX-05] |
-| `cod_max_open_orders_per_customer` | integer | `3` | 1–5 | Product owner | [Assumption A-08; OD-18] |
-| `cod_max_refusals` | integer | `2` | 1–10 | Product owner | Proposed repeat-refuser rule [Assumption; OD-18]; used only if OD-18 adopts it |
-| `cod_refusal_window_days` | integer | `90` | 30–365 | Product owner | As above |
-| `vendor_acceptance_sla_hours` | integer | `48` | 12–120 | Product owner | [Assumption A-07; OD-19] |
-| `return_window_days` | integer | `7` | 7–30 | Product owner + legal | [Assumption A-05; OD-06]. Not below 7: CPA 2075 s14 [Verify-external VX-04] |
-| `ledger_hold_days` | integer | `7` | 0–60, and ≥ `return_window_days` | Product owner | [Assumption A-06; OD-06]. The cross-key rule is checked by `updatePlatformSetting` |
-| `reservation_ttl_minutes` | integer | `30` | 10–60 | Tech lead | [Assumption A-09]; eSewa hold and fallback when a provider returns no expiry |
-| `max_shops_per_owner` | integer | `3` | 1–10 | Product owner | [Assumption A-21] |
-| `single_operator_mode` | boolean | `false` | `true`, `false` | Product owner | [Assumption A-20; Open OD-14]. `false` is the safe default: maker-checker applies until someone deliberately switches it on |
-| `platform_legal_disclosures` | object | all fields `""` | Shape below; every field non-empty before launch | Product owner + legal | FR-ADM-011; E-Commerce Act 2081 s4(2) [Verify-external VX-02] |
+| Key                                | Type            | Seeded default        | Allowed range                                    | Decision owner                 | Source                                                                                                                      |
+| ---------------------------------- | --------------- | --------------------- | ------------------------------------------------ | ------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| `checkout_enabled`                 | boolean         | `true`                | `true`, `false`                                  | Platform admin (incident lead) | Kill switch, FR-ADM-010; Directive 2082 s8(2) requires stopping transactions after a breach [Verify-external VX-02]         |
+| `maintenance_banner`               | string          | `""`                  | ≤ 280 characters; empty means none               | Platform admin                 | FR-ADM-010. Shown automatically while checkout is disabled                                                                  |
+| `default_commission_rate_bp`       | integer         | `1000` (10%)          | 0–5,000                                          | Product owner                  | [Open OD-04]; placeholder until decided, must be confirmed before M7                                                        |
+| `cod_max_order_value_minor`        | integer (paisa) | `2000000` (Rs 20,000) | 100,000–2,500,000                                | Product owner                  | [Assumption A-08; Open OD-18]. The cap stays below the Rs 25,000 cash-transaction limit [Verify-external VX-05]             |
+| `cod_max_open_orders_per_customer` | integer         | `3`                   | 1–5                                              | Product owner                  | [Assumption A-08; OD-18]                                                                                                    |
+| `cod_max_refusals`                 | integer         | `2`                   | 1–10                                             | Product owner                  | Proposed repeat-refuser rule [Assumption; OD-18]; used only if OD-18 adopts it                                              |
+| `cod_refusal_window_days`          | integer         | `90`                  | 30–365                                           | Product owner                  | As above                                                                                                                    |
+| `vendor_acceptance_sla_hours`      | integer         | `48`                  | 12–120                                           | Product owner                  | [Assumption A-07; OD-19]                                                                                                    |
+| `return_window_days`               | integer         | `7`                   | 7–30                                             | Product owner + legal          | [Assumption A-05; OD-06]. Not below 7: CPA 2075 s14 [Verify-external VX-04]                                                 |
+| `ledger_hold_days`                 | integer         | `7`                   | 0–60, and ≥ `return_window_days`                 | Product owner                  | [Assumption A-06; OD-06]. The cross-key rule is checked by `updatePlatformSetting`                                          |
+| `reservation_ttl_minutes`          | integer         | `30`                  | 10–60                                            | Tech lead                      | [Assumption A-09]; eSewa hold and fallback when a provider returns no expiry                                                |
+| `max_shops_per_owner`              | integer         | `3`                   | 1–10                                             | Product owner                  | [Assumption A-21]                                                                                                           |
+| `single_operator_mode`             | boolean         | `false`               | `true`, `false`                                  | Product owner                  | [Assumption A-20; Open OD-14]. `false` is the safe default: maker-checker applies until someone deliberately switches it on |
+| `platform_legal_disclosures`       | object          | all fields `""`       | Shape below; every field non-empty before launch | Product owner + legal          | FR-ADM-011; E-Commerce Act 2081 s4(2) [Verify-external VX-02]                                                               |
 
 `platform_legal_disclosures` shape: `{platform_name, business_name, registered_address, registering_authority, registration_number, pan_vat_number, docscp_listing_number, contact_email, contact_phone, grievance_officer: {name, email, phone, postal_address}, special_licences: []}`. It feeds the footer page and `/grievance` (AC-FR-ADM-009-5). The launch checklist ([11](11-deployment-and-operations.md)) fails while any field is empty. s4(3) requires changes to be published within 48 hours [Verify-external VX-02], and the audit row evidences when a change was made.
 
@@ -2860,19 +2865,19 @@ This is the one `jsonb` column that holds scalars, an exception to the object-on
 
 The stored outcome of an operation called with an `Idempotency-Key` (⚷). The contract is canon §6.6 and [06](06-api-design.md); how `placeOrder` uses it is [05 §4.6](05-order-payment-and-inventory-lifecycles.md#46-idempotency-handling). The row is inserted as the first statement of the business transaction, so it becomes visible only when the operation commits.
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `id` | uuid | no | `uuidv7()` | Referenced by `orders.idempotency_key_id` and by adjustment movements (§8.3) |
-| `actor_scope` | text | no | App | User id, `provider:<name>` for webhooks, or `system` |
-| `operation` | text | no | App | The operationId, for example `placeOrder` |
-| `key` | text | no | App | Client-generated, 16–64 characters |
-| `fingerprint` | bytea | no | App | SHA-256 of method, route pattern, resolved path parameters and canonical JSON body |
-| `status` | text | no | `'completed'` | Always `completed` in R1, because the row commits with the operation. The column exists for a future non-transactional operation that must record `in_progress` |
-| `response_status` | smallint | no | App | HTTP status to replay |
-| `response_body` | jsonb | no | App | Transformed response body; never secrets, and never a payment redirect ([05 §4.6](05-order-payment-and-inventory-lifecycles.md#46-idempotency-handling)) |
-| `resource_type`, `resource_id` | text, uuid | yes | — | What was created, for support |
-| `created_at` | timestamptz | no | `now()` | |
-| `expires_at` | timestamptz | no | App | `created_at` + 24 h, or + 72 h for `placeOrder` [Assumption A-32] |
+| Column                         | Type        | Null | Default       | Notes                                                                                                                                                           |
+| ------------------------------ | ----------- | ---- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                           | uuid        | no   | `uuidv7()`    | Referenced by `orders.idempotency_key_id` and by adjustment movements (§8.3)                                                                                    |
+| `actor_scope`                  | text        | no   | App           | User id, `provider:<name>` for webhooks, or `system`                                                                                                            |
+| `operation`                    | text        | no   | App           | The operationId, for example `placeOrder`                                                                                                                       |
+| `key`                          | text        | no   | App           | Client-generated, 16–64 characters                                                                                                                              |
+| `fingerprint`                  | bytea       | no   | App           | SHA-256 of method, route pattern, resolved path parameters and canonical JSON body                                                                              |
+| `status`                       | text        | no   | `'completed'` | Always `completed` in R1, because the row commits with the operation. The column exists for a future non-transactional operation that must record `in_progress` |
+| `response_status`              | smallint    | no   | App           | HTTP status to replay                                                                                                                                           |
+| `response_body`                | jsonb       | no   | App           | Transformed response body; never secrets, and never a payment redirect ([05 §4.6](05-order-payment-and-inventory-lifecycles.md#46-idempotency-handling))        |
+| `resource_type`, `resource_id` | text, uuid  | yes  | —             | What was created, for support                                                                                                                                   |
+| `created_at`                   | timestamptz | no   | `now()`       |                                                                                                                                                                 |
+| `expires_at`                   | timestamptz | no   | App           | `created_at` + 24 h, or + 72 h for `placeOrder` [Assumption A-32]                                                                                               |
 
 **Keys and constraints.**
 
@@ -2894,10 +2899,10 @@ CONSTRAINT idempotency_keys_expiry_check
 
 **Indexes.**
 
-| Index | Definition | Query served |
-|---|---|---|
-| `idempotency_keys_scope_key` | `(actor_scope, operation, key)` | Insert-or-replay at the start of every ⚷ operation |
-| `idempotency_keys_expiry_idx` | `(expires_at)` | `platform.purge-idempotency-keys` (hourly): `DELETE … WHERE expires_at < now()` in batches of 1,000 |
+| Index                         | Definition                      | Query served                                                                                        |
+| ----------------------------- | ------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `idempotency_keys_scope_key`  | `(actor_scope, operation, key)` | Insert-or-replay at the start of every ⚷ operation                                                  |
+| `idempotency_keys_expiry_idx` | `(expires_at)`                  | `platform.purge-idempotency-keys` (hourly): `DELETE … WHERE expires_at < now()` in batches of 1,000 |
 
 **Lifecycle and retention.** Hard-deleted after `expires_at` ([04 §2.6](04-domain-model-and-data-dictionary.md)). The purge sets `orders.idempotency_key_id` to null through `ON DELETE SET NULL`, served by `orders_idempotency_key_idx` (§11.1).
 
@@ -2907,21 +2912,21 @@ CONSTRAINT idempotency_keys_expiry_check
 
 Who did what, to what, when, from where and why: one row per state change made by a shop member or staff member, in the same transaction (AC-J00-09), plus authentication events and system actions that move money. It is the accountability record behind FR-ADM-003, the maker-checker flags and financial corrections.
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `id` | bigint | no | identity | `GENERATED ALWAYS AS IDENTITY` ([04 §2.1](04-domain-model-and-data-dictionary.md)) |
-| `occurred_at` | timestamptz | no | `now()` | Transaction time |
-| `actor_type` | text | no | App | `customer`, `shop_member`, `platform_staff`, `system`, `provider` |
-| `actor_user_id` | uuid | yes | — | No FK (below) |
-| `actor_role` | text | yes | — | Role at the time: `platform:finance_officer`, `shop:<shop_id>:manager`, `shop:<shop_id>:owner` |
-| `action` | text | no | App | `<subject>.<verb>`: `shop.suspend`, `refund.approve`, `ledger.adjust`, `platform_setting.update`, `auth.login_failed` |
-| `subject_type` | text | no | App | `order`, `shop_order`, `refund`, `payout`, `shop`, `user`, `platform_setting`, … |
-| `subject_id` | text | no | App | The subject's id as text: a UUID, or a setting key |
-| `shop_id` | uuid | yes | — | No FK (below) |
-| `request_id` | text | yes | — | Links to logs and the problem body |
-| `ip_hash` | bytea | yes | — | Keyed HMAC-SHA256 of the client IP; correlates abuse without storing addresses |
-| `changes` | jsonb | no | `'{}'` | Redacted before and after values. Never plaintext of `*_enc` columns, passwords, tokens or full phone numbers; flags such as `{"flags":["single_operator"]}` |
-| `reason` | text | yes | — | Mandatory for suspensions, adjustments, manual resolutions |
+| Column          | Type        | Null | Default  | Notes                                                                                                                                                        |
+| --------------- | ----------- | ---- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `id`            | bigint      | no   | identity | `GENERATED ALWAYS AS IDENTITY` ([04 §2.1](04-domain-model-and-data-dictionary.md))                                                                           |
+| `occurred_at`   | timestamptz | no   | `now()`  | Transaction time                                                                                                                                             |
+| `actor_type`    | text        | no   | App      | `customer`, `shop_member`, `platform_staff`, `system`, `provider`                                                                                            |
+| `actor_user_id` | uuid        | yes  | —        | No FK (below)                                                                                                                                                |
+| `actor_role`    | text        | yes  | —        | Role at the time: `platform:finance_officer`, `shop:<shop_id>:manager`, `shop:<shop_id>:owner`                                                               |
+| `action`        | text        | no   | App      | `<subject>.<verb>`: `shop.suspend`, `refund.approve`, `ledger.adjust`, `platform_setting.update`, `auth.login_failed`                                        |
+| `subject_type`  | text        | no   | App      | `order`, `shop_order`, `refund`, `payout`, `shop`, `user`, `platform_setting`, …                                                                             |
+| `subject_id`    | text        | no   | App      | The subject's id as text: a UUID, or a setting key                                                                                                           |
+| `shop_id`       | uuid        | yes  | —        | No FK (below)                                                                                                                                                |
+| `request_id`    | text        | yes  | —        | Links to logs and the problem body                                                                                                                           |
+| `ip_hash`       | bytea       | yes  | —        | Keyed HMAC-SHA256 of the client IP; correlates abuse without storing addresses                                                                               |
+| `changes`       | jsonb       | no   | `'{}'`   | Redacted before and after values. Never plaintext of `*_enc` columns, passwords, tokens or full phone numbers; flags such as `{"flags":["single_operator"]}` |
+| `reason`        | text        | yes  | —        | Mandatory for suspensions, adjustments, manual resolutions                                                                                                   |
 
 There are no foreign keys, matching [04 §4.5](04-domain-model-and-data-dictionary.md): the audit trail must survive whatever happens to the rows it describes (anonymisation, the retention purge of other tables), and it must record actions whose subject never existed, such as a failed login for an unknown email.
 
@@ -2945,13 +2950,13 @@ A customer actor may have no user id: anonymous authentication attempts are reco
 
 **Indexes.**
 
-| Index | Definition | Query served |
-|---|---|---|
-| `audit_logs_subject_idx` | `(subject_type, subject_id, id DESC)` | History of one order, refund, shop or user on its admin page |
-| `audit_logs_actor_idx` | `(actor_user_id, id DESC) WHERE actor_user_id IS NOT NULL` | "What did this staff member do" (`listAuditLogs?actor=`) |
-| `audit_logs_shop_idx` | `(shop_id, id DESC) WHERE shop_id IS NOT NULL` | Activity inside one shop |
-| `audit_logs_action_idx` | `(action, id DESC)` | Filter by action, for example every `refund.approve` |
-| `audit_logs_occurred_at_brin` | BRIN `(occurred_at)` | Date-range browsing: `WHERE occurred_at >= :from AND occurred_at < :to ORDER BY id DESC LIMIT 50` |
+| Index                         | Definition                                                 | Query served                                                                                      |
+| ----------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `audit_logs_subject_idx`      | `(subject_type, subject_id, id DESC)`                      | History of one order, refund, shop or user on its admin page                                      |
+| `audit_logs_actor_idx`        | `(actor_user_id, id DESC) WHERE actor_user_id IS NOT NULL` | "What did this staff member do" (`listAuditLogs?actor=`)                                          |
+| `audit_logs_shop_idx`         | `(shop_id, id DESC) WHERE shop_id IS NOT NULL`             | Activity inside one shop                                                                          |
+| `audit_logs_action_idx`       | `(action, id DESC)`                                        | Filter by action, for example every `refund.approve`                                              |
+| `audit_logs_occurred_at_brin` | BRIN `(occurred_at)`                                       | Date-range browsing: `WHERE occurred_at >= :from AND occurred_at < :to ORDER BY id DESC LIMIT 50` |
 
 The BRIN index is a few pages in size because rows arrive in time order. It cannot serve an exact lookup, which the B-tree indexes above do.
 
@@ -2963,11 +2968,11 @@ The BRIN index is a few pages in size because rows arrive in time order. It cann
 
 The database store of `@adonisjs/limiter` 3.0.1, chosen over Redis because PostgreSQL is the only stateful service in R1 (canon §6.1; OD-10 resolved). The table keeps the shape of the package's migration stub, as [04 §2.1](04-domain-model-and-data-dictionary.md) allows for package tables [Verified-doc `@adonisjs/limiter` 3.0.1 `build/make/migration/rate_limits.stub`, <https://registry.npmjs.org/@adonisjs/limiter/-/limiter-3.0.1.tgz>]:
 
-| Column | Type | Null | Default | Notes |
-|---|---|---|---|---|
-| `key` | varchar(255) | no | — | Primary key; the limiter key |
-| `points` | integer | no | `0` | Points consumed in the window |
-| `expire` | bigint | yes | — | Window end in epoch milliseconds |
+| Column   | Type         | Null | Default | Notes                            |
+| -------- | ------------ | ---- | ------- | -------------------------------- |
+| `key`    | varchar(255) | no   | —       | Primary key; the limiter key     |
+| `points` | integer      | no   | `0`     | Points consumed in the window    |
+| `expire` | bigint       | yes  | —       | Window end in epoch milliseconds |
 
 `varchar(255)` breaks the text-plus-CHECK rule of [04 §2.8](04-domain-model-and-data-dictionary.md) on purpose: the package owns this shape.
 

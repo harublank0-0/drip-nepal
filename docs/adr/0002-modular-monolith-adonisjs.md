@@ -4,14 +4,14 @@ Status: Draft v1 (2026-09-25)
 
 ## Status
 
-| Field | Value |
-|---|---|
-| Decision status | **Accepted** |
-| Date | 2026-09-25 |
-| Deciders | Product owner, lead developer |
-| Supersedes | — |
-| Superseded by | — |
-| Blocking items | none. The job-backend detail is in ADR-0010 and hosting in ADR-0016 (Proposed). |
+| Field           | Value                                                                           |
+| --------------- | ------------------------------------------------------------------------------- |
+| Decision status | **Accepted**                                                                    |
+| Date            | 2026-09-25                                                                      |
+| Deciders        | Product owner, lead developer                                                   |
+| Supersedes      | —                                                                               |
+| Superseded by   | —                                                                               |
+| Blocking items  | none. The job-backend detail is in ADR-0010 and hosting in ADR-0016 (Proposed). |
 
 ## Context
 
@@ -22,6 +22,7 @@ Status: Draft v1 (2026-09-25)
 **The domain is transactional across areas.** A single `placeOrder` call must, atomically: lock the cart; reserve stock; insert `orders`, `shop_orders` and `order_items` with snapshots; create payment records; write the idempotency key, order events and audit rows; and enqueue follow-up jobs ([state machines and checkout](../05-order-payment-and-inventory-lifecycles.md)). Lucid 22.4.2 managed transactions (`db.transaction(cb)`) commit on resolve and roll back on throw. It also provides `forUpdate()`, `skipLocked()` and `trx.after('commit')` [Verified-doc, Lucid 22.4.2 source and https://lucid.adonisjs.com/docs/transactions, accessed 2026-09-25]. Splitting this across services would turn one database transaction into a distributed saga that two people would have to operate.
 
 **The current code has no boundaries, and it shows.**
+
 - The client is the source of truth for price, stock, shop and order number (RF-16, audit A3-03).
 - The RBAC relations point at tables that do not exist (RF-20).
 - Order items can reference another shop's product because there are no composite tenant keys (RF-13).
@@ -68,29 +69,32 @@ Arrows point from a module to the module it depends on. `checkout` fans out to `
 
 ## Alternatives considered
 
-| Alternative | Why rejected |
-|---|---|
-| Microservices (catalog, orders, payments as separate deployables) | `placeOrder` would need a saga across services. It would add network hops on every checkout, multiply deployments and monitoring for 1–2 people, and spend the 22-connection budget on several pools. Nothing at about 2k orders a month needs independent scaling. |
-| Unstructured monolith (status quo: controllers call models directly) | There would be no place to enforce "only `inventory` writes stock" or "prices come from `pricing`". RF-16 and RF-13 are the result of exactly this. |
-| Rewrite in another framework (NestJS, Laravel, a Next.js full stack) | Throws away the existing Adonis 7 code and first-party packages the plan relies on: session auth, Vine, Shield, limiter 3.0.1, Drive 4.0.0, mail 10.4.0, i18n 3.0.1. A rewrite costs weeks the M0–M1 budget does not have. |
-| pnpm workspace package per module | Real compile-time boundaries, but build, test and tooling overhead for 15 packages. Folder boundaries checked by a CI rule (T-ARCH-001) catch most violations at a fraction of the cost. |
-| MySQL or MongoDB | The design relies on PostgreSQL features: CHECK constraints, partial unique indexes, row-lock re-evaluation under READ COMMITTED (ADR-0008), `pg_trgm` and full-text search (ADR-0014), pg-boss (ADR-0010) and `uuidv7()` (ADR-0017). |
+| Alternative                                                          | Why rejected                                                                                                                                                                                                                                                        |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Microservices (catalog, orders, payments as separate deployables)    | `placeOrder` would need a saga across services. It would add network hops on every checkout, multiply deployments and monitoring for 1–2 people, and spend the 22-connection budget on several pools. Nothing at about 2k orders a month needs independent scaling. |
+| Unstructured monolith (status quo: controllers call models directly) | There would be no place to enforce "only `inventory` writes stock" or "prices come from `pricing`". RF-16 and RF-13 are the result of exactly this.                                                                                                                 |
+| Rewrite in another framework (NestJS, Laravel, a Next.js full stack) | Throws away the existing Adonis 7 code and first-party packages the plan relies on: session auth, Vine, Shield, limiter 3.0.1, Drive 4.0.0, mail 10.4.0, i18n 3.0.1. A rewrite costs weeks the M0–M1 budget does not have.                                          |
+| pnpm workspace package per module                                    | Real compile-time boundaries, but build, test and tooling overhead for 15 packages. Folder boundaries checked by a CI rule (T-ARCH-001) catch most violations at a fraction of the cost.                                                                            |
+| MySQL or MongoDB                                                     | The design relies on PostgreSQL features: CHECK constraints, partial unique indexes, row-lock re-evaluation under READ COMMITTED (ADR-0008), `pg_trgm` and full-text search (ADR-0014), pg-boss (ADR-0010) and `uuidv7()` (ADR-0017).                               |
 
 ## Consequences
 
 **Positive**
+
 - Checkout, cancellation and refund invariants hold inside a single PostgreSQL transaction with CHECK-constraint backstops.
 - One image and one deploy pipeline. Local development is `docker compose up` (Postgres and Mailpit) plus `node ace serve`.
 - Module boundaries make ownership reviewable. A PR that touches `ledger` tables outside `app/modules/ledger` fails T-ARCH-001.
 
 **Negative**
+
 - Scaling is vertical first. A CPU-heavy SSR spike and a heavy admin report share the same `web` processes until more instances are added behind the load balancer.
 - A bad deploy takes down storefront, seller and admin together. The single image means any change rebuilds everything.
 - The Adonis 7 ecosystem has no maintained OpenAPI generator [Verified-doc, `adonis_stack` research on @tuyau/core 1.2.2 exports]. `docs/openapi.yaml` is hand-maintained and enforced by T-API-001 (ADR-0004).
 
 **Risks**
-- *Boundary erosion* ("just import the model this once"). Mitigation: T-ARCH-001 runs on every PR, and module-private files are not exported from `queries.ts`.
-- *Adapter version drift.* @adonisjs/inertia 4.2.0 targets Inertia v2 while the current Adonis docs target v5/Inertia v3 (OD-25). Examples copied from current docs may not compile. See ADR-0003.
+
+- _Boundary erosion_ ("just import the model this once"). Mitigation: T-ARCH-001 runs on every PR, and module-private files are not exported from `queries.ts`.
+- _Adapter version drift._ @adonisjs/inertia 4.2.0 targets Inertia v2 while the current Adonis docs target v5/Inertia v3 (OD-25). Examples copied from current docs may not compile. See ADR-0003.
 
 ## When to revisit
 

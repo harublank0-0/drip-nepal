@@ -4,18 +4,19 @@ Status: Draft v1 (2026-09-25)
 
 ## Status
 
-| Field | Value |
-|---|---|
-| Decision status | **Accepted** for product URLs, shop and category slug redirects, and canonical tags. **Proposed** for the seller dashboard prefix `/seller/{shopSlug}`, pending **OD-12**. |
-| Date | 2026-09-25 |
-| Deciders | Tech lead (lead developer); product owner informed (OD-12 reverses a recent commit) |
-| Supersedes | — |
-| Superseded by | — |
-| Related open items | **OD-12** (seller dashboard prefix), OD-13 (JSON casing of `public_id`); requirements FR-SRCH-004, FR-SRCH-005, FR-SHOP-012, AC-FR-CAT-001-3 |
+| Field              | Value                                                                                                                                                                      |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Decision status    | **Accepted** for product URLs, shop and category slug redirects, and canonical tags. **Proposed** for the seller dashboard prefix `/seller/{shopSlug}`, pending **OD-12**. |
+| Date               | 2026-09-25                                                                                                                                                                 |
+| Deciders           | Tech lead (lead developer); product owner informed (OD-12 reverses a recent commit)                                                                                        |
+| Supersedes         | —                                                                                                                                                                          |
+| Superseded by      | —                                                                                                                                                                          |
+| Related open items | **OD-12** (seller dashboard prefix), OD-13 (JSON casing of `public_id`); requirements FR-SRCH-004, FR-SRCH-005, FR-SHOP-012, AC-FR-CAT-001-3                               |
 
 ## Context
 
 **Repository today** [Verified-repo, per [docs/04](../04-domain-model-and-data-dictionary.md) §3.13 and the ADR-0011 baseline table]:
+
 - `products.name` is globally `UNIQUE`, and product slugs are unique too. Two shops therefore cannot both sell a "Black Hoodie" (F10, RF-17).
 - The seller dashboard sits one letter away from the public shop page:
   - the route recorded in OD-12 is `/shop/:shopSlug/…` (start/routes/shops.ts:27);
@@ -25,11 +26,13 @@ Status: Draft v1 (2026-09-25)
 **How links travel.** Customers share product links in social media and chat apps. A link that breaks when a vendor fixes a typo in a title is lost traffic and lost trust. Search engines need one canonical URL per page (AC-FR-SRCH-005-2), and the storefront is server-rendered for them (ADR-0003).
 
 **Existing identifiers** ([docs/04 §2.1](../04-domain-model-and-data-dictionary.md)):
+
 - `products.public_id` is 8 random Crockford base32 characters. The alphabet `0-9 A-H J K M N P-T V-Z` has no I, L, O or U.
 - That gives 32^8 ≈ 1.1 × 10^12 values. A collision is retried.
 - Internal keys are UUIDs, which never appear in storefront URLs.
 
 **HTTP facts** [Verified-doc, RFC 9110 §15.4.2, https://www.rfc-editor.org/rfc/rfc9110.html, accessed 2026-09-25]:
+
 - "A user agent MAY change the request method from POST to GET" after a 301.
 - "A 301 response is heuristically cacheable", which means browsers may keep it indefinitely.
 
@@ -76,18 +79,19 @@ Status: Draft v1 (2026-09-25)
 
 ## Alternatives considered
 
-| Alternative | Why rejected |
-|---|---|
-| Globally unique product slugs, as today (`black-hoodie-7` on collision) | Blocks common titles across shops. A numeric suffix leaks how many shops sell an item. Links still break on rename unless every product gets redirect rows. |
-| `/shops/{shopSlug}/{productSlug}`, unique per shop | Readable, but a shop rename breaks every product URL, and a product rename needs a redirect table for products. Two lookups per request. Titles still collide within a shop. |
-| Numeric sequential IDs (`/p/12345`) | Leaks catalogue size and growth rate, and makes scraping by enumeration trivial. Not readable. |
-| UUID in the URL | 36 unreadable characters, poor for sharing and for reading aloud to support. |
-| Slug history table for products | Unnecessary: the embedded ID already resolves every old URL. |
-| Self-service shop slug changes in R1 | Rename-and-impersonate risk (taking a slug that resembles another brand) and broken shared links. Admin-only until abuse controls exist. |
+| Alternative                                                             | Why rejected                                                                                                                                                                 |
+| ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Globally unique product slugs, as today (`black-hoodie-7` on collision) | Blocks common titles across shops. A numeric suffix leaks how many shops sell an item. Links still break on rename unless every product gets redirect rows.                  |
+| `/shops/{shopSlug}/{productSlug}`, unique per shop                      | Readable, but a shop rename breaks every product URL, and a product rename needs a redirect table for products. Two lookups per request. Titles still collide within a shop. |
+| Numeric sequential IDs (`/p/12345`)                                     | Leaks catalogue size and growth rate, and makes scraping by enumeration trivial. Not readable.                                                                               |
+| UUID in the URL                                                         | 36 unreadable characters, poor for sharing and for reading aloud to support.                                                                                                 |
+| Slug history table for products                                         | Unnecessary: the embedded ID already resolves every old URL.                                                                                                                 |
+| Self-service shop slug changes in R1                                    | Rename-and-impersonate risk (taking a slug that resembles another brand) and broken shared links. Admin-only until abuse controls exist.                                     |
 
 ## Consequences
 
 **Positive**
+
 - Product links survive title edits indefinitely, with zero redirect rows for products.
 - Any number of shops can use the same title.
 - One indexed lookup per product page.
@@ -95,14 +99,16 @@ Status: Draft v1 (2026-09-25)
 - The public and private namespaces cannot be confused by a middleware group.
 
 **Negative**
+
 - URLs end in an opaque 8-character token.
 - A title change changes the canonical URL, and search engines follow the 301 before re-indexing.
 - Old shop slugs are reserved forever, a small namespace cost.
 - Rewriting the current `/shop/...` routes (OD-12) costs M0 effort. There are no users to break.
 
 **Risks**
-- *Cached 301s loop after a rename back.* Bounded to one day by `max-age`; rename-backs are staff-only and rare.
-- *public_id collisions at scale.* A collision raises a unique violation, and generation is retried.
+
+- _Cached 301s loop after a rename back._ Bounded to one day by `max-age`; rename-backs are staff-only and rare.
+- _public_id collisions at scale._ A collision raises a unique violation, and generation is retried.
 
 ## When to revisit
 
@@ -114,6 +120,7 @@ Status: Draft v1 (2026-09-25)
 ## Verification
 
 Tests are in the T-CAT, T-SHOP and T-UI areas ([docs/10](../10-testing-and-quality-gates.md)).
+
 - **Product URL tests** (AC-FR-SRCH-004-1):
   - a wrong slug, an old slug, a missing slug, an uppercase ID and an alias form each return 301 with the exact canonical `Location`;
   - an unknown ID, an unpublished product or a product of a suspended shop returns 404;

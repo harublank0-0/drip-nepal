@@ -4,18 +4,19 @@ Status: Draft v1 (2026-09-25)
 
 ## Status
 
-| Field | Value |
-|---|---|
-| Decision status | **Accepted** |
-| Date | 2026-09-25 |
-| Deciders | Lead developer |
-| Supersedes | — |
-| Superseded by | — |
+| Field              | Value                                                                              |
+| ------------------ | ---------------------------------------------------------------------------------- |
+| Decision status    | **Accepted**                                                                       |
+| Date               | 2026-09-25                                                                         |
+| Deciders           | Lead developer                                                                     |
+| Supersedes         | —                                                                                  |
+| Superseded by      | —                                                                                  |
 | Related open items | OD-15 (audience values, size systems, colour list: these define the filter arrays) |
 
 ## Context
 
 **Requirements (R1):**
+
 - category and navigation listings with filters, sort, pagination and URL state (FR-SRCH-001);
 - keyword search (FR-SRCH-002);
 - a shop storefront page (FR-SRCH-003);
@@ -30,6 +31,7 @@ Facet counts (FR-SRCH-008) and autocomplete (FR-SRCH-006) are R2. A dedicated se
 **Content.** Product text is mostly English but may contain Nepali in Devanagari, and romanized Nepali is common in titles [Confirmed, Q8: "product text may contain Nepali"].
 
 **PostgreSQL facts** [Verified-doc, accessed 2026-09-25]:
+
 - The `simple` dictionary works by "converting the input token to lower case" and checking stop words. It does no stemming, so English-only stemming cannot mangle Nepali words or brand names (https://www.postgresql.org/docs/18/textsearch-dictionaries.html).
 - `pg_trgm` provides `similarity()`, the `%` operator, and GIN/GiST operator classes (`gin_trgm_ops`) that also accelerate `LIKE`/`ILIKE`. It is a "trusted" extension (https://www.postgresql.org/docs/18/pgtrgm.html).
 - DigitalOcean Managed PostgreSQL 18 supports `pg_trgm`, `unaccent` and `citext` (https://docs.digitalocean.com/products/databases/postgresql/details/supported-extensions/).
@@ -48,6 +50,7 @@ Facet counts (FR-SRCH-008) and autocomplete (FR-SRCH-006) are R2. A dedicated se
    `search_tsv = setweight(to_tsvector('simple', title), 'A') || setweight(to_tsvector('simple', brand_name || ' ' || category_names), 'B') || setweight(to_tsvector('simple', attribute_labels), 'C')`
 
    The description is excluded in R1 to keep the index small and relevant.
+
 3. **Query.**
    - `WHERE search_tsv @@ websearch_to_tsquery('simple', :q) OR title % :q` (trigram similarity for typos and partial romanized words).
    - Ranked by `ts_rank_cd(search_tsv, query)` blended with `similarity(title, :q)`.
@@ -68,32 +71,36 @@ Facet counts (FR-SRCH-008) and autocomplete (FR-SRCH-006) are R2. A dedicated se
 
 ## Alternatives considered
 
-| Alternative | Why rejected |
-|---|---|
+| Alternative                                               | Why rejected                                                                                                                                                                                   |
+| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Dedicated engine now (Meilisearch, Typesense, OpenSearch) | Another stateful service to host, secure, back up and keep in sync, with no measured need at under 50 shops. Its cost sits in the ADR-0016 budget. Planned for R3 behind the thresholds below. |
-| Query normalised tables directly, with no read model | Multi-join aggregations per request and array filters that cannot be indexed. Listing p95 would degrade as the catalog grows. |
-| PostgreSQL `english` configuration with stemming | Stems English words and leaves Nepali or romanized words unpredictable. Fashion titles are mostly brand and product nouns, where stemming adds little. |
-| Materialized view with periodic `REFRESH … CONCURRENTLY` | Rebuilds every row on each refresh. Per-product upserts from events are cheaper and fresher. |
-| Hosted search SaaS (Algolia) | Recurring cost in USD, customer data sent to another processor (VX-09), and a sync pipeline to maintain. |
+| Query normalised tables directly, with no read model      | Multi-join aggregations per request and array filters that cannot be indexed. Listing p95 would degrade as the catalog grows.                                                                  |
+| PostgreSQL `english` configuration with stemming          | Stems English words and leaves Nepali or romanized words unpredictable. Fashion titles are mostly brand and product nouns, where stemming adds little.                                         |
+| Materialized view with periodic `REFRESH … CONCURRENTLY`  | Rebuilds every row on each refresh. Per-product upserts from events are cheaper and fresher.                                                                                                   |
+| Hosted search SaaS (Algolia)                              | Recurring cost in USD, customer data sent to another processor (VX-09), and a sync pipeline to maintain.                                                                                       |
 
 ## Consequences
 
 **Positive**
+
 - No new infrastructure. Search, filters and listings run in the same PostgreSQL, inside the connection budget.
 - A listing query is one indexed table scan, and listing freshness is tied to domain events.
 - Suspending a shop removes its products from search on the next job run, with no separate index to purge.
 
 **Negative**
+
 - Relevance is basic: no synonyms, no transliteration between romanized and Devanagari Nepali, and typo tolerance limited to trigram similarity.
 - Write amplification: every stock flip that changes `in_stock` rewrites a listing row.
 
 **Risks**
-- *The read model drifts from the source* because a job was lost or an event missed. Mitigation: transactional send, the nightly rebuild, and a consistency test.
-- *Unbounded `%` queries on short strings* are slow. Mitigation: require `q` of at least 2 characters, and rate-limit the public catalogue at 120/min per IP.
+
+- _The read model drifts from the source_ because a job was lost or an event missed. Mitigation: transactional send, the nightly rebuild, and a consistency test.
+- _Unbounded `%` queries on short strings_ are slow. Mitigation: require `q` of at least 2 characters, and rate-limit the public catalogue at 120/min per IP.
 
 ## When to revisit
 
 Move to a dedicated engine (R3) when **any** of these holds:
+
 - more than 200,000 listing rows;
 - search p95 above 300 ms at 10× launch load (T-PERF-001);
 - R2 facet counts across more than 10 facets push listing p95 above 500 ms;

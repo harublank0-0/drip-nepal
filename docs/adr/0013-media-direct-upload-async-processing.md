@@ -4,18 +4,19 @@ Status: Draft v1 (2026-09-25)
 
 ## Status
 
-| Field | Value |
-|---|---|
-| Decision status | **Accepted.** The pattern is provider-neutral (S3 API). The storage provider and region follow ADR-0016 (Proposed; VX-09). |
-| Date | 2026-09-25 |
-| Deciders | Lead developer |
-| Supersedes | — |
-| Superseded by | — |
-| Related open items | VX-09 (data location, especially KYC documents), VX-15 (storage and CDN prices), OD-16 (which KYC documents are required) |
+| Field              | Value                                                                                                                      |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| Decision status    | **Accepted.** The pattern is provider-neutral (S3 API). The storage provider and region follow ADR-0016 (Proposed; VX-09). |
+| Date               | 2026-09-25                                                                                                                 |
+| Deciders           | Lead developer                                                                                                             |
+| Supersedes         | —                                                                                                                          |
+| Superseded by      | —                                                                                                                          |
+| Related open items | VX-09 (data location, especially KYC documents), VX-15 (storage and CDN prices), OD-16 (which KYC documents are required)  |
 
 ## Context
 
 **Repository findings** [Verified-repo]:
+
 - The vendor `ImageUpload` reads files with `FileReader.readAsDataURL`, accepts `image/*` including SVG, and has no size limit (`image-upload.tsx:28-36,74`). The server validator allows 2 MB and has an `'jped'` typo (RF-18, audit A3-14).
 - `product_media` stores a 255-char URL, a text `sort_order` (so "10" sorts before "2") and no storage key or owner (audit F15).
 - Multipart parsing runs on every route with a 20 MB limit before authentication (RF-35).
@@ -24,6 +25,7 @@ Status: Draft v1 (2026-09-25)
 **Operating constraints.** Vendors photograph products on phones and upload over mobile connections. A 5–10 MB upload through the single VPS (ADR-0016) ties up a web connection and memory for the whole transfer.
 
 **Image-processing security** [Verified-doc, accessed 2026-09-25]:
+
 - sharp before 0.35.4 has high-severity libheif/libvips advisories (GHSA-rgj7-g3m4-5g8c, GHSA-f88m-g3jw-g9cj, https://github.com/lovell/sharp/security/advisories).
 - `limitInputPixels` defaults to about 268 MP, far too large for a small VM. The docs advise keeping `failOn: 'warning'` for untrusted input (https://sharp.pixelplumbing.com/api-constructor).
 - `VIPS_BLOCK_UNTRUSTED` blocks untrusted loaders (https://sharp.pixelplumbing.com/api-utility).
@@ -31,6 +33,7 @@ Status: Draft v1 (2026-09-25)
 - On glibc Linux, sharp's concurrency defaults to 1.
 
 **Storage and delivery** [Verified-doc, accessed 2026-09-25]:
+
 - @adonisjs/drive 4.0.0 supports S3-compatible services including R2 and Spaces, with `getSignedUploadUrl` and `getSignedUrl` (https://docs.adonisjs.com/guides/digging-deeper/drive).
 - R2 egress is free. `r2.dev` public access "is rate-limited and should only be used for development purposes"; custom domains enable Cloudflare cache and WAF (https://developers.cloudflare.com/r2/buckets/public-buckets/).
 - Cloudflare Images' free plan allows 5,000 unique transformations per month, as published on 2026-09-25 (https://developers.cloudflare.com/images/pricing/).
@@ -58,29 +61,32 @@ Status: Draft v1 (2026-09-25)
 
 ## Alternatives considered
 
-| Alternative | Why rejected |
-|---|---|
-| Upload through the app (multipart to `web`) | Holds a web connection and memory for the whole slow upload on a 1–2 vCPU VPS. Re-opens RF-35's pre-auth parsing risk. |
-| Process synchronously in the request | sharp CPU spikes would stall storefront SSR on the same `web` process. |
-| Store images in PostgreSQL (`bytea`) | Inflates the database, backups and restore time (ADR-0016 RTO), and every image read goes through Node. |
+| Alternative                                            | Why rejected                                                                                                                                 |
+| ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Upload through the app (multipart to `web`)            | Holds a web connection and memory for the whole slow upload on a 1–2 vCPU VPS. Re-opens RF-35's pre-auth parsing risk.                       |
+| Process synchronously in the request                   | sharp CPU spikes would stall storefront SSR on the same `web` process.                                                                       |
+| Store images in PostgreSQL (`bytea`)                   | Inflates the database, backups and restore time (ADR-0016 RTO), and every image read goes through Node.                                      |
 | Cloudflare Images as the primary store and transformer | Per-image storage and delivery pricing, and lock-in to one vendor's API. On-the-fly transformation of R2 originals remains a revisit option. |
-| Client-side resize as the only processing | The client is untrusted. It cannot be relied on to strip EXIF or reject malformed files. |
+| Client-side resize as the only processing              | The client is untrusted. It cannot be relied on to strip EXIF or reject malformed files.                                                     |
 
 ## Consequences
 
 **Positive**
+
 - Web processes never handle upload bytes, so slow vendor uploads cannot degrade checkout.
 - EXIF location data never becomes public. Malformed or oversized images are rejected in an isolated worker with a pinned, patched sharp.
 - The fixed derivative set keeps storage and CDN behaviour predictable, and immutable keys make caching trivial.
 
 **Negative**
+
 - Upload is two steps and the UI shows a "processing" state. Bucket CORS must allow the site origin for PUT.
 - New derivative widths need a backfill job.
 
 **Risks**
-- *Presigned URL abuse* (uploading junk or large files). Mitigation: size-bound URLs, per-shop rate limit, orphan purge, and no public read on the private bucket.
-- *libvips/libheif CVEs.* Mitigation: Renovate or Dependabot alerts; HEIC is not accepted in R1.
-- *VX-09* may require KYC documents or all media to be stored in Nepal. Mitigation: a Drive disk swap.
+
+- _Presigned URL abuse_ (uploading junk or large files). Mitigation: size-bound URLs, per-shop rate limit, orphan purge, and no public read on the private bucket.
+- _libvips/libheif CVEs._ Mitigation: Renovate or Dependabot alerts; HEIC is not accepted in R1.
+- _VX-09_ may require KYC documents or all media to be stored in Nepal. Mitigation: a Drive disk swap.
 
 ## When to revisit
 

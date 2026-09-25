@@ -4,13 +4,13 @@ Status: Draft v1 (2026-09-25)
 
 ## Status
 
-| Field | Value |
-|---|---|
-| Decision status | **Accepted** |
-| Date | 2026-09-25 |
-| Deciders | Lead developer |
-| Supersedes | — |
-| Superseded by | — |
+| Field              | Value                                                                                                                               |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Decision status    | **Accepted**                                                                                                                        |
+| Date               | 2026-09-25                                                                                                                          |
+| Deciders           | Lead developer                                                                                                                      |
+| Supersedes         | —                                                                                                                                   |
+| Superseded by      | —                                                                                                                                   |
 | Related open items | OD-13 (JSON casing: snake_case [Assumption] vs camelCase; decide before M1, does not change this ADR), OD-25 (Inertia v3 `useHttp`) |
 
 ## Context
@@ -30,8 +30,8 @@ Status: Draft v1 (2026-09-25)
 
 1. **Reads go through Inertia props.** Each page controller loads data with module queries (ADR-0002), serializes it through a transformer and renders the page. Pages do not fetch their initial data from `/api/v1`, which would add a round trip on slow networks. Filters, sorting and pagination are Inertia GET visits with `only`/`preserveState`, so the state lives in the URL.
 2. **Every state change goes through `/api/v1`.** All non-GET operations are JSON endpoints under `/api/v1`. The canonical catalogue, with operationIds, is owned by [docs/06](../06-api-design.md) and [openapi.yaml](../openapi.yaml). This includes login and logout (`POST`/`DELETE /api/v1/auth/session`). Pages call these endpoints through the Tuyau client and on success refresh the affected props with `router.reload({ only: [...] })` or navigate with `router.visit(...)`. Errors come back as problem+json (ADR-0018) and are rendered by field.
-   - *Exception:* `GET /payments/{provider}/return` is an Inertia page route that runs server-side payment verification before rendering the result (ADR-0012).
-   - *Exception:* inbound webhooks are `POST /api/v1/webhooks/payments/{provider}`, exempt from CSRF and verified by the provider's scheme.
+   - _Exception:_ `GET /payments/{provider}/return` is an Inertia page route that runs server-side payment verification before rendering the result (ADR-0012).
+   - _Exception:_ inbound webhooks are `POST /api/v1/webhooks/payments/{provider}`, exempt from CSRF and verified by the provider's scheme.
 3. **Contract rules.** Full text in [docs/06](../06-api-design.md); summary here:
    - Version in the path: `/api/v1`. Additive changes are allowed. Breaking changes need `/api/v2`, with a 6-month overlap once external clients exist and `Deprecation`/`Sunset` headers.
    - Money is `{ "amount_minor": <int>, "currency": "NPR" }` (ADR-0007). Timestamps are RFC 3339 UTC. Field casing is snake_case [Assumption; OD-13].
@@ -69,29 +69,32 @@ sequenceDiagram
 
 ## Alternatives considered
 
-| Alternative | Why rejected |
-|---|---|
+| Alternative                                          | Why rejected                                                                                                                                                                                                     |
+| ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Inertia form posts for all mutations (redirect-back) | No natural place for `Idempotency-Key`, `If-Match`/`ETag` or structured conflict payloads. Errors are flattened to one message per field. Unusable by the R3 mobile app or providers, and hard to contract-test. |
-| JSON API for reads as well (SPA style) | An extra request after every navigation on slow networks, and it breaks SSR (ADR-0003). |
-| GraphQL | Needs a schema, per-field authorization and persisted queries, all for 1–2 developers. HTTP caching and problem+json error semantics become harder. |
-| RPC over Tuyau types only, with no OpenAPI | Tuyau types are TypeScript-only. Providers, mobile clients and contract tests need a language-neutral spec. |
-| Unversioned API | The first breaking change after the mobile app ships (R3) would break installed clients with no overlap period. |
+| JSON API for reads as well (SPA style)               | An extra request after every navigation on slow networks, and it breaks SSR (ADR-0003).                                                                                                                          |
+| GraphQL                                              | Needs a schema, per-field authorization and persisted queries, all for 1–2 developers. HTTP caching and problem+json error semantics become harder.                                                              |
+| RPC over Tuyau types only, with no OpenAPI           | Tuyau types are TypeScript-only. Providers, mobile clients and contract tests need a language-neutral spec.                                                                                                      |
+| Unversioned API                                      | The first breaking change after the mobile app ships (R3) would break installed clients with no overlap period.                                                                                                  |
 
 ## Consequences
 
 **Positive**
+
 - One mutation contract, validated on every response by T-API-001. The same endpoints serve the R3 mobile app.
 - Double submits on slow networks are harmless (T-CHK-004), and concurrent edits on the seller dashboard are detected (412) instead of silently overwritten.
 - Mass assignment is structurally prevented, because request validators never contain server-owned fields (T-SEC-003).
 
 **Negative**
+
 - Each screen that mutates data has a page route and API routes. After a mutation, one extra partial reload fetches fresh props.
 - `docs/openapi.yaml` is hand-maintained. A route change without a spec change fails CI rather than being generated automatically.
 - Client code handles problem+json explicitly instead of relying on Inertia's built-in error bag.
 
 **Risks**
-- *A developer adds an Inertia POST route "just this once".* Mitigation: the route-file rule in Decision item 6, checked in CI.
-- *Spec drift.* Mitigation: T-API-001 validates real responses from functional tests against the spec, so a missing or wrong schema fails the build.
+
+- _A developer adds an Inertia POST route "just this once"._ Mitigation: the route-file rule in Decision item 6, checked in CI.
+- _Spec drift._ Mitigation: T-API-001 validates real responses from functional tests against the spec, so a missing or wrong schema fails the build.
 
 ## When to revisit
 

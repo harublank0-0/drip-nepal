@@ -4,14 +4,14 @@ Status: Draft v1 (2026-09-25)
 
 ## Status
 
-| Field | Value |
-|---|---|
-| Decision status | **Accepted** |
-| Date | 2026-09-25 |
-| Deciders | Product owner, lead developer |
-| Supersedes | — |
-| Superseded by | — |
-| Blocking items | none |
+| Field           | Value                         |
+| --------------- | ----------------------------- |
+| Decision status | **Accepted**                  |
+| Date            | 2026-09-25                    |
+| Deciders        | Product owner, lead developer |
+| Supersedes      | —                             |
+| Superseded by   | —                             |
+| Blocking items  | none                          |
 
 ## Context
 
@@ -30,13 +30,13 @@ MADR ("Markdown Architectural Decision Records", version 4.0.0, released 2024-09
 We record architecture decisions as ADRs in `docs/adr/`, using a trimmed MADR layout adapted for a small team.
 
 1. **Location and naming.** One file per decision: `docs/adr/NNNN-kebab-title.md`, numbered sequentially from 0001. Numbers are never reused, even when an ADR is rejected. The [index](README.md) lists every ADR.
-2. **Required sections**, in this order: Status, Context, Decision, Alternatives considered, Consequences (positive, negative, risks), When to revisit, Verification, Related. They map to MADR as follows: "Considered Options / Pros and Cons" → *Alternatives considered*; "Confirmation" → *Verification*. We add *When to revisit*, because a small team needs explicit triggers rather than periodic architecture reviews.
+2. **Required sections**, in this order: Status, Context, Decision, Alternatives considered, Consequences (positive, negative, risks), When to revisit, Verification, Related. They map to MADR as follows: "Considered Options / Pros and Cons" → _Alternatives considered_; "Confirmation" → _Verification_. We add _When to revisit_, because a small team needs explicit triggers rather than periodic architecture reviews.
 3. **Status values.**
    - `Proposed`: written, but depends on an open decision (OD-xx) or an external verification (VX-xx). The Status table names the blocking IDs.
    - `Accepted`: the team builds against it.
    - `Deprecated`: no longer applies and has no replacement.
    - `Superseded by ADR-NNNN`: replaced by a newer ADR.
-4. **Immutability.** Once an ADR is Accepted, its Context, Decision and Alternatives are not rewritten. A changed decision gets a new ADR that supersedes the old one, and both Status tables are updated. The only edits allowed in place are typo fixes, link repairs, status changes, and additions to *Verification* when new tests enforce the decision.
+4. **Immutability.** Once an ADR is Accepted, its Context, Decision and Alternatives are not rewritten. A changed decision gets a new ADR that supersedes the old one, and both Status tables are updated. The only edits allowed in place are typo fixes, link repairs, status changes, and additions to _Verification_ when new tests enforce the decision.
 5. **Labels.** ADRs use the evidence labels defined in [docs/00](../00-context-assumptions-and-questions.md): [Confirmed], [Verified-repo], [Verified-doc], [Assumption], [Open] OD-xx and [Verify-external] VX-xx. External facts cite a URL and an access date. Prices are always written "as published on <date>".
 6. **Ownership split.** An ADR records the decision and the reason for it. The specification document that owns the detail (tables, endpoints, state tables, tests) holds that detail, and the ADR links to it. For example, ADR-0007 decides "integer paisa", while the column list lives in [docs/04](../04-domain-model-and-data-dictionary.md).
 7. **When an ADR is required.** A pull request needs a new or superseding ADR when it:
@@ -50,32 +50,36 @@ We record architecture decisions as ADRs in `docs/adr/`, using a trimmed MADR la
    - weakens a security control, for example disabling CSP or CSRF on a route.
 
    Library patch upgrades, new shadcn primitives within ADR-0015's policy, and new endpoints that follow ADR-0004 need no ADR.
+
 8. **Workflow.** An ADR arrives as `Proposed` in the same pull request as the first code that depends on it, or earlier. With two developers, the other developer reviews it. With one developer, the product owner acknowledges it in the PR. Once every blocking OD/VX in the [risk register](../risks-and-open-decisions.md) is closed, the status moves to Accepted in a follow-up commit.
 
 ## Alternatives considered
 
-| Alternative | Why rejected |
-|---|---|
-| No ADRs; rationale stays in PR descriptions and chat | PR text cannot be found once the PR is merged and is not versioned with the docs. RF-03, RF-20 and RF-42 are examples of the cost. |
-| Wiki or Notion outside the repository | It drifts from the code, is not reviewed in the same PR, and would mean granting extra tool access to every contributor. The repository is already the single source for docs. |
-| Nygard's original four-section format (Status, Context, Decision, Consequences) | Too thin for this team. It has no *Verification* section, so a decision cannot be tied to a CI check, and no *When to revisit* section, so we would lose track of the thresholds (for example ADR-0014's search limits). |
-| Full MADR with a Pros/Cons subsection per option and decision-driver lists | Doubles the writing time per ADR for 1–2 developers. A table of alternatives with the rejection reason gives most of the value. |
-| ADR tooling (adr-tools, log4brains) | Adds a dependency for about 20 files. Plain Markdown and a CI heading check are enough at this size. |
+| Alternative                                                                     | Why rejected                                                                                                                                                                                                             |
+| ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| No ADRs; rationale stays in PR descriptions and chat                            | PR text cannot be found once the PR is merged and is not versioned with the docs. RF-03, RF-20 and RF-42 are examples of the cost.                                                                                       |
+| Wiki or Notion outside the repository                                           | It drifts from the code, is not reviewed in the same PR, and would mean granting extra tool access to every contributor. The repository is already the single source for docs.                                           |
+| Nygard's original four-section format (Status, Context, Decision, Consequences) | Too thin for this team. It has no _Verification_ section, so a decision cannot be tied to a CI check, and no _When to revisit_ section, so we would lose track of the thresholds (for example ADR-0014's search limits). |
+| Full MADR with a Pros/Cons subsection per option and decision-driver lists      | Doubles the writing time per ADR for 1–2 developers. A table of alternatives with the rejection reason gives most of the value.                                                                                          |
+| ADR tooling (adr-tools, log4brains)                                             | Adds a dependency for about 20 files. Plain Markdown and a CI heading check are enough at this size.                                                                                                                     |
 
 ## Consequences
 
 **Positive**
+
 - A new developer can read 18 files and understand why the system looks the way it does, without asking the original author.
 - Each decision carries its own triggers for revisiting, so the team reacts to measured conditions (connection counts, latency, legal answers) rather than rediscovering them.
 - Proposed ADRs make external blockers visible (OD-01, VX-09, VX-13) next to the design that depends on them.
 
 **Negative**
+
 - Writing an ADR takes about 30–60 minutes of a scarce developer's time.
 - Superseding instead of editing makes the history longer, and readers must follow the "Superseded by" links.
 
 **Risks**
-- *ADR rot*: the code changes but the ADR is never superseded. Mitigation: every ADR names the test IDs or CI checks that enforce it. If those checks are changed or removed, the PR diff shows it.
-- *Status drift*: a Proposed ADR stays Proposed after its OD closes. Mitigation: the milestone exit checklist in [docs/12](../12-roadmap-and-backlog.md) includes "ADR statuses match the OD/VX register".
+
+- _ADR rot_: the code changes but the ADR is never superseded. Mitigation: every ADR names the test IDs or CI checks that enforce it. If those checks are changed or removed, the PR diff shows it.
+- _Status drift_: a Proposed ADR stays Proposed after its OD closes. Mitigation: the milestone exit checklist in [docs/12](../12-roadmap-and-backlog.md) includes "ADR statuses match the OD/VX register".
 
 ## When to revisit
 

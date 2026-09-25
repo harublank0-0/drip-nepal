@@ -4,13 +4,13 @@ Status: Draft v1 (2026-09-25)
 
 ## Status
 
-| Field | Value |
-|---|---|
-| Decision status | **Accepted** |
-| Date | 2026-09-25 |
-| Deciders | Lead developer, product owner |
-| Supersedes | — |
-| Superseded by | — |
+| Field              | Value                                                                                                                    |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| Decision status    | **Accepted**                                                                                                             |
+| Date               | 2026-09-25                                                                                                               |
+| Deciders           | Lead developer, product owner                                                                                            |
+| Supersedes         | —                                                                                                                        |
+| Superseded by      | —                                                                                                                        |
 | Related open items | OD-25: upgrade to @adonisjs/inertia 5 + @inertiajs/react 3 + @adonisjs/vite 6. This decision holds under either version. |
 
 ## Context
@@ -26,6 +26,7 @@ Customer account and auth pages sit between them.
 **Installed stack** [Verified-repo, `pnpm-lock.yaml`]: @adonisjs/inertia 4.2.0, @inertiajs/react 2.3.27, React 19.2.7, Vite 7, Tailwind 4.3.1.
 
 **The current SSR setup is broken (RF-08, audit A5-03, A3-09)** [Verified-repo]:
+
 - `config/inertia.ts:11` sets `ssr.enabled: true`, but `vite.config.ts:11` passes `inertia({ ssr: { enabled: false, … } })`.
 - In adapter 4.2.0 the SSR bundle is built only when the Vite plugin's flag is true, and in production the server imports that bundle for every SSR page. After `node ace build`, every full page load, including the 500 error page, would fail.
 - `inertia/app.tsx:30` calls `createRoot`, not `hydrateRoot`, so the server HTML is thrown away and re-rendered on the client.
@@ -34,6 +35,7 @@ Customer account and auth pages sit between them.
 **Per-page SSR is supported.** @adonisjs/inertia 4.2.0 `defineConfig` accepts `ssr.pages` as `string[]` or `(ctx, page) => boolean` [Verified-doc, @adonisjs/inertia 4.2.0 `build/src/types.d.ts`, https://registry.npmjs.org/@adonisjs/inertia/-/inertia-4.2.0.tgz, accessed 2026-09-25]. The current AdonisJS guide, which targets adapter 5, documents the same option [Verified-doc, https://docs.adonisjs.com/guides/frontend/inertia, accessed 2026-09-25]. The brief's open question, "SSR disabled per page if supported — verify", is therefore resolved: it is supported.
 
 **Requirements.**
+
 - FR-SRCH-005 requires SSR, canonical URLs, a sitemap and JSON-LD for the storefront (R1).
 - The proposed performance targets are LCP p75 ≤ 2.5 s, INP p75 ≤ 200 ms, CLS ≤ 0.1 and initial storefront JS ≤ 250 KB gzip per route [Assumption; texts owned by [docs/01](../01-product-requirements.md)].
 - Seller and admin pages have no SEO value. Rendering them on the server spends CPU on the single small VPS proposed in ADR-0016.
@@ -48,6 +50,7 @@ Customer account and auth pages sit between them.
    - `auth/`: `/login`, `/signup`, `/verify-email`, `/forgot-password`, `/reset-password`. [Assumption: auth pages are reached from emails and shared links on phones and are cheap to render.]
 
    `account/`, `seller/` and `admin/` pages render client-side.
+
 3. **Fix RF-08 in M0.**
    - Set the Vite plugin's `ssr.enabled` to `true`.
    - The client entry hydrates when the root element already contains server markup and mounts otherwise (`el.hasChildNodes() ? hydrateRoot(...) : createRoot(...).render(...)`).
@@ -66,29 +69,32 @@ Customer account and auth pages sit between them.
 
 ## Alternatives considered
 
-| Alternative | Why rejected |
-|---|---|
-| Next.js (RSC) storefront + Adonis API backend | Two runtimes, two deployments and duplicated session/CSRF handling, all for 1–2 developers. Shadcn UI Kit dashboards being Next.js apps is not a reason (ADR-0015 treats them as reference only). |
-| SSR for every page | Spends VPS CPU on authenticated dashboards with no SEO value. It also enlarges the SSR bundle and the hydration-mismatch surface (locale, dates, theme). |
-| CSR for every page (SPA) | Fails FR-SRCH-005. Crawlers and link previews get an empty shell, and first paint on slow mobile connections waits for the full JS bundle. |
-| Separate React Router SPA for seller and admin, consuming only `/api/v1` | A second routing, auth-redirect and build setup. Inertia already provides server-driven routing with session auth. |
-| Server-only Edge templates for the storefront | The variant picker, cart and filters need React anyway, and the components would be duplicated. |
+| Alternative                                                              | Why rejected                                                                                                                                                                                      |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Next.js (RSC) storefront + Adonis API backend                            | Two runtimes, two deployments and duplicated session/CSRF handling, all for 1–2 developers. Shadcn UI Kit dashboards being Next.js apps is not a reason (ADR-0015 treats them as reference only). |
+| SSR for every page                                                       | Spends VPS CPU on authenticated dashboards with no SEO value. It also enlarges the SSR bundle and the hydration-mismatch surface (locale, dates, theme).                                          |
+| CSR for every page (SPA)                                                 | Fails FR-SRCH-005. Crawlers and link previews get an empty shell, and first paint on slow mobile connections waits for the full JS bundle.                                                        |
+| Separate React Router SPA for seller and admin, consuming only `/api/v1` | A second routing, auth-redirect and build setup. Inertia already provides server-driven routing with session auth.                                                                                |
+| Server-only Edge templates for the storefront                            | The variant picker, cart and filters need React anyway, and the components would be duplicated.                                                                                                   |
 
 ## Consequences
 
 **Positive**
+
 - Storefront pages arrive as HTML: indexable, previewable, and painted before JavaScript downloads. This matters most on congested mobile networks.
 - Seller and admin pages cost no SSR CPU, and dashboard libraries such as tables and charts never enter the SSR bundle.
 - One component library and one form stack (TanStack Form) across all surfaces.
 
 **Negative**
+
 - Two rendering modes. A component used on both kinds of page must be SSR-safe, and reviewers must know which pages SSR.
 - SSR runs in the `web` process. A render-time exception or memory leak affects every storefront request on that instance.
 - Adapter 4.2.0 and Inertia v2 are now the legacy line, so examples in current Adonis docs will not compile as-is (OD-25).
 
 **Risks**
-- *Silent SSR build failure* (RF-08 shows it happens only in production builds). Mitigation: the CI production-build smoke test below.
-- *Hydration mismatches* from ICU data differences between Node and browsers (unquantified; `ui_frontend` research). Mitigation: explicit locale formatting, and Playwright checks for hydration warnings on core pages.
+
+- _Silent SSR build failure_ (RF-08 shows it happens only in production builds). Mitigation: the CI production-build smoke test below.
+- _Hydration mismatches_ from ICU data differences between Node and browsers (unquantified; `ui_frontend` research). Mitigation: explicit locale formatting, and Playwright checks for hydration warnings on core pages.
 
 ## When to revisit
 

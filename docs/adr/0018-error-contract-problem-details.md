@@ -4,29 +4,32 @@ Status: Draft v1 (2026-09-25)
 
 ## Status
 
-| Field | Value |
-|---|---|
-| Decision status | **Accepted** |
-| Date | 2026-09-25 |
-| Deciders | Tech lead (lead developer) |
-| Supersedes | — |
-| Superseded by | — |
+| Field              | Value                                                                                                                                                                                |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Decision status    | **Accepted**                                                                                                                                                                         |
+| Date               | 2026-09-25                                                                                                                                                                           |
+| Deciders           | Tech lead (lead developer)                                                                                                                                                           |
+| Supersedes         | —                                                                                                                                                                                    |
+| Superseded by      | —                                                                                                                                                                                    |
 | Related open items | OD-13 (JSON casing: the extension members `request_id` and `errors[]` follow it; the RFC members do not change); fixes RF-36 (raw messages in 5xx) and RF-12 (empty error responses) |
 
 ## Context
 
 **Repository today** [Verified-repo, audit evidence]:
+
 - `app/exceptions/handler.ts:10` sets `debug = !app.inProduction`. Line 17 enables status pages only in production: 404 → `errors/not_found`, 500..599 → `errors/server_error`. Lines 32–34 delegate `handle` to the parent class.
 - For a request that negotiates JSON, @adonisjs/http-server 9.1.0 `renderErrorAsJSON` sends `{ message: error.message }` whenever debug is off. Knex and pg errors put SQL text and constraint names in `message`, so production 5xx bodies leak internals (**RF-36**).
 - Login swallows non-credential errors and returns an empty response (**RF-12**).
 - There are no machine-readable error codes anywhere.
 
 **Framework facts** [Verified-doc, `adonis_stack` research, accessed 2026-09-25]:
+
 - For Inertia requests with a session, @adonisjs/session 8.1.0 flashes validation errors and redirects back. @adonisjs/inertia 4.2.0 keeps only the first message per field.
 - @tuyau/core 1.2.2 adds a `422 { errors: SimpleError[] }` variant to every route's error type. Its `validationErrorType` option can replace that type. The client exports `TuyauHTTPError`.
 - Adonis 7 has no OpenAPI generator, so [openapi.yaml](../openapi.yaml) is written by hand and enforced by T-API-001.
 
 **RFC 9457** [Verified-doc, https://www.rfc-editor.org/rfc/rfc9457.html, accessed 2026-09-25]:
+
 - It obsoletes RFC 7807 and defines `application/problem+json`, with members `type`, `status`, `title`, `detail` and `instance`.
 - `type` defaults to `about:blank`. "It is RECOMMENDED that absolute URIs be used in 'type'."
 - `title` "SHOULD NOT change from occurrence to occurrence of the problem, except for localization."
@@ -34,6 +37,7 @@ Status: Draft v1 (2026-09-25)
 - The security considerations warn against exposing "implementation details such as a stack dump".
 
 **Who consumes errors:**
+
 - the Inertia pages, which call `/api/v1` through Tuyau (ADR-0004);
 - the R3 mobile app;
 - support staff quoting a request ID;
@@ -54,7 +58,11 @@ They need structured conflicts (`OUT_OF_STOCK` lines, `PRICE_CHANGED` with a new
      "code": "VALIDATION_FAILED",
      "request_id": "0b7c9f2e-4d1a-4e8b-9a51-2f6d0c3e7a10",
      "errors": [
-       { "field": "recipient_phone", "code": "regex", "message": "Enter a 10-digit mobile number starting with 96, 97 or 98." }
+       {
+         "field": "recipient_phone",
+         "code": "regex",
+         "message": "Enter a 10-digit mobile number starting with 96, 97 or 98."
+       }
      ]
    }
    ```
@@ -68,40 +76,43 @@ They need structured conflicts (`OUT_OF_STOCK` lines, `PRICE_CHANGED` with a new
    - **`errors[]`** appears only for `VALIDATION_FAILED`, as `{field, code, message}`. `field` is the dotted input path (`items.0.quantity`), and `code` is the validator rule name.
    - **Extension members.** Code-specific members are defined per code in [docs/06](../06-api-design.md), for example the current representation for `VERSION_CONFLICT`.
    - **`instance`** is omitted in R1.
+
 2. **Canonical codes** (canon §6.6):
 
-   | Status | Codes |
-   |---|---|
-   | 400 | `INVALID_QUERY_PARAMETER` (unknown or invalid query parameter), `IDEMPOTENCY_KEY_REQUIRED` |
-   | 401 | `UNAUTHENTICATED`, `MFA_REQUIRED` |
-   | 403 | `FORBIDDEN` (an in-scope actor lacks the permission; also a CSRF failure), `ACCOUNT_SUSPENDED`, `SHOP_NOT_ACTIVE`, `EMAIL_NOT_VERIFIED` |
-   | 404 | `NOT_FOUND` (missing, **or belonging to another shop or customer**, or an unknown route) |
-   | 409 | `CONFLICT`, `IDEMPOTENCY_IN_PROGRESS`, `OUT_OF_STOCK`, `PRICE_CHANGED`, `CART_CHANGED`, `INVALID_STATE_TRANSITION` |
-   | 412 | `VERSION_CONFLICT` (`If-Match` mismatch; the body carries the current representation) |
-   | 413 | `PAYLOAD_TOO_LARGE` |
-   | 422 | `VALIDATION_FAILED` (including an unparseable JSON body), `IDEMPOTENCY_KEY_REUSED`, `DELIVERY_NOT_AVAILABLE`, `COD_LIMIT_EXCEEDED`, `REFUND_EXCEEDS_REFUNDABLE` |
-   | 428 | `PRECONDITION_REQUIRED` (`If-Match` missing) |
-   | 429 | `RATE_LIMITED`, with `Retry-After` |
-   | 500 | `INTERNAL` |
-   | 503 | `PROVIDER_UNAVAILABLE`, with `Retry-After` |
+   | Status | Codes                                                                                                                                                           |
+   | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+   | 400    | `INVALID_QUERY_PARAMETER` (unknown or invalid query parameter), `IDEMPOTENCY_KEY_REQUIRED`                                                                      |
+   | 401    | `UNAUTHENTICATED`, `MFA_REQUIRED`                                                                                                                               |
+   | 403    | `FORBIDDEN` (an in-scope actor lacks the permission; also a CSRF failure), `ACCOUNT_SUSPENDED`, `SHOP_NOT_ACTIVE`, `EMAIL_NOT_VERIFIED`                         |
+   | 404    | `NOT_FOUND` (missing, **or belonging to another shop or customer**, or an unknown route)                                                                        |
+   | 409    | `CONFLICT`, `IDEMPOTENCY_IN_PROGRESS`, `OUT_OF_STOCK`, `PRICE_CHANGED`, `CART_CHANGED`, `INVALID_STATE_TRANSITION`                                              |
+   | 412    | `VERSION_CONFLICT` (`If-Match` mismatch; the body carries the current representation)                                                                           |
+   | 413    | `PAYLOAD_TOO_LARGE`                                                                                                                                             |
+   | 422    | `VALIDATION_FAILED` (including an unparseable JSON body), `IDEMPOTENCY_KEY_REUSED`, `DELIVERY_NOT_AVAILABLE`, `COD_LIMIT_EXCEEDED`, `REFUND_EXCEEDS_REFUNDABLE` |
+   | 428    | `PRECONDITION_REQUIRED` (`If-Match` missing)                                                                                                                    |
+   | 429    | `RATE_LIMITED`, with `Retry-After`                                                                                                                              |
+   | 500    | `INTERNAL`                                                                                                                                                      |
+   | 503    | `PROVIDER_UNAVAILABLE`, with `Retry-After`                                                                                                                      |
 
    Adding a code means updating this table, `openapi.yaml` and the code enum in the same PR. Changing a code's meaning needs a superseding ADR (ADR-0001).
+
 3. **404, not 403, across tenants.**
    - Resources in another shop, or another customer's orders, return `NOT_FOUND` with the same `title` and `detail` as a genuinely missing ID. The response is produced by the same scoped query, so the body and the timing give no hint.
    - `FORBIDDEN` is reserved for actors inside the scope, such as a shop member without the permission (ADR-0006).
    - No code may act as an existence oracle. For example, signup with a registered email gets the same response as a new one (RF-38; the flow is in [docs/07](../07-security-threat-model-and-permissions.md)).
 4. **One translation point.** Domain code throws `DomainError(code, { detail?, extensions? })`, with status and title taken from the code registry. The exception handler maps everything else:
 
-   | Source error | Result |
-   |---|---|
-   | Validator errors | `VALIDATION_FAILED` with `errors[]` |
-   | Auth guard | `UNAUTHENTICATED` |
-   | Limiter | `RATE_LIMITED` |
-   | Body-size limit | `PAYLOAD_TOO_LARGE` |
-   | PostgreSQL 23505 on an allow-listed constraint | Its mapped code (for example a field error) |
-   | Anything else | `INTERNAL`, with detail "Something went wrong. Quote the request ID to support." |
+   | Source error                                   | Result                                                                           |
+   | ---------------------------------------------- | -------------------------------------------------------------------------------- |
+   | Validator errors                               | `VALIDATION_FAILED` with `errors[]`                                              |
+   | Auth guard                                     | `UNAUTHENTICATED`                                                                |
+   | Limiter                                        | `RATE_LIMITED`                                                                   |
+   | Body-size limit                                | `PAYLOAD_TOO_LARGE`                                                              |
+   | PostgreSQL 23505 on an allow-listed constraint | Its mapped code (for example a field error)                                      |
+   | Anything else                                  | `INTERNAL`, with detail "Something went wrong. Quote the request ID to support." |
 
    Production never echoes `error.message`, SQL, constraint names or stacks (RF-36).
+
 5. **Logging.** `report()` sends the full error, with `request_id`, to the logs and the error tracker: 4xx at info, 5xx at error. Nothing in `detail` repeats submitted personal data.
 6. **How Inertia pages consume it.**
    - **Mutations.** A thin `apiCall()` wrapper catches `TuyauHTTPError` and parses the body into a typed `Problem`. Tuyau's `validationErrorType` is set to that type (an M0 check; if the option cannot express it, the wrapper narrows the type instead).
@@ -117,28 +128,31 @@ They need structured conflicts (`OUT_OF_STOCK` lines, `PRICE_CHANGED` with a new
 
 ## Alternatives considered
 
-| Alternative | Why rejected |
-|---|---|
-| Ad-hoc JSON per controller (`{ message }`, `{ error }`) | The current state. No stable codes, inconsistent shapes, and it leaks internals (RF-36). |
+| Alternative                                                               | Why rejected                                                                                                                                                                                    |
+| ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Ad-hoc JSON per controller (`{ message }`, `{ error }`)                   | The current state. No stable codes, inconsistent shapes, and it leaks internals (RF-36).                                                                                                        |
 | JSON:API error objects (`{ errors: [{ status, code, source.pointer }] }`) | Designed for JSON:API documents. Our success bodies are plain transformer output, so mixing the two confuses clients. The top-level array complicates single-error handling. No Adonis tooling. |
-| Adonis default renderer | Validation errors and other errors take different shapes. With debug off it still returns `error.message` [Verified-repo]. |
-| Inertia redirect-back error bag for all mutations | Lossy (first message per field), no codes, unusable by the mobile app and contract tests (ADR-0004). |
-| HTTP 200 with an error body | Breaks HTTP semantics, monitoring and retry logic. |
+| Adonis default renderer                                                   | Validation errors and other errors take different shapes. With debug off it still returns `error.message` [Verified-repo].                                                                      |
+| Inertia redirect-back error bag for all mutations                         | Lossy (first message per field), no codes, unusable by the mobile app and contract tests (ADR-0004).                                                                                            |
+| HTTP 200 with an error body                                               | Breaks HTTP semantics, monitoring and retry logic.                                                                                                                                              |
 
 ## Consequences
 
 **Positive**
+
 - One documented shape for every client. Codes are stable across releases and languages.
 - Support can find any failure from the `request_id` a user quotes.
 - Tenant boundaries are not leaked through status codes.
 
 **Negative**
+
 - Every new failure mode needs a code decision and an OpenAPI update.
 - The client needs a wrapper instead of Inertia's built-in error bag.
 
 **Risks**
-- *Code sprawl or drift between code and spec.* Mitigation: the registry test below.
-- *A handler path bypasses the mapping and leaks a message.* Mitigation: the production-mode test below.
+
+- _Code sprawl or drift between code and spec._ Mitigation: the registry test below.
+- _A handler path bypasses the mapping and leaks a message._ Mitigation: the production-mode test below.
 
 ## When to revisit
 

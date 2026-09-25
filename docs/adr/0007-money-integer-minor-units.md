@@ -4,18 +4,19 @@ Status: Draft v1 (2026-09-25)
 
 ## Status
 
-| Field | Value |
-|---|---|
-| Decision status | **Accepted** |
-| Date | 2026-09-25 |
-| Deciders | Lead developer, product owner |
-| Supersedes | — |
-| Superseded by | — |
+| Field              | Value                                                                                                                                        |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Decision status    | **Accepted**                                                                                                                                 |
+| Date               | 2026-09-25                                                                                                                                   |
+| Deciders           | Lead developer, product owner                                                                                                                |
+| Supersedes         | —                                                                                                                                            |
+| Superseded by      | —                                                                                                                                            |
 | Related open items | VX-12 (NPR display conventions), OD-11 / OD-26 (VAT display, invoicing): these affect presentation and tax columns, not the storage decision |
 
 ## Context
 
 **Repository findings** [Verified-repo, RF-16, audit F9, A3-02, A3-03, A3-07]:
+
 - Money is `decimal(10,2)` with no currency column and no CHECKs: `product_variants.price`, `orders.subtotal/discount_total/shipping_total/grand_total`, `order_items.unit_price/sub_total`, `payments.amount`.
 - The generated `database/schema.ts` types them as `string` (`:367 declare price: string`, `:220 declare grandTotal: string`).
 - The UI multiplies JavaScript numbers (`inertia/components/commerce/cart/cart_item.tsx:112 (item.price * item.quantity)`).
@@ -25,6 +26,7 @@ Status: Draft v1 (2026-09-25)
 **Framework.** Lucid 22.4.2's schema generator maps `decimal`/`numeric` to `string` and `bigint` to `bigint | number` [Verified-doc, Lucid 22.4.2 `schema_generator/rules.js`, accessed 2026-09-25]. The pg driver returns int8 as a string by default, so bigint columns need an explicit, guarded parser.
 
 **Payment providers** [Verified-doc, `nepal_payments` research, accessed 2026-09-25]:
+
 - Khalti KPG-2 `amount` is in paisa and must exceed Rs 10, i.e. 1000 paisa (https://docs.khalti.com/khalti-epayment/).
 - connectIPS `TXNAMT` is in paisa (https://doc.connectips.com/docs/connectIPS-Gateway/merchant-interface).
 - eSewa ePay sends rupee values in `amount`/`total_amount` and signs `total_amount` in the HMAC string (https://developer.esewa.com.np/pages/Epay).
@@ -56,36 +58,39 @@ Status: Draft v1 (2026-09-25)
 
 **Worked examples**
 
-| Case | Input | Result |
-|---|---|---|
-| Commission 12.5 % on a line | `line_total_minor` 99,950, `commission_rate_bp` 1,250 | 99,950 × 1,250 / 10,000 = 12,493.75 → half-up **12,494** |
-| Refund Rs 100 split over 3 equal lines | 10,000 paisa, weights 1:1:1 | 3,333.33 each → floors 3,333 × 3 = 9,999 → remainder 1 goes to the lowest id → **3,334 / 3,333 / 3,333** (sum 10,000) |
-| Display | 123,456,750 paisa | `formatNPR` → **Rs 12,34,567.50** |
+| Case                                   | Input                                                 | Result                                                                                                                |
+| -------------------------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Commission 12.5 % on a line            | `line_total_minor` 99,950, `commission_rate_bp` 1,250 | 99,950 × 1,250 / 10,000 = 12,493.75 → half-up **12,494**                                                              |
+| Refund Rs 100 split over 3 equal lines | 10,000 paisa, weights 1:1:1                           | 3,333.33 each → floors 3,333 × 3 = 9,999 → remainder 1 goes to the lowest id → **3,334 / 3,333 / 3,333** (sum 10,000) |
+| Display                                | 123,456,750 paisa                                     | `formatNPR` → **Rs 12,34,567.50**                                                                                     |
 
 ## Alternatives considered
 
-| Alternative | Why rejected |
-|---|---|
+| Alternative                                                                    | Why rejected                                                                                                                                                                                                                |
+| ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `numeric(12,2)` + a decimal library (decimal.js / big.js) on server and client | Values arrive as ORM strings, a library is needed in the browser bundle, rounding mode must be chosen per operation, and every gateway boundary still converts to paisa. The only real benefit is human-readable DB values. |
-| Floating point (`double precision`, JS number rupees) | Binary rounding errors (0.1 + 0.2). It already causes drift in the current cart (RF-16). |
-| Integer rupees (no paisa) | Khalti and connectIPS work in paisa. Commission and allocation results need sub-rupee precision to add up exactly. |
-| Currency implied by the table (no per-row column) | A per-row `currency` with a CHECK costs 3 bytes and makes the single-currency invariant explicit and testable. |
-| Composite PostgreSQL money type or JSONB amounts | `SUM()`, CHECK constraints and indexes become awkward. The built-in `money` type is locale-dependent. |
+| Floating point (`double precision`, JS number rupees)                          | Binary rounding errors (0.1 + 0.2). It already causes drift in the current cart (RF-16).                                                                                                                                    |
+| Integer rupees (no paisa)                                                      | Khalti and connectIPS work in paisa. Commission and allocation results need sub-rupee precision to add up exactly.                                                                                                          |
+| Currency implied by the table (no per-row column)                              | A per-row `currency` with a CHECK costs 3 bytes and makes the single-currency invariant explicit and testable.                                                                                                              |
+| Composite PostgreSQL money type or JSONB amounts                               | `SUM()`, CHECK constraints and indexes become awkward. The built-in `money` type is locale-dependent.                                                                                                                       |
 
 ## Consequences
 
 **Positive**
+
 - Totals, allocations and ledger balances are exact. DB CHECKs stop inconsistent totals even when application code has bugs (backstop for T-SEC-004).
 - Khalti and connectIPS amounts map one to one, and the ledger `SUM(amount_minor)` is exact (ADR-0009).
 - One formatter removes the Devanagari/Latin mix and SSR/client hydration differences (RF-25).
 
 **Negative**
+
 - Every vendor input and every display converts between rupees and paisa. Developers must remember that `*_minor` means paisa.
 - The bigint parser and schema rules add setup in M0.
 
 **Risks**
-- *Someone divides by 100 into a float for display, or uses `toFixed` in business code.* Mitigation: an ESLint `no-restricted-syntax` rule bans `parseFloat` and `toFixed` in `app/modules/**` and `inertia/**` outside the formatter file. Review checklist in [docs/09](../09-code-structure-and-engineering-standards.md).
-- *The VAT decision (OD-26) later requires per-line tax.* The nullable `tax_minor`/`tax_rate_bp` columns and half-up line rounding already accommodate it. The 13/113 inclusive-tax fraction [Verify-external VX-05] becomes a pricing function.
+
+- _Someone divides by 100 into a float for display, or uses `toFixed` in business code._ Mitigation: an ESLint `no-restricted-syntax` rule bans `parseFloat` and `toFixed` in `app/modules/**` and `inertia/**` outside the formatter file. Review checklist in [docs/09](../09-code-structure-and-engineering-standards.md).
+- _The VAT decision (OD-26) later requires per-line tax._ The nullable `tax_minor`/`tax_rate_bp` columns and half-up line rounding already accommodate it. The 13/113 inclusive-tax fraction [Verify-external VX-05] becomes a pricing function.
 
 ## When to revisit
 

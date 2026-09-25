@@ -11,20 +11,20 @@ This document describes the end-to-end journeys that DripNepal must support for 
 
 This document owns journeys, state coverage and acceptance criteria only. It does not repeat rules owned elsewhere. It links to them instead:
 
-| Topic | Owner document |
-|---|---|
-| Context, repository findings (RF-xx), assumptions | [00 context and findings](00-context-assumptions-and-questions.md) |
-| Requirement text (FR/NFR), scope, metrics | [01 requirements](01-product-requirements.md) |
-| Modules, jobs, process layout | [03 architecture](03-system-architecture.md) |
-| Tables, columns, invariants, retention | [04 domain model](04-domain-model-and-data-dictionary.md) |
-| Transition tables, checkout algorithm, ledger postings | [05 state machines](05-order-payment-and-inventory-lifecycles.md) |
-| API conventions and endpoint catalogue | [06 API](06-api-design.md) and [openapi.yaml](openapi.yaml) |
-| Threats, permission maps, privacy | [07 security and privacy](07-security-threat-model-and-permissions.md) |
-| Screens, components, copy, accessibility | [08 UI/UX](08-ui-ux-and-design-system.md) |
-| Test catalogue and CI gates | [10 testing](10-testing-and-quality-gates.md) |
-| Runbooks, alerts, jobs in operation | [11 operations](11-deployment-and-operations.md) |
-| Milestones, backlog, master traceability matrix | [12 milestones and traceability](12-roadmap-and-backlog.md) |
-| Open decisions (OD), external verifications (VX), risks | [risks and open decisions](risks-and-open-decisions.md) |
+| Topic                                                   | Owner document                                                         |
+| ------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Context, repository findings (RF-xx), assumptions       | [00 context and findings](00-context-assumptions-and-questions.md)     |
+| Requirement text (FR/NFR), scope, metrics               | [01 requirements](01-product-requirements.md)                          |
+| Modules, jobs, process layout                           | [03 architecture](03-system-architecture.md)                           |
+| Tables, columns, invariants, retention                  | [04 domain model](04-domain-model-and-data-dictionary.md)              |
+| Transition tables, checkout algorithm, ledger postings  | [05 state machines](05-order-payment-and-inventory-lifecycles.md)      |
+| API conventions and endpoint catalogue                  | [06 API](06-api-design.md) and [openapi.yaml](openapi.yaml)            |
+| Threats, permission maps, privacy                       | [07 security and privacy](07-security-threat-model-and-permissions.md) |
+| Screens, components, copy, accessibility                | [08 UI/UX](08-ui-ux-and-design-system.md)                              |
+| Test catalogue and CI gates                             | [10 testing](10-testing-and-quality-gates.md)                          |
+| Runbooks, alerts, jobs in operation                     | [11 operations](11-deployment-and-operations.md)                       |
+| Milestones, backlog, master traceability matrix         | [12 milestones and traceability](12-roadmap-and-backlog.md)            |
+| Open decisions (OD), external verifications (VX), risks | [risks and open decisions](risks-and-open-decisions.md)                |
 
 Architecture decisions are cited by number (for example ADR-0009). They live in [docs/adr](adr/).
 
@@ -46,62 +46,62 @@ Test references use the fixed canonical IDs (for example T-INV-003, T-CHK-004, T
 
 ### 1.3 State-coverage classes
 
-| Class | What the row must answer |
-|---|---|
-| Success | What the actor sees and what the system has stored when everything works. |
-| Empty | What happens when there is nothing to show or act on (first use, no results, all filtered out). |
-| Validation | Which inputs are rejected, with which code, and how the error reaches the field. |
-| Permission | Who is refused, with which code. Other tenants' resources return `NOT_FOUND (404)`, never 403 (canon §6.6). |
-| Concurrency | What happens with two tabs, two staff members, a job racing a human, or a retried request. |
-| External-provider failure | Behaviour when email, object storage, the payment gateway or the courier (off-platform) is slow, down or ambiguous. |
-| Recovery | How the actor gets back to a good state after a timeout, closed tab, expired link or partial failure, without creating duplicates. |
+| Class                     | What the row must answer                                                                                                           |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Success                   | What the actor sees and what the system has stored when everything works.                                                          |
+| Empty                     | What happens when there is nothing to show or act on (first use, no results, all filtered out).                                    |
+| Validation                | Which inputs are rejected, with which code, and how the error reaches the field.                                                   |
+| Permission                | Who is refused, with which code. Other tenants' resources return `NOT_FOUND (404)`, never 403 (canon §6.6).                        |
+| Concurrency               | What happens with two tabs, two staff members, a job racing a human, or a retried request.                                         |
+| External-provider failure | Behaviour when email, object storage, the payment gateway or the courier (off-platform) is slow, down or ambiguous.                |
+| Recovery                  | How the actor gets back to a good state after a timeout, closed tab, expired link or partial failure, without creating duplicates. |
 
 ## 2. Journey index
 
-| ID | Journey | Surface | Primary actors | Release | Milestone | Primary FRs |
-|---|---|---|---|---|---|---|
-| J-01 | Browse & discover | Storefront | Guest, customer | R1 | M4 | FR-SRCH-001, 002, 003, 005, 007; FR-CAT-001 |
-| J-02 | Product detail & variant selection | Storefront | Guest, customer | R1 | M4 | FR-SRCH-004; FR-CAT-004, 012; FR-PROMO-001 |
-| J-03 | Cart | Storefront | Guest, customer | R1 | M5 | FR-CART-001, 002, 003 |
-| J-04 | Sign up & verify | Auth | Guest | R1 | M1 | FR-IAM-001, 002, 003, 013 |
-| J-05 | Checkout COD | Storefront | Customer | R1 | M5 | FR-CHK-001, 002, 003, 004, 005, 007; FR-IAM-012; FR-NOT-002 |
-| J-06 | Checkout gateway | Storefront | Customer, system, gateway | R1.1 | M8 | FR-CHK-006; FR-PAY-002, 003, 004 |
-| J-07 | Customer order tracking & cancellation | Account | Customer | R1 | M6 | FR-ORD-001, 002 |
-| J-08 | Shop application & approval | Account, admin, seller | Applicant, catalog moderator | R1 | M2 | FR-SHOP-001, 002, 003, 004, 010, 013, 014 |
-| J-09 | Staff invitation | Seller | Owner, invitee | R1 | M2 | FR-SHOP-005, 006 |
-| J-10 | Product creation & publication | Seller | Owner, manager, catalog editor | R1 | M3 | FR-CAT-003 to 008, 011, 012; FR-MED-001, 002 |
-| J-11 | Inventory management | Seller | Owner, manager, catalog editor, system | R1 | M3 | FR-INV-001, 002, 003, 005 |
-| J-12 | Vendor order processing & fulfillment | Seller | Order fulfiller, manager, owner, system | R1 | M6 | FR-ORD-003, 004; FR-FUL-001; FR-NOT-002, 003 |
-| J-13 | COD delivery outcome & RTO | Seller | Order fulfiller, system | R1 | M6, M7 | FR-FUL-002, 003; FR-PAY-001; FR-LED-002; FR-CHK-007; FR-ORD-006 |
-| J-14 | Refund (admin-initiated) | Admin | Support agent, finance officer | R1 manual; R1.1 gateway | M7, M8 | FR-RET-001, 003, 007 |
-| J-15 | Vendor ledger & remittance/payout | Seller, admin | Owner, manager, finance officer | R1 remittance; R1.1 payout | M7, M8 | FR-LED-001 to 005 |
-| J-16 | Admin moderation (shops/products) | Admin | Catalog moderator, platform admin | R1 | M2, M3 | FR-SHOP-002; FR-CAT-005, 006; FR-ADM-001 |
-| J-17 | Account suspension & recovery | Admin, all | Platform admin, affected user or shop | R1 | M1, M2 | FR-IAM-006; FR-ADM-002; FR-SHOP-007 |
-| J-18 | Password reset | Auth, account | Any user | R1 | M1 | FR-IAM-004, 005 |
-| J-19 | Support case / grievance | Account, admin, seller | Customer, support agent, shop members | R1 | M7 | FR-ADM-009, 011; FR-RET-005 |
-| J-20 | Support-mediated return | Admin, seller | Customer, support agent, order fulfiller, finance officer | R1 | M6, M7 | FR-RET-006, 001, 007 |
+| ID   | Journey                                | Surface                | Primary actors                                            | Release                    | Milestone | Primary FRs                                                     |
+| ---- | -------------------------------------- | ---------------------- | --------------------------------------------------------- | -------------------------- | --------- | --------------------------------------------------------------- |
+| J-01 | Browse & discover                      | Storefront             | Guest, customer                                           | R1                         | M4        | FR-SRCH-001, 002, 003, 005, 007; FR-CAT-001                     |
+| J-02 | Product detail & variant selection     | Storefront             | Guest, customer                                           | R1                         | M4        | FR-SRCH-004; FR-CAT-004, 012; FR-PROMO-001                      |
+| J-03 | Cart                                   | Storefront             | Guest, customer                                           | R1                         | M5        | FR-CART-001, 002, 003                                           |
+| J-04 | Sign up & verify                       | Auth                   | Guest                                                     | R1                         | M1        | FR-IAM-001, 002, 003, 013                                       |
+| J-05 | Checkout COD                           | Storefront             | Customer                                                  | R1                         | M5        | FR-CHK-001, 002, 003, 004, 005, 007; FR-IAM-012; FR-NOT-002     |
+| J-06 | Checkout gateway                       | Storefront             | Customer, system, gateway                                 | R1.1                       | M8        | FR-CHK-006; FR-PAY-002, 003, 004                                |
+| J-07 | Customer order tracking & cancellation | Account                | Customer                                                  | R1                         | M6        | FR-ORD-001, 002                                                 |
+| J-08 | Shop application & approval            | Account, admin, seller | Applicant, catalog moderator                              | R1                         | M2        | FR-SHOP-001, 002, 003, 004, 010, 013, 014                       |
+| J-09 | Staff invitation                       | Seller                 | Owner, invitee                                            | R1                         | M2        | FR-SHOP-005, 006                                                |
+| J-10 | Product creation & publication         | Seller                 | Owner, manager, catalog editor                            | R1                         | M3        | FR-CAT-003 to 008, 011, 012; FR-MED-001, 002                    |
+| J-11 | Inventory management                   | Seller                 | Owner, manager, catalog editor, system                    | R1                         | M3        | FR-INV-001, 002, 003, 005                                       |
+| J-12 | Vendor order processing & fulfillment  | Seller                 | Order fulfiller, manager, owner, system                   | R1                         | M6        | FR-ORD-003, 004; FR-FUL-001; FR-NOT-002, 003                    |
+| J-13 | COD delivery outcome & RTO             | Seller                 | Order fulfiller, system                                   | R1                         | M6, M7    | FR-FUL-002, 003; FR-PAY-001; FR-LED-002; FR-CHK-007; FR-ORD-006 |
+| J-14 | Refund (admin-initiated)               | Admin                  | Support agent, finance officer                            | R1 manual; R1.1 gateway    | M7, M8    | FR-RET-001, 003, 007                                            |
+| J-15 | Vendor ledger & remittance/payout      | Seller, admin          | Owner, manager, finance officer                           | R1 remittance; R1.1 payout | M7, M8    | FR-LED-001 to 005                                               |
+| J-16 | Admin moderation (shops/products)      | Admin                  | Catalog moderator, platform admin                         | R1                         | M2, M3    | FR-SHOP-002; FR-CAT-005, 006; FR-ADM-001                        |
+| J-17 | Account suspension & recovery          | Admin, all             | Platform admin, affected user or shop                     | R1                         | M1, M2    | FR-IAM-006; FR-ADM-002; FR-SHOP-007                             |
+| J-18 | Password reset                         | Auth, account          | Any user                                                  | R1                         | M1        | FR-IAM-004, 005                                                 |
+| J-19 | Support case / grievance               | Account, admin, seller | Customer, support agent, shop members                     | R1                         | M7        | FR-ADM-009, 011; FR-RET-005                                     |
+| J-20 | Support-mediated return                | Admin, seller          | Customer, support agent, order fulfiller, finance officer | R1                         | M6, M7    | FR-RET-006, 001, 007                                            |
 
 docs/12 holds the master traceability matrix (FR → journey → entities → operationIds → permissions → tests → milestone). The milestone column above follows canon §4. J-19 and J-20 are placed in M7 and M6/M7 as an [Assumption] until docs/12 assigns them.
 
 ## 3. Actors
 
-| Actor | Identity and state | Can do (summary; permission maps are owned by docs/07) |
-|---|---|---|
-| Guest | No session user; guest cart token cookie | Browse, search, view products, keep a server-side cart. Cannot check out [Confirmed Q6]. |
-| Customer (pending) | `users.status = pending_verification` | Browse, cart, account pages, resend verification. Checkout and shop application refused with `EMAIL_NOT_VERIFIED (403)`. |
-| Customer | `users.status = active`, verified email, Nepal mobile on the account | Check out, track and cancel orders, open support cases, apply to open a shop. |
-| Shop owner | `shops.owner_user_id` (not a membership row) | All shop permissions, including `shop.staff.manage` and `shop.payout_account.manage`. |
-| Shop manager | `shop_memberships.role = manager` | All shop permissions except staff and payout account. |
-| Catalog editor | `role = catalog_editor` | `shop.products.view`, `shop.products.edit`, `shop.products.publish`, `shop.inventory.adjust`. |
-| Order fulfiller | `role = order_fulfiller` | `shop.orders.view`, `shop.orders.process`, `shop.customer_contact.view`, `shop.products.view`. |
-| Shop viewer | `role = viewer` | `shop.products.view`, `shop.orders.view` with customer contact masked. |
-| Platform admin | `platform_staff.role = platform_admin`, TOTP enrolled | All platform permissions. Admin routes need `mfa_verified_at` within 12 h. |
-| Support agent | `support_agent` | Users view, orders view and intervene, refunds create, support cases, returns. |
-| Catalog moderator | `catalog_moderator` | Shop review, product moderation, users view. |
-| Finance officer | `finance_officer` | Orders view, refunds approve, ledger view and adjust, payouts manage and approve. |
-| System | pg-boss jobs in the `worker` process (ADR-0010) | Timeouts, reconciliation, completion, SLA alerts, emails, listing refresh. Acts with `actor_type = system`. |
-| Payment provider | eSewa or Khalti (OD-03), R1.1 | Browser redirects and server-to-server lookups. Never trusted without lookup (ADR-0012). |
-| Courier | Off-platform, contracted by the vendor [Confirmed Q5] | Delivers and collects COD cash. Has no DripNepal account in R1. The vendor records outcomes. |
+| Actor              | Identity and state                                                   | Can do (summary; permission maps are owned by docs/07)                                                                   |
+| ------------------ | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Guest              | No session user; guest cart token cookie                             | Browse, search, view products, keep a server-side cart. Cannot check out [Confirmed Q6].                                 |
+| Customer (pending) | `users.status = pending_verification`                                | Browse, cart, account pages, resend verification. Checkout and shop application refused with `EMAIL_NOT_VERIFIED (403)`. |
+| Customer           | `users.status = active`, verified email, Nepal mobile on the account | Check out, track and cancel orders, open support cases, apply to open a shop.                                            |
+| Shop owner         | `shops.owner_user_id` (not a membership row)                         | All shop permissions, including `shop.staff.manage` and `shop.payout_account.manage`.                                    |
+| Shop manager       | `shop_memberships.role = manager`                                    | All shop permissions except staff and payout account.                                                                    |
+| Catalog editor     | `role = catalog_editor`                                              | `shop.products.view`, `shop.products.edit`, `shop.products.publish`, `shop.inventory.adjust`.                            |
+| Order fulfiller    | `role = order_fulfiller`                                             | `shop.orders.view`, `shop.orders.process`, `shop.customer_contact.view`, `shop.products.view`.                           |
+| Shop viewer        | `role = viewer`                                                      | `shop.products.view`, `shop.orders.view` with customer contact masked.                                                   |
+| Platform admin     | `platform_staff.role = platform_admin`, TOTP enrolled                | All platform permissions. Admin routes need `mfa_verified_at` within 12 h.                                               |
+| Support agent      | `support_agent`                                                      | Users view, orders view and intervene, refunds create, support cases, returns.                                           |
+| Catalog moderator  | `catalog_moderator`                                                  | Shop review, product moderation, users view.                                                                             |
+| Finance officer    | `finance_officer`                                                    | Orders view, refunds approve, ledger view and adjust, payouts manage and approve.                                        |
+| System             | pg-boss jobs in the `worker` process (ADR-0010)                      | Timeouts, reconciliation, completion, SLA alerts, emails, listing refresh. Acts with `actor_type = system`.              |
+| Payment provider   | eSewa or Khalti (OD-03), R1.1                                        | Browser redirects and server-to-server lookups. Never trusted without lookup (ADR-0012).                                 |
+| Courier            | Off-platform, contracted by the vendor [Confirmed Q5]                | Delivers and collects COD cash. Has no DripNepal account in R1. The vendor records outcomes.                             |
 
 ## 4. Cross-cutting rules for every journey
 
@@ -109,21 +109,21 @@ docs/12 holds the master traceability matrix (FR → journey → entities → op
 
 The storefront and dashboards at HEAD (commit 0282605) are mostly mock-driven. The journeys below are written for the target system. These defects must not be copied forward, and the named ACs prove they are gone. Evidence is from `gt/audit.md` (accessed 2026-09-25) and was re-checked in the repository.
 
-| RF | Current behaviour [Verified-repo] | Fixed by |
-|---|---|---|
-| RF-02 | Catalog, product, cart and checkout routes sit behind `middleware.guest()`, so signed-in users are redirected to `/` (start/routes.ts:49, 57, 64). | AC-J01-01, AC-J05-01 |
-| RF-10 | `/cart` and `/checkout` throw during render: `useCart must be used within a CartProvider` (inertia/hooks/use_cart.tsx:270). | AC-J03-01 |
-| RF-16 | Cart total subtracts compare-at savings twice; client computes order totals and generates the order number `DN-${Date.now().toString(36)}` (inertia/components/commerce/checkout/checkout_page.tsx:242). | AC-J03-06, AC-J05-02 |
-| RF-27 | Listings, PDP and search run on client mocks; filter state is not in the URL; add-to-cart does nothing. | AC-J01-02, AC-J02-05 |
-| RF-28 | Cart button is `hidden sm:block` (inertia/components/navbar/index.tsx:126), so phones have no cart entry; unlabeled inputs and 24–28 px targets. | AC-J00-06, AC-J03-07 |
-| RF-29 | Checkout phone rule `^(98\|97)\d{8}$` rejects valid 96x numbers (inertia/components/commerce/checkout/address_form.tsx:52); district list from mocks misses Eastern and Western Rukum. | AC-J04-04, AC-J05-10 |
-| RF-01 | `/shop/:shopSlug/*` checks only that someone is logged in (start/routes/shops.ts:27-28). | AC-J09-06, AC-J12-01 |
-| RF-03, RF-21 | Shop registration is guest-only, always creates a new user, and is broken at HEAD. | AC-J08-11 |
-| RF-04 | Cookie session store; suspended users keep their sessions. | AC-J17-01 |
-| RF-12, RF-38 | Login has no rate limit and a 32-character password cap; signup reveals existing emails. | AC-J04-02, AC-J04-03, AC-J04-08 |
-| RF-15 | No idempotency key on orders, so double submits on slow networks create duplicates. | AC-J05-03 |
-| RF-25 | Money formatted with Devanagari digits after a Latin "Rs.", `$` in places, UTC dates. | AC-J00-05 |
-| RF-37 | Redirects forward the incoming query string; there is no validated return URL. | AC-J00-02 |
+| RF           | Current behaviour [Verified-repo]                                                                                                                                                                        | Fixed by                        |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| RF-02        | Catalog, product, cart and checkout routes sit behind `middleware.guest()`, so signed-in users are redirected to `/` (start/routes.ts:49, 57, 64).                                                       | AC-J01-01, AC-J05-01            |
+| RF-10        | `/cart` and `/checkout` throw during render: `useCart must be used within a CartProvider` (inertia/hooks/use_cart.tsx:270).                                                                              | AC-J03-01                       |
+| RF-16        | Cart total subtracts compare-at savings twice; client computes order totals and generates the order number `DN-${Date.now().toString(36)}` (inertia/components/commerce/checkout/checkout_page.tsx:242). | AC-J03-06, AC-J05-02            |
+| RF-27        | Listings, PDP and search run on client mocks; filter state is not in the URL; add-to-cart does nothing.                                                                                                  | AC-J01-02, AC-J02-05            |
+| RF-28        | Cart button is `hidden sm:block` (inertia/components/navbar/index.tsx:126), so phones have no cart entry; unlabeled inputs and 24–28 px targets.                                                         | AC-J00-06, AC-J03-07            |
+| RF-29        | Checkout phone rule `^(98\|97)\d{8}$` rejects valid 96x numbers (inertia/components/commerce/checkout/address_form.tsx:52); district list from mocks misses Eastern and Western Rukum.                   | AC-J04-04, AC-J05-10            |
+| RF-01        | `/shop/:shopSlug/*` checks only that someone is logged in (start/routes/shops.ts:27-28).                                                                                                                 | AC-J09-06, AC-J12-01            |
+| RF-03, RF-21 | Shop registration is guest-only, always creates a new user, and is broken at HEAD.                                                                                                                       | AC-J08-11                       |
+| RF-04        | Cookie session store; suspended users keep their sessions.                                                                                                                                               | AC-J17-01                       |
+| RF-12, RF-38 | Login has no rate limit and a 32-character password cap; signup reveals existing emails.                                                                                                                 | AC-J04-02, AC-J04-03, AC-J04-08 |
+| RF-15        | No idempotency key on orders, so double submits on slow networks create duplicates.                                                                                                                      | AC-J05-03                       |
+| RF-25        | Money formatted with Devanagari digits after a Latin "Rs.", `$` in places, UTC dates.                                                                                                                    | AC-J00-05                       |
+| RF-37        | Redirects forward the incoming query string; there is no validated return URL.                                                                                                                           | AC-J00-02                       |
 
 ### 4.2 Cross-cutting acceptance criteria (AC-J00)
 
@@ -210,14 +210,14 @@ flowchart LR
 
 ### J-01 Browse & discover
 
-| Field | Value |
-|---|---|
-| Actors | Guest, customer (any status except suspended) |
-| Release | R1 (M4). Facet counts and autocomplete are R2 (FR-SRCH-008, 006). |
-| Related FRs | FR-SRCH-001, 002, 003, 005, 007; FR-CAT-001 |
-| Entry points | `/`, `/men`, `/women`, `/c/{categorySlug}`, `/search?q=`, `/shops/{shopSlug}`, external links and search engines |
+| Field         | Value                                                                                                                                                                |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Actors        | Guest, customer (any status except suspended)                                                                                                                        |
+| Release       | R1 (M4). Facet counts and autocomplete are R2 (FR-SRCH-008, 006).                                                                                                    |
+| Related FRs   | FR-SRCH-001, 002, 003, 005, 007; FR-CAT-001                                                                                                                          |
+| Entry points  | `/`, `/men`, `/women`, `/c/{categorySlug}`, `/search?q=`, `/shops/{shopSlug}`, external links and search engines                                                     |
 | Preconditions | Reference categories and attributes seeded; `product_listings` read model populated by the listing refresh job; at least one `published` product in an `active` shop |
-| Permissions | None (public). Listing queries always filter to `products.status = published` and `shops.status = active`. |
+| Permissions   | None (public). Listing queries always filter to `products.status = published` and `shops.status = active`.                                                           |
 
 #### Main success flow
 
@@ -230,15 +230,15 @@ flowchart LR
 
 #### State coverage
 
-| Class | Behaviour |
-|---|---|
-| Success | SSR HTML contains product names, prices, links, `<link rel="canonical">`, `<html lang="en">` and pagination links. Filters and sort reflect the URL. |
-| Empty | Category with no products: "No products in T-shirts yet" with links to the parent category and "Clear filters". Search with no results: the query is echoed, spelling tips and top categories are shown, and the page carries `noindex`. A filter combination with zero results keeps the chips visible so the user can remove one. |
-| Validation | Pages: unknown or malformed parameters are dropped, and the canonical URL omits them. API: unknown parameter → `INVALID_QUERY_PARAMETER (400)` naming the parameter; `per_page` > 48 or `page` > 100 → `INVALID_QUERY_PARAMETER (400)`. Price `min` > `max` shows an inline error and the filter is not applied. `q` is trimmed and capped at 100 characters [Assumption]. |
-| Permission | None required. Products in `draft`, `pending_review`, `rejected`, `unpublished`, `archived` or `blocked`, and all products of `pending_review`, `suspended`, `rejected` or `closed` shops, never appear. The shop page of a non-active shop returns 404. |
-| Concurrency | The read model can be seconds stale (canon §8). A product unpublished a moment ago can still be listed; opening it gives the "no longer available" page (J-02). Stock badges can be stale; the cart and checkout are authoritative. |
-| External-provider failure | CDN or image derivative missing: fixed-ratio placeholder with the alt text, so there is no layout shift. Listing refresh job lagging: stale data is served, and an alert fires when lag exceeds 5 minutes [Assumption; docs/11]. Database down: 503 error page; `/health/ready` fails. |
-| Recovery | Back, forward and refresh restore filters, page and scroll because the URL is the only filter state (fixes RF-27). An old category or shop slug returns 301 to the current slug via `slug_redirects`, keeping the query string. |
+| Class                     | Behaviour                                                                                                                                                                                                                                                                                                                                                                  |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Success                   | SSR HTML contains product names, prices, links, `<link rel="canonical">`, `<html lang="en">` and pagination links. Filters and sort reflect the URL.                                                                                                                                                                                                                       |
+| Empty                     | Category with no products: "No products in T-shirts yet" with links to the parent category and "Clear filters". Search with no results: the query is echoed, spelling tips and top categories are shown, and the page carries `noindex`. A filter combination with zero results keeps the chips visible so the user can remove one.                                        |
+| Validation                | Pages: unknown or malformed parameters are dropped, and the canonical URL omits them. API: unknown parameter → `INVALID_QUERY_PARAMETER (400)` naming the parameter; `per_page` > 48 or `page` > 100 → `INVALID_QUERY_PARAMETER (400)`. Price `min` > `max` shows an inline error and the filter is not applied. `q` is trimmed and capped at 100 characters [Assumption]. |
+| Permission                | None required. Products in `draft`, `pending_review`, `rejected`, `unpublished`, `archived` or `blocked`, and all products of `pending_review`, `suspended`, `rejected` or `closed` shops, never appear. The shop page of a non-active shop returns 404.                                                                                                                   |
+| Concurrency               | The read model can be seconds stale (canon §8). A product unpublished a moment ago can still be listed; opening it gives the "no longer available" page (J-02). Stock badges can be stale; the cart and checkout are authoritative.                                                                                                                                        |
+| External-provider failure | CDN or image derivative missing: fixed-ratio placeholder with the alt text, so there is no layout shift. Listing refresh job lagging: stale data is served, and an alert fires when lag exceeds 5 minutes [Assumption; docs/11]. Database down: 503 error page; `/health/ready` fails.                                                                                     |
+| Recovery                  | Back, forward and refresh restore filters, page and scroll because the URL is the only filter state (fixes RF-27). An old category or shop slug returns 301 to the current slug via `slug_redirects`, keeping the query string.                                                                                                                                            |
 
 #### Acceptance criteria
 
@@ -255,14 +255,14 @@ flowchart LR
 
 ### J-02 Product detail & variant selection
 
-| Field | Value |
-|---|---|
-| Actors | Guest, customer |
-| Release | R1 (M4) |
-| Related FRs | FR-SRCH-004, 005; FR-CAT-004, 012; FR-PROMO-001; FR-CART-001 |
-| Entry points | `/p/{productSlug}-{publicId}` from listings, search, shop page, shared links |
+| Field         | Value                                                                                                                         |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Actors        | Guest, customer                                                                                                               |
+| Release       | R1 (M4)                                                                                                                       |
+| Related FRs   | FR-SRCH-004, 005; FR-CAT-004, 012; FR-PROMO-001; FR-CART-001                                                                  |
+| Entry points  | `/p/{productSlug}-{publicId}` from listings, search, shop page, shared links                                                  |
 | Preconditions | Product `published`; shop `active`; at least one `active` variant; at least one `ready` image; shop shipping rates configured |
-| Permissions | None to view. `addCartItem` works for guests and signed-in users. |
+| Permissions   | None to view. `addCartItem` works for guests and signed-in users.                                                             |
 
 #### Main success flow
 
@@ -275,15 +275,15 @@ flowchart LR
 
 #### State coverage
 
-| Class | Behaviour |
-|---|---|
-| Success | Variant selected, price shown tax-inclusive ("Price includes all taxes" [Assumption pending OD-11]), item added and cart count updated. |
-| Empty | Product with no option axes: no pickers, the default variant is used. Colour with no dedicated images: the product's first images are shown. Delivery estimate missing (should not happen for a published product): "Delivery estimate unavailable" and a support link. |
-| Validation | Add without choosing every axis: inline "Select a size", no API call. `quantity` > 10 or < 1 → `VALIDATION_FAILED (422)` with `errors[0].field = "quantity"`. Variant not `active` → `NOT_FOUND (404)`. |
-| Permission | Non-published product or non-active shop → 404 page "This product is no longer available", with links to the category and similar products. Shop members preview drafts only inside the seller dashboard, never through the public URL [Assumption]. |
-| Concurrency | Variant sells out between page load and add → `OUT_OF_STOCK (409)` with the available quantity, and the picker refreshes. Price changes between load and add → the cart stores the current server price in `unit_price_minor_at_add`, and the cart notice shows the new price. Product unpublished meanwhile → `NOT_FOUND (404)` and the "no longer available" message. |
-| External-provider failure | Slow CDN: a low-quality placeholder in a fixed aspect-ratio box. Image derivative failed: placeholder plus alt text. |
-| Recovery | The selected variant is kept in the URL (`?variant={variantId}` [Assumption]), so reload and share keep the selection. If add-to-cart fails on the network, the button re-enables and the retry uses the same payload. `addCartItem` is not ⚷, so a repeated add increments the quantity, capped at 10. |
+| Class                     | Behaviour                                                                                                                                                                                                                                                                                                                                                               |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Success                   | Variant selected, price shown tax-inclusive ("Price includes all taxes" [Assumption pending OD-11]), item added and cart count updated.                                                                                                                                                                                                                                 |
+| Empty                     | Product with no option axes: no pickers, the default variant is used. Colour with no dedicated images: the product's first images are shown. Delivery estimate missing (should not happen for a published product): "Delivery estimate unavailable" and a support link.                                                                                                 |
+| Validation                | Add without choosing every axis: inline "Select a size", no API call. `quantity` > 10 or < 1 → `VALIDATION_FAILED (422)` with `errors[0].field = "quantity"`. Variant not `active` → `NOT_FOUND (404)`.                                                                                                                                                                 |
+| Permission                | Non-published product or non-active shop → 404 page "This product is no longer available", with links to the category and similar products. Shop members preview drafts only inside the seller dashboard, never through the public URL [Assumption].                                                                                                                    |
+| Concurrency               | Variant sells out between page load and add → `OUT_OF_STOCK (409)` with the available quantity, and the picker refreshes. Price changes between load and add → the cart stores the current server price in `unit_price_minor_at_add`, and the cart notice shows the new price. Product unpublished meanwhile → `NOT_FOUND (404)` and the "no longer available" message. |
+| External-provider failure | Slow CDN: a low-quality placeholder in a fixed aspect-ratio box. Image derivative failed: placeholder plus alt text.                                                                                                                                                                                                                                                    |
+| Recovery                  | The selected variant is kept in the URL (`?variant={variantId}` [Assumption]), so reload and share keep the selection. If add-to-cart fails on the network, the button re-enables and the retry uses the same payload. `addCartItem` is not ⚷, so a repeated add increments the quantity, capped at 10.                                                                 |
 
 #### Acceptance criteria
 
@@ -300,14 +300,14 @@ flowchart LR
 
 ### J-03 Cart
 
-| Field | Value |
-|---|---|
-| Actors | Guest, customer |
-| Release | R1 (M5) |
-| Related FRs | FR-CART-001, 002, 003; FR-PROMO-001 |
-| Entry points | Header cart icon (visible at all widths), "Added to cart" notice, `/cart` |
-| Preconditions | None. A guest cart is created on first add. |
-| Permissions | The cart is resolved only from the session user or the guest token cookie. No cart ID is ever accepted from the client. |
+| Field         | Value                                                                                                                   |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Actors        | Guest, customer                                                                                                         |
+| Release       | R1 (M5)                                                                                                                 |
+| Related FRs   | FR-CART-001, 002, 003; FR-PROMO-001                                                                                     |
+| Entry points  | Header cart icon (visible at all widths), "Added to cart" notice, `/cart`                                               |
+| Preconditions | None. A guest cart is created on first add.                                                                             |
+| Permissions   | The cart is resolved only from the session user or the guest token cookie. No cart ID is ever accepted from the client. |
 
 #### Main success flow
 
@@ -319,15 +319,15 @@ flowchart LR
 
 #### State coverage
 
-| Class | Behaviour |
-|---|---|
-| Success | Lines grouped by shop, totals match the server, notices shown for changed lines. |
-| Empty | "Your cart is empty" with links to Men, Women and recently viewed items. After an order the old cart is `converted`, and the next add creates a new cart. |
-| Validation | `quantity` outside 1–10 → `VALIDATION_FAILED (422)` on `quantity`. A 51st line → `VALIDATION_FAILED (422)` with code `max_lines` [Assumption: code value owned by docs/06]. More than 60 adds per minute → `RATE_LIMITED (429)`. |
-| Permission | A `cartItemId` that is not in the caller's cart → `NOT_FOUND (404)`. Suspended user → `ACCOUNT_SUSPENDED (403)`. |
-| Concurrency | Two tabs: tab A removes a line while tab B changes its quantity → B gets `NOT_FOUND (404)` and reloads the cart. Every change increments `carts.version`, and checkout compares it (`CART_CHANGED (409)`, J-05). Quantity updates are last-write-wins. |
-| External-provider failure | No external dependency. A database error returns 503. The optimistic UI rolls back and shows "Couldn't update your cart. Try again." |
-| Recovery | The guest token is a random value in an httpOnly cookie; only its hash is stored (fixes RF-19). The guest cart survives browser restarts until `expires_at` (30 days [Assumption]). After login the merged cart is shown with the merge notice. |
+| Class                     | Behaviour                                                                                                                                                                                                                                              |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Success                   | Lines grouped by shop, totals match the server, notices shown for changed lines.                                                                                                                                                                       |
+| Empty                     | "Your cart is empty" with links to Men, Women and recently viewed items. After an order the old cart is `converted`, and the next add creates a new cart.                                                                                              |
+| Validation                | `quantity` outside 1–10 → `VALIDATION_FAILED (422)` on `quantity`. A 51st line → `VALIDATION_FAILED (422)` with code `max_lines` [Assumption: code value owned by docs/06]. More than 60 adds per minute → `RATE_LIMITED (429)`.                       |
+| Permission                | A `cartItemId` that is not in the caller's cart → `NOT_FOUND (404)`. Suspended user → `ACCOUNT_SUSPENDED (403)`.                                                                                                                                       |
+| Concurrency               | Two tabs: tab A removes a line while tab B changes its quantity → B gets `NOT_FOUND (404)` and reloads the cart. Every change increments `carts.version`, and checkout compares it (`CART_CHANGED (409)`, J-05). Quantity updates are last-write-wins. |
+| External-provider failure | No external dependency. A database error returns 503. The optimistic UI rolls back and shows "Couldn't update your cart. Try again."                                                                                                                   |
+| Recovery                  | The guest token is a random value in an httpOnly cookie; only its hash is stored (fixes RF-19). The guest cart survives browser restarts until `expires_at` (30 days [Assumption]). After login the merged cart is shown with the merge notice.        |
 
 #### Acceptance criteria
 
@@ -344,14 +344,14 @@ flowchart LR
 
 ### J-04 Sign up & verify
 
-| Field | Value |
-|---|---|
-| Actors | Guest; system (email job) |
-| Release | R1 (M1). Phone OTP is R2 (FR-IAM-010). Social login is R3. |
-| Related FRs | FR-IAM-001, 002, 003, 013; FR-CART-001 (merge on login) |
-| Entry points | `/signup`, `/login`, checkout gate (`/login?return_to=/checkout`), `/sell` gate, `/verify-email` |
-| Preconditions | Email provider configured (OD-08). Rate limiter uses the database store (OD-10 resolved). |
-| Permissions | Guest only for `/signup` and `/login`. A signed-in user who opens them is redirected to `/account`. |
+| Field         | Value                                                                                               |
+| ------------- | --------------------------------------------------------------------------------------------------- |
+| Actors        | Guest; system (email job)                                                                           |
+| Release       | R1 (M1). Phone OTP is R2 (FR-IAM-010). Social login is R3.                                          |
+| Related FRs   | FR-IAM-001, 002, 003, 013; FR-CART-001 (merge on login)                                             |
+| Entry points  | `/signup`, `/login`, checkout gate (`/login?return_to=/checkout`), `/sell` gate, `/verify-email`    |
+| Preconditions | Email provider configured (OD-08). Rate limiter uses the database store (OD-10 resolved).           |
+| Permissions   | Guest only for `/signup` and `/login`. A signed-in user who opens them is redirected to `/account`. |
 
 #### Main success flow
 
@@ -365,15 +365,15 @@ flowchart LR
 
 #### State coverage
 
-| Class | Behaviour |
-|---|---|
-| Success | Account active after verification; login lands on `return_to` or `/account`. |
-| Empty | A new account has no orders or addresses: `/account` shows "No orders yet" and an "Add address" call to action. |
-| Validation | Invalid email format, password shorter than 10 or longer than 128, or a mobile not matching `^9[678]\d{8}$` after stripping `+977`, `977`, spaces and hyphens → `VALIDATION_FAILED (422)` with field errors. A landline is rejected for a customer mobile. |
-| Permission | Login by a `suspended` user with the correct password → `ACCOUNT_SUSPENDED (403)`. With a wrong password, the generic "Invalid email or password" is shown (no status leak). `anonymized` accounts cannot log in. |
-| Concurrency | Two signups with the same email at once: the unique index on `users.email` lets one insert win; both callers get the same 202. Double-clicking the verification link: the second call finds the token consumed and the user already verified, and shows "Your email is already verified" (idempotent, no error). |
-| External-provider failure | Email provider down: the `notification_deliveries` row stays `queued` and the job retries with backoff; after the final attempt the row is `failed` and an alert fires (docs/11). The page says delivery can take a few minutes and offers resend. Deliverability to Nepali mailboxes is VX-14. |
-| Recovery | Expired token: "This link has expired" with an email field and resend. A user who logs in before verifying gets a session with a "Verify your email" banner; checkout and `/sell` are refused with `EMAIL_NOT_VERIFIED (403)` and link to resend. |
+| Class                     | Behaviour                                                                                                                                                                                                                                                                                                        |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Success                   | Account active after verification; login lands on `return_to` or `/account`.                                                                                                                                                                                                                                     |
+| Empty                     | A new account has no orders or addresses: `/account` shows "No orders yet" and an "Add address" call to action.                                                                                                                                                                                                  |
+| Validation                | Invalid email format, password shorter than 10 or longer than 128, or a mobile not matching `^9[678]\d{8}$` after stripping `+977`, `977`, spaces and hyphens → `VALIDATION_FAILED (422)` with field errors. A landline is rejected for a customer mobile.                                                       |
+| Permission                | Login by a `suspended` user with the correct password → `ACCOUNT_SUSPENDED (403)`. With a wrong password, the generic "Invalid email or password" is shown (no status leak). `anonymized` accounts cannot log in.                                                                                                |
+| Concurrency               | Two signups with the same email at once: the unique index on `users.email` lets one insert win; both callers get the same 202. Double-clicking the verification link: the second call finds the token consumed and the user already verified, and shows "Your email is already verified" (idempotent, no error). |
+| External-provider failure | Email provider down: the `notification_deliveries` row stays `queued` and the job retries with backoff; after the final attempt the row is `failed` and an alert fires (docs/11). The page says delivery can take a few minutes and offers resend. Deliverability to Nepali mailboxes is VX-14.                  |
+| Recovery                  | Expired token: "This link has expired" with an email field and resend. A user who logs in before verifying gets a session with a "Verify your email" banner; checkout and `/sell` are refused with `EMAIL_NOT_VERIFIED (403)` and link to resend.                                                                |
 
 #### Acceptance criteria
 
@@ -392,14 +392,14 @@ flowchart LR
 
 ### J-05 Checkout COD
 
-| Field | Value |
-|---|---|
-| Actors | Customer; system (jobs); shop members (receive the new order) |
-| Release | R1 (M5) |
-| Related FRs | FR-CHK-001, 002, 003, 004, 005, 007; FR-CART-002, 003; FR-IAM-012; FR-INV-002; FR-NOT-002 |
-| Entry points | "Checkout" on `/cart`; direct `/checkout`; retry after timeout |
+| Field         | Value                                                                                                                                                        |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Actors        | Customer; system (jobs); shop members (receive the new order)                                                                                                |
+| Release       | R1 (M5)                                                                                                                                                      |
+| Related FRs   | FR-CHK-001, 002, 003, 004, 005, 007; FR-CART-002, 003; FR-IAM-012; FR-INV-002; FR-NOT-002                                                                    |
+| Entry points  | "Checkout" on `/cart`; direct `/checkout`; retry after timeout                                                                                               |
 | Preconditions | `checkout_enabled = true`; user `active`, email verified, mobile on account; cart has at least one available line; every shop in the cart has shipping rates |
-| Permissions | Authenticated customer acting on their own cart and addresses. No staff or shop permission applies. |
+| Permissions   | Authenticated customer acting on their own cart and addresses. No staff or shop permission applies.                                                          |
 
 The worked example used below: a customer in Lalitpur (zone `ktm_valley`) buys 2 × T-shirt at Rs 1,200 from shop A (shipping Rs 100) and 1 × sneakers at Rs 4,500 from shop B (shipping Rs 250). The grand total is Rs 7,250 (`725000` paisa), split into shop orders `DN-7Q4K2MX-1` (Rs 2,500) and `DN-7Q4K2MX-2` (Rs 4,750). Amounts are illustrative.
 
@@ -436,15 +436,15 @@ sequenceDiagram
 
 #### State coverage
 
-| Class | Behaviour |
-|---|---|
-| Success | As steps 6–8. One order, one shop order per shop, reservations committed, emails queued in the same transaction. |
-| Empty | Cart empty or every line unavailable → `/checkout` redirects to `/cart` with a notice. No saved address → the address form opens first. |
-| Validation | Address: missing field, ward above `ward_count`, recipient mobile not `^9[678]\d{8}$` → `VALIDATION_FAILED (422)`. Missing `expected_grand_total_minor` or `cart_version` → `VALIDATION_FAILED (422)`. Missing key → `IDEMPOTENCY_KEY_REQUIRED (400)`. No mobile on the account → `VALIDATION_FAILED (422)` with field `phone`, and the page shows an inline "Add your mobile number" form (`updateMe`). |
-| Permission | Not signed in → `UNAUTHENTICATED (401)`. Unverified → `EMAIL_NOT_VERIFIED (403)`. Suspended → `ACCOUNT_SUSPENDED (403)`. `address_id` of another user → `NOT_FOUND (404)`. District not covered by a shop → `DELIVERY_NOT_AVAILABLE (422)` naming the shop(s), with "Remove these items" or "Change address". COD over `cod_max_order_value_minor`, open COD orders at `cod_max_open_orders_per_customer` (3), or COD disabled for repeated refusals (J-13) → `COD_LIMIT_EXCEEDED (422)` (values OD-18). Kill switch → refused (AC-J00-11). |
-| Concurrency | **Two tabs place the same cart.** Tab 1 commits. Tab 2 (different key) waits on the cart row lock, then sees the cart `converted` with a new version → `CART_CHANGED (409)`, and the UI shows "This cart was already ordered as DN-7Q4K2MX". **Last unit race:** both requests reach the conditional `UPDATE … WHERE on_hand - reserved >= :q`; one wins, the other gets `OUT_OF_STOCK (409)` with per-line available quantities (T-INV-003). **Price change:** a vendor edits a price after the quote → `PRICE_CHANGED (409)` with a new quote in the body; the customer must confirm the new total, and the client creates a new key for the new body. **Repeated submit with the same key:** the stored response is replayed with the same order (T-CHK-004). **Concurrent duplicates with the same key** block on the unique index and then replay; if the first holds the key beyond the lock timeout, the duplicate gets `IDEMPOTENCY_IN_PROGRESS (409)` with `Retry-After`. **Cart edited in another tab after the quote** → `CART_CHANGED (409)`. **Shop suspended or product unpublished after the quote** → `CART_CHANGED (409)` with `errors[]` per line (`code: unavailable`). |
-| External-provider failure | Email provider down: the order is placed regardless; email jobs retry with backoff and alert on final failure. The confirmation page and `/account/orders` do not depend on email. Database failover during commit: the client times out and retries with the same key; the server either replays the committed response or re-executes a rolled-back attempt. It never creates two orders. |
-| Recovery | The customer returns to `/checkout` after a timeout or closed tab. If their cart was converted in the last 72 h (checkout key retention), the page shows "Your order DN-7Q4K2MX was placed" with a link, instead of an empty checkout. A pending retry in `sessionStorage` resends the same key and gets the replay. A 409 never loses the address or note the customer entered. |
+| Class                     | Behaviour                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Success                   | As steps 6–8. One order, one shop order per shop, reservations committed, emails queued in the same transaction.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Empty                     | Cart empty or every line unavailable → `/checkout` redirects to `/cart` with a notice. No saved address → the address form opens first.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Validation                | Address: missing field, ward above `ward_count`, recipient mobile not `^9[678]\d{8}$` → `VALIDATION_FAILED (422)`. Missing `expected_grand_total_minor` or `cart_version` → `VALIDATION_FAILED (422)`. Missing key → `IDEMPOTENCY_KEY_REQUIRED (400)`. No mobile on the account → `VALIDATION_FAILED (422)` with field `phone`, and the page shows an inline "Add your mobile number" form (`updateMe`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Permission                | Not signed in → `UNAUTHENTICATED (401)`. Unverified → `EMAIL_NOT_VERIFIED (403)`. Suspended → `ACCOUNT_SUSPENDED (403)`. `address_id` of another user → `NOT_FOUND (404)`. District not covered by a shop → `DELIVERY_NOT_AVAILABLE (422)` naming the shop(s), with "Remove these items" or "Change address". COD over `cod_max_order_value_minor`, open COD orders at `cod_max_open_orders_per_customer` (3), or COD disabled for repeated refusals (J-13) → `COD_LIMIT_EXCEEDED (422)` (values OD-18). Kill switch → refused (AC-J00-11).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Concurrency               | **Two tabs place the same cart.** Tab 1 commits. Tab 2 (different key) waits on the cart row lock, then sees the cart `converted` with a new version → `CART_CHANGED (409)`, and the UI shows "This cart was already ordered as DN-7Q4K2MX". **Last unit race:** both requests reach the conditional `UPDATE … WHERE on_hand - reserved >= :q`; one wins, the other gets `OUT_OF_STOCK (409)` with per-line available quantities (T-INV-003). **Price change:** a vendor edits a price after the quote → `PRICE_CHANGED (409)` with a new quote in the body; the customer must confirm the new total, and the client creates a new key for the new body. **Repeated submit with the same key:** the stored response is replayed with the same order (T-CHK-004). **Concurrent duplicates with the same key** block on the unique index and then replay; if the first holds the key beyond the lock timeout, the duplicate gets `IDEMPOTENCY_IN_PROGRESS (409)` with `Retry-After`. **Cart edited in another tab after the quote** → `CART_CHANGED (409)`. **Shop suspended or product unpublished after the quote** → `CART_CHANGED (409)` with `errors[]` per line (`code: unavailable`). |
+| External-provider failure | Email provider down: the order is placed regardless; email jobs retry with backoff and alert on final failure. The confirmation page and `/account/orders` do not depend on email. Database failover during commit: the client times out and retries with the same key; the server either replays the committed response or re-executes a rolled-back attempt. It never creates two orders.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Recovery                  | The customer returns to `/checkout` after a timeout or closed tab. If their cart was converted in the last 72 h (checkout key retention), the page shows "Your order DN-7Q4K2MX was placed" with a link, instead of an empty checkout. A pending retry in `sessionStorage` resends the same key and gets the replay. A 409 never loses the address or note the customer entered.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 
 #### Acceptance criteria
 
@@ -469,16 +469,17 @@ sequenceDiagram
 
 ### J-06 Checkout gateway (R1.1)
 
-| Field | Value |
-|---|---|
-| Actors | Customer; system (reconciliation and expiry jobs); payment provider; finance officer (needs-review queue) |
-| Release | R1.1 (M8). The provider is chosen in OD-03 (canon recommends Khalti first). The legal model for collecting on behalf of vendors is VX-01 and OD-02, and blocks M8. |
-| Related FRs | FR-CHK-006; FR-PAY-002, 003, 004; FR-RET-003 (late-capture refunds) |
-| Entry points | `/checkout` with a wallet method; `/payments/{provider}/return`; `/account/orders/{orderNumber}` "Pay now" |
-| Preconditions | As J-05, plus: provider live credentials issued after UAT sign-off; Khalti merchant KYC complete (otherwise NPR 200 per transaction cap) |
-| Permissions | Customer self. Finance officer (`platform.orders.view`, `platform.refunds.approve`) for `needs_review` payments. |
+| Field         | Value                                                                                                                                                              |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Actors        | Customer; system (reconciliation and expiry jobs); payment provider; finance officer (needs-review queue)                                                          |
+| Release       | R1.1 (M8). The provider is chosen in OD-03 (canon recommends Khalti first). The legal model for collecting on behalf of vendors is VX-01 and OD-02, and blocks M8. |
+| Related FRs   | FR-CHK-006; FR-PAY-002, 003, 004; FR-RET-003 (late-capture refunds)                                                                                                |
+| Entry points  | `/checkout` with a wallet method; `/payments/{provider}/return`; `/account/orders/{orderNumber}` "Pay now"                                                         |
+| Preconditions | As J-05, plus: provider live credentials issued after UAT sign-off; Khalti merchant KYC complete (otherwise NPR 200 per transaction cap)                           |
+| Permissions   | Customer self. Finance officer (`platform.orders.view`, `platform.refunds.approve`) for `needs_review` payments.                                                   |
 
 **Provider facts that shape this journey** [Verified-doc, `gt/nepal_payments.md`, accessed 2026-09-25]:
+
 - Khalti KPG-2: server-side initiate returns `pidx`, `payment_url` and `expires_at`. The return redirect is **unsigned** and must be confirmed with the lookup API; only `Completed` is success. There is no server-to-server webhook. The amount must be above Rs 10. Before KYC, merchants cannot take more than NPR 200 per transaction. The docs contradict themselves on link expiry (60 vs 30 minutes), so `expires_at` from each response is used. <https://docs.khalti.com/khalti-epayment/>, <https://docs.khalti.com/getting-started/>.
 - eSewa ePay v2: a signed browser form POST. The success redirect carries a signed Base64 payload. `failure_url` is used for both FAILURE **and PENDING**. The status-check API is the source of truth. There is no server-to-server webhook and no refund API. Payment must be completed within about 5 minutes. <https://developer.esewa.com.np/pages/Epay>.
 - The NRB Unified Directive on Payment Systems 2082 caps wallet balances at NPR 50,000, so large carts can fail on wallet balance (canon §17.1; gt/nepal_payments.md).
@@ -523,15 +524,15 @@ sequenceDiagram
 
 #### State coverage
 
-| Class | Behaviour |
-|---|---|
-| Success | Captured through the return handler or the job, whichever is first. The other finds the payment already `captured` and does nothing. |
-| Empty | No enabled gateway (before R1.1, or the provider disabled by a platform setting): only COD is offered. |
-| Validation | Total at or below Rs 10 with Khalti → `VALIDATION_FAILED (422)` on `payment_method`. Unknown provider in the return route → 404. |
-| Permission | Return handler: works without a session because the payment is found by the stored identifier. The page shows order details only to the signed-in owner; others see a neutral "Payment received, check your account". `startOrderPayment` on another customer's order → `NOT_FOUND (404)`. |
-| Concurrency | Return handler, page refresh and job racing on one payment: the `provider_events` unique key and the compare-and-set `UPDATE … WHERE status = 'pending'` allow one capture, one ledger-relevant event and one email (T-PAY-005). `startOrderPayment` while an attempt is still `pending` → the server looks it up first; if still pending → `CONFLICT (409)` with the resume URL until `expires_at`. The partial unique index allows only one live gateway attempt per order. |
+| Class                     | Behaviour                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Success                   | Captured through the return handler or the job, whichever is first. The other finds the payment already `captured` and does nothing.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| Empty                     | No enabled gateway (before R1.1, or the provider disabled by a platform setting): only COD is offered.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| Validation                | Total at or below Rs 10 with Khalti → `VALIDATION_FAILED (422)` on `payment_method`. Unknown provider in the return route → 404.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Permission                | Return handler: works without a session because the payment is found by the stored identifier. The page shows order details only to the signed-in owner; others see a neutral "Payment received, check your account". `startOrderPayment` on another customer's order → `NOT_FOUND (404)`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Concurrency               | Return handler, page refresh and job racing on one payment: the `provider_events` unique key and the compare-and-set `UPDATE … WHERE status = 'pending'` allow one capture, one ledger-relevant event and one email (T-PAY-005). `startOrderPayment` while an attempt is still `pending` → the server looks it up first; if still pending → `CONFLICT (409)` with the resume URL until `expires_at`. The partial unique index allows only one live gateway attempt per order.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | External-provider failure | **Customer closes the browser mid-payment:** there is no return; the job captures on its next run after the provider completes. **Provider timeout with unknown outcome:** a lookup timeout or 5xx keeps the payment `pending`, increments `verification_attempts` and schedules `next_verification_at`; the customer sees "We're confirming your payment" (the page polls `getMyOrder` every 5 s for 2 minutes, then offers a manual refresh). After the maximum attempts → `needs_review` plus an alert; stock stays reserved only until the reservation expiry. **Initiate fails** (timeout or 5xx): the order stays `awaiting_payment` with the payment `initiated`; the 201 carries `next_action = retry_payment`; "Try again" calls `startOrderPayment`, which returns `PROVIDER_UNAVAILABLE (503)` while the provider is still down. An attempt whose initiate response never arrived has no `pidx` the customer could pay against, so it is marked failed and a new attempt uses a new provider identifier. **eSewa `failure_url`:** treated as a hint only; the status check decides, and `PENDING` keeps polling. **Signature mismatch or amount mismatch:** no capture; the event is recorded with `signature_valid = false` or the mismatch; the payment goes to `needs_review` and an alert fires. |
-| Recovery | **Payment captured after reservation expiry (late capture):** at expiry the job does a final lookup and releases the held stock. If the provider says expired or cancelled, the shop orders are `cancelled` with reason `payment_expired`. If the outcome is still unknown, the shop orders stay `awaiting_payment` without stock. If a later lookup says `Completed`, the system tries to re-reserve each line with the same conditional update. Lines that succeed proceed to `awaiting_acceptance`. Shop orders whose lines cannot be re-reserved are `cancelled` with reason `stock_unavailable_after_payment`, and a refund is `requested` for their allocation (J-14; 7-day SLA). A capture that arrives for a fully cancelled order records the capture and opens a full refund. Money is never kept silently. The customer can also reopen `/account/orders/{orderNumber}` and use "Pay now" (`startOrderPayment`) while the order is `awaiting_payment` and its reservation is live. |
+| Recovery                  | **Payment captured after reservation expiry (late capture):** at expiry the job does a final lookup and releases the held stock. If the provider says expired or cancelled, the shop orders are `cancelled` with reason `payment_expired`. If the outcome is still unknown, the shop orders stay `awaiting_payment` without stock. If a later lookup says `Completed`, the system tries to re-reserve each line with the same conditional update. Lines that succeed proceed to `awaiting_acceptance`. Shop orders whose lines cannot be re-reserved are `cancelled` with reason `stock_unavailable_after_payment`, and a refund is `requested` for their allocation (J-14; 7-day SLA). A capture that arrives for a fully cancelled order records the capture and opens a full refund. Money is never kept silently. The customer can also reopen `/account/orders/{orderNumber}` and use "Pay now" (`startOrderPayment`) while the order is `awaiting_payment` and its reservation is live.                                                                                                                                                                                                                                                                                                                   |
 
 #### Acceptance criteria
 
@@ -555,14 +556,14 @@ sequenceDiagram
 
 ### J-07 Customer order tracking & cancellation
 
-| Field | Value |
-|---|---|
-| Actors | Customer; shop members (see cancellations); system |
-| Release | R1 (M6) |
-| Related FRs | FR-ORD-001, 002; FR-FUL-001 (tracking shown); FR-NOT-002 |
-| Entry points | `/account/orders`, `/account/orders/{orderNumber}`, email links, `/checkout/complete/{orderNumber}` |
-| Preconditions | Signed in. The order's `customer_user_id` equals the user. |
-| Permissions | Customer self. Every query filters by `orders.customer_user_id = auth.user.id` (canon §7). |
+| Field         | Value                                                                                               |
+| ------------- | --------------------------------------------------------------------------------------------------- |
+| Actors        | Customer; shop members (see cancellations); system                                                  |
+| Release       | R1 (M6)                                                                                             |
+| Related FRs   | FR-ORD-001, 002; FR-FUL-001 (tracking shown); FR-NOT-002                                            |
+| Entry points  | `/account/orders`, `/account/orders/{orderNumber}`, email links, `/checkout/complete/{orderNumber}` |
+| Preconditions | Signed in. The order's `customer_user_id` equals the user.                                          |
+| Permissions   | Customer self. Every query filters by `orders.customer_user_id = auth.user.id` (canon §7).          |
 
 #### Main success flow
 
@@ -573,15 +574,15 @@ sequenceDiagram
 
 #### State coverage
 
-| Class | Behaviour |
-|---|---|
-| Success | Accurate per-shop status and tracking; cancellation effective immediately. |
-| Empty | No orders: "You haven't ordered anything yet" and a shop link. A shop order without a shipment yet: "The shop will add tracking when it ships". |
-| Validation | Cancel reason longer than 500 characters → `VALIDATION_FAILED (422)`. Missing key → `IDEMPOTENCY_KEY_REQUIRED (400)`. |
-| Permission | Another customer's order number → `NOT_FOUND (404)` (T-SEC-002). Suspended user → `ACCOUNT_SUSPENDED (403)`. |
-| Concurrency | The customer cancels while the vendor accepts: both use compare-and-set on `status = 'awaiting_acceptance'`, so exactly one wins. The loser gets `INVALID_STATE_TRANSITION (409)`, and the UI reloads the order. The acceptance-timeout job racing a cancel behaves the same way. A repeated cancel with the same key replays the first response. |
-| External-provider failure | Courier tracking site down: DripNepal still shows the status recorded by the vendor. Email down: cancellation is committed and the emails retry. |
-| Recovery | A cancelled shop order cannot be reopened; the customer reorders from the product links on the order page. A mistaken cancel after acceptance is impossible by design and goes through support. |
+| Class                     | Behaviour                                                                                                                                                                                                                                                                                                                                         |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Success                   | Accurate per-shop status and tracking; cancellation effective immediately.                                                                                                                                                                                                                                                                        |
+| Empty                     | No orders: "You haven't ordered anything yet" and a shop link. A shop order without a shipment yet: "The shop will add tracking when it ships".                                                                                                                                                                                                   |
+| Validation                | Cancel reason longer than 500 characters → `VALIDATION_FAILED (422)`. Missing key → `IDEMPOTENCY_KEY_REQUIRED (400)`.                                                                                                                                                                                                                             |
+| Permission                | Another customer's order number → `NOT_FOUND (404)` (T-SEC-002). Suspended user → `ACCOUNT_SUSPENDED (403)`.                                                                                                                                                                                                                                      |
+| Concurrency               | The customer cancels while the vendor accepts: both use compare-and-set on `status = 'awaiting_acceptance'`, so exactly one wins. The loser gets `INVALID_STATE_TRANSITION (409)`, and the UI reloads the order. The acceptance-timeout job racing a cancel behaves the same way. A repeated cancel with the same key replays the first response. |
+| External-provider failure | Courier tracking site down: DripNepal still shows the status recorded by the vendor. Email down: cancellation is committed and the emails retry.                                                                                                                                                                                                  |
+| Recovery                  | A cancelled shop order cannot be reopened; the customer reorders from the product links on the order page. A mistaken cancel after acceptance is impossible by design and goes through support.                                                                                                                                                   |
 
 #### Acceptance criteria
 
@@ -596,14 +597,14 @@ sequenceDiagram
 
 ### J-08 Shop application & approval
 
-| Field | Value |
-|---|---|
-| Actors | Applicant (an existing customer who becomes the owner); catalog moderator or platform admin; system (emails) |
-| Release | R1 (M2) |
-| Related FRs | FR-SHOP-001, 002, 003, 004, 010, 012, 013, 014 |
-| Entry points | "Sell on DripNepal" in the header and footer → `/sell`; `/account/shops` for status, documents and resubmission; `/admin/shop-applications` for reviewers |
-| Preconditions | Applicant `active` with verified email; owns fewer than `max_shops_per_owner` (3) shops; a current seller agreement exists (`getCurrentSellerAgreement`) |
-| Permissions | Applicant becomes `shops.owner_user_id`. Reviewers need `platform.shops.review` and an MFA-verified session. |
+| Field         | Value                                                                                                                                                     |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Actors        | Applicant (an existing customer who becomes the owner); catalog moderator or platform admin; system (emails)                                              |
+| Release       | R1 (M2)                                                                                                                                                   |
+| Related FRs   | FR-SHOP-001, 002, 003, 004, 010, 012, 013, 014                                                                                                            |
+| Entry points  | "Sell on DripNepal" in the header and footer → `/sell`; `/account/shops` for status, documents and resubmission; `/admin/shop-applications` for reviewers |
+| Preconditions | Applicant `active` with verified email; owns fewer than `max_shops_per_owner` (3) shops; a current seller agreement exists (`getCurrentSellerAgreement`)  |
+| Permissions   | Applicant becomes `shops.owner_user_id`. Reviewers need `platform.shops.review` and an MFA-verified session.                                              |
 
 E-Commerce Act 2081 s16 requires each seller to sign a written or electronic contract with the intermediary before selling, and to provide business registration evidence, full name and address, a grievance mechanism, return and refund details, and PAN or VAT details. Section 14 requires the intermediary to have that agreement before listing (<https://giwmscdnone.gov.np/media/files/E-Commerce%20Act%2C%202081_yr7k9o5.pdf>, accessed 2026-09-25; legal confirmation VX-02). This journey captures all of it before the shop can list.
 
@@ -624,15 +625,15 @@ E-Commerce Act 2081 s16 requires each seller to sign a written or electronic con
 
 #### State coverage
 
-| Class | Behaviour |
-|---|---|
-| Success | Shop `active` with an agreement row and all s16 fields, and the owner lands in the seller dashboard. |
-| Empty | No shops: `/account/shops` shows "You don't have a shop yet" and a link to `/sell`. Empty admin queue: "No applications waiting". |
-| Validation | Missing registration fields for `registered_business`, missing grievance contact, `pan_vat_number` not 9 digits [Verify-external VX-05], return policy shorter than 50 characters [Assumption], reserved or malformed slug → `VALIDATION_FAILED (422)` with field errors. Missing or stale `accepted_agreement_version` → `VALIDATION_FAILED (422)` or `CONFLICT (409)` with the current version. A fourth shop → `VALIDATION_FAILED (422)` with code `max_shops_reached` [Assumption]. |
-| Permission | Unverified → `EMAIL_NOT_VERIFIED (403)`. While `pending_review` or `rejected`, seller routes other than the application and documents → `SHOP_NOT_ACTIVE (403)`, and the public `/shops/{shopSlug}` → 404. Reviewer without MFA in the last 12 h → `MFA_REQUIRED (401)`. Support agent (no `platform.shops.review`) → `FORBIDDEN (403)`. |
-| Concurrency | Slug taken between the availability hint and submit → `CONFLICT (409)` on `slug`, and the form keeps all other input. Two reviewers decide at once → the second gets `INVALID_STATE_TRANSITION (409)`. Resubmit while already `pending_review` → `INVALID_STATE_TRANSITION (409)`. |
-| External-provider failure | Object storage down during KYC upload → `PROVIDER_UNAVAILABLE (503)` and retry. Email down → the decision is stored and the email retries; `/account/shops` always shows the current status and reason. |
-| Recovery | Rejected applicants fix and resubmit without losing data. An abandoned form keeps its draft in `sessionStorage` for the session only (no KYC data is stored client-side). |
+| Class                     | Behaviour                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Success                   | Shop `active` with an agreement row and all s16 fields, and the owner lands in the seller dashboard.                                                                                                                                                                                                                                                                                                                                                                                    |
+| Empty                     | No shops: `/account/shops` shows "You don't have a shop yet" and a link to `/sell`. Empty admin queue: "No applications waiting".                                                                                                                                                                                                                                                                                                                                                       |
+| Validation                | Missing registration fields for `registered_business`, missing grievance contact, `pan_vat_number` not 9 digits [Verify-external VX-05], return policy shorter than 50 characters [Assumption], reserved or malformed slug → `VALIDATION_FAILED (422)` with field errors. Missing or stale `accepted_agreement_version` → `VALIDATION_FAILED (422)` or `CONFLICT (409)` with the current version. A fourth shop → `VALIDATION_FAILED (422)` with code `max_shops_reached` [Assumption]. |
+| Permission                | Unverified → `EMAIL_NOT_VERIFIED (403)`. While `pending_review` or `rejected`, seller routes other than the application and documents → `SHOP_NOT_ACTIVE (403)`, and the public `/shops/{shopSlug}` → 404. Reviewer without MFA in the last 12 h → `MFA_REQUIRED (401)`. Support agent (no `platform.shops.review`) → `FORBIDDEN (403)`.                                                                                                                                                |
+| Concurrency               | Slug taken between the availability hint and submit → `CONFLICT (409)` on `slug`, and the form keeps all other input. Two reviewers decide at once → the second gets `INVALID_STATE_TRANSITION (409)`. Resubmit while already `pending_review` → `INVALID_STATE_TRANSITION (409)`.                                                                                                                                                                                                      |
+| External-provider failure | Object storage down during KYC upload → `PROVIDER_UNAVAILABLE (503)` and retry. Email down → the decision is stored and the email retries; `/account/shops` always shows the current status and reason.                                                                                                                                                                                                                                                                                 |
+| Recovery                  | Rejected applicants fix and resubmit without losing data. An abandoned form keeps its draft in `sessionStorage` for the session only (no KYC data is stored client-side).                                                                                                                                                                                                                                                                                                               |
 
 #### Acceptance criteria
 
@@ -652,14 +653,14 @@ E-Commerce Act 2081 s16 requires each seller to sign a written or electronic con
 
 ### J-09 Staff invitation
 
-| Field | Value |
-|---|---|
-| Actors | Shop owner; invitee; existing members |
-| Release | R1 (M2). Custom roles are R3. |
-| Related FRs | FR-SHOP-005, 006 |
-| Entry points | `/seller/{shopSlug}/staff`; email link `/invitations/{token}` |
+| Field         | Value                                                                                    |
+| ------------- | ---------------------------------------------------------------------------------------- |
+| Actors        | Shop owner; invitee; existing members                                                    |
+| Release       | R1 (M2). Custom roles are R3.                                                            |
+| Related FRs   | FR-SHOP-005, 006                                                                         |
+| Entry points  | `/seller/{shopSlug}/staff`; email link `/invitations/{token}`                            |
 | Preconditions | Shop `active` (or `suspended` in `fulfill_existing` mode for removals only [Assumption]) |
-| Permissions | `shop.staff.manage` (owner only; managers do not have it) |
+| Permissions   | `shop.staff.manage` (owner only; managers do not have it)                                |
 
 #### Main success flow
 
@@ -671,15 +672,15 @@ E-Commerce Act 2081 s16 requires each seller to sign a written or electronic con
 
 #### State coverage
 
-| Class | Behaviour |
-|---|---|
-| Success | The member has exactly the permissions of their role on the next request. |
-| Empty | Only the owner: "Invite people to help run your shop", with role descriptions. |
-| Validation | Invalid email, `role = owner` or an unknown role → `VALIDATION_FAILED (422)`. |
-| Permission | Manager tries to invite → `FORBIDDEN (403)`. A non-member calls any staff endpoint → `NOT_FOUND (404)` (T-SEC-001). Account email differs from the invitation email → `FORBIDDEN (403)` naming the masked invited address. |
-| Concurrency | Invitation accepted and revoked at once: compare-and-set on `accepted_at IS NULL AND revoked_at IS NULL`, so one wins. A second accept by the same user returns the existing membership (UNIQUE `(shop_id, user_id)`). Inviting someone who is already an active member or the owner → `CONFLICT (409)`. |
-| External-provider failure | Email down: the invitation exists and the owner can copy the link from the staff page [Assumption] or resend. |
-| Recovery | Expired, revoked or unknown token → `NOT_FOUND (404)` page "This invitation is no longer valid. Ask the shop owner to send a new one." A removed member who is re-invited gets a fresh membership row status `active` again. |
+| Class                     | Behaviour                                                                                                                                                                                                                                                                                                |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Success                   | The member has exactly the permissions of their role on the next request.                                                                                                                                                                                                                                |
+| Empty                     | Only the owner: "Invite people to help run your shop", with role descriptions.                                                                                                                                                                                                                           |
+| Validation                | Invalid email, `role = owner` or an unknown role → `VALIDATION_FAILED (422)`.                                                                                                                                                                                                                            |
+| Permission                | Manager tries to invite → `FORBIDDEN (403)`. A non-member calls any staff endpoint → `NOT_FOUND (404)` (T-SEC-001). Account email differs from the invitation email → `FORBIDDEN (403)` naming the masked invited address.                                                                               |
+| Concurrency               | Invitation accepted and revoked at once: compare-and-set on `accepted_at IS NULL AND revoked_at IS NULL`, so one wins. A second accept by the same user returns the existing membership (UNIQUE `(shop_id, user_id)`). Inviting someone who is already an active member or the owner → `CONFLICT (409)`. |
+| External-provider failure | Email down: the invitation exists and the owner can copy the link from the staff page [Assumption] or resend.                                                                                                                                                                                            |
+| Recovery                  | Expired, revoked or unknown token → `NOT_FOUND (404)` page "This invitation is no longer valid. Ask the shop owner to send a new one." A removed member who is re-invited gets a fresh membership row status `active` again.                                                                             |
 
 #### Acceptance criteria
 
@@ -695,14 +696,14 @@ E-Commerce Act 2081 s16 requires each seller to sign a written or electronic con
 
 ### J-10 Product creation & publication
 
-| Field | Value |
-|---|---|
-| Actors | Owner, manager, catalog editor; catalog moderator (J-16); system (media worker, listing refresh) |
-| Release | R1 (M3). Bulk CSV import is R3. |
-| Related FRs | FR-CAT-003, 004, 005, 007, 008, 011, 012; FR-MED-001, 002; FR-PROMO-001 |
-| Entry points | `/seller/{shopSlug}/products` → "Add product" → `/seller/{shopSlug}/products/new`; edit at `/seller/{shopSlug}/products/{productId}` |
-| Preconditions | Shop `active` with agreement and s16 fields (J-08); shipping configured before submit or publish; categories and attributes seeded |
-| Permissions | `shop.products.edit` (create, edit, variants, media); `shop.products.publish` (submit, publish, unpublish, archive, restore) |
+| Field         | Value                                                                                                                                |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Actors        | Owner, manager, catalog editor; catalog moderator (J-16); system (media worker, listing refresh)                                     |
+| Release       | R1 (M3). Bulk CSV import is R3.                                                                                                      |
+| Related FRs   | FR-CAT-003, 004, 005, 007, 008, 011, 012; FR-MED-001, 002; FR-PROMO-001                                                              |
+| Entry points  | `/seller/{shopSlug}/products` → "Add product" → `/seller/{shopSlug}/products/new`; edit at `/seller/{shopSlug}/products/{productId}` |
+| Preconditions | Shop `active` with agreement and s16 fields (J-08); shipping configured before submit or publish; categories and attributes seeded   |
+| Permissions   | `shop.products.edit` (create, edit, variants, media); `shop.products.publish` (submit, publish, unpublish, archive, restore)         |
 
 #### Main success flow
 
@@ -718,15 +719,15 @@ E-Commerce Act 2081 s16 requires each seller to sign a written or electronic con
 
 #### State coverage
 
-| Class | Behaviour |
-|---|---|
-| Success | Product live with correct disclosures, variants and images. |
-| Empty | No products: "Add your first product" plus a completeness checklist. |
-| Validation | Non-leaf category; compare-at not greater than price; duplicate option combination; SKU already used by an active variant in this shop; missing disclosures → `VALIDATION_FAILED (422)` with indexed fields (for example `variants[2].sku`, code `sku_taken`). Declared upload size over 10 MB → `PAYLOAD_TOO_LARGE (413)`. SVG, HEIC [Assumption] or bad magic bytes → the asset becomes `rejected` with a reason. |
-| Permission | Order fulfiller or viewer editing → `FORBIDDEN (403)`. Another shop's `productId` → `NOT_FOUND (404)` (T-SEC-001). Shop `suspended` → `SHOP_NOT_ACTIVE (403)`. Vendor trying to publish a `blocked` product → `INVALID_STATE_TRANSITION (409)`. |
-| Concurrency | Two editors save the same product: the second gets `VERSION_CONFLICT (412)` with the current representation, and the UI shows what changed and lets them reapply. Missing `If-Match` → `PRECONDITION_REQUIRED (428)`. Edit while `pending_review` → `INVALID_STATE_TRANSITION (409)` ("under review"). |
-| External-provider failure | Storage presign fails → `PROVIDER_UNAVAILABLE (503)`. Upload interrupted → the asset stays `pending_upload` and a cleanup job deletes it after 24 h [Assumption]. Worker down → assets stay `processing`, and submit is refused with "Images are still processing". |
-| Recovery | Drafts are stored server-side from the first save. Unsaved edits are kept in `sessionStorage` and offered back after a 412 or a session expiry. A rejected product returns to `draft` for fixes and resubmission. |
+| Class                     | Behaviour                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Success                   | Product live with correct disclosures, variants and images.                                                                                                                                                                                                                                                                                                                                                         |
+| Empty                     | No products: "Add your first product" plus a completeness checklist.                                                                                                                                                                                                                                                                                                                                                |
+| Validation                | Non-leaf category; compare-at not greater than price; duplicate option combination; SKU already used by an active variant in this shop; missing disclosures → `VALIDATION_FAILED (422)` with indexed fields (for example `variants[2].sku`, code `sku_taken`). Declared upload size over 10 MB → `PAYLOAD_TOO_LARGE (413)`. SVG, HEIC [Assumption] or bad magic bytes → the asset becomes `rejected` with a reason. |
+| Permission                | Order fulfiller or viewer editing → `FORBIDDEN (403)`. Another shop's `productId` → `NOT_FOUND (404)` (T-SEC-001). Shop `suspended` → `SHOP_NOT_ACTIVE (403)`. Vendor trying to publish a `blocked` product → `INVALID_STATE_TRANSITION (409)`.                                                                                                                                                                     |
+| Concurrency               | Two editors save the same product: the second gets `VERSION_CONFLICT (412)` with the current representation, and the UI shows what changed and lets them reapply. Missing `If-Match` → `PRECONDITION_REQUIRED (428)`. Edit while `pending_review` → `INVALID_STATE_TRANSITION (409)` ("under review").                                                                                                              |
+| External-provider failure | Storage presign fails → `PROVIDER_UNAVAILABLE (503)`. Upload interrupted → the asset stays `pending_upload` and a cleanup job deletes it after 24 h [Assumption]. Worker down → assets stay `processing`, and submit is refused with "Images are still processing".                                                                                                                                                 |
+| Recovery                  | Drafts are stored server-side from the first save. Unsaved edits are kept in `sessionStorage` and offered back after a 412 or a session expiry. A rejected product returns to `draft` for fixes and resubmission.                                                                                                                                                                                                   |
 
 #### Acceptance criteria
 
@@ -744,14 +745,14 @@ E-Commerce Act 2081 s16 requires each seller to sign a written or electronic con
 
 ### J-11 Inventory management
 
-| Field | Value |
-|---|---|
-| Actors | Owner, manager, catalog editor; system (drift detection job) |
-| Release | R1 (M3). Low-stock alerts R2; multi-location R3. |
-| Related FRs | FR-INV-001, 002, 003, 005 |
-| Entry points | `/seller/{shopSlug}/inventory`; "Stock" tab on the product editor |
+| Field         | Value                                                                                  |
+| ------------- | -------------------------------------------------------------------------------------- |
+| Actors        | Owner, manager, catalog editor; system (drift detection job)                           |
+| Release       | R1 (M3). Low-stock alerts R2; multi-location R3.                                       |
+| Related FRs   | FR-INV-001, 002, 003, 005                                                              |
+| Entry points  | `/seller/{shopSlug}/inventory`; "Stock" tab on the product editor                      |
 | Preconditions | Product has variants. `inventory_items` exists per variant (created with the variant). |
-| Permissions | `shop.inventory.adjust` to change; `shop.products.view` to view |
+| Permissions   | `shop.inventory.adjust` to change; `shop.products.view` to view                        |
 
 #### Main success flow
 
@@ -763,15 +764,15 @@ E-Commerce Act 2081 s16 requires each seller to sign a written or electronic con
 
 #### State coverage
 
-| Class | Behaviour |
-|---|---|
-| Success | Stock reflects the change; listings update `in_stock` within 60 s. |
-| Empty | No variants: "Add variants to this product to track stock". |
-| Validation | Delta 0, non-integer, or missing reason → `VALIDATION_FAILED (422)`. |
-| Permission | Order fulfiller or viewer adjusting → `FORBIDDEN (403)`. Another shop's variant → `NOT_FOUND (404)`. Suspended shop → `SHOP_NOT_ACTIVE (403)`. |
-| Concurrency | An adjustment that would make `on_hand < reserved` (for example a checkout reserved the last units a moment ago) → `CONFLICT (409)` with the current `reserved`; the CHECK constraint is the backstop. Stocktake with a stale `expected_on_hand` → `CONFLICT (409)` with current values. Adjustments and checkout reservations serialise on the row lock. |
-| External-provider failure | None. |
-| Recovery | Mistakes are corrected with a new `correction` adjustment. Movements are never edited or deleted. |
+| Class                     | Behaviour                                                                                                                                                                                                                                                                                                                                                 |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Success                   | Stock reflects the change; listings update `in_stock` within 60 s.                                                                                                                                                                                                                                                                                        |
+| Empty                     | No variants: "Add variants to this product to track stock".                                                                                                                                                                                                                                                                                               |
+| Validation                | Delta 0, non-integer, or missing reason → `VALIDATION_FAILED (422)`.                                                                                                                                                                                                                                                                                      |
+| Permission                | Order fulfiller or viewer adjusting → `FORBIDDEN (403)`. Another shop's variant → `NOT_FOUND (404)`. Suspended shop → `SHOP_NOT_ACTIVE (403)`.                                                                                                                                                                                                            |
+| Concurrency               | An adjustment that would make `on_hand < reserved` (for example a checkout reserved the last units a moment ago) → `CONFLICT (409)` with the current `reserved`; the CHECK constraint is the backstop. Stocktake with a stale `expected_on_hand` → `CONFLICT (409)` with current values. Adjustments and checkout reservations serialise on the row lock. |
+| External-provider failure | None.                                                                                                                                                                                                                                                                                                                                                     |
+| Recovery                  | Mistakes are corrected with a new `correction` adjustment. Movements are never edited or deleted.                                                                                                                                                                                                                                                         |
 
 #### Acceptance criteria
 
@@ -786,14 +787,14 @@ E-Commerce Act 2081 s16 requires each seller to sign a written or electronic con
 
 ### J-12 Vendor order processing & fulfillment
 
-| Field | Value |
-|---|---|
-| Actors | Order fulfiller, manager, owner; viewer (read-only); system (acceptance-timeout job, emails); customer |
-| Release | R1 (M6). Partial shipments R2; courier APIs R3. |
-| Related FRs | FR-ORD-003, 004; FR-FUL-001; FR-NOT-002, 003; FR-INV-002 |
-| Entry points | "New order" email; dashboard badge (polling); `/seller/{shopSlug}/orders`; `/seller/{shopSlug}/orders/{shopOrderNumber}` |
-| Preconditions | Shop order exists in `awaiting_acceptance` (COD at placement; gateway after capture) |
-| Permissions | `shop.orders.view`; `shop.orders.process` to accept, reject and record events; `shop.customer_contact.view` for the full recipient contact |
+| Field         | Value                                                                                                                                      |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Actors        | Order fulfiller, manager, owner; viewer (read-only); system (acceptance-timeout job, emails); customer                                     |
+| Release       | R1 (M6). Partial shipments R2; courier APIs R3.                                                                                            |
+| Related FRs   | FR-ORD-003, 004; FR-FUL-001; FR-NOT-002, 003; FR-INV-002                                                                                   |
+| Entry points  | "New order" email; dashboard badge (polling); `/seller/{shopSlug}/orders`; `/seller/{shopSlug}/orders/{shopOrderNumber}`                   |
+| Preconditions | Shop order exists in `awaiting_acceptance` (COD at placement; gateway after capture)                                                       |
+| Permissions   | `shop.orders.view`; `shop.orders.process` to accept, reject and record events; `shop.customer_contact.view` for the full recipient contact |
 
 #### Main success flow
 
@@ -810,15 +811,15 @@ E-Commerce Act 2081 s16 requires each seller to sign a written or electronic con
 
 #### State coverage
 
-| Class | Behaviour |
-|---|---|
-| Success | Accepted and shipped within the SLA; the customer sees tracking. |
-| Empty | No orders: "No orders yet. Orders appear here as soon as customers check out." No orders awaiting acceptance: the default filter says so and offers "All orders". |
-| Validation | `shipped` without `courier_name` or `tracking_number`, or a `tracking_url` that is not `https://` → `VALIDATION_FAILED (422)`. Rejecting more than a line's remaining quantity → `VALIDATION_FAILED (422)`. |
-| Permission | Other shop's order → `NOT_FOUND (404)` (T-SEC-001). Viewer or catalog editor processing → `FORBIDDEN (403)`. Shop `suspended` + `frozen` → `SHOP_NOT_ACTIVE (403)`; `fulfill_existing` → allowed (J-17). |
-| Concurrency | Accept races the customer's cancel or the timeout job: compare-and-set on the source status means one wins, and the loser gets `INVALID_STATE_TRANSITION (409)`. Two fulfillers accept with different keys → the second gets `INVALID_STATE_TRANSITION (409)`. The same key replays. `packed` after `shipped` → `INVALID_STATE_TRANSITION (409)`. |
-| External-provider failure | Courier systems are off-platform in R1; the vendor records what the courier reports. Email failures retry without blocking state changes. |
-| Recovery | A tracking typo is fixed by sending `shipped` again with corrected details while the shipment is `shipped`. This writes a `shipment_events` row and does not change the status [Assumption; docs/05 confirms]. Wrong acceptance cannot be undone by the vendor; they ask support, who can use `adminCancelShopOrder`. |
+| Class                     | Behaviour                                                                                                                                                                                                                                                                                                                                         |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Success                   | Accepted and shipped within the SLA; the customer sees tracking.                                                                                                                                                                                                                                                                                  |
+| Empty                     | No orders: "No orders yet. Orders appear here as soon as customers check out." No orders awaiting acceptance: the default filter says so and offers "All orders".                                                                                                                                                                                 |
+| Validation                | `shipped` without `courier_name` or `tracking_number`, or a `tracking_url` that is not `https://` → `VALIDATION_FAILED (422)`. Rejecting more than a line's remaining quantity → `VALIDATION_FAILED (422)`.                                                                                                                                       |
+| Permission                | Other shop's order → `NOT_FOUND (404)` (T-SEC-001). Viewer or catalog editor processing → `FORBIDDEN (403)`. Shop `suspended` + `frozen` → `SHOP_NOT_ACTIVE (403)`; `fulfill_existing` → allowed (J-17).                                                                                                                                          |
+| Concurrency               | Accept races the customer's cancel or the timeout job: compare-and-set on the source status means one wins, and the loser gets `INVALID_STATE_TRANSITION (409)`. Two fulfillers accept with different keys → the second gets `INVALID_STATE_TRANSITION (409)`. The same key replays. `packed` after `shipped` → `INVALID_STATE_TRANSITION (409)`. |
+| External-provider failure | Courier systems are off-platform in R1; the vendor records what the courier reports. Email failures retry without blocking state changes.                                                                                                                                                                                                         |
+| Recovery                  | A tracking typo is fixed by sending `shipped` again with corrected details while the shipment is `shipped`. This writes a `shipment_events` row and does not change the status [Assumption; docs/05 confirms]. Wrong acceptance cannot be undone by the vendor; they ask support, who can use `adminCancelShopOrder`.                             |
 
 #### Acceptance criteria
 
@@ -839,14 +840,14 @@ E-Commerce Act 2081 s16 requires each seller to sign a written or electronic con
 
 ### J-13 COD delivery outcome & RTO
 
-| Field | Value |
-|---|---|
-| Actors | Order fulfiller (records what the courier reports); courier (off-platform); customer; system (ledger posting, completion job) |
-| Release | R1 (M6 for outcomes, M7 for ledger) |
-| Related FRs | FR-FUL-002, 003; FR-PAY-001; FR-LED-001, 002; FR-CHK-007; FR-ORD-006 |
-| Entry points | `/seller/{shopSlug}/orders/{shopOrderNumber}` for a `shipped` shop order |
-| Preconditions | Shipment `shipped`; COD payment `awaiting_collection` |
-| Permissions | `shop.orders.process` |
+| Field         | Value                                                                                                                         |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Actors        | Order fulfiller (records what the courier reports); courier (off-platform); customer; system (ledger posting, completion job) |
+| Release       | R1 (M6 for outcomes, M7 for ledger)                                                                                           |
+| Related FRs   | FR-FUL-002, 003; FR-PAY-001; FR-LED-001, 002; FR-CHK-007; FR-ORD-006                                                          |
+| Entry points  | `/seller/{shopSlug}/orders/{shopOrderNumber}` for a `shipped` shop order                                                      |
+| Preconditions | Shipment `shipped`; COD payment `awaiting_collection`                                                                         |
+| Permissions   | `shop.orders.process`                                                                                                         |
 
 In R1 the vendor's courier collects the cash, so the platform holds no customer money and the vendor ends up owing commission (canon §1). E-Commerce Act 2081 s8(1) deems payment to the delivery service provider to be payment received by the business entity; which entity that is for a marketplace is VX-01 and VX-02 (gt/nepal_payments.md, accessed 2026-09-25).
 
@@ -857,13 +858,13 @@ In R1 the vendor's courier collects the cash, so the platform holds no customer 
 3. The fulfiller records `recordCodCollection {outcome: "collected", amount_minor}` → payment `collected`. The amount must equal the expected COD amount.
 4. When both are recorded (in the transaction of whichever comes second), the ledger posts, with `available_at = delivered_at + ledger_hold_days` (7 [Assumption; OD-06]). For shop order `DN-7Q4K2MX-1` (items Rs 2,400, shipping Rs 100, commission 10% of items [Assumption; OD-04]):
 
-| Entry type | Amount | Meaning |
-|---|---|---|
-| `sale` | +Rs 2,400 | Items sold |
-| `shipping_income` | +Rs 100 | Shipping charged |
-| `commission` | −Rs 240 | Platform commission |
-| `cod_cash_held` | −Rs 2,500 | Vendor already holds the cash |
-| **Net** | **−Rs 240** | Vendor owes commission (J-15) |
+| Entry type        | Amount      | Meaning                       |
+| ----------------- | ----------- | ----------------------------- |
+| `sale`            | +Rs 2,400   | Items sold                    |
+| `shipping_income` | +Rs 100     | Shipping charged              |
+| `commission`      | −Rs 240     | Platform commission           |
+| `cod_cash_held`   | −Rs 2,500   | Vendor already holds the cash |
+| **Net**           | **−Rs 240** | Vendor owes commission (J-15) |
 
 5. The return window (`return_window_days`, 7 [Assumption; OD-06, OD-07]) starts at `delivered_at`. The completion job marks the shop order `completed` when the window has elapsed and no return or refund is open (FR-ORD-006).
 
@@ -895,15 +896,15 @@ flowchart TD
 
 #### State coverage
 
-| Class | Behaviour |
-|---|---|
-| Success | Delivered and collected, ledger posted once, completion after the return window. |
-| Empty | No shipped orders: the outcome actions are hidden. |
-| Validation | `collected` with an amount different from the expected COD amount → `VALIDATION_FAILED (422)`; shortfalls go through support and a finance ledger adjustment. `delivered_at` in the future or before `shipped_at` → `VALIDATION_FAILED (422)`. |
-| Permission | As J-12. `frozen` shops cannot record outcomes (J-17). |
-| Concurrency | `not_collected` when the shipment is `delivered` → `INVALID_STATE_TRANSITION (409)`. `collected` twice with different keys → the second gets `INVALID_STATE_TRANSITION (409)`. Ledger posting uses a `dedupe_key` per shop order and entry type, so replays and job retries cannot post twice. |
-| External-provider failure | The courier is off-platform. When the vendor has not recorded an outcome 10 days after `shipped_at`, or has recorded `delivered` without a COD collection for 48 h, the vendor gets a reminder and the order appears in an admin exception list [Assumption; docs/11]. |
-| Recovery | A wrongly recorded `delivery_failed` is followed by `reattempt` and then `delivered`. A wrongly recorded `delivered` is corrected by support: an order note plus a finance `adjustment` or reversal entry. Ledger rows are never edited. |
+| Class                     | Behaviour                                                                                                                                                                                                                                                                                      |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Success                   | Delivered and collected, ledger posted once, completion after the return window.                                                                                                                                                                                                               |
+| Empty                     | No shipped orders: the outcome actions are hidden.                                                                                                                                                                                                                                             |
+| Validation                | `collected` with an amount different from the expected COD amount → `VALIDATION_FAILED (422)`; shortfalls go through support and a finance ledger adjustment. `delivered_at` in the future or before `shipped_at` → `VALIDATION_FAILED (422)`.                                                 |
+| Permission                | As J-12. `frozen` shops cannot record outcomes (J-17).                                                                                                                                                                                                                                         |
+| Concurrency               | `not_collected` when the shipment is `delivered` → `INVALID_STATE_TRANSITION (409)`. `collected` twice with different keys → the second gets `INVALID_STATE_TRANSITION (409)`. Ledger posting uses a `dedupe_key` per shop order and entry type, so replays and job retries cannot post twice. |
+| External-provider failure | The courier is off-platform. When the vendor has not recorded an outcome 10 days after `shipped_at`, or has recorded `delivered` without a COD collection for 48 h, the vendor gets a reminder and the order appears in an admin exception list [Assumption; docs/11].                         |
+| Recovery                  | A wrongly recorded `delivery_failed` is followed by `reattempt` and then `delivered`. A wrongly recorded `delivered` is corrected by support: an order note plus a finance `adjustment` or reversal entry. Ledger rows are never edited.                                                       |
 
 #### Acceptance criteria
 
@@ -923,14 +924,14 @@ flowchart TD
 
 ### J-14 Refund (admin-initiated)
 
-| Field | Value |
-|---|---|
-| Actors | Support agent (creates); finance officer (approves, records); system (gateway refund job, SLA job); customer |
-| Release | R1: manual transfer for COD and bank or wallet (M7). R1.1: gateway refunds with unknown-outcome handling (M8). Self-serve is R2. |
-| Related FRs | FR-RET-001, 003, 005, 007; FR-LED-002 |
-| Entry points | Support case (J-19); return received (J-20); `/admin/orders` order detail; `/admin/refunds` queue; system-created refunds (J-06 late capture, gateway order cancelled or rejected) |
-| Preconditions | Money was collected or captured for the shop order. MFA-verified staff session. |
-| Permissions | `platform.refunds.create`; `platform.refunds.approve`; approver differs from creator (maker-checker; `single_operator_mode` exception, OD-14) |
+| Field         | Value                                                                                                                                                                              |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Actors        | Support agent (creates); finance officer (approves, records); system (gateway refund job, SLA job); customer                                                                       |
+| Release       | R1: manual transfer for COD and bank or wallet (M7). R1.1: gateway refunds with unknown-outcome handling (M8). Self-serve is R2.                                                   |
+| Related FRs   | FR-RET-001, 003, 005, 007; FR-LED-002                                                                                                                                              |
+| Entry points  | Support case (J-19); return received (J-20); `/admin/orders` order detail; `/admin/refunds` queue; system-created refunds (J-06 late capture, gateway order cancelled or rejected) |
+| Preconditions | Money was collected or captured for the shop order. MFA-verified staff session.                                                                                                    |
+| Permissions   | `platform.refunds.create`; `platform.refunds.approve`; approver differs from creator (maker-checker; `single_operator_mode` exception, OD-14)                                      |
 
 Refund methods (canon §17.1 overrides the §8 list): `manual_transfer` (COD, bank or wallet transfer by finance), `gateway_api` (Khalti refund API), and `gateway_manual` (eSewa has no documented refund API; the operator refunds in the merchant portal or through eSewa support and records the reference). Sources: <https://docs.khalti.com/api/refund/>, <https://developer.esewa.com.np/pages/Epay>, accessed 2026-09-25. The Khalti refund method, auth header and amount unit are unconfirmed (VX-07).
 
@@ -951,15 +952,15 @@ Refund methods (canon §17.1 overrides the §8 list): `manual_transfer` (COD, ba
 
 #### State coverage
 
-| Class | Behaviour |
-|---|---|
-| Success | Refund `succeeded`, ledger posted once, customer informed. |
-| Empty | `/admin/refunds` with no pending items: "Nothing to approve". COD order not yet collected: "Nothing has been paid, so there is nothing to refund. Cancel the shop order instead." |
-| Validation | Amount above refundable → `REFUND_EXCEEDS_REFUNDABLE (422)` (T-SEC-004). Missing recipient details for `manual_transfer`, or a missing `paid_reference` when marking success → `VALIDATION_FAILED (422)`. |
-| Permission | Support agent approving → `FORBIDDEN (403)`. Approver equal to creator outside single-operator mode → `FORBIDDEN (403)`, with the DB CHECK as backstop. No MFA → `MFA_REQUIRED (401)`. |
-| Concurrency | Two finance officers approve → one `approved`, the other `INVALID_STATE_TRANSITION (409)`. Two refunds for the same items created in parallel → the refundable check runs under a row lock on the payment, so the second exceeding one gets `REFUND_EXCEEDS_REFUNDABLE (422)`. |
-| External-provider failure | Khalti timeout after the provider processed the refund → `needs_review`, then lookup → `succeeded`, with no double refund (T-PAY-008). Provider down → `failed` with `attempts` incremented; finance retries later. |
-| Recovery | `failed` → `retryRefund` or `cancelled`. `needs_review` is resolved by lookup or manual confirmation. A refund `succeeded` by mistake is corrected with a ledger `adjustment` and a support note; the refund row is never edited. |
+| Class                     | Behaviour                                                                                                                                                                                                                                                                      |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Success                   | Refund `succeeded`, ledger posted once, customer informed.                                                                                                                                                                                                                     |
+| Empty                     | `/admin/refunds` with no pending items: "Nothing to approve". COD order not yet collected: "Nothing has been paid, so there is nothing to refund. Cancel the shop order instead."                                                                                              |
+| Validation                | Amount above refundable → `REFUND_EXCEEDS_REFUNDABLE (422)` (T-SEC-004). Missing recipient details for `manual_transfer`, or a missing `paid_reference` when marking success → `VALIDATION_FAILED (422)`.                                                                      |
+| Permission                | Support agent approving → `FORBIDDEN (403)`. Approver equal to creator outside single-operator mode → `FORBIDDEN (403)`, with the DB CHECK as backstop. No MFA → `MFA_REQUIRED (401)`.                                                                                         |
+| Concurrency               | Two finance officers approve → one `approved`, the other `INVALID_STATE_TRANSITION (409)`. Two refunds for the same items created in parallel → the refundable check runs under a row lock on the payment, so the second exceeding one gets `REFUND_EXCEEDS_REFUNDABLE (422)`. |
+| External-provider failure | Khalti timeout after the provider processed the refund → `needs_review`, then lookup → `succeeded`, with no double refund (T-PAY-008). Provider down → `failed` with `attempts` incremented; finance retries later.                                                            |
+| Recovery                  | `failed` → `retryRefund` or `cancelled`. `needs_review` is resolved by lookup or manual confirmation. A refund `succeeded` by mistake is corrected with a ledger `adjustment` and a support note; the refund row is never edited.                                              |
 
 #### Acceptance criteria
 
@@ -980,14 +981,14 @@ Refund methods (canon §17.1 overrides the §8 list): `manual_transfer` (COD, ba
 
 ### J-15 Vendor ledger & remittance/payout
 
-| Field | Value |
-|---|---|
-| Actors | Owner and manager (view); finance officer (record, create and approve); system (posting and availability) |
-| Release | R1: ledger, statements, vendor remittances for COD commission (M7). R1.1: payouts by manual bank transfer with approval (M8). Automated payouts R3. |
-| Related FRs | FR-LED-001, 002, 003, 004, 005 |
-| Entry points | `/seller/{shopSlug}/finance`; `/admin/ledger`; `/admin/payouts` |
-| Preconditions | Ledger entries exist (J-13, J-14). For payouts: a verified payout account (`shop_payout_accounts.verified_at`). |
-| Permissions | `shop.finance.view` (owner, manager; still allowed while suspended or closed); `platform.ledger.view`, `platform.ledger.adjust`, `platform.payouts.manage`, `platform.payouts.approve` |
+| Field         | Value                                                                                                                                                                                  |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Actors        | Owner and manager (view); finance officer (record, create and approve); system (posting and availability)                                                                              |
+| Release       | R1: ledger, statements, vendor remittances for COD commission (M7). R1.1: payouts by manual bank transfer with approval (M8). Automated payouts R3.                                    |
+| Related FRs   | FR-LED-001, 002, 003, 004, 005                                                                                                                                                         |
+| Entry points  | `/seller/{shopSlug}/finance`; `/admin/ledger`; `/admin/payouts`                                                                                                                        |
+| Preconditions | Ledger entries exist (J-13, J-14). For payouts: a verified payout account (`shop_payout_accounts.verified_at`).                                                                        |
+| Permissions   | `shop.finance.view` (owner, manager; still allowed while suspended or closed); `platform.ledger.view`, `platform.ledger.adjust`, `platform.payouts.manage`, `platform.payouts.approve` |
 
 #### Main success flow A: COD commission owed and remitted (R1)
 
@@ -1008,15 +1009,15 @@ Refund methods (canon §17.1 overrides the §8 list): `manual_transfer` (COD, ba
 
 #### State coverage
 
-| Class | Behaviour |
-|---|---|
-| Success | Balances match the sum of entries; remittances and payouts are visible to the vendor with references. |
-| Empty | New shop: "No transactions yet. Entries appear when orders are delivered." No payable balance: "Create payout" is disabled with the reason. |
-| Validation | Remittance or payout amount ≤ 0; `received_at` in the future; payout above the available balance → `VALIDATION_FAILED (422)`. Payout without a verified payout account → `VALIDATION_FAILED (422)` naming the account. |
-| Permission | Order fulfiller or viewer opening finance → `FORBIDDEN (403)`. Other shop → `NOT_FOUND (404)` (T-SEC-001). The approver of a payout must differ from its creator (outside single-operator mode) → `FORBIDDEN (403)`. |
-| Concurrency | Two payouts selecting the same entries → the unique `payout_entries.ledger_entry_id` makes the second fail with `CONFLICT (409)`. The same remittance recorded twice with different keys → the UI warns when the same shop, amount and reference exist within 7 days [Assumption]. A mistake is reversed with an `adjustment` via `createLedgerAdjustment`, which needs a reason. |
-| External-provider failure | Bank transfer failures are reported by finance (`markPayoutFailed`). There is no bank API in R1/R1.1. |
-| Recovery | Every correction is a new entry (`adjustment` or reversal with `reverses_entry_id`), never an update. A failed payout returns its entries' value through `payout_reversal`, so the next payout can include it again. |
+| Class                     | Behaviour                                                                                                                                                                                                                                                                                                                                                                         |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Success                   | Balances match the sum of entries; remittances and payouts are visible to the vendor with references.                                                                                                                                                                                                                                                                             |
+| Empty                     | New shop: "No transactions yet. Entries appear when orders are delivered." No payable balance: "Create payout" is disabled with the reason.                                                                                                                                                                                                                                       |
+| Validation                | Remittance or payout amount ≤ 0; `received_at` in the future; payout above the available balance → `VALIDATION_FAILED (422)`. Payout without a verified payout account → `VALIDATION_FAILED (422)` naming the account.                                                                                                                                                            |
+| Permission                | Order fulfiller or viewer opening finance → `FORBIDDEN (403)`. Other shop → `NOT_FOUND (404)` (T-SEC-001). The approver of a payout must differ from its creator (outside single-operator mode) → `FORBIDDEN (403)`.                                                                                                                                                              |
+| Concurrency               | Two payouts selecting the same entries → the unique `payout_entries.ledger_entry_id` makes the second fail with `CONFLICT (409)`. The same remittance recorded twice with different keys → the UI warns when the same shop, amount and reference exist within 7 days [Assumption]. A mistake is reversed with an `adjustment` via `createLedgerAdjustment`, which needs a reason. |
+| External-provider failure | Bank transfer failures are reported by finance (`markPayoutFailed`). There is no bank API in R1/R1.1.                                                                                                                                                                                                                                                                             |
+| Recovery                  | Every correction is a new entry (`adjustment` or reversal with `reverses_entry_id`), never an update. A failed payout returns its entries' value through `payout_reversal`, so the next payout can include it again.                                                                                                                                                              |
 
 #### Acceptance criteria
 
@@ -1037,14 +1038,14 @@ Refund methods (canon §17.1 overrides the §8 list): `manual_transfer` (COD, ba
 
 ### J-16 Admin moderation (shops/products)
 
-| Field | Value |
-|---|---|
-| Actors | Catalog moderator, platform admin; vendors (notified) |
-| Release | R1 (M2 shop review, M3 product moderation). Brand and reference-data admin UI is R2. |
-| Related FRs | FR-SHOP-002; FR-CAT-005, 006, 008; FR-ADM-001 |
-| Entry points | `/admin/overview` queue counts; `/admin/shop-applications`; `/admin/products/moderation`; `/admin/shops` |
-| Preconditions | MFA-verified staff session (`mfa_verified_at` within 12 h) |
-| Permissions | `platform.shops.review`; `platform.products.moderate`; `platform.shops.update` for review mode |
+| Field         | Value                                                                                                    |
+| ------------- | -------------------------------------------------------------------------------------------------------- |
+| Actors        | Catalog moderator, platform admin; vendors (notified)                                                    |
+| Release       | R1 (M2 shop review, M3 product moderation). Brand and reference-data admin UI is R2.                     |
+| Related FRs   | FR-SHOP-002; FR-CAT-005, 006, 008; FR-ADM-001                                                            |
+| Entry points  | `/admin/overview` queue counts; `/admin/shop-applications`; `/admin/products/moderation`; `/admin/shops` |
+| Preconditions | MFA-verified staff session (`mfa_verified_at` within 12 h)                                               |
+| Permissions   | `platform.shops.review`; `platform.products.moderate`; `platform.shops.update` for review mode           |
 
 Shop review is described in J-08 steps 8–9. This journey adds product moderation and review-mode control.
 
@@ -1058,15 +1059,15 @@ Shop review is described in J-08 steps 8–9. This journey adds product moderati
 
 #### State coverage
 
-| Class | Behaviour |
-|---|---|
-| Success | Decision stored with a reason, vendor notified, listings updated within 60 s. |
-| Empty | Empty queue: "No products waiting for review" with the oldest decision time today. |
-| Validation | Reject or block without a reason of at least 10 characters → `VALIDATION_FAILED (422)`. |
-| Permission | Support agent or finance officer → `FORBIDDEN (403)`. No recent MFA → `MFA_REQUIRED (401)`. |
-| Concurrency | Two moderators decide the same product → the second gets `INVALID_STATE_TRANSITION (409)`. Vendor edits during review are blocked (J-10), so the moderator always approves the version they saw. |
-| External-provider failure | Email down: the decision stands and emails retry. Image derivatives missing: the moderator opens the original through a signed URL. |
-| Recovery | A wrong approval is followed by `blockProduct` with a reason. A wrong block is undone by unblocking to `unpublished`, after which the vendor republishes. |
+| Class                     | Behaviour                                                                                                                                                                                        |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Success                   | Decision stored with a reason, vendor notified, listings updated within 60 s.                                                                                                                    |
+| Empty                     | Empty queue: "No products waiting for review" with the oldest decision time today.                                                                                                               |
+| Validation                | Reject or block without a reason of at least 10 characters → `VALIDATION_FAILED (422)`.                                                                                                          |
+| Permission                | Support agent or finance officer → `FORBIDDEN (403)`. No recent MFA → `MFA_REQUIRED (401)`.                                                                                                      |
+| Concurrency               | Two moderators decide the same product → the second gets `INVALID_STATE_TRANSITION (409)`. Vendor edits during review are blocked (J-10), so the moderator always approves the version they saw. |
+| External-provider failure | Email down: the decision stands and emails retry. Image derivatives missing: the moderator opens the original through a signed URL.                                                              |
+| Recovery                  | A wrong approval is followed by `blockProduct` with a reason. A wrong block is undone by unblocking to `unpublished`, after which the vendor republishes.                                        |
 
 #### Acceptance criteria
 
@@ -1081,14 +1082,14 @@ Shop review is described in J-08 steps 8–9. This journey adds product moderati
 
 ### J-17 Account suspension & recovery
 
-| Field | Value |
-|---|---|
-| Actors | Platform admin; suspended user; suspended shop's members; customers with open orders |
-| Release | R1 (M1 user suspension, M2 shop suspension) |
-| Related FRs | FR-IAM-006; FR-ADM-002; FR-SHOP-007; FR-ADM-011 (public grievance contact) |
-| Entry points | `/admin/users` → user detail; `/admin/shops` → shop detail |
-| Preconditions | MFA-verified platform admin |
-| Permissions | `platform.users.suspend`, `platform.shops.suspend`, `platform.orders.intervene` |
+| Field         | Value                                                                                |
+| ------------- | ------------------------------------------------------------------------------------ |
+| Actors        | Platform admin; suspended user; suspended shop's members; customers with open orders |
+| Release       | R1 (M1 user suspension, M2 shop suspension)                                          |
+| Related FRs   | FR-IAM-006; FR-ADM-002; FR-SHOP-007; FR-ADM-011 (public grievance contact)           |
+| Entry points  | `/admin/users` → user detail; `/admin/shops` → shop detail                           |
+| Preconditions | MFA-verified platform admin                                                          |
+| Permissions   | `platform.users.suspend`, `platform.shops.suspend`, `platform.orders.intervene`      |
 
 #### Main success flow: user suspension
 
@@ -1106,15 +1107,15 @@ Shop review is described in J-08 steps 8–9. This journey adds product moderati
 
 #### State coverage
 
-| Class | Behaviour |
-|---|---|
-| Success | Suspension effective on the next request; reinstatement restores access with no data loss. |
-| Empty | A shop with no open orders is frozen with no follow-up list. |
-| Validation | Missing reason or missing `suspension_mode` → `VALIDATION_FAILED (422)`. |
-| Permission | Support agent → `FORBIDDEN (403)`. An admin cannot suspend themselves or the last active `platform_admin` → `CONFLICT (409)` [Assumption]. |
-| Concurrency | Suspension during a checkout in progress: the transaction that commits first decides. The next request is refused. An order that committed just before the suspension stands. |
-| External-provider failure | Email to the suspended party fails → retried. Suspension does not depend on email. |
-| Recovery | Reinstatement is a single action. Data is never deleted by suspension. |
+| Class                     | Behaviour                                                                                                                                                                     |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Success                   | Suspension effective on the next request; reinstatement restores access with no data loss.                                                                                    |
+| Empty                     | A shop with no open orders is frozen with no follow-up list.                                                                                                                  |
+| Validation                | Missing reason or missing `suspension_mode` → `VALIDATION_FAILED (422)`.                                                                                                      |
+| Permission                | Support agent → `FORBIDDEN (403)`. An admin cannot suspend themselves or the last active `platform_admin` → `CONFLICT (409)` [Assumption].                                    |
+| Concurrency               | Suspension during a checkout in progress: the transaction that commits first decides. The next request is refused. An order that committed just before the suspension stands. |
+| External-provider failure | Email to the suspended party fails → retried. Suspension does not depend on email.                                                                                            |
+| Recovery                  | Reinstatement is a single action. Data is never deleted by suspension.                                                                                                        |
 
 #### Acceptance criteria
 
@@ -1130,14 +1131,14 @@ Shop review is described in J-08 steps 8–9. This journey adds product moderati
 
 ### J-18 Password reset
 
-| Field | Value |
-|---|---|
-| Actors | Any user (customer, seller, staff); system (email) |
-| Release | R1 (M1) |
-| Related FRs | FR-IAM-004, 005 |
-| Entry points | "Forgot password?" on `/login` → `/forgot-password`; email link → `/reset-password`; `/account/security` for change password and sign-out-everywhere |
-| Preconditions | Email provider configured |
-| Permissions | None for reset (token-based); self for change password |
+| Field         | Value                                                                                                                                                |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Actors        | Any user (customer, seller, staff); system (email)                                                                                                   |
+| Release       | R1 (M1)                                                                                                                                              |
+| Related FRs   | FR-IAM-004, 005                                                                                                                                      |
+| Entry points  | "Forgot password?" on `/login` → `/forgot-password`; email link → `/reset-password`; `/account/security` for change password and sign-out-everywhere |
+| Preconditions | Email provider configured                                                                                                                            |
+| Permissions   | None for reset (token-based); self for change password                                                                                               |
 
 #### Main success flow
 
@@ -1149,15 +1150,15 @@ Shop review is described in J-08 steps 8–9. This journey adds product moderati
 
 #### State coverage
 
-| Class | Behaviour |
-|---|---|
-| Success | New password works, old sessions end. |
-| Empty | Not applicable (single form). |
-| Validation | Password out of range → `VALIDATION_FAILED (422)`. Wrong current password on change → `VALIDATION_FAILED (422)` on `current_password`. |
-| Permission | Suspended user: reset gives no email, and login still returns `ACCOUNT_SUSPENDED (403)`. |
-| Concurrency | Two reset emails requested: only the newest token works. The same token used in two tabs: compare-and-set on `consumed_at IS NULL` lets one succeed; the other shows "link already used". |
-| External-provider failure | Email down: job retries, and the page tells the user delivery may take minutes. |
-| Recovery | Expired or used token → "This link has expired" with a new request form. |
+| Class                     | Behaviour                                                                                                                                                                                 |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Success                   | New password works, old sessions end.                                                                                                                                                     |
+| Empty                     | Not applicable (single form).                                                                                                                                                             |
+| Validation                | Password out of range → `VALIDATION_FAILED (422)`. Wrong current password on change → `VALIDATION_FAILED (422)` on `current_password`.                                                    |
+| Permission                | Suspended user: reset gives no email, and login still returns `ACCOUNT_SUSPENDED (403)`.                                                                                                  |
+| Concurrency               | Two reset emails requested: only the newest token works. The same token used in two tabs: compare-and-set on `consumed_at IS NULL` lets one succeed; the other shows "link already used". |
+| External-provider failure | Email down: job retries, and the page tells the user delivery may take minutes.                                                                                                           |
+| Recovery                  | Expired or used token → "This link has expired" with a new request form.                                                                                                                  |
 
 #### Acceptance criteria
 
@@ -1172,14 +1173,14 @@ Shop review is described in J-08 steps 8–9. This journey adds product moderati
 
 ### J-19 Support case / grievance
 
-| Field | Value |
-|---|---|
-| Actors | Customer; support agent; shop members (on cases about their orders); platform admin (SLA oversight) |
-| Release | R1 (M7 [Assumption]) |
-| Related FRs | FR-ADM-009, 011; FR-RET-005; FR-NOT-002 |
-| Entry points | "Need help?" on `/account/orders/{orderNumber}`; the account support area; the grievance officer contact on the legal disclosures page; for staff, the admin support-case register; for shops, the case panel on `/seller/{shopSlug}/orders/{shopOrderNumber}` (routes for the account and admin support pages are proposed in the Consistency notes) |
-| Preconditions | Customer signed in and `active`. Suspended users use the published grievance contact. |
-| Permissions | Customer self; `platform.support_cases.manage`; shop members with `shop.orders.view` for cases on their shop orders |
+| Field         | Value                                                                                                                                                                                                                                                                                                                                                 |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Actors        | Customer; support agent; shop members (on cases about their orders); platform admin (SLA oversight)                                                                                                                                                                                                                                                   |
+| Release       | R1 (M7 [Assumption])                                                                                                                                                                                                                                                                                                                                  |
+| Related FRs   | FR-ADM-009, 011; FR-RET-005; FR-NOT-002                                                                                                                                                                                                                                                                                                               |
+| Entry points  | "Need help?" on `/account/orders/{orderNumber}`; the account support area; the grievance officer contact on the legal disclosures page; for staff, the admin support-case register; for shops, the case panel on `/seller/{shopSlug}/orders/{shopOrderNumber}` (routes for the account and admin support pages are proposed in the Consistency notes) |
+| Preconditions | Customer signed in and `active`. Suspended users use the published grievance contact.                                                                                                                                                                                                                                                                 |
+| Permissions   | Customer self; `platform.support_cases.manage`; shop members with `shop.orders.view` for cases on their shop orders                                                                                                                                                                                                                                   |
 
 E-Commerce Act 2081 s33 requires complaints to be registered and acknowledged immediately, investigated and decided within 15 days, answered in writing with reasons, and handled through an online mechanism. Directive 2082 s12 lets an unresolved complaint go to the Department (<https://giwmscdnone.gov.np/media/files/E-Commerce%20Act%2C%202081_yr7k9o5.pdf>, <https://giwmscdnone.gov.np/media/pdf_upload/ecommerce-directives_8errkt4.pdf>, accessed 2026-09-25; legal confirmation VX-02).
 
@@ -1196,15 +1197,15 @@ E-Commerce Act 2081 s33 requires complaints to be registered and acknowledged im
 
 #### State coverage
 
-| Class | Behaviour |
-|---|---|
-| Success | Acknowledged immediately; decided within 15 days with a written reason. |
-| Empty | No cases: "No support requests. Start one from any order." |
-| Validation | Missing category or description, or an order not owned by the customer → `VALIDATION_FAILED (422)` or `NOT_FOUND (404)`. |
-| Permission | Another customer's case number → `NOT_FOUND (404)`. Shop members never see `internal` messages or cases about other shops. Customers never see `internal` or `shop` messages. |
-| Concurrency | Two agents update the same case: last write wins on assignment, and every change is audited. Resolving an already `closed` case → `INVALID_STATE_TRANSITION (409)`. |
-| External-provider failure | Acknowledgement email fails: the case and its number are shown in the account area, and the email retries. The due date does not depend on email. |
-| Recovery | A customer who lost the email finds the case in their account. A suspended user writes to the grievance officer, and support opens the case on their behalf [Assumption]. |
+| Class                     | Behaviour                                                                                                                                                                     |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Success                   | Acknowledged immediately; decided within 15 days with a written reason.                                                                                                       |
+| Empty                     | No cases: "No support requests. Start one from any order."                                                                                                                    |
+| Validation                | Missing category or description, or an order not owned by the customer → `VALIDATION_FAILED (422)` or `NOT_FOUND (404)`.                                                      |
+| Permission                | Another customer's case number → `NOT_FOUND (404)`. Shop members never see `internal` messages or cases about other shops. Customers never see `internal` or `shop` messages. |
+| Concurrency               | Two agents update the same case: last write wins on assignment, and every change is audited. Resolving an already `closed` case → `INVALID_STATE_TRANSITION (409)`.           |
+| External-provider failure | Acknowledgement email fails: the case and its number are shown in the account area, and the email retries. The due date does not depend on email.                             |
+| Recovery                  | A customer who lost the email finds the case in their account. A suspended user writes to the grievance officer, and support opens the case on their behalf [Assumption].     |
 
 #### Acceptance criteria
 
@@ -1221,14 +1222,14 @@ E-Commerce Act 2081 s33 requires complaints to be registered and acknowledged im
 
 ### J-20 Support-mediated return
 
-| Field | Value |
-|---|---|
-| Actors | Customer; support agent; order fulfiller (receives the parcel); finance officer (refund) |
-| Release | R1 (M6 and M7). Customer self-serve returns are R2 (FR-RET-002). |
-| Related FRs | FR-RET-006, 001, 007; FR-INV-001 |
-| Entry points | A support case with category `return_request` (J-19); the admin order detail |
+| Field         | Value                                                                                                                                        |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Actors        | Customer; support agent; order fulfiller (receives the parcel); finance officer (refund)                                                     |
+| Release       | R1 (M6 and M7). Customer self-serve returns are R2 (FR-RET-002).                                                                             |
+| Related FRs   | FR-RET-006, 001, 007; FR-INV-001                                                                                                             |
+| Entry points  | A support case with category `return_request` (J-19); the admin order detail                                                                 |
 | Preconditions | Shipment `delivered` and within `return_window_days` (7 [Assumption; OD-06, OD-07]); item category not excluded by the return policy (OD-07) |
-| Permissions | `platform.returns.manage`; `shop.orders.process` for receipt; the J-14 refund permissions |
+| Permissions   | `platform.returns.manage`; `shop.orders.process` for receipt; the J-14 refund permissions                                                    |
 
 The Consumer Protection Act 2075 s14 gives a 7-day return right for dissatisfaction, without deductions (secondary source <https://faolex.fao.org/docs/pdf/NEP225788.pdf>, accessed 2026-09-25). E-Commerce Act s10 requires non-conforming goods to be taken back and refunded including taxes. How the two interact, and whether return shipping may be charged, is VX-04 and OD-07.
 
@@ -1245,15 +1246,15 @@ The Consumer Protection Act 2075 s14 gives a 7-day return right for dissatisfact
 
 #### State coverage
 
-| Class | Behaviour |
-|---|---|
-| Success | Item back in stock, customer refunded within 7 days, case resolved. |
-| Empty | No eligible items (all returned or outside the window): the agent sees "Nothing eligible to return" with the reason. |
-| Validation | Quantity above returnable, window elapsed, excluded category → `VALIDATION_FAILED (422)` naming the rule. A second return for the same units → `VALIDATION_FAILED (422)`. |
-| Permission | Shop members cannot create or approve returns → `FORBIDDEN (403)`. Other shop's return → `NOT_FOUND (404)`. |
-| Concurrency | Vendor and support both record receipt → one succeeds, the other `INVALID_STATE_TRANSITION (409)`. The completion job does not complete a shop order with an open return (J-13). |
+| Class                     | Behaviour                                                                                                                                                                                                                                     |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Success                   | Item back in stock, customer refunded within 7 days, case resolved.                                                                                                                                                                           |
+| Empty                     | No eligible items (all returned or outside the window): the agent sees "Nothing eligible to return" with the reason.                                                                                                                          |
+| Validation                | Quantity above returnable, window elapsed, excluded category → `VALIDATION_FAILED (422)` naming the rule. A second return for the same units → `VALIDATION_FAILED (422)`.                                                                     |
+| Permission                | Shop members cannot create or approve returns → `FORBIDDEN (403)`. Other shop's return → `NOT_FOUND (404)`.                                                                                                                                   |
+| Concurrency               | Vendor and support both record receipt → one succeeds, the other `INVALID_STATE_TRANSITION (409)`. The completion job does not complete a shop order with an open return (J-13).                                                              |
 | External-provider failure | The courier for the return is off-platform. A parcel lost in transit is handled in the case: the refund is still made if the platform decides so, and the vendor is compensated or charged through a ledger `adjustment` [Assumption; OD-07]. |
-| Recovery | A wrong rejection is reversed by creating a new return request with a support note. A refund failure follows J-14 recovery. |
+| Recovery                  | A wrong rejection is reversed by creating a new return request with a support note. A refund failure follows J-14 recovery.                                                                                                                   |
 
 #### Acceptance criteria
 

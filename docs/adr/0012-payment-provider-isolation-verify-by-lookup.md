@@ -4,14 +4,14 @@ Status: Draft v1 (2026-09-25)
 
 ## Status
 
-| Field | Value |
-|---|---|
-| Decision status | **Accepted.** The port and the verify-by-lookup rule hold whichever gateway is chosen. Provider-specific adapter details are confirmed during M8 onboarding (VX-06, VX-07). |
-| Date | 2026-09-25 |
-| Deciders | Lead developer, product owner |
-| Supersedes | — |
-| Superseded by | — |
-| Related open items | OD-03 (eSewa or Khalti first), OD-02 / VX-01 (legality of platform collection), VX-06 (eSewa capabilities), VX-07 (Khalti capabilities) |
+| Field              | Value                                                                                                                                                                       |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Decision status    | **Accepted.** The port and the verify-by-lookup rule hold whichever gateway is chosen. Provider-specific adapter details are confirmed during M8 onboarding (VX-06, VX-07). |
+| Date               | 2026-09-25                                                                                                                                                                  |
+| Deciders           | Lead developer, product owner                                                                                                                                               |
+| Supersedes         | —                                                                                                                                                                           |
+| Superseded by      | —                                                                                                                                                                           |
+| Related open items | OD-03 (eSewa or Khalti first), OD-02 / VX-01 (legality of platform collection), VX-06 (eSewa capabilities), VX-07 (Khalti capabilities)                                     |
 
 ## Context
 
@@ -19,16 +19,16 @@ Gateway payments arrive in R1.1 (M8), after a COD-only launch [Confirmed, Q4]. T
 
 **What the providers document** [Verified-doc, `nepal_payments` research, accessed 2026-09-25]:
 
-| Capability | eSewa ePay v2 (https://developer.esewa.com.np/pages/Epay) | Khalti KPG-2 (https://docs.khalti.com/khalti-epayment/) |
-|---|---|---|
-| Start | Browser form POST with HMAC-SHA256 signature over `total_amount,transaction_uuid,product_code` | Server-side `POST …/epayment/initiate/` returns `pidx`, `payment_url`, `expires_at` |
-| Return | Signed Base64 payload to `success_url`. `failure_url` is used for FAILURE **and PENDING** | GET to `return_url` with **unsigned** query params; docs say to "use the lookup API for the final validation" |
-| Server-to-server webhook | **None documented** (merchant notified by email/SMS; use the status API if no response within 5 minutes) | **None documented** |
-| Status source of truth | Status-check API: `COMPLETE`, `PENDING`, `FULL_REFUND`, `PARTIAL_REFUND`, `AMBIGUOUS`, `NOT_FOUND`, `CANCELED` | Lookup API: only `Completed` is success; also `Pending`, `Initiated`, `Refunded`, `Expired`, `User canceled`, `Partially refunded` |
-| Refund API | **None documented** (refunds appear only as statuses) | Documented (`…/merchant-transaction/{transaction_id}/refund/`). Method, auth and amount unit are ambiguous in the docs (VX-07) |
-| Limits and quirks | Payment window about 5 minutes; unique `transaction_uuid` per request | Amount > Rs 10; NPR 200/txn cap until merchant KYC; link expiry docs contradict themselves (30 vs 60 min) |
+| Capability               | eSewa ePay v2 (https://developer.esewa.com.np/pages/Epay)                                                      | Khalti KPG-2 (https://docs.khalti.com/khalti-epayment/)                                                                            |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Start                    | Browser form POST with HMAC-SHA256 signature over `total_amount,transaction_uuid,product_code`                 | Server-side `POST …/epayment/initiate/` returns `pidx`, `payment_url`, `expires_at`                                                |
+| Return                   | Signed Base64 payload to `success_url`. `failure_url` is used for FAILURE **and PENDING**                      | GET to `return_url` with **unsigned** query params; docs say to "use the lookup API for the final validation"                      |
+| Server-to-server webhook | **None documented** (merchant notified by email/SMS; use the status API if no response within 5 minutes)       | **None documented**                                                                                                                |
+| Status source of truth   | Status-check API: `COMPLETE`, `PENDING`, `FULL_REFUND`, `PARTIAL_REFUND`, `AMBIGUOUS`, `NOT_FOUND`, `CANCELED` | Lookup API: only `Completed` is success; also `Pending`, `Initiated`, `Refunded`, `Expired`, `User canceled`, `Partially refunded` |
+| Refund API               | **None documented** (refunds appear only as statuses)                                                          | Documented (`…/merchant-transaction/{transaction_id}/refund/`). Method, auth and amount unit are ambiguous in the docs (VX-07)     |
+| Limits and quirks        | Payment window about 5 minutes; unique `transaction_uuid` per request                                          | Amount > Rs 10; NPR 200/txn cap until merchant KYC; link expiry docs contradict themselves (30 vs 60 min)                          |
 
-connectIPS and Fonepay document neither a public webhook nor a refund API. eSewa's separate *Intent* API does POST a signed server callback, but only development URLs are published (https://developer.esewa.com.np/pages/Intent). No provider documents split or marketplace settlement (VX-01).
+connectIPS and Fonepay document neither a public webhook nor a refund API. eSewa's separate _Intent_ API does POST a signed server callback, but only development URLs are published (https://developer.esewa.com.np/pages/Intent). No provider documents split or marketplace settlement (VX-01).
 
 ## Decision
 
@@ -40,6 +40,7 @@ connectIPS and Fonepay document neither a public webhook nor a refund API. eSewa
    - `capabilities: { refundApi, serverWebhook, minAmountMinor, perTxnCapMinor? }`
 
    Adapters live in `app/modules/payments/providers/<provider>.ts`. Only the OD-03 winner is built in M8. A `fake` adapter backs all tests. Credentials and hosts come from per-environment env vars. UAT keys (eSewa's is public) are rejected at boot when `NODE_ENV=production`.
+
 2. **One provider transaction per attempt.** Each retry creates a new `payments` row (`attempt_no`) and a new provider reference (eSewa `transaction_uuid`, Khalti `purchase_order_id`), unique per `(provider, provider_reference)`. The exact amount strings sent are stored for signature and status comparison (ADR-0007). A partial unique index allows at most one live gateway attempt per order.
 3. **Never trust redirects.**
    - `GET /payments/{provider}/return` records a `provider_events` row (`kind = return`), checks the signature where one exists, and uses the payload **only to locate the attempt**. It then calls `verify()` server-to-server.
@@ -87,28 +88,31 @@ sequenceDiagram
 
 ## Alternatives considered
 
-| Alternative | Why rejected |
-|---|---|
-| Trust eSewa's signed success redirect | PENDING goes to `failure_url`, a closed tab loses the redirect, and a replayed old payload proves nothing about the current state. |
-| Wait for provider webhooks | Neither ePay nor KPG-2 documents one. |
-| Third-party SDKs (e.g. nepal-payment-go) | Unofficial, not TypeScript, and they encode undocumented assumptions (such as eSewa's `data` parameter name). |
-| Provider calls directly in controllers | Blocks the second gateway (FR-PAY-005, R2) and makes tests hit sandboxes. The port allows a fake adapter. |
-| Client-side confirmation via a JS SDK callback | The client can forge it. The server must confirm. |
+| Alternative                                    | Why rejected                                                                                                                       |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Trust eSewa's signed success redirect          | PENDING goes to `failure_url`, a closed tab loses the redirect, and a replayed old payload proves nothing about the current state. |
+| Wait for provider webhooks                     | Neither ePay nor KPG-2 documents one.                                                                                              |
+| Third-party SDKs (e.g. nepal-payment-go)       | Unofficial, not TypeScript, and they encode undocumented assumptions (such as eSewa's `data` parameter name).                      |
+| Provider calls directly in controllers         | Blocks the second gateway (FR-PAY-005, R2) and makes tests hit sandboxes. The port allows a fake adapter.                          |
+| Client-side confirmation via a JS SDK callback | The client can forge it. The server must confirm.                                                                                  |
 
 ## Consequences
 
 **Positive**
+
 - Orders are confirmed correctly even when the redirect never arrives, which on mobile networks is the common case, not an edge case.
 - The same rule applies to every provider, including future connectIPS or Fonepay adapters.
 - Refund handling matches what each provider can actually do.
 
 **Negative**
+
 - Polling load on provider APIs, whose rate limits are unknown (VX-06, VX-07).
 - `needs_review` payments and eSewa manual refunds create ops work. Runbooks are in [docs/11](../11-deployment-and-operations.md).
 
 **Risks**
-- *Unconfirmed provider details:* the eSewa production status host, the eSewa return parameter name, and Khalti's refund method/auth/unit. Mitigation: a UAT sign-off checklist in M8 before go-live.
-- *Legal:* platform collection may need NRB clearance (VX-01). The port also supports per-shop credentials if the fallback model is chosen (ADR-0009).
+
+- _Unconfirmed provider details:_ the eSewa production status host, the eSewa return parameter name, and Khalti's refund method/auth/unit. Mitigation: a UAT sign-off checklist in M8 before go-live.
+- _Legal:_ platform collection may need NRB clearance (VX-01). The port also supports per-shop credentials if the fallback model is chosen (ADR-0009).
 
 ## When to revisit
 

@@ -4,24 +4,26 @@ Status: Draft v1 (2026-09-25)
 
 ## Status
 
-| Field | Value |
-|---|---|
-| Decision status | **Accepted** |
-| Date | 2026-09-25 |
-| Deciders | Lead developer |
-| Supersedes | — |
-| Superseded by | — |
+| Field              | Value                                                                                                                                       |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Decision status    | **Accepted**                                                                                                                                |
+| Date               | 2026-09-25                                                                                                                                  |
+| Deciders           | Lead developer                                                                                                                              |
+| Supersedes         | —                                                                                                                                           |
+| Superseded by      | —                                                                                                                                           |
 | Related open items | `reservation_ttl_minutes` default 30 and the provider-expiry buffer are [Assumption] (canon §17.1); multi-location stock is R3 (FR-INV-006) |
 
 ## Context
 
 **Repository findings** [Verified-repo, RF-14, audit F11]:
+
 - Stock is one integer: `product_variants.quantity`, `integer notNullable()` with no CHECK and no default (`1780072881100_create_product_variants_table.ts:19`).
 - SKU is globally unique (`:13`), so Shop B cannot reuse a SKU Shop A already has, and the unique violation leaks that fact.
 - Nothing prevents two variants with the same option combination.
 - There are no reservations and no movement history.
 
 **Business facts.**
+
 - COD orders sit for days between placement, vendor acceptance and delivery (Q4, Q5 [Confirmed]).
 - In R1.1, gateway payments stay pending until the provider session expires. eSewa ePay's window is about 5 minutes [Verified-doc, https://developer.esewa.com.np/pages/Epay, accessed 2026-09-25]. Khalti's link expiry comes back as `expires_at` in the initiate response, and its docs contradict themselves on 30 versus 60 minutes [Verified-doc, https://github.com/khalti/docs.khalti.com/blob/master/content/khalti-epayment.md, accessed 2026-09-25].
 - Stock must be held during these windows without being counted as shipped.
@@ -46,8 +48,9 @@ Status: Draft v1 (2026-09-25)
    RETURNING on_hand, reserved;
    ```
 
-   - Zero rows: the transaction rolls back. The API returns 409 `OUT_OF_STOCK`, with per-line available quantities re-read *after* the rollback.
+   - Zero rows: the transaction rolls back. The API returns 409 `OUT_OF_STOCK`, with per-line available quantities re-read _after_ the rollback.
    - Otherwise a reservation row and a `reserve` movement are inserted in the same transaction.
+
 3. **Reservation lifecycle.**
    - **COD**: the reservation is `committed` at placement, with no expiry.
    - **Gateway (R1.1)**: the reservation is `held`, with `expires_at` = provider session expiry (from the initiate response where available) + 10 minutes, falling back to `platform_settings.reservation_ttl_minutes` (30).
@@ -78,29 +81,32 @@ sequenceDiagram
 
 ## Alternatives considered
 
-| Alternative | Why rejected |
-|---|---|
-| Decrement `on_hand` at order time, with no reservations | Cancellations, rejections, RTO and payment expiry all have to "give back" stock with no record of what is outstanding. Vendors cannot tell sellable stock from units promised to open orders. |
-| `SELECT … FOR UPDATE`, check in application code, then UPDATE | Correct, but two round trips per line with the lock held longer. The conditional UPDATE does the same in one statement, and the error detail is re-read after rollback. |
-| SERIALIZABLE isolation with retry | The whole checkout transaction retries on any conflict, including unrelated reads, which causes retry storms on popular items. It is harder to reason about for a small team. |
-| Redis atomic counters | A second source of truth that can disagree with PostgreSQL after a crash. Redis is not in the R1 stack (ADR-0002). |
-| Event-sourced stock only (movements, no projection) | Every availability read and listing refresh would need a `SUM()`. The projection plus ledger gives fast reads and a full audit trail. |
-| PostgreSQL advisory locks per variant | Extra locking discipline that does not work with transaction-mode pools and adds nothing over row locks. |
+| Alternative                                                   | Why rejected                                                                                                                                                                                  |
+| ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Decrement `on_hand` at order time, with no reservations       | Cancellations, rejections, RTO and payment expiry all have to "give back" stock with no record of what is outstanding. Vendors cannot tell sellable stock from units promised to open orders. |
+| `SELECT … FOR UPDATE`, check in application code, then UPDATE | Correct, but two round trips per line with the lock held longer. The conditional UPDATE does the same in one statement, and the error detail is re-read after rollback.                       |
+| SERIALIZABLE isolation with retry                             | The whole checkout transaction retries on any conflict, including unrelated reads, which causes retry storms on popular items. It is harder to reason about for a small team.                 |
+| Redis atomic counters                                         | A second source of truth that can disagree with PostgreSQL after a crash. Redis is not in the R1 stack (ADR-0002).                                                                            |
+| Event-sourced stock only (movements, no projection)           | Every availability read and listing refresh would need a `SUM()`. The projection plus ledger gives fast reads and a full audit trail.                                                         |
+| PostgreSQL advisory locks per variant                         | Extra locking discipline that does not work with transaction-mode pools and adds nothing over row locks.                                                                                      |
 
 ## Consequences
 
 **Positive**
+
 - Overselling cannot happen even with buggy application code: the conditional UPDATE and `CHECK (reserved <= on_hand)` both enforce it.
 - Every stock change has an actor, a reason and a request ID, so vendor disputes can be answered from data.
 - Vendors see on-hand, reserved and available per variant.
 
 **Negative**
+
 - A very hot variant (a single flash-sale item) serializes checkouts on its row lock, so those checkouts queue for milliseconds each.
 - Three tables and a lifecycle instead of one integer. RTO restock depends on the vendor recording receipt.
 
 **Risks**
-- *A code path updates `inventory_items` without inserting a movement.* Mitigation: only `inventory` actions write these tables (T-ARCH-001), and the drift job detects any mismatch within 24 h.
-- *Expired reservations are never released because the job stalls.* Mitigation: an alert when any `held` reservation is more than 10 minutes past `expires_at` ([docs/11](../11-deployment-and-operations.md)).
+
+- _A code path updates `inventory_items` without inserting a movement._ Mitigation: only `inventory` actions write these tables (T-ARCH-001), and the drift job detects any mismatch within 24 h.
+- _Expired reservations are never released because the job stalls._ Mitigation: an alert when any `held` reservation is more than 10 minutes past `expires_at` ([docs/11](../11-deployment-and-operations.md)).
 
 ## When to revisit
 

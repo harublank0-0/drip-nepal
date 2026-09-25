@@ -4,23 +4,25 @@ Status: Draft v1 (2026-09-25)
 
 ## Status
 
-| Field | Value |
-|---|---|
-| Decision status | **Proposed.** Depends on **OD-01**: the product owner must confirm that no production or otherwise valuable data exists in any environment (Assumption A-01). |
-| Date | 2026-09-25 |
-| Deciders | Product owner (OD-01), lead developer |
-| Supersedes | — |
-| Superseded by | — (after the R1 launch, this ADR's forward-only rule is permanent) |
-| Related open items | OD-01; VX-10 (authoritative location dataset for reference seeders) |
+| Field              | Value                                                                                                                                                         |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Decision status    | **Proposed.** Depends on **OD-01**: the product owner must confirm that no production or otherwise valuable data exists in any environment (Assumption A-01). |
+| Date               | 2026-09-25                                                                                                                                                    |
+| Deciders           | Product owner (OD-01), lead developer                                                                                                                         |
+| Supersedes         | —                                                                                                                                                             |
+| Superseded by      | — (after the R1 launch, this ADR's forward-only rule is permanent)                                                                                            |
+| Related open items | OD-01; VX-10 (authoritative location dataset for reference seeders)                                                                                           |
 
 ## Context
 
 **Repository state** [Verified-repo]:
+
 - 25 exploratory migrations create `users`, `global_roles`, `permissions`, `global_user_roles`, `global_role_permissions`, `shops`, `shop_roles`, `shop_role_permissions`, `shop_staff_assignments`, `categories`, `products`, `product_variants`, `attributes`, `attribute_values`, `product_variant_attribute_values`, `product_media`, `user_addresses`, `carts`, `cart_items`, `orders`, `order_items`, `payments`, `shop_addresses`, `shop_categories` and `shop_categories_shop`.
 - They have been **edited in place** after being applied (RF-41, audit A1-09): the users migration was touched by 8 commits, and commit `9144745` changed `payments.paid_at` inside the create migration.
 - Migrations import mutable app constants (`#constants/shop_status`), and one has a hand-picked timestamp (`1780080000000`).
 
 **Structural defects that need more than a column tweak:**
+
 - cascades from users, addresses and catalog into orders and payments (RF-06);
 - one order row spanning shops (RF-07);
 - a globally unique `recipient_phone` (RF-11);
@@ -37,6 +39,7 @@ Status: Draft v1 (2026-09-25)
 Fixing these incrementally would need roughly 40 ALTER migrations that convert or drop data nobody has.
 
 **Framework behaviour** [Verified-doc, Lucid 22.4.2 `commands/schema_generate.js`, accessed 2026-09-25]:
+
 - `migration:run` regenerates `database/schema.ts` in development, but **not** when `app.inProduction`. The committed file must therefore always match the migrations.
 - Schema rules load only when `schemaGeneration.rulesPaths` is configured.
 
@@ -60,6 +63,7 @@ Fixing these incrementally would need roughly 40 ALTER migrations that convert o
    - the database session table (ADR-0005) and the limiter table.
 
    pg-boss creates and migrates its own `pgboss` schema; it is not part of our migrations.
+
 3. **Migrations are self-contained.** They never import from `#constants`, `#models` or any app module. Status value lists are written as literals, so changing an app constant cannot change what an old migration produces.
 4. **Reference data vs dev data.**
    - `database/seeders/reference/*` are idempotent upserts: provinces/districts/local levels from the dataset chosen under VX-10, categories, attributes, delivery zones, platform settings. They run in production.
@@ -73,27 +77,30 @@ Fixing these incrementally would need roughly 40 ALTER migrations that convert o
 
 ## Alternatives considered
 
-| Alternative | Why rejected |
-|---|---|
-| Incremental ALTER migrations on top of the 25 | About 40 migrations that convert `decimal` to `bigint`, split `orders`, rewrite FKs and rename pivots, all on empty tables. Review is harder, and the history keeps encoding the wrong decisions. |
-| Keep editing migrations in place (current practice) | Environments drift silently from `database/schema.ts` and from each other (RF-41). It becomes impossible once production exists. |
-| Declarative schema tooling (Atlas, migra, pg-schema-diff) | Another tool beside Lucid migrations and `schema:generate`, which the team already uses. Diff-generated migrations still need expand/contract judgement. |
-| Squash after launch | Once real orders exist, a squash needs dump-and-restore alignment and adds legal-retention risk. The cheap moment is now. |
+| Alternative                                               | Why rejected                                                                                                                                                                                      |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Incremental ALTER migrations on top of the 25             | About 40 migrations that convert `decimal` to `bigint`, split `orders`, rewrite FKs and rename pivots, all on empty tables. Review is harder, and the history keeps encoding the wrong decisions. |
+| Keep editing migrations in place (current practice)       | Environments drift silently from `database/schema.ts` and from each other (RF-41). It becomes impossible once production exists.                                                                  |
+| Declarative schema tooling (Atlas, migra, pg-schema-diff) | Another tool beside Lucid migrations and `schema:generate`, which the team already uses. Diff-generated migrations still need expand/contract judgement.                                          |
+| Squash after launch                                       | Once real orders exist, a squash needs dump-and-restore alignment and adds legal-retention risk. The cheap moment is now.                                                                         |
 
 ## Consequences
 
 **Positive**
+
 - The first production schema enforces every invariant the other ADRs rely on from day one: CHECKs, tenant FKs, append-only tables.
 - `database/schema.ts`, models and docs/04 agree. New developers read one baseline instead of 25 contradictory files.
 - Forward-only rules after launch make every environment reproducible.
 
 **Negative**
+
 - All local and test data is discarded. Open feature branches must be rebased.
 - Several days of M0 are spent writing and reviewing the baseline before any feature work.
 
 **Risks**
-- *OD-01 is wrong.* Someone has a staging database with vendor data they care about. Mitigation: confirm in writing before merging, and export any needed rows with a one-off script.
-- *A mistake in the baseline found after launch* now costs an expand/contract migration. Mitigation: constraint tests and a two-person review of the baseline PR, or a product-owner walkthrough with a single developer.
+
+- _OD-01 is wrong._ Someone has a staging database with vendor data they care about. Mitigation: confirm in writing before merging, and export any needed rows with a one-off script.
+- _A mistake in the baseline found after launch_ now costs an expand/contract migration. Mitigation: constraint tests and a two-person review of the baseline PR, or a product-owner walkthrough with a single developer.
 
 ## When to revisit
 

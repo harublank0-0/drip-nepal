@@ -4,18 +4,19 @@ Status: Draft v1 (2026-09-25)
 
 ## Status
 
-| Field | Value |
-|---|---|
-| Decision status | **Accepted** |
-| Date | 2026-09-25 |
-| Deciders | Lead developer, product owner |
-| Supersedes | — |
-| Superseded by | — |
+| Field              | Value                                                                                                                                                   |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Decision status    | **Accepted**                                                                                                                                            |
+| Date               | 2026-09-25                                                                                                                                              |
+| Deciders           | Lead developer, product owner                                                                                                                           |
+| Supersedes         | —                                                                                                                                                       |
+| Superseded by      | —                                                                                                                                                       |
 | Related open items | OD-12 (seller URL prefix `/seller/{shopSlug}`), OD-14 (maker-checker vs single-operator mode), OD-17 (vendor access to customer contact after delivery) |
 
 ## Context
 
 **Repository findings** [Verified-repo]:
+
 - `start/routes/shops.ts:14-28` protects `/shop/:shopSlug/*` with `middleware.auth()` only. The dashboard controller never reads `shopSlug`. Any logged-in customer can open any shop's dashboard, including shops that do not exist or are suspended (RF-01, audit IAM-01). This is broken object-level authorization: harmless while the pages are placeholders, and a data leak as soon as orders, customer addresses or payout details are added.
 - The RBAC schema is miswired (RF-20):
   - the `User.roles` pivot is named `user_roles`, but the migration creates `global_user_roles`;
@@ -26,6 +27,7 @@ Status: Draft v1 (2026-09-25)
 - The `ShopTransformer` exposes `ownerId` and the owner's personal email and phone (RF-36). Shared props list only owned shops, not staff shops (RF-44).
 
 **Product scope.**
+
 - One user may own several shops and be staff in others (FR-SHOP-001, FR-SHOP-005).
 - Custom shop roles are R3 (FR-SHOP-011). At launch there are fewer than about 50 shops [Confirmed, Q1].
 - Platform staff need separated duties for moderation, support and finance, with mandatory MFA (FR-IAM-007, FR-ADM-004).
@@ -42,7 +44,7 @@ Status: Draft v1 (2026-09-25)
    - Permissions are canonical `platform.*` slugs, e.g. `platform.shops.review`, `platform.refunds.approve`, `platform.payouts.approve`, `platform.audit.view`. The full role → permission map is owned by [docs/07](../07-security-threat-model-and-permissions.md).
    - Staff need TOTP enrolled and a session MFA verification within 12 h (ADR-0005).
 2. **Shop access.**
-   - **Owner**: `shops.owner_user_id` (NOT NULL, RESTRICT) is the single source of ownership. The owner is the legal and payout party, and is *not* a membership row.
+   - **Owner**: `shops.owner_user_id` (NOT NULL, RESTRICT) is the single source of ownership. The owner is the legal and payout party, and is _not_ a membership row.
    - **Staff**: `shop_memberships(shop_id, user_id, role, status)`, UNIQUE (`shop_id`, `user_id`), `CHECK (role <> 'owner')`. Roles are `manager`, `catalog_editor`, `order_fulfiller`, `viewer`; status is `active` or `removed`.
    - Invitations live in `shop_invitations` (hashed token, 7-day expiry).
    - Permissions are canonical `shop.*` slugs (`shop.products.edit`, `shop.orders.process`, `shop.payout_account.manage`, …). Owner has all of them. Manager has all except `shop.staff.manage` and `shop.payout_account.manage`.
@@ -82,28 +84,31 @@ flowchart TD
 
 ## Alternatives considered
 
-| Alternative | Why rejected |
-|---|---|
+| Alternative                                                                               | Why rejected                                                                                                                                                                                                                                                                                                       |
+| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Keep the generic RBAC tables (roles and permissions in the DB, per-shop custom roles now) | This is the design that is currently miswired (RF-20, F24). It carries a privilege-escalation risk through the shared permission table and needs management UI and migration of grants. It is also harder to test exhaustively. Custom roles are deferred to R3 (FR-SHOP-011) with a shop-scoped permission table. |
-| Global vendor role plus ad-hoc `shop_id` checks in controllers | RF-01 shows the failure mode: one forgotten check exposes another vendor's orders and payout data. |
-| PostgreSQL row-level security | Needs a per-request `SET` on pooled connections inside every transaction. Worker jobs legitimately cross shops. Debugging is harder for a small team. It stays a defense-in-depth option (see When to revisit). |
-| Policy engine (OPA, Cedar, Casbin) | Another language and runtime to learn for about 20 permissions. |
-| Owner as a membership row with role `owner` | Two sources of ownership, "last owner removed" edge cases, and payout-party ambiguity. `shops.owner_user_id` is the legal anchor. |
+| Global vendor role plus ad-hoc `shop_id` checks in controllers                            | RF-01 shows the failure mode: one forgotten check exposes another vendor's orders and payout data.                                                                                                                                                                                                                 |
+| PostgreSQL row-level security                                                             | Needs a per-request `SET` on pooled connections inside every transaction. Worker jobs legitimately cross shops. Debugging is harder for a small team. It stays a defense-in-depth option (see When to revisit).                                                                                                    |
+| Policy engine (OPA, Cedar, Casbin)                                                        | Another language and runtime to learn for about 20 permissions.                                                                                                                                                                                                                                                    |
+| Owner as a membership row with role `owner`                                               | Two sources of ownership, "last owner removed" edge cases, and payout-party ambiguity. `shops.owner_user_id` is the legal anchor.                                                                                                                                                                                  |
 
 ## Consequences
 
 **Positive**
+
 - The whole permission model fits in two small constant maps that tests can check exhaustively: every role against every action.
 - Cross-tenant access fails closed in three places: middleware, query scope and composite FK.
 - A 404 for other tenants' resources reveals nothing about which shops, products or orders exist.
 
 **Negative**
+
 - Changing what a role can do needs a deploy. Shops cannot define their own roles until R3.
 - Two authorization paths (platform and shop) must be kept consistent in audit logging (`actor_role` = `platform:finance_officer` or `shop:<shop_id>:manager`).
 
 **Risks**
-- *A new seller endpoint is registered outside the `shopContext` group.* Mitigation: T-SEC-001 is generated from the route list, so every route under `/api/v1/seller` is exercised automatically with another shop's credentials.
-- *Status-gate gaps* (for example a suspended shop still publishing). Mitigation: the gate is a table-driven function with unit tests per status × permission.
+
+- _A new seller endpoint is registered outside the `shopContext` group._ Mitigation: T-SEC-001 is generated from the route list, so every route under `/api/v1/seller` is exercised automatically with another shop's credentials.
+- _Status-gate gaps_ (for example a suspended shop still publishing). Mitigation: the gate is a table-driven function with unit tests per status × permission.
 
 ## When to revisit
 
