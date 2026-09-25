@@ -2,126 +2,125 @@
 
 Status: Draft v1 (2026-09-25)
 
+Reviewed: critic pass A4.3 (2026-09-25)
+
 ## Status
 
-| Field              | Value                                                                                                                                                         |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Decision status    | **Proposed.** Depends on **OD-01**: the product owner must confirm that no production or otherwise valuable data exists in any environment (Assumption A-01). |
-| Date               | 2026-09-25                                                                                                                                                    |
-| Deciders           | Product owner (OD-01), lead developer                                                                                                                         |
-| Supersedes         | —                                                                                                                                                             |
-| Superseded by      | — (after the R1 launch, this ADR's forward-only rule is permanent)                                                                                            |
-| Related open items | OD-01; VX-10 (authoritative location dataset for reference seeders)                                                                                           |
+- **Decision status:** **Proposed**, pending **OD-01**: the product owner confirms in writing that no hosted database holds real sign-ups, shops or orders (Assumption A-01).
+- **Date:** 2026-09-25
+- **Deciders:** product owner (OD-01), lead developer
+- **Supersedes / superseded by:** — / — (after the R1 launch the forward-only rule is permanent)
+- **Related open items:** OD-01; VX-10 (location dataset for reference seeders)
 
 ## Context
 
-**Repository state** [Verified-repo]:
+**Repository** [Verified-repo, RF-41]:
 
-- 25 exploratory migrations create `users`, `global_roles`, `permissions`, `global_user_roles`, `global_role_permissions`, `shops`, `shop_roles`, `shop_role_permissions`, `shop_staff_assignments`, `categories`, `products`, `product_variants`, `attributes`, `attribute_values`, `product_variant_attribute_values`, `product_media`, `user_addresses`, `carts`, `cart_items`, `orders`, `order_items`, `payments`, `shop_addresses`, `shop_categories` and `shop_categories_shop`.
-- They have been **edited in place** after being applied (RF-41, audit A1-09): the users migration was touched by 8 commits, and commit `9144745` changed `payments.paid_at` inside the create migration.
+- `database/migrations` has 26 files: 25 exploratory tables plus the `pgcrypto` extension ([00 §4.3](../00-context-assumptions-and-questions.md#43-what-exists), [04 §20.1](../04-domain-model-and-data-dictionary.md#201-mapping-from-current-tables-to-the-baseline)).
+- Applied migrations have been **edited in place**. For example, commit `9144745` changed `payments.paid_at` inside the create migration.
 - Migrations import mutable app constants (`#constants/shop_status`), and one has a hand-picked timestamp (`1780080000000`).
 
-**Structural defects that need more than a column tweak:**
+**Structural defects that are more than column tweaks:**
 
-- cascades from users, addresses and catalog into orders and payments (RF-06);
+- cascades into orders and payments (RF-06);
 - one order row spanning shops (RF-07);
 - a globally unique `recipient_phone` (RF-11);
 - no composite tenant keys (RF-13);
 - a single stock integer (RF-14);
-- a payments table unable to support callbacks or refunds (RF-15);
+- no payment event or refund model (RF-15);
 - `decimal(10,2)` money (RF-16);
-- catalog uniqueness and status defaults (RF-17);
+- catalog uniqueness and default statuses (RF-17);
 - miswired RBAC (RF-20);
 - free-text statuses (RF-23);
-- unenforced soft-delete (RF-24);
-- mismatched indexes (RF-45).
+- unenforced soft delete (RF-24);
+- indexes that do not match queries (RF-45).
 
-Fixing these incrementally would need roughly 40 ALTER migrations that convert or drop data nobody has.
+Fixing these incrementally would take dozens of ALTER migrations that convert or drop data nobody has.
 
-**Framework behaviour** [Verified-doc, Lucid 22.4.2 `commands/schema_generate.js`, accessed 2026-09-25]:
+**Framework** [Verified-doc, Lucid 22.4.2, accessed 2026-09-25]:
 
-- `migration:run` regenerates `database/schema.ts` in development, but **not** when `app.inProduction`. The committed file must therefore always match the migrations.
-- Schema rules load only when `schemaGeneration.rulesPaths` is configured.
+- `migration:run` regenerates `database/schema.ts` outside production only (`build/commands/migration/run.js`), so the committed file must match the migrations.
+- Schema rules load only when `schemaGeneration.rulesPaths` is set.
+- `schema:dump --prune` exists, but it would snapshot the defective schema instead of replacing it.
 
-**No production data is believed to exist** [Assumption A-01 → OD-01]. Once real orders exist, retention obligations apply to them: financial and order records must be kept at least 5–6 years [Verify-external VX-08]. After that point, destructive schema resets become unacceptable.
+**Timing.** No production data is believed to exist [Assumption A-01 → OD-01]. Once real orders exist, their records must be kept for the statutory period [Verify-external VX-08; schedule in [04 §19.3](../04-domain-model-and-data-dictionary.md#193-retention-schedule)], and a destructive reset is no longer acceptable. The cheap moment is before launch.
 
 ## Decision
 
-1. **In M0, replace the 25 migrations with a reviewed baseline** that implements [docs/04](../04-domain-model-and-data-dictionary.md) exactly.
-   - One migration file per module, in dependency order: extensions and platform/audit → identity → shops → logistics → catalog → media → inventory → cart → orders → payments → ledger → notifications.
-   - Timestamps are generated by `node ace make:migration`, never hand-picked.
-   - The old files are deleted from the working tree, and the last commit before the baseline is tagged `pre-baseline` for reference.
-2. **The baseline includes:**
-   - extensions `citext` and `pg_trgm` (both available on DigitalOcean Managed PostgreSQL 18 [Verified-doc, https://docs.digitalocean.com/products/databases/postgresql/details/supported-extensions/, accessed 2026-09-25]);
-   - `uuidv7()` primary-key defaults (built into PostgreSQL 18 [Verified-doc, https://www.postgresql.org/docs/18/functions-uuid.html, accessed 2026-09-25]);
-   - `text` status columns with CHECK value lists (not PG enums);
-   - money as `*_minor bigint` + currency CHECK (ADR-0007);
-   - composite tenant FKs with `UNIQUE (id, shop_id)` on parents (ADR-0006);
-   - RESTRICT from anything into orders, items, payments, ledger and audit;
-   - partial unique indexes (per-shop active SKU, one default address, one active cart per user, one live gateway attempt per order);
-   - append-only triggers plus `REVOKE UPDATE, DELETE` on `inventory_movements`, `ledger_entries`, `order_events` and `audit_logs`;
-   - the database session table (ADR-0005) and the limiter table.
+1. **In M0, replace the 26 migration files with a reviewed baseline** that implements [04](../04-domain-model-and-data-dictionary.md) and [04a](../04a-data-dictionary-tables.md) exactly.
+   - There are 14 files, one per module group, generated with `node ace make:migration`. They follow the order in [04 §20.2.2](../04-domain-model-and-data-dictionary.md#2022-baseline-files-and-their-order), in which every FK points at a table created earlier.
+   - File 1 holds the extensions and the `set_updated_at()`, `forbid_mutation()` and `allow_only_columns()` functions. Logistics reference tables come before identity, and platform tables come after identity. Inventory comes after orders. The ledger file creates `payouts` and `vendor_remittances` before `ledger_entries`.
+   - Two reference cycles are closed by later `ALTER TABLE`s: `shops` ↔ `media_assets`, and `return_requests_case_fkey`, which is added after `support_cases`.
+   - The last commit before the baseline is tagged `pre-baseline`, and the old files are deleted.
+2. **The baseline encodes the invariants of the other ADRs:**
+   - `citext` and `pg_trgm`;
+   - `uuidv7()` defaults (built into PostgreSQL 18 [Verified-doc, <https://www.postgresql.org/docs/18/functions-uuid.html>, accessed 2026-09-25]; availability on the managed cluster is an M0 spike);
+   - `text` statuses with CHECK lists;
+   - `*_minor bigint` money (ADR-0007);
+   - composite tenant FKs (ADR-0006);
+   - RESTRICT into orders, payments, the ledger and audit;
+   - partial unique indexes;
+   - the session and limiter tables (ADR-0005);
+   - `REVOKE UPDATE, DELETE` plus triggers on the nine append-only tables of [04 §2.12](../04-domain-model-and-data-dictionary.md#212-append-only-tables).
 
-   pg-boss creates and migrates its own `pgboss` schema; it is not part of our migrations.
+   pg-boss manages its own `pgboss` schema outside our migrations (ADR-0010).
 
-3. **Migrations are self-contained.** They never import from `#constants`, `#models` or any app module. Status value lists are written as literals, so changing an app constant cannot change what an old migration produces.
-4. **Reference data vs dev data.**
-   - `database/seeders/reference/*` are idempotent upserts: provinces/districts/local levels from the dataset chosen under VX-10, categories, attributes, delivery zones, platform settings. They run in production.
-   - `database/seeders/dev/*` refuse to run when `NODE_ENV=production` (fixes RF-05).
-   - The first platform admin is created with `node ace platform:create-admin` (FR-ADM-005), never by a seeder.
-5. **After the first production deploy: forward-only, expand/contract.**
+3. **Migrations are self-contained.** They never import from `#constants`, `#models` or `#modules`, and they write value lists as literals.
+4. **Reference data and dev data are separate** ([04 §20.3](../04-domain-model-and-data-dictionary.md#203-seeders-factories-and-schema-generation)). Reference seeders (locations per VX-10, categories, attributes, zones, settings) are idempotent upserts that run in production. Dev seeders refuse to run when `NODE_ENV=production` (RF-05). The first platform admin comes from `node ace platform:create-admin` (FR-ADM-005).
+5. **After the first production deploy: forward-only, expand/contract** ([04 §20.2.4](../04-domain-model-and-data-dictionary.md#2024-after-the-first-production-deploy-forward-only-expand-and-contract)).
    - An applied migration is never edited, and `down` is never run in production.
-   - Breaking changes follow expand → backfill (job, in batches) → enforce (`NOT VALID` constraint, then `VALIDATE CONSTRAINT`) → contract (a later release removes the old column).
-   - Each migration sets `lock_timeout` (e.g. 5 s) so a blocked DDL fails fast instead of queueing behind checkout traffic.
-6. **Developer cut-over.** `node ace migration:fresh --seed` locally, commit the regenerated `database/schema.ts`, and rebase open branches onto the baseline commit.
+   - Each migration sets `lock_timeout = '5s'`.
+   - CHECK-list and `NOT NULL` changes go through `NOT VALID` then `VALIDATE CONSTRAINT`.
+6. **Cut-over.** Developers run `node ace migration:fresh --seed`, commit the regenerated `database/schema.ts` unedited, and rebase open branches.
 
 ## Alternatives considered
 
-| Alternative                                               | Why rejected                                                                                                                                                                                      |
-| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Incremental ALTER migrations on top of the 25             | About 40 migrations that convert `decimal` to `bigint`, split `orders`, rewrite FKs and rename pivots, all on empty tables. Review is harder, and the history keeps encoding the wrong decisions. |
-| Keep editing migrations in place (current practice)       | Environments drift silently from `database/schema.ts` and from each other (RF-41). It becomes impossible once production exists.                                                                  |
-| Declarative schema tooling (Atlas, migra, pg-schema-diff) | Another tool beside Lucid migrations and `schema:generate`, which the team already uses. Diff-generated migrations still need expand/contract judgement.                                          |
-| Squash after launch                                       | Once real orders exist, a squash needs dump-and-restore alignment and adds legal-retention risk. The cheap moment is now.                                                                         |
+| Alternative                                  | Why rejected                                                                                                 |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Incremental ALTER migrations on the 26 files | Dozens of conversions on empty tables. Review is harder, and the history keeps encoding the wrong decisions. |
+| Keep editing migrations in place             | Environments drift from `database/schema.ts` and from each other (RF-41). Impossible once production exists. |
+| Declarative diff tools (Atlas, migra)        | A second tool beside Lucid migrations. Diffs still need expand/contract judgement.                           |
+| `schema:dump --prune` now                    | Freezes the defective schema. It is the right tool for squashing post-launch history later.                  |
+| Squash after launch                          | Needs dump-and-restore alignment and puts records under legal retention at risk.                             |
 
 ## Consequences
 
 **Positive**
 
-- The first production schema enforces every invariant the other ADRs rely on from day one: CHECKs, tenant FKs, append-only tables.
-- `database/schema.ts`, models and docs/04 agree. New developers read one baseline instead of 25 contradictory files.
-- Forward-only rules after launch make every environment reproducible.
+- The first production schema enforces every invariant the other ADRs rely on (CHECKs, tenant FKs, append-only tables) from day one.
+- `database/schema.ts`, the models and 04 agree. New developers read 14 files instead of 26 contradictory ones.
 
 **Negative**
 
-- All local and test data is discarded. Open feature branches must be rebased.
-- Several days of M0 are spent writing and reviewing the baseline before any feature work.
+- All local and test data is discarded, and open branches must be rebased.
+- Several days of M0 go into writing and reviewing the baseline before feature work.
 
 **Risks**
 
-- _OD-01 is wrong._ Someone has a staging database with vendor data they care about. Mitigation: confirm in writing before merging, and export any needed rows with a one-off script.
-- _A mistake in the baseline found after launch_ now costs an expand/contract migration. Mitigation: constraint tests and a two-person review of the baseline PR, or a product-owner walkthrough with a single developer.
+- _OD-01 is wrong_ and a staging database holds data someone values. Mitigation: written confirmation before merge, and a one-off export.
+- _A baseline mistake is found after launch_ and then costs an expand/contract migration. Mitigation: constraint tests, and a two-person review (or a product-owner walkthrough when there is one developer).
 
 ## When to revisit
 
-- OD-01 answered "data exists". Supersede with an incremental-migration plan for the affected tables.
-- Launch slips and docs/04 changes substantially before any production deploy. The baseline may be re-squashed, but **only before the first production deploy**.
-- After the R1 launch this ADR is not revisited. Its forward-only rule stays in force until a superseding ADR says otherwise.
+- OD-01 is answered "data exists": supersede this ADR with an incremental plan for the affected tables.
+- 04 changes substantially before launch: the baseline may be re-squashed, **only before the first production deploy**.
+- After launch this ADR is not revisited. Only a superseding ADR can change the forward-only rule.
 
 ## Verification
 
-- **CI schema job** ([docs/10](../10-testing-and-quality-gates.md)):
-  - `migration:run` on an empty `postgres:18.4`;
-  - `schema:generate`;
-  - `git diff --exit-code database/schema.ts`, which fails if the committed file is stale.
-- **Migration immutability check** (after launch): CI compares SHA-256 checksums of files in `database/migrations` against `database/migrations.lock` and fails if an existing file changed.
-- **Lint rule**: files in `database/migrations/**` may not import from `#constants/*`, `#models/*` or `#modules/*`.
-- **Constraint tests**: T-SEC-004 (refund CHECK), T-INV-003 (stock CHECKs), composite-FK insert tests (ADR-0006), and append-only trigger tests (ADR-0008, ADR-0009).
-- **Seeder guard test**: running a dev seeder with `NODE_ENV=production` exits non-zero.
+- **T-ARCH-010 (proposed)**: CI runs `migration:fresh` on `postgres:18.4`, then `git diff --exit-code database/schema.ts`.
+- **T-ARCH-011 (proposed)**: CHECK value lists match the TypeScript arrays, and the set of cascading FKs equals 04 §2.6.
+- **T-ARCH-012 (proposed)**: `UPDATE` and `DELETE` on each append-only table fail for both roles.
+- **T-ARCH-013 / T-ARCH-014 (proposed)**: the int8 parser and the money-column lint (ADR-0007).
+- **Constraint tests**: T-SEC-004 (refund CHECK), T-INV-003 (stock CHECK), T-ORD-104 (proposed, composite FK).
+- **Migration immutability check** (after launch): CI compares checksums against `database/migrations.lock`.
+- **Lint rule**: `database/migrations/**` may not import from `#constants/*`, `#models/*` or `#modules/*`.
+- **Seeder guard test**: a dev seeder with `NODE_ENV=production` exits non-zero.
 
 ## Related
 
-- [Domain model and data dictionary](../04-domain-model-and-data-dictionary.md)
-- [Context and repository findings (RF-05, RF-06, RF-41)](../00-context-assumptions-and-questions.md)
-- [Milestones (M0)](../12-roadmap-and-backlog.md)
-- ADR-0006, ADR-0007, ADR-0008, ADR-0009 (the invariants the baseline encodes)
+- [04 §20 Migration from the current schema](../04-domain-model-and-data-dictionary.md#20-migration-from-the-current-schema)
+- [00 Repository findings](../00-context-assumptions-and-questions.md)
+- [Risks and open decisions (OD-01)](../risks-and-open-decisions.md#22-decision-table)
+- [12 Roadmap (M0)](../12-roadmap-and-backlog.md)
+- [ADR-0005](0005-session-auth-server-side-revocation.md), [ADR-0006](0006-authorization-platform-roles-shop-memberships.md), [ADR-0007](0007-money-integer-minor-units.md), [ADR-0008](0008-inventory-reservations-and-ledger.md), [ADR-0009](0009-multi-shop-orders-and-vendor-ledger.md), [ADR-0010](0010-postgres-jobs-pg-boss-transactional-send.md)

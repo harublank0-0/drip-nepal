@@ -2,147 +2,91 @@
 
 Status: Draft v1 (2026-09-25)
 
+Reviewed: critic pass A4.3 (2026-09-25)
+
 ## Status
 
-| Field              | Value                                                                                                                                                                       |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Decision status    | **Accepted**                                                                                                                                                                |
-| Date               | 2026-09-25                                                                                                                                                                  |
-| Deciders           | Lead developer, product owner                                                                                                                                               |
-| Supersedes         | —                                                                                                                                                                           |
-| Superseded by      | —                                                                                                                                                                           |
-| Related open items | Session lifetimes and password policy are [Assumption] (owner: lead developer; revisit after M1 metrics). VX-03 (interpretation of Directive 2082 s8(1) encryption duties). |
+| Field              | Value                                                                                                                                             |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Decision status    | **Accepted**                                                                                                                                      |
+| Date               | 2026-09-25                                                                                                                                        |
+| Deciders           | Lead developer, product owner                                                                                                                     |
+| Supersedes         | —                                                                                                                                                 |
+| Superseded by      | —                                                                                                                                                 |
+| Related open items | Lifetimes A-23 and password length A-22 are [Assumption]. VX-03 (reading of Directive 2082 s8(1) "encrypted form"). Neither changes the decision. |
 
 ## Context
 
-**Repository state** [Verified-repo]:
+**Repository state** [Verified-repo] (RF-04, RF-12):
 
-- `.env.example:13` sets `SESSION_DRIVER=cookie`. With the cookie store the server keeps no session record, so "log out all devices", killing sessions on password change and admin force-logout are all impossible (RF-04, audit IAM-04/A5-11).
-- `app/controllers/session_controller.ts:15-16` calls `verifyCredentials` then `login` without checking `users.status` or `deleted_at`. Suspended or soft-deleted users can log in, and existing sessions keep working.
-- The "remember me" checkbox is ignored.
-- Login has no rate limit, swallows non-credential errors (lines 18-23) and caps passwords at 32 characters (`app/validators/shared.ts:7`) (RF-12).
+- `.env.example:13` sets `SESSION_DRIVER=cookie`: no server-side session record, so no "log out everywhere" or forced logout.
+- `session_controller.ts:15-16` logs in without checking `users.status`, so suspended users keep working.
+- Login has no rate limit, swallows non-credential errors and caps passwords at 32 characters.
 
-**Framework behaviour** [Verified-doc, npm tarballs of the exact locked versions, accessed 2026-09-25; `adonis_stack` research]:
+**Framework behaviour** [Verified-doc, `adonis_stack` digest of the locked package sources, https://registry.npmjs.org/@adonisjs/auth/-/auth-10.1.0.tgz and https://registry.npmjs.org/@adonisjs/session/-/session-8.1.0.tgz, accessed 2026-09-25]:
 
-- @adonisjs/auth 10.1.0 `SessionGuard.login()` stores the user ID and calls `session.regenerate()`, which gives session-fixation protection. `logout()` does not regenerate or clear the session.
-- `authenticate()` re-queries the user by ID on every request. There is no built-in rejection of suspended users.
-- @adonisjs/session 8.1.0 supports `stores.database()` (migration via `make:session-table`) and session tagging: `session.tag(userId)` plus `SessionCollection.tagged(userId)` / `destroy(id)`. The cookie store does not support tagging.
-- Reading the source (not runtime-tested) suggests the tag must be applied **after** `login()` regenerates the ID.
-- @adonisjs/shield 9.0.0 accepts `X-XSRF-TOKEN`, and the Tuyau client sends it automatically.
-- @adonisjs/limiter 3.0.1 offers a database store with `penalize()` (OD-10 resolved: database store).
+- @adonisjs/auth 10.1.0 `login()` calls `session.regenerate()` (fixation protection); `logout()` does not. The guard re-queries the user on every request but has no suspended-user check.
+- @adonisjs/session 8.1.0 offers `stores.database()` (table from `make:session-table`) and tagging (`session.tag(userId)`, `SessionCollection.tagged(userId)`/`destroy(id)`); the cookie store supports neither and silently truncates data over about 4 KB [Verified-doc, https://docs.adonisjs.com/guides/basics/session, accessed 2026-09-25].
+- Reading the source (not run) suggests tagging must follow `login()`.
+- @adonisjs/limiter 3.0.1 has a database store with `penalize()` (OD-10 resolved).
 
-**Requirements.**
-
-- Suspension takes effect on the next request (FR-IAM-006, test T-SEC-010).
-- Change password plus revoke all sessions (FR-IAM-005).
-- Mandatory TOTP MFA for platform staff (FR-IAM-007).
-- E-Commerce Directive 2082 s8(1) requires passwords and other authentication data to be stored "in encrypted form". For passwords we read this as a one-way hash [Verify-external VX-03].
-
-**Environment.** Customers often share phones, which is why history is cleared on logout (ADR-0003). WCAG 2.2 SC 3.3.8 forbids blocking paste in login and OTP fields [Verified-doc, https://www.w3.org/TR/WCAG22/, accessed 2026-09-25].
+**Requirements.** Suspension, password change and "sign out everywhere" act on the next request (FR-IAM-005, FR-IAM-006, NFR-SEC-004). TOTP MFA is mandatory for platform staff (FR-IAM-007). Directive 2082 s8(1) requires passwords and other authentication data to be stored "in encrypted form"; for passwords we read this as a one-way hash [Verify-external VX-03]. Customers often share phones. WCAG 2.2 SC 3.3.8 fails authentication fields that block paste [Verified-doc, https://www.w3.org/WAI/WCAG22/Understanding/accessible-authentication-minimum.html, accessed 2026-09-25].
 
 ## Decision
 
-1. **Guard and store.**
-   - @adonisjs/auth session guard `web`.
-   - @adonisjs/session **database store** (sessions table via `make:session-table`).
-   - Cookie `dripnepal_session`: `HttpOnly; Secure; SameSite=Lax; Path=/`.
-   - No Redis in R1 (ADR-0002).
-2. **Per-user `security_stamp`** (uuid column on `users`).
-   - Copied into the session at login.
-   - A global middleware, placed after authentication, compares it on every authenticated request.
-   - Rotated on password change, password reset, suspension, "revoke all sessions", platform-staff role grant or revoke, and MFA reset.
-   - On mismatch, the session is destroyed and the request gets 401 `UNAUTHENTICATED` (API) or a redirect to `/login` (pages).
-   - Because the guard already loads the user row on each request, this costs no extra query.
-3. **Status gate in the same middleware.** Users whose `status` is `suspended`, `deactivated` or `anonymized` get 403 `ACCOUNT_SUSPENDED` (API) or a redirect with a notice (pages). Login applies the same check before `login()`. `pending_verification` users may use account pages and the cart but not checkout or shop application (`EMAIL_NOT_VERIFIED`).
-4. **Session tagging.** `session.tag(String(user.id))` runs after `login()`. `revokeAllSessions` and admin suspension destroy every tagged session. The stamp remains the correctness mechanism if tagging ever misses a session.
-5. **Session hygiene.**
-   - The session ID is regenerated on login, after the MFA challenge and on privilege change.
-   - Logout calls `auth.logout()`, `session.untag()`, `session.regenerate()`, clears cart/flash keys and calls `inertia.clearHistory()`.
-   - Expired rows are purged by a daily job (ADR-0010).
-6. **Lifetimes** [Assumption]:
-
-   | Role                    | Idle timeout | Absolute timeout                                                                                  |
-   | ----------------------- | ------------ | ------------------------------------------------------------------------------------------------- |
-   | Customers               | 7 days       | 30 days                                                                                           |
-   | Seller owners and staff | 12 h         | —                                                                                                 |
-   | Platform staff          | 2 h          | `mfa_verified_at` must be within 12 h for `/admin` and `/api/v1/admin` (`MFA_REQUIRED` otherwise) |
-
-   Remember-me tokens are off in R1, and the checkbox is removed.
-
-7. **MFA.** TOTP is mandatory for platform staff in R1. The secret is stored application-encrypted (`mfa_totp_secret_enc`). OTP inputs use `autocomplete="one-time-code"` and accept pasted codes. Optional MFA for shop owners and staff is R2 (FR-IAM-008).
-8. **Passwords.** Hashed with scrypt (existing `config/hash.ts`, cost 16384; parameters to be re-checked in M1). Length 10–128 characters [Assumption; NIST guidance to verify]. Breached-password checks come in R2. Login rethrows every non-credential error so the exception handler reports it (ADR-0018).
-9. **Throttling** (limiter database store, initial values [Assumption]): login 5/min per account+IP and 20/min per IP, with `penalize()` on failure; password-reset request 3/h per email and 10/h per IP; signup 5/h per IP. Full table in [docs/06](../06-api-design.md).
-
-```mermaid
-sequenceDiagram
-  participant B as Browser
-  participant MW as Auth + stamp middleware
-  participant S as sessions table
-  participant U as users table
-  B->>MW: request with dripnepal_session cookie
-  MW->>S: load session (user_id, stamp, mfa_verified_at)
-  MW->>U: find user by id (guard re-query)
-  alt status not active
-    MW-->>B: 403 ACCOUNT_SUSPENDED and session destroyed
-  else stamp differs
-    MW-->>B: 401 UNAUTHENTICATED and session destroyed
-  else admin route and MFA older than 12 h
-    MW-->>B: 401 MFA_REQUIRED
-  else ok
-    MW-->>B: continue to CSRF check, policy, controller
-  end
-```
+1. **Guard and store.** Session guard `web`; @adonisjs/session **database store** (`sessions` table, [04a §5.3](../04a-data-dictionary-tables.md#53-sessions-session-store-table)); cookie `dripnepal_session` with `HttpOnly; Secure; SameSite=Lax; Path=/`; no Redis in R1 (ADR-0002). What session `data` may hold is fixed in 04a §5.3 (no cart, no personal data beyond the user ID).
+2. **Per-user `security_stamp`** (uuid on `users`), copied into the session at login and compared on every authenticated request by the account-status middleware ([03 §3.3](../03-system-architecture.md#33-inside-the-web-process)). It rotates on password change or reset, suspension, "revoke all sessions", platform-staff role change and MFA reset; the acting session receives the new stamp where the user stays signed in (AC-FR-IAM-005-2). A mismatch destroys the session and answers 401 `UNAUTHENTICATED` (API) or redirects to `/login`.
+3. **Status gate in the same middleware.** `suspended`, `deactivated` or `anonymized` users get 403 `ACCOUNT_SUSPENDED` (API) or a redirect with a notice, and the session is destroyed. Login applies the same check before `login()`. `pending_verification` users may use account pages and the cart but get 403 `EMAIL_NOT_VERIFIED` at checkout and shop application.
+4. **Revocation of live sessions.** `suspendUser`, `changePassword` and `revokeAllSessions` rotate the stamp in their transaction and send `identity.revoke_sessions`, which destroys every session tagged with the user ID ([03 §7.7](../03-system-architecture.md#77-suspension-taking-effect-on-an-existing-session-j-17-fr-iam-006-t-sec-010)). The stamp and status check is the guarantee if the job has not run yet. Job payloads carry the user ID only, never a session ID or raw token; queues that must carry a token delete completed jobs after one day ([04a §15.5](../04a-data-dictionary-tables.md#155-pg-boss-schema-pgboss)).
+5. **Session hygiene.** `session.tag(String(user.id))` after `login()`. The ID is regenerated at login, after the MFA challenge and on privilege change. Logout calls `auth.logout()`, `session.untag()`, `session.regenerate()` and `inertia.clearHistory()` (ADR-0003). Expired rows are removed by the store's probabilistic garbage collection (04a §5.3).
+6. **Lifetimes** [Assumption A-23]: customers idle 7 days, absolute 30 days; sellers idle 12 h; platform staff idle 2 h, and `/admin` plus `/api/v1/admin` need `mfa_verified_at` within 12 h (401 `MFA_REQUIRED` otherwise). Shorter limits are enforced by middleware (04a §5.3). Remember-me is off in R1 and the checkbox is removed.
+7. **MFA.** TOTP mandatory for platform staff in R1; secret stored application-encrypted in `mfa_totp_secret_enc`; `mfa_last_used_step` refuses replayed codes; OTP inputs use `autocomplete="one-time-code"` and accept paste. Optional owner MFA is R2 (FR-IAM-008).
+8. **Passwords.** scrypt from the existing `config/hash.ts` (cost 16384 [Verified-repo]; re-benchmarked in M1). Length 10–128 characters [A-22]; paste and password managers allowed. Login rethrows non-credential errors to the exception handler (ADR-0018).
+9. **Throttling** with the limiter database store; initial values [A-24] such as login 5/min per account+IP with `penalize()` on failure. The table is owned by [06](../06-api-design.md).
 
 ## Alternatives considered
 
-| Alternative                                       | Why rejected                                                                                                                                                                                                                              |
-| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Keep the cookie session store                     | No server-side revocation (RF-04), no tagging, 4 KB limit with silent truncation [Verified-doc, https://docs.adonisjs.com/guides/basics/session, accessed 2026-09-25].                                                                    |
-| Redis session store                               | Adds a stateful service with persistence settings to operate. Managed Valkey starts at $15.00/month as published on 2026-09-25 (https://docs.digitalocean.com/products/databases/valkey/details/pricing/). PostgreSQL handles R1 volumes. |
-| Stateless JWT in the browser                      | Revocation still needs a server-side denylist. Storing the token in JS-readable storage exposes it to XSS. Inertia already relies on cookie sessions.                                                                                     |
-| Opaque access-token guard for the web app         | Built for non-browser clients and still needs CSRF-equivalent care in browsers. Reserved for the R3 mobile app.                                                                                                                           |
-| Hosted identity provider (Auth0, Clerk, Keycloak) | Recurring cost, another data processor subject to VX-09, and awkward Nepal-specific flows (phone format, R2 SMS OTP).                                                                                                                     |
-| Session tagging only, without `security_stamp`    | Correctness would depend on tag-after-regenerate ordering, which has not been runtime-tested. The stamp check is one column comparison on a row the guard already loads.                                                                  |
+| Alternative                               | Why rejected                                                                                                                                                                                          |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Keep the cookie session store             | No server-side revocation (RF-04), no tagging, about 4 KB limit with silent truncation.                                                                                                               |
+| Redis session store                       | Another stateful service; managed Valkey starts at $15.00/month as published on 2026-09-25 (https://docs.digitalocean.com/products/databases/valkey/details/pricing/). PostgreSQL handles R1 volumes. |
+| Stateless JWT in the browser              | Revocation still needs a server-side denylist; JS-readable storage exposes the token to XSS; Inertia already relies on cookie sessions.                                                               |
+| Hosted identity provider (Auth0, Clerk)   | Recurring cost, another processor subject to VX-09, awkward Nepal-specific flows (phone format, R2 SMS OTP).                                                                                          |
+| Session tagging only, no `security_stamp` | Correctness would rest on the untested tag-after-regenerate order and on a job running; the stamp check is one comparison on a row already loaded.                                                    |
 
 ## Consequences
 
 **Positive**
 
 - Suspension, password change and "log out everywhere" take effect on the next request (T-SEC-010).
-- Session fixation is handled by the framework. CSRF works unchanged for Inertia visits and Tuyau calls.
-- No new infrastructure.
+- Framework fixation protection; CSRF unchanged; no new infrastructure.
 
 **Negative**
 
-- Every authenticated request reads and writes a session row and reads the user row. This counts against the web pool (8 connections, ADR-0016).
-- A sessions-table purge job is required, and the table grows with anonymous carts if guests get sessions. Guest carts use their own token (docs/04), not session data.
+- Every authenticated request reads and writes a session row and reads the user row, from the 8-connection web pool ([03 §3.4](../03-system-architecture.md#34-postgresql-layout-and-connection-budget)).
+- A database reader could copy a live session ID; `data` is not encrypted. Mitigation: restricted runtime role and `TRUNCATE sessions` in the incident runbook ([11](../11-deployment-and-operations.md)).
 
 **Risks**
 
-- _A route group misses the stamp middleware._ Mitigation: register it as router middleware on every authenticated group, and test it per surface.
-- _Staff lockout if the TOTP device is lost._ Mitigation: an admin MFA-reset procedure in the runbook ([docs/11](../11-deployment-and-operations.md)), which rotates the stamp and is audit-logged.
+- _A route group misses the status middleware._ Mitigation: registered on every authenticated group and tested per surface.
+- _Staff lockout after losing the TOTP device._ Mitigation: an audited admin MFA-reset procedure in [11](../11-deployment-and-operations.md) that rotates the stamp.
 
 ## When to revisit
 
-- The sessions table exceeds about 1 million live rows, or session read p95 exceeds 10 ms. Consider the Redis store (pin @adonisjs/redis ^10; version 11 breaks peer ranges).
-- The R3 mobile app needs token auth. Add a new ADR for an access-token guard.
-- R2 phone OTP (FR-IAM-010) or passkeys become viable for Nepali Android users. Revisit MFA factors for owners.
-- M1 metrics show customers re-logging in more often than weekly. Revisit the lifetime assumptions.
+- More than about 1 million live session rows, or session read p95 above 10 ms: consider the Redis store (pin @adonisjs/redis ^10; 11.0.0 breaks the session and limiter peer ranges [Verified-doc]).
+- The R3 mobile app needs token auth (an opaque access-token guard): new ADR.
+- R2 phone OTP (FR-IAM-010) or passkeys become practical for owners: revisit MFA factors.
+- M1 metrics show customers re-logging in more than weekly: revisit A-23.
 
 ## Verification
 
 - **T-SEC-010**: a suspended user's existing session is rejected on the next request (403 `ACCOUNT_SUSPENDED` for the API, redirect for pages).
-- **T-IAM suite** ([docs/10](../10-testing-and-quality-gates.md)):
-  - the session ID differs before and after login (fixation);
-  - a password change invalidates other sessions (stamp);
-  - `revokeAllSessions` destroys tagged sessions;
-  - login is throttled after 5 failures per minute (429 `RATE_LIMITED` with `Retry-After`);
-  - an admin route without fresh MFA returns 401 `MFA_REQUIRED`;
-  - cookie flags `HttpOnly`, `Secure` and `SameSite=Lax` are asserted on the login response.
-- **CSRF test**: an unsafe `/api/v1` request without `X-XSRF-TOKEN` returns 403. The webhook route is the only exemption (ADR-0012).
+- **T-IAM-109** (proposed, 04a §5.3): "log out everywhere" removes every tagged row and the old cookie is then rejected.
+- **T-IAM suite** (proposed, [10](../10-testing-and-quality-gates.md)): new session ID at login; password change rejects other sessions only; login throttling (429 `RATE_LIMITED`); stale MFA gives 401 `MFA_REQUIRED`; cookie flags.
+- **CSRF test** (proposed): an unsafe `/api/v1` request without `X-XSRF-TOKEN` is rejected; the payment webhook route is the only exemption (ADR-0012).
 
 ## Related
 
-- [Security, privacy and threat model](../07-security-threat-model-and-permissions.md)
-- [API conventions (rate limits, problem codes)](../06-api-design.md)
-- ADR-0003 (history encryption), ADR-0006 (authorization), ADR-0018 (error contract)
+- [07 Security and threat model](../07-security-threat-model-and-permissions.md) · [03 §12.2 Authentication and sessions](../03-system-architecture.md#122-authentication-and-sessions-adr-0005) · [04a §5 Identity tables](../04a-data-dictionary-tables.md#5-identity-and-access-tables)
+- [01 FR-IAM](../01-product-requirements.md#71-identity-and-accounts-fr-iam) · [06 API (rate limits)](../06-api-design.md)
+- [ADR-0003](0003-inertia-ssr-storefront-csr-dashboards.md), [ADR-0006](0006-authorization-platform-roles-shop-memberships.md), [ADR-0010](0010-postgres-jobs-pg-boss-transactional-send.md), [ADR-0018](0018-error-contract-problem-details.md)

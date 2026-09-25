@@ -2,167 +2,106 @@
 
 Status: Draft v1 (2026-09-25)
 
+Reviewed: critic pass A4.3 (2026-09-25)
+
 ## Status
 
-| Field              | Value                                                                                                                                                             |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Decision status    | **Accepted** for the order hierarchy and the vendor ledger (R1). **Proposed** for platform-as-payee gateway collection and payouts (R1.1), pending VX-01 / OD-02. |
-| Date               | 2026-09-25                                                                                                                                                        |
-| Deciders           | Product owner, lead developer (accountant and legal counsel for the R1.1 part)                                                                                    |
-| Supersedes         | —                                                                                                                                                                 |
-| Superseded by      | —                                                                                                                                                                 |
-| Related open items | OD-02, OD-04 (commission rate and basis), OD-05 (COD commission remittance terms), OD-06 (hold days), OD-11 / OD-27 (tax on commission and payouts), VX-01, VX-08 |
+- **Decision status:** Accepted for the order hierarchy, COD payments and the vendor ledger (R1). **Proposed** for platform-as-payee gateway collection and payouts (R1.1), pending OD-02 / VX-01.
+- **Date:** 2026-09-25
+- **Deciders:** product owner, lead developer; accountant and legal counsel for the R1.1 part
+- **Supersedes / superseded by:** — / —
+- **Related open items:** OD-02, OD-04 (commission rate and basis), OD-05 (COD commission remittance, blocks launch), OD-06 (hold days), OD-07 (refund routes), OD-11 / OD-27 (tax), VX-01, VX-02, VX-08
 
 ## Context
 
-**Confirmed product decisions:**
+**Confirmed answers** (canon §1): one payment for a multi-shop cart, split into per-shop suborders (Q2). DripNepal is the payee for gateway payments and pays vendors out, subject to VX-01 (Q3). COD at launch and one wallet gateway in R1.1 (Q4). Vendors ship with their own couriers (Q5).
 
-- Q2: a multi-shop cart pays with ONE payment, split into per-shop suborders.
-- Q3: DripNepal is the payee for gateway payments and pays vendors out, subject to legal and NRB confirmation (VX-01).
-- Q4: COD at launch (R1); one wallet gateway in R1.1.
-- Q5: vendors ship with their own couriers.
+**Consequence for R1.** The vendor or its courier collects COD cash, so the platform holds no customer money and _the vendor owes the platform its commission_. The ledger must therefore allow negative balances and net them against later gateway credits. How vendors remit is OD-05.
 
-**Consequence for R1** (canon §1). With COD and vendor-arranged couriers, the vendor or its courier physically collects the cash. The platform holds no customer funds, and the _vendor owes the platform its commission_. The ledger must therefore allow negative vendor balances and net them against gateway receipts later. The commission remittance process is a business agreement still to be made (OD-05).
-
-**Repository finding** [Verified-repo, RF-07, audit A1-01]: one `orders` row covers several shops with a single `status`, `payment_status` and `shipping_total` (`1780074257570_create_orders_table.ts:18-34`). Shop A shipping marks the whole order shipped. Shop B's cancellation, per-shop shipping fees, commissions and payouts cannot be represented.
+**Repository** [Verified-repo, RF-07]: one `orders` row spans shops with a single `status`, `payment_status` and `shipping_total` (`1780074257570_create_orders_table.ts:18-34`). Per-shop acceptance, shipping, cancellation, commission and payout cannot be represented.
 
 **Law and providers** [Verified-doc, `nepal_payments` research, accessed 2026-09-25]:
 
-- E-Commerce Act 2081 s8(1): payment made to a delivery service provider "shall be deemed as payment received by the business entity" (https://giwmscdnone.gov.np/media/files/E-Commerce%20Act,%202081_yr7k9o5.pdf). This supports COD, but which entity is deemed paid (platform or vendor) is a legal question [Verify-external VX-02].
-- s14: the intermediary accepts return, exchange or refund "notwithstanding any terms of the contract", so the platform carries refund liability.
-- Neither eSewa nor Khalti documents split payments, sub-merchants or marketplace settlement (https://developer.esewa.com.np/, https://docs.khalti.com/).
-- NRB describes third-party payment aggregators as not yet provided for (NRB NPS reference document, Oct 2025). Platform-collects-then-pays-out is therefore unconfirmed [Verify-external VX-01].
-- Income Tax Act s95A(6e) describes 1 % advance tax collected by a resident e-commerce operator when paying platform sellers [Verify-external VX-05; OD-27].
-- Retention of transaction records: at least 5–6 years (VAT Rules r23(7), Directive 2082 s14) [Verify-external VX-08].
+- E-Commerce Act 2081 s8(1) deems payment to a delivery provider as received by the business entity, and s14 makes the intermediary accept returns and refunds "notwithstanding any terms of the contract" (<https://giwmscdnone.gov.np/media/files/E-Commerce%20Act,%202081_yr7k9o5.pdf>) [Verify-external VX-02].
+- Neither eSewa nor Khalti documents split payments or sub-merchants (<https://developer.esewa.com.np/pages/Epay>, <https://docs.khalti.com/khalti-epayment/>). Whether a platform may collect for vendors is unconfirmed [Verify-external VX-01].
+- Income Tax Act s95A(6e): 1% advance tax on payments to platform sellers [Verify-external VX-05; OD-27].
 
 ## Decision
 
-1. **Order hierarchy** (tables in [docs/04](../04-domain-model-and-data-dictionary.md), state machines in [docs/05](../05-order-payment-and-inventory-lifecycles.md)):
-   - `orders`: one per `placeOrder`, number `DN-XXXXXXX`. Its status (`awaiting_payment | placed | in_progress | completed | cancelled`) is derived and recomputed in the same transaction as any shop-order change.
-   - `shop_orders`: one per shop in the cart, number `DN-XXXXXXX-1`. Each has its own status machine, shipping fee, totals, `commission_total_minor` and `acceptance_due_at`, and is accepted, rejected, shipped and cancelled independently.
-   - `order_items`: snapshots of title, variant label, SKU, image, unit price and commission rate/amount, with a composite FK `(shop_order_id, shop_id)`.
-   - Nothing cascades into orders, items, payments or the ledger (RESTRICT, ADR-0011).
-2. **Payments.**
-   - **COD (R1)**: one `payments` row per shop order (`method = cod`, `awaiting_collection → collected | not_collected`), because each vendor collects separately. Each COD payment has one `payment_allocations` row for its shop order, so allocation queries work the same for every method [Assumption; docs/04 owns the column list].
-   - **Gateway (R1.1, Proposed)**: one payment for the grand total, with `payment_allocations` per shop order (sum = amount; partial captures and refunds allocated by largest remainder, ADR-0007).
-3. **Vendor ledger.** `ledger_entries` per shop, append-only, with signed `amount_minor` where **positive means the platform owes the vendor**.
-   - Entry types: `sale`, `shipping_income`, `commission`, `commission_reversal`, `cod_cash_held`, `refund`, `vendor_remittance`, `payout`, `payout_reversal`, `tax_withholding` (reserved; OD-27), `adjustment`.
-   - `dedupe_key` is UNIQUE, so a replayed event cannot post twice. `available_at = delivered_at + ledger_hold_days` (default 7) [Assumption; OD-06].
-   - Balance = `SUM(amount_minor)` per shop; available balance counts entries with `available_at <= now()`. **The balance may be negative.**
-   - Corrections are always new entries (`adjustment`, or reversal entries with `reverses_entry_id`), never UPDATEs.
-4. **Posting rules** (the authoritative table is in docs/05):
-   - At COD delivery with cash collected: `sale` +items, `shipping_income` +shipping, `commission` −commission, `cod_cash_held` −cash collected.
-   - At gateway capture plus delivery: the same entries without `cod_cash_held`.
-   - Refund: `refund` −the vendor's share, plus `commission_reversal` +proportional commission.
-   - COD commission paid by the vendor: `vendor_remittance` +amount, recorded by finance (`recordVendorRemittance`).
-   - Payout (R1.1): `payout` −amount. A failed payout is reversed with `payout_reversal` +amount, and a new payout is created.
-5. **Commission** is snapshotted per order item at placement. It is computed on the item line total only [Assumption; OD-04 decides whether shipping is included], so later rate changes never alter past orders.
+1. **Order hierarchy** (tables in [04a §11](../04a-data-dictionary-tables.md#11-orders-fulfillment-and-returns), machines in [05 §6.1–6.2](../05-order-payment-and-inventory-lifecycles.md#61-shoporder)):
+   - `orders`: one per `placeOrder`, numbered `DN-XXXXXXX`. Its `status` (`awaiting_payment`, `placed`, `in_progress`, `completed`, `cancelled`) is written only by `recomputeOrderStatus`, in the same transaction as every shop-order change ([05 §3.8](../05-order-payment-and-inventory-lifecycles.md#38-parent-status-derivation)).
+   - `shop_orders`: one per shop, numbered `DN-XXXXXXX-n`. Each has its own machine (`awaiting_payment`, `awaiting_acceptance`, `accepted`, `completed`, `cancelled`, `rejected`), shipping fee, totals, `commission_total_minor` and `acceptance_due_at`.
+   - `order_items`: snapshots of title, variant, SKU, price and commission, with composite tenant FKs. Nothing cascades into orders, payments or the ledger (RESTRICT).
+   - A single-shop cart is the same shape with one shop order. There is no separate code path ([05 §2.4](../05-order-payment-and-inventory-lifecycles.md#24-single-shop-checkout-is-the-degenerate-case)).
+2. **Payments** ([04a §12](../04a-data-dictionary-tables.md#12-payments-and-refunds)):
+   - **COD (R1):** one `payments` row per shop order (`method = 'cod'`, `shop_order_id` set) with one `payment_allocations` row. Status: `awaiting_collection` → `collected`, `not_collected` or `cancelled`.
+   - **Gateway (R1.1, Proposed):** one payment (`method` `esewa` or `khalti`) for the grand total, with one `payment_allocations` row per shop order. Refunds are always per shop order and capped by that allocation. Gateway capture is applied downward in one transaction by `orders.applyPaymentOutcome`: payment, allocations, reservations, then shop orders ([03 §4.2](../03-system-architecture.md#42-how-modules-talk-to-each-other)).
+3. **Vendor ledger** ([05 §7](../05-order-payment-and-inventory-lifecycles.md#7-vendor-ledger-and-settlement), [04a §13.1](../04a-data-dictionary-tables.md#131-ledger_entries)):
+   - `ledger_entries` is per shop and append-only. `amount_minor` is signed, and **positive means the platform owes the vendor**. The balance is `SUM(amount_minor)` (via `sumMinor`, ADR-0007) and **may be negative**.
+   - Entry types: `sale`, `shipping_income`, `commission`, `commission_reversal`, `cod_cash_held`, `refund`, `vendor_remittance`, `payout`, `payout_reversal`, `tax_withholding` (reserved and disabled until OD-27) and `adjustment`.
+   - `dedupe_key` is UNIQUE, and postings use `ON CONFLICT (dedupe_key) DO NOTHING`. A correction is always a new entry, never an UPDATE.
+4. **Posting rules.** The authoritative table is [05 §7.2](../05-order-payment-and-inventory-lifecycles.md#72-entry-types-and-posting-rules). In summary:
+   - Nothing is posted before delivery. The delivery posting runs in the transaction that makes the shop order both `delivered` and paid (`collected` or `captured`): `sale +I`, `shipping_income +S`, `commission −K`, and for COD `cod_cash_held −(I+S)`.
+   - `available_at` follows a group rule. If the posting's net is positive (gateway), its entries become available at `delivered_at + ledger_hold_days` (default 7) [Assumption A-06; OD-06]. Otherwise (COD) they are available immediately. Debts are never deferred.
+   - A refund posts `refund` (negative) and `commission_reversal` (positive) only if the shop order already has a delivery posting. Refunds before delivery are between the platform and the customer only.
+   - `vendor_remittance` is recorded by finance (`recordVendorRemittance`). A payout (R1.1) posts `payout`, and a bounced payout posts `payout_reversal`.
+5. **Commission** is snapshotted per order item at placement and rounded half up per line (ADR-0007). Shipping is commission-free [Assumption; OD-04].
 
-**Worked example (COD, 10 % commission [Assumption OD-04]).** Order DN-1000001 contains Shop A: item Rs 2,000 + shipping Rs 100, and Shop B: item Rs 1,500 + shipping Rs 150. Grand total 375,000 paisa, collected as two COD payments of 210,000 and 165,000.
-
-| Shop A event                                                   | Entry                               | amount_minor                 | Running balance             |
-| -------------------------------------------------------------- | ----------------------------------- | ---------------------------- | --------------------------- |
-| Delivered, cash collected                                      | sale                                | +200,000                     | +200,000                    |
-|                                                                | shipping_income                     | +10,000                      | +210,000                    |
-|                                                                | commission                          | −20,000                      | +190,000                    |
-|                                                                | cod_cash_held                       | −210,000                     | **−20,000** (A owes Rs 200) |
-| R1.1 gateway order delivered (item Rs 3,000 + shipping Rs 100) | sale / shipping_income / commission | +300,000 / +10,000 / −30,000 | **+260,000**                |
-| Payout after `available_at` (netted)                           | payout                              | −260,000                     | 0                           |
-
-```mermaid
-erDiagram
-  orders ||--|{ shop_orders : "splits into"
-  shop_orders ||--|{ order_items : contains
-  orders ||--|{ payments : "paid by"
-  payments ||--|{ payment_allocations : "allocated as"
-  shop_orders ||--o{ payment_allocations : receives
-  shops ||--o{ shop_orders : fulfils
-  shops ||--o{ ledger_entries : "sub-ledger of"
-  shop_orders ||--o{ ledger_entries : "posts"
-  orders {
-    uuid id PK
-    text number UK "DN-XXXXXXX"
-    text status "derived from shop orders"
-    bigint grand_total_minor
-  }
-  shop_orders {
-    uuid id PK
-    uuid order_id FK
-    uuid shop_id FK
-    text status "own state machine"
-    bigint total_minor
-    bigint commission_total_minor
-  }
-  payments {
-    uuid id PK
-    uuid order_id FK
-    text method "cod or gateway"
-    bigint amount_minor
-  }
-  payment_allocations {
-    uuid payment_id PK
-    uuid shop_order_id PK
-    bigint amount_minor
-  }
-  ledger_entries {
-    uuid id PK
-    uuid shop_id FK
-    text entry_type
-    bigint amount_minor "signed, positive = platform owes vendor"
-    text dedupe_key UK
-  }
-```
+**Worked example** (COD, 10% commission [Assumption OD-04]). Shop A sells an item for Rs 2,000 with Rs 100 shipping. On delivery with cash collected, it posts `sale +200000`, `shipping_income +10000`, `commission −20000` and `cod_cash_held −210000`. Shop A's balance becomes −20000: it owes Rs 200. A later R1.1 gateway order (item Rs 3,000, shipping Rs 100) adds +280000 once available, and the next payout of 260000 nets the debt. The full two-shop example with a partial rejection and a return is in [05 §7.11](../05-order-payment-and-inventory-lifecycles.md#711-worked-example-a-two-shop-cod-order-with-a-partial-rejection-and-a-return).
 
 ## Alternatives considered
 
-| Alternative                                                                                  | Why rejected                                                                                                                                                                                                                                                                                 |
-| -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| One order row with `shop_id` and status per item (status quo)                                | One status cannot describe independent fulfilments. There is no place for per-shop shipping, acceptance or commission (RF-07).                                                                                                                                                               |
-| Separate checkout and payment per shop                                                       | Contradicts Q2 (one payment), and means several gateway redirects on a slow mobile connection.                                                                                                                                                                                               |
-| Per-vendor merchant accounts with gateway-side split                                         | No provider documents split or sub-merchant settlement. Every vendor would need PSP KYC. Kept as the **fallback** if VX-01 rules out platform collection: only the payment side changes; orders and the ledger stay.                                                                         |
-| Mutable `balance` column on `shops`                                                          | No audit trail, lost updates under concurrency, and statements cannot be explained or re-derived. Fails retention needs (VX-08).                                                                                                                                                             |
-| Full double-entry general ledger now (gateway clearing, commission revenue, vendor payables) | More than R1 needs. The vendor sub-ledger answers "what does each shop owe or earn". Reconciling platform-side accounts, such as Khalti netting refunds against future collections [Verified-doc, https://khalti.com/info/terms/merchant/, accessed 2026-09-25], is an R1.1 revisit trigger. |
-| Forbid negative balances (prepaid commission deposits)                                       | Does not match COD reality. Vendors would need to pre-fund before selling, which hurts onboarding of small shops.                                                                                                                                                                            |
+| Alternative                                            | Why rejected                                                                                                                                                                                                                                                                                  |
+| ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| One order row with per-item status (status quo)        | Cannot hold per-shop shipping, acceptance, COD collection or commission (RF-07).                                                                                                                                                                                                              |
+| Separate checkout and payment per shop                 | Contradicts Q2, and several wallet sessions in a row on mobile can leave a half-paid checkout.                                                                                                                                                                                                |
+| Per-vendor merchant accounts with a gateway-side split | No provider documents it, and every vendor would need PSP KYC. Kept as the **fallback** if VX-01 rules out platform collection: only the payment side changes.                                                                                                                                |
+| Mutable `balance` column on `shops`                    | No audit trail, lost updates under concurrency, and statements cannot be re-derived (VX-08).                                                                                                                                                                                                  |
+| Full double-entry general ledger now                   | More than R1 needs. Platform cash, gateway balances and tax accounts stay in the accountant's books (OD-11), fed by exports. Khalti nets refunds against collections [Verified-doc, <https://khalti.com/info/terms/merchant/>, accessed 2026-09-25], which is an R1.1 reconciliation concern. |
+| Forbid negative balances (prepaid deposits)            | Does not match COD, and pre-funding would put off small shops from onboarding.                                                                                                                                                                                                                |
 
 ## Consequences
 
 **Positive**
 
-- Shops fulfil, cancel and reject independently. The parent status is always consistent because it is recomputed in the same transaction.
-- Every rupee on a vendor statement traces to an entry with a `dedupe_key`, so replays are harmless (T-PAY-005).
-- The same ledger covers R1 COD (vendor owes) and R1.1 gateway (platform owes), with netting and no schema change.
+- Shops accept, reject, ship and cancel independently. The parent status is always consistent because it is derived in the same transaction.
+- Every amount on a statement traces to an entry with a deterministic `dedupe_key`, so replays cannot double-post.
+- One ledger covers COD (vendor owes) and gateway (platform owes), and netting needs no schema change.
 
 **Negative**
 
-- R1 commission collection is a manual process. Vendors remit, and finance records it, so credit risk exists until OD-05 defines terms, for example suspending new listings when the balance is below a threshold [Assumption].
-- Parent-status derivation and allocation logic add code that must be tested exhaustively.
+- Collecting COD commission in R1 is manual. Credit risk remains until OD-05 sets terms, for example a review when a balance stays below −Rs 5,000 for 30 days [Assumption OD-05].
+- Parent derivation, allocation and posting logic add code that needs exhaustive tests.
 
 **Risks**
 
-- _VX-01 outcome._ If platform collection is not permitted, the R1.1 payment flow is redesigned (per-vendor merchant accounts or merchant-of-record resale) in a superseding ADR. The order and ledger parts remain.
-- _Tax treatment of commission and payouts_ (OD-11, OD-27). Mitigation: the reserved `tax_withholding` entry type means no schema change is needed.
+- _VX-01 forbids platform collection._ Supersede the R1.1 payment part (per-vendor accounts). Orders and the ledger stay.
+- _Tax on commission or payouts (OD-11, OD-27)._ The reserved `tax_withholding` type and the separate `sale`, `shipping_income` and `commission` entries let any tax base be computed later.
 
 ## When to revisit
 
-- VX-01 or OD-02 answered. Move the R1.1 part to Accepted, or supersede it.
-- Total negative balances across shops exceed an OD-05-defined limit for 2 consecutive months, or there are more than 50 active vendors. Automate commission collection and enforcement.
-- Finance needs statutory books from the system. Add platform-side double-entry accounts.
-- R2 partial shipments (FR-FUL-005). Revisit one shipment per shop order.
+- OD-02 or VX-01 answered: accept or supersede the R1.1 part.
+- Total negative balances exceed the OD-05 limit for 2 consecutive months, or more than 50 vendors are active [Assumption]: automate commission collection.
+- Finance needs statutory books from the system: add platform-side accounts.
+- R2 partial shipments (FR-FUL-005): revisit one shipment per shop order.
 
 ## Verification
 
-- **T-PAY-005**: the same webhook delivered N times, including concurrently, produces one state change and one ledger posting.
-- **T-SEC-004**: a refund above the refundable amount returns 422, with the DB CHECK as backstop.
-- **T-LED suite** ([docs/10](../10-testing-and-quality-gates.md)):
-  - the worked example above reproduces exactly;
-  - reposting with the same `dedupe_key` is rejected;
-  - `ledger_entries` UPDATE/DELETE raise an error;
-  - payout netting against a negative balance.
-- **T-ORD / T-CHK suites**: parent status derivation for every combination of shop-order states; `SUM(shop_orders.total_minor) = orders.grand_total_minor`; COD per-shop payments created at placement.
+- **T-PAY-005**: the same provider event (return, lookup or callback) N times, including concurrently, gives one state change and one ledger posting.
+- **T-SEC-004**: a refund above the refundable amount returns 422 `REFUND_EXCEEDS_REFUNDABLE`, with the DB CHECK as a backstop.
+- Proposed in [05 §10](../05-order-payment-and-inventory-lifecycles.md#10-traceability-and-test-index):
+  - **T-LED-001**: the 05 §7.11 golden example;
+  - **T-LED-002**: append-only;
+  - **T-LED-003**: availability group rule;
+  - **T-LED-004**: payout failure carry-forward;
+  - **T-LED-005**: dedupe;
+  - **T-ORD-001, T-ORD-009**: parent derivation;
+  - **T-CHK-010**: single shop and multi-shop give the same invariants.
+- **`ledger.integrity_check`** (daily 03:00) alerts on any broken ledger identity ([05 §7.12](../05-order-payment-and-inventory-lifecycles.md#712-statements-and-integrity-checks)).
 
 ## Related
 
-- [State machines, checkout, ledger postings](../05-order-payment-and-inventory-lifecycles.md)
-- [Domain model (orders, payments, ledger)](../04-domain-model-and-data-dictionary.md)
-- [Risks and open decisions (OD-02, OD-04, OD-05, OD-06, VX-01)](../risks-and-open-decisions.md)
-- ADR-0007 (money and allocation), ADR-0008 (inventory), ADR-0012 (payment providers)
+- [05 §2–3, §6–7](../05-order-payment-and-inventory-lifecycles.md#2-recommendation-multi-shop-checkout-with-one-payment)
+- [04a §11–13](../04a-data-dictionary-tables.md#11-orders-fulfillment-and-returns)
+- [Risks and open decisions](../risks-and-open-decisions.md#22-decision-table)
+- [ADR-0007](0007-money-integer-minor-units.md), [ADR-0008](0008-inventory-reservations-and-ledger.md), [ADR-0012](0012-payment-provider-isolation-verify-by-lookup.md)
