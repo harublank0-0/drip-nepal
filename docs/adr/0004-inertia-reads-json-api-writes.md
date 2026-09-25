@@ -59,7 +59,7 @@ Reviewed: critic pass A4.3 (2026-09-25)
 **Negative**
 
 - Each mutating screen has a page route and API routes; a mutation costs one extra partial reload.
-- `docs/openapi.yaml` is hand-maintained; a route change without a spec change fails CI instead of being generated.
+- `docs/openapi.yaml` is hand-maintained; a route change without a spec change fails CI instead of being generated. It starts as a foundation (shared components plus the operations of 06 §14's worked examples, `x-foundation-scope`); each remaining operation (`x-pending-operations`) is specified in the PR that implements it [Confirmed, product owner 2026-09-26].
 - Client code handles problem+json explicitly (a small `useApiMutation` hook) instead of Inertia's error bag.
 
 **Risks**
