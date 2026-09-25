@@ -1161,7 +1161,7 @@ HTTP/1.1 200 OK
   "next_steps": ["record_cod_collection"] } }
 ```
 
-`return_window_ends_at` is a **computed** response field (`delivered_at` + the live `return_window_days` setting, 7 days); it is not a column. 05 §9.6 proposes a stored `shipments.return_window_ends_at`, which 04a §11.5 does not have, so until 04a adds it a settings change moves the window shown here (Consistency note 13). The ledger delivery posting waits for `recordCodCollection` `collected` ([05 §7.3](05-order-payment-and-inventory-lifecycles.md#73-delivery-posting)). A later `reattempt` on a delivered shipment:
+`return_window_ends_at` is the stored `shipments.return_window_ends_at` column, set in the `delivered` transaction as `delivered_at` + `return_window_days` and never changed afterwards ([04a §11.5](04a-data-dictionary-tables.md), [05 §9.6](05-order-payment-and-inventory-lifecycles.md)), so a later settings change does not move it. The ledger delivery posting waits for `recordCodCollection` `collected` ([05 §7.3](05-order-payment-and-inventory-lifecycles.md#73-delivery-posting)). A later `reattempt` on a delivered shipment:
 
 ```http
 HTTP/1.1 409 Conflict
@@ -1314,7 +1314,7 @@ The success transaction adds `refunded_minor` on the payment and allocation, pos
 10. `errors[]` on non-validation problems (`INVALID_QUERY_PARAMETER`, `OUT_OF_STOCK`, `CART_CHANGED`, `DELIVERY_NOT_AVAILABLE`, `CONFLICT`) is used by 01 AC-FR-INV-003-1/2 and 05 §4.3/§5.9, while ADR-0018 decision 1 limits `errors[]` to `VALIDATION_FAILED`. ADR-0018 should widen the rule.
 11. Weak `ETag` with `If-Match`: canon §6.6 and ADR-0004 use `W/"<version>"`, but RFC 9110 §13.1.1 requires strong comparison for `If-Match` (my reading; not in the research digests). The server compares the version number and accepts both forms; canon should decide between keeping weak tags knowingly or moving to strong opaque tags.
 12. 03 §7.4 still says `gateway_manual` refunds are "confirmed by an operator"; §13.6 follows 05 note 17 (status check confirms).
-13. Return window end: 05 §9.6 proposes a stored `shipments.return_window_ends_at`; 04a §11.5 has no such column. The `recordFulfillmentEvent` response (§14.6) returns `return_window_ends_at` as a computed field (`delivered_at` + live `return_window_days`), so a settings change moves the window for shipments already delivered. 04a (owner) must add the column or 05 must drop the proposal; the API field name stays the same either way.
+13. Return window end: resolved. `shipments.return_window_ends_at` is a stored column in [04a §11.5](04a-data-dictionary-tables.md) (added in the A4.2b review), and §14.6 returns it as stored.
 
 **Proposed additions used here (pending the product owner's approval)**
 
@@ -1336,6 +1336,6 @@ The success transaction adds `refunded_minor` on the payment and allocation, pos
 23. Pagination `meta`: canon §6.6 has `{ next_cursor }` and `{ page, per_page, total? }`. §3.4 adds `limit` to cursor meta and `total_is_capped`, `has_more` to page meta; the 10,000 cap is an [Assumption]. These are additive and need canon §6.6 updated.
 24. T-PAY-005: canon §12 names it "Same webhook delivered N times", but eSewa ePay and Khalti KPG-2 send no webhooks (§12.1). This document applies it to repeated returns, lookups and the reserved webhook (§12.3, §14.7), as 05 §8.6 and ADR-0012 do; [10](10-testing-and-quality-gates.md) should restate the canonical name.
 25. T-SEC-010: canon §12 says "API 403 `ACCOUNT_SUSPENDED`". Under §4.2 that holds only while the session row exists; see note 7.
-26. Email path on `signUp` and account operations follows 03 §9 and 04a §14.3 (`notifications.dispatch` creates delivery rows, then one `notifications.send_email` per row). 05 §4.3/§4.7 sends `notifications.send_email` directly from checkout; §13.4 cites 05's steps for `placeOrder` without choosing between them. 03 and 05 must agree; the API contract does not change.
+26. Email path: resolved. Every document now uses the 03 §9 / 04a §14.3 path (`notifications.dispatch` creates delivery rows, then one `notifications.send_email` per row); 05 §4.3/§4.7 was aligned in the A4.1 review. The API contract does not depend on it.
 27. CSRF failure as 403 `FORBIDDEN` (§4.1) is ADR-0018's [Assumption]; 07 must confirm it and the "reload once" client rule.
 28. Support-case, return and settings endpoints (FR-ADM-009, FR-RET-006, FR-ADM-010) are marked "R1" without a milestone because canon §4 does not place them; [12](12-roadmap-and-backlog.md) must assign milestones (the settings endpoints are shown at M7, canon §4's "admin ops & launch readiness" milestone, because `checkout_enabled` must exist before launch [Assumption]; canon places self-serve returns in M9/R2, while the support-mediated returns of FR-RET-006 are R1).
