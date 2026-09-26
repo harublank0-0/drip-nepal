@@ -4,6 +4,8 @@ Status: Draft v1 (2026-09-26)
 
 Reviewed: critic pass B5 part 1 (2026-09-26)
 
+Reviewed: critic pass B5 part 2 (2026-09-26)
+
 This document is the standard the DripNepal codebase must meet: where code lives, which module may depend on which, what each layer of a request may and may not do, and (in later sections) how errors, configuration, logging, migrations, dependencies, reviews and the frontend are handled. It describes the **target state**. Files in the repository today are evidence of what exists and are cited as [Verified-repo]; a file is kept only where it already meets the standard, and each "Current code → target" table says whether it is kept, fixed, rewritten or deleted (product owner, 2026-09-26: "rewrite is fine where needed").
 
 **What this document does not own.** Module map, dependency diagram and job catalogue: [03](03-system-architecture.md#4-modules-and-dependency-rules). Tables, columns, constraints and settings: [04](04-domain-model-and-data-dictionary.md) and [04a](04a-data-dictionary-tables.md). State machines, lock order and transaction rules for money and stock: [05](05-order-payment-and-inventory-lifecycles.md). Endpoints, status codes, error codes and idempotency: [06](06-api-design.md) and [openapi.yaml](openapi.yaml). Permissions, threats and privacy: [07](07-security-threat-model-and-permissions.md). UI behaviour: [08](08-ui-ux-and-design-system.md). Test ID registry and CI gates: [10](10-testing-and-quality-gates.md). Runbooks and job operations: [11](11-deployment-and-operations.md). Milestones: [12](12-roadmap-and-backlog.md).
@@ -17,17 +19,17 @@ This document is the standard the DripNepal codebase must meet: where code lives
 | 1   | Repository structure                                      | Written                                    |
 | 2   | Module ownership and dependency rules                     | Written                                    |
 | 3   | Layer responsibilities                                    | Written                                    |
-| 4   | API serialization and shared contracts                    | Planned                                    |
-| 5   | Error handling                                            | Planned                                    |
-| 6   | Configuration validation and secrets                      | Planned                                    |
-| 7   | Structured logging and request IDs                        | Planned                                    |
+| 4   | API serialization and shared contracts                    | Written                                    |
+| 5   | Error handling                                            | Written                                    |
+| 6   | Configuration validation and secrets                      | Written                                    |
+| 7   | Structured logging and request IDs                        | Written                                    |
 | 8   | Migrations and seeders                                    | Planned                                    |
 | 9   | Safe production initialization                            | Planned                                    |
 | 10  | Dependency policy                                         | Planned                                    |
 | 11  | Lint, format, typecheck and review                        | Planned                                    |
 | 12  | Vertical slice: vendor product creation (`createProduct`) | Planned                                    |
 | 13  | Frontend code standards                                   | Planned                                    |
-| —   | Consistency notes for editor                              | Written (for §1–§3; later parts add to it) |
+| —   | Consistency notes for editor                              | Written (for §1–§7; later parts add to it) |
 
 A developer adding a feature reads §1.3 (names), §2.2 (what the module may import) and §3.2 (what each layer does). A reviewer uses §3.13 as the list of things to reject.
 
@@ -495,7 +497,7 @@ Order after the existing router stack (`bodyparser`, `session`, `shield`, `initi
 
 | #   | Middleware (doc name) | File                                                 | Kernel                                | Sets on `ctx`                                                         | Behaviour owned by                                                                                                  |
 | --- | --------------------- | ---------------------------------------------------- | ------------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| 1   | request context       | `request_context_middleware.ts`                      | router stack                          | request ID on `ctx.logger` and the response                           | §7, [03 §12.1](03-system-architecture.md#121-request-ids-and-logging)                                               |
+| 1   | request context       | `request_context_middleware.ts`                      | server stack (first; §7.4)            | request ID on `ctx.logger` and the response                           | §7, [03 §12.1](03-system-architecture.md#121-request-ids-and-logging)                                               |
 | 2   | account status        | `account_status_middleware.ts`                       | router stack                          | nothing; rejects suspended users and stale stamps                     | [07 §3.3](07-security-threat-model-and-permissions.md#33-the-per-request-account-check-and-the-suspension-decision) |
 | 3   | `auth`, `guest`       | existing files                                       | named `auth`, `guest`                 | `ctx.auth.user`                                                       | `guest` is used only on login, signup and reset pages (RF-02)                                                       |
 | 4   | `verified_email`      | `verified_email_middleware.ts`                       | named `verifiedEmail`                 | —                                                                     | 06 §2.2 (`EMAIL_NOT_VERIFIED`)                                                                                      |
@@ -705,6 +707,710 @@ JSON responses go through `ctx.serialize(...)`, registered by `providers/api_pro
 
 ---
 
+## 4. API serialization and shared contracts
+
+Four artefacts describe what crosses the HTTP boundary. Each has one owner and one CI check, so a change to one either updates the others in the same PR or fails the build.
+
+| Artefact                                                    | What it types                                                               | Source of truth for                                      | Generated or hand-written                                                                                                         | Check that keeps it honest                                           |
+| ----------------------------------------------------------- | --------------------------------------------------------------------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| Transformers (`app/transformers/<module>/*_transformer.ts`) | Every response body and every Inertia prop                                  | Field allowlist and JSON shape                           | Hand-written; `Data.*` prop types generated from them by `indexEntities` into `.adonisjs/client/data.d.ts` [Verified-repo]        | Typecheck (server and `inertia/`), T-API-001, T-ARCH-001             |
+| Tuyau registry (`.adonisjs/client/registry/`)               | Route names, params, request bodies (from Vine validators), response bodies | The typed client used by pages for every `/api/v1` write | Generated by `generateRegistry()` in `adonisrc.ts` hooks [Verified-repo `adonisrc.ts`]                                            | Typecheck of `inertia/`                                              |
+| `docs/openapi.yaml`                                         | The language-neutral `/api/v1` contract                                     | Operations, schemas, `ProblemCode` enum                  | Hand-maintained; no maintained generator targets AdonisJS 7 [Verified-doc gt/adonis_stack.md, `@tuyau/openapi` 1.0.2 predates v7] | Lint, route parity, T-API-001, problem-code registry test (all §4.5) |
+| Problem-code registry (`app/exceptions/problem_codes.ts`)   | `code` → status and title                                                   | The code list the server can emit (§5.2)                 | Hand-written                                                                                                                      | Problem-code registry test (§4.5)                                    |
+
+The rules for what a response contains (envelopes, casing, money, masking) are owned by [06 §3](06-api-design.md#3-conventions); this section fixes how the code produces them.
+
+### 4.1 Transformer rules
+
+1. **Controllers never return models.** Every body and every prop goes through a transformer extending `BaseTransformer` from `@adonisjs/core/transformers` [Verified-repo `@adonisjs/http-transformers` 2.3.1 `build/src/base_transformer.d.ts`]. Returning a Lucid model, calling `model.serialize()`, `toJSON()` or `$attributes` in `app/controllers/**` fails T-ARCH-001 (the rule is added to the §2 dependency configuration: controllers may import `#transformers/*`, and `no-restricted-syntax` bans those member calls outside `app/transformers/**`).
+2. **The JSON shape is written out, key by key.** The installed `pick()` returns the model's own property names, which are camelCase (`fullName`, `ownerId` in today's transformers [Verified-repo `app/transformers/user_transformer.ts`, `shop_transformer.ts`]), while [06 §3.2](06-api-design.md#32-json-casing-od-13) requires `snake_case` [Assumption; Open OD-13]. So `toObject()` returns an object literal with `snake_case` keys. `pick()` and `omit()` are allowed only for nested plain objects that are already in wire shape. Trade-off: more lines per transformer; in return, a renamed column cannot leak or silently rename a JSON field, and if OD-13 picks camelCase the change is confined to `toObject()` bodies. Verified by T-API-001 (every documented field present, no extra field, because the schemas set `additionalProperties: false`). This rule refines the `this.pick(...)` shape shown in [§3.11](#311-transformers): `BaseTransformer` stays, the key list is written out.
+3. **One transformer per audience** where visibility differs, named `<Resource><Audience>Transformer` in a file `<resource>_<audience>_transformer.ts`: `ProductSellerTransformer`, `ProductPublicTransformer`, `ShopOrderSellerTransformer`, `OrderAdminTransformer` ([06 §3.6](06-api-design.md#36-output-transformers-never-models)). Variants (`useVariant`) are used only for size differences of the same audience (a list row versus the detail view), never to hide fields from a less-privileged audience, because a forgotten `useVariant` call would then leak.
+4. **Money, time and identifiers use shared helpers** in `app/transformers/shared/wire.ts`: `moneyJson(minor: number)` returns `{ amount_minor, currency: 'NPR' }` and throws unless `Number.isSafeInteger(minor)` (the values come through the guarded int8 parser and `sumMinor` of [04 §18.4](04-domain-model-and-data-dictionary.md#184-lucid-and-node-postgres-bigint-handling)); `isoUtc(dt)` returns RFC 3339 UTC with milliseconds or `null`. No transformer formats a money display string (06 §3.3).
+5. **Transformers do no I/O.** Relations must be preloaded by the query; `whenLoaded()` is used for optional relations. A transformer that needs data it was not given receives it as a constructor argument (`transform(data, ...rest)` accepts extra arguments [Verified-repo `base_transformer.d.ts`]), for example the viewer's permission set for customer-contact masking. Trade-off: queries must know what the transformer needs; the benefit is that serialising 48 listing cards can never trigger 48 queries.
+6. **Decryption** of `*_enc` columns happens only in the transformers on the [07 §5.5](07-security-threat-model-and-permissions.md#55-encryption) allowlist; the §2 dependency rule makes any other import of the field decrypter fail T-ARCH-001 (T-SEC-034, proposed in 07).
+7. **Versioned resources** include `version` in the body; the controller sets `ETag: W/"<version>"` from the same value ([06 §8](06-api-design.md#8-concurrent-edits-etag-and-if-match)).
+
+```ts
+// app/transformers/catalog/product_seller_transformer.ts
+// design sketch: BaseTransformer, this.resource and static transform() are verified in
+// @adonisjs/http-transformers 2.3.1; column names follow 04a §7.6; the Product model is the §1 target
+import type Product from '#models/product'
+import { BaseTransformer } from '@adonisjs/core/transformers'
+import { isoUtc, moneyJson } from '#transformers/shared/wire'
+
+export default class ProductSellerTransformer extends BaseTransformer<Product> {
+  toObject() {
+    const p = this.resource
+    return {
+      id: p.id,
+      public_id: p.publicId,
+      title: p.title,
+      status: p.status,
+      version: p.version,
+      price: p.priceMinor === null ? null : moneyJson(p.priceMinor),
+      created_at: isoUtc(p.createdAt),
+      updated_at: isoUtc(p.updatedAt),
+    }
+  }
+}
+```
+
+The field list above is illustrative; the authoritative `createProduct` response fields are in [06 §14.2](06-api-design.md#142-vendor-product-creation-createproduct-then-replaceproductvariants) and `openapi.yaml`, and the §12 slice shows the full transformer.
+
+### 4.2 Serializer, envelopes and Inertia props
+
+- **API responses** go through `ctx.serialize()` registered by `providers/api_provider.ts` [Verified-repo `providers/api_provider.ts:10-35`]. The file is **kept** and fixed in M1 as decided in [06 §3.4](06-api-design.md#34-envelopes-and-the-existing-apiserializer): `definePaginationMetaData` accepts only `PageMeta` or `CursorMeta`, and the paginator key `metadata` that `BaseSerializer` always emits [Verified-repo, 06 §3.4 item 1] is renamed to `meta` in that one place. T-API-008 (proposed in 06) guards it.
+- **Controllers set the status through the typed response helpers** so the Tuyau registry records it: `return ctx.response.created(await ctx.serialize(item))` for 201 and `ctx.response.ok(...)` for 200. `@tuyau/core` 1.2.2 augments `HttpResponse` so `created<T>(body)` is typed `{ __response: T; __status: 201 }` for inference only [Verified-repo `@tuyau/core/build/backend/generate_registry.d.ts`]; `ctx.serialize` returns a promise [Verified-repo `@adonisjs/http-transformers` 2.3.1 `build/src/base_serializer.d.ts:93-125`] and must be called on `ctx`, because the function registered by `providers/api_provider.ts` reads `this` ([§3.5](#35-controllers)). `ctx.response.status(201)` followed by a plain return, as in the §3.5 sketch, sends the same bytes but leaves the registry to infer 200, so the typed helpers are the standard. `Location` and `ETag` are set with `ctx.response.header()` before the return.
+- **Inertia props** are transformer items or collections: `inertia.render('seller/products/show', { product: ProductSellerTransformer.transform(product) })`. The installed adapter serialises props through its own `InertiaSerializer` (a `BaseSerializer` with no wrap) [Verified-repo `@adonisjs/inertia` 4.2.0 `build/inertia_manager-BGHA4cDP.js:29`], so the same transformer serves the page and the API. Page lists pass `{ items: XTransformer.transform(rows), meta: pageMeta }` explicitly and **never** `XTransformer.paginate(...)`, because the paginator would put `metadata` into the props while the API says `meta`. Trade-off: two lines per list page; the benefit is one meta shape across props and API.
+- **Shared props** (`user`, `seller_shops`, flash, and `request_id`, proposed here so any page can show the reference of 08 §8.3) come from `InertiaMiddleware.share()` and are typed through `Data.SharedProps` [Verified-repo `.adonisjs/client/data.d.ts`]. They stay small (no lists beyond the shop switcher) because they are sent on every visit (RF-44).
+
+### 4.3 Tuyau registry and route naming
+
+- **API route names equal `operationId`s.** Every `/api/v1` route is declared with `.as('<operationId>')`, for example `.as('createProduct')`. This settles the assumption left to this document by [03 §6.5](03-system-architecture.md#65-reads-through-inertia-props-writes-through-apiv1-adr-0004) and [06 §10](06-api-design.md#10-versioning-and-compatibility): one name links the route, the Tuyau call (`tuyau.request('createProduct', …)`), the OpenAPI operation and the test title. Today's names such as `shops.register.shop_registrations.store` and `new_account.store` [Verified-repo `.adonisjs/client/registry/index.ts`] disappear as those routes move to `/api/v1` (§1 table). Page routes keep dotted names chosen in §3; they are used by `<Link route="…">` from `@adonisjs/inertia/react` [Verified-doc gt/adonis_stack.md].
+- **`generateRegistry` options** (`adonisrc.ts` hooks): keep `generateRegistry()` with the `routes.except` list of [§1.4](#14-generated-artefacts), and set `validationErrorType` to the `Problem` type. The option replaces the type of the 422 error variant that Tuyau auto-adds to every route with a validator (default `{ errors: SimpleError[] }`) [Verified-repo `@tuyau/core` 1.2.2 `generate_registry.d.ts:185-212`]; other error statuses stay untyped (`{ response: any }`), which is why the `apiCall()` wrapper parses every error body as a `Problem` anyway. The option takes a TypeScript type string inserted into the generated file; whether an import expression such as `import('#shared/api/problem').Problem` resolves there is the M0 check named in [06 §5.4](06-api-design.md#54-how-inertia-pages-consume-errors). Fallback if it does not: `validationErrorType: false`, and the `apiCall()` wrapper narrows `TuyauHTTPError.response` (typed `any` [Verified-repo `@tuyau/core` `index-BPATPJFD.d.ts:395-406`]) with a runtime guard.
+- **Shared wire types** that both sides import live in `shared/api/` (the `#shared/*` import alias already exists [Verified-repo `package.json` `imports`]): `problem.ts` (the `Problem` and `ProblemErrorItem` types and the `ProblemCode` union re-exported from the server registry as a type-only import), `money.ts` (`MoneyJson`). They contain types and constants only, never server code, so the Vite bundle stays clean.
+- **Generated folders.** `.adonisjs/client` and `.adonisjs/server` are produced by the assembler hooks on `node ace serve`, `build` and `test`, and are committed ([§1.4](#14-generated-artefacts)). CI runs the hooks, fails on `git diff --exit-code .adonisjs` (T-ARCH-016, proposed in §1.4) and then runs `pnpm typecheck`, so a stale registry fails CI, not production.
+
+### 4.4 How `openapi.yaml` is maintained
+
+`docs/openapi.yaml` is the foundation contract with the per-PR rule [Confirmed, product owner 2026-09-26; `openapi.yaml` `info.description`]: an operation moves from `x-pending-operations` into `paths` in the PR that implements it. The developer workflow for one endpoint:
+
+1. Add the operation to `openapi.yaml` first (request schema, 2xx schema, the problem codes it can return), removing its ID from `x-pending-operations`.
+2. Write the Vine validator and transformer to match; the validator's allowlist equals the request schema, and the transformer's keys equal the response schema's `required` list.
+3. Declare the route with `.as('<operationId>')`.
+4. Write the functional tests; T-API-001 validates every response they receive.
+5. If the operation adds a problem code, add it to `app/exceptions/problem_codes.ts`, the `ProblemCode` enum and the [06 §5.2](06-api-design.md#52-codes) table in the same PR (ADR-0018 decision 2).
+
+### 4.5 CI checks that keep the contracts in sync
+
+| Check                 | Mechanism                                                                                                                                                                                                                                                                                  | Fails when                                                                                                                           | Test ID                                               |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------- |
+| Spec lint             | An OpenAPI 3.1 linter over `docs/openapi.yaml` (Redocly CLI was used in the B2 review [Assumption: tool choice confirmed in 10])                                                                                                                                                           | Invalid schema, broken `$ref`, duplicate `operationId`                                                                               | part of T-API-001 (proposed split in 10)              |
+| Route parity          | `scripts/check_api_contract.ts` reads `node ace list:routes --json` (the flag exists [Verified-repo `@adonisjs/core` 7.3.4 `build/commands/list/routes.d.ts`]) and the parsed spec; compares method + pattern + route name for every `/api/v1` route with `paths` ∪ `x-pending-operations` | A route without an operation, an operation without a route, a route name that is not its `operationId`, a pending ID that has a path | proposed check (ID assigned by 10)                    |
+| Response validation   | A Japa functional-suite hook validates every `/api/v1` response (status, headers `Content-Type`, body) against the operation's schema; the validator library is chosen in 10 [Assumption]                                                                                                  | Any undocumented field, missing field, wrong type, non-problem error body                                                            | T-API-001                                             |
+| Problem-code registry | Unit test asserts that the keys of `PROBLEM_CODES` equal the `ProblemCode` enum of the spec, that statuses and titles equal a snapshot reviewed with the 06 §5.2 table, and greps `app/**` for `new DomainError('<code>'` of codes marked `proposed`                                       | Code in one place only; a proposed code thrown before adoption                                                                       | code registry test (proposed in ADR-0018; ID from 10) |
+| Pagination meta       | Functional assertion on every list endpoint                                                                                                                                                                                                                                                | `metadata` key present or meta not one of the two shapes                                                                             | T-API-008 (proposed in 06)                            |
+| Unknown fields        | Generic suite over every mutation                                                                                                                                                                                                                                                          | An extra top-level or nested key is accepted                                                                                         | T-API-002 (proposed in 06), T-SEC-003                 |
+| Typed client          | `pnpm typecheck` (server and `inertia/` projects) after the assembler hooks ran                                                                                                                                                                                                            | A transformer or validator change breaks a page's call or prop use                                                                   | typecheck gate (10)                                   |
+
+Trade-off: the parity script and response hook are about 150 lines the team owns, instead of a generator; the benefit is a spec that states intent (06) rather than mirroring whatever the code happens to return. If spec drift causes more than 3 T-API-001 failures in one milestone, [ADR-0004](adr/0004-inertia-reads-json-api-writes.md) says to evaluate `@foadonis/openapi`.
+
+### 4.6 Current code → target (serialization and contracts)
+
+| Area / file(s)                         | Today [Verified-repo]                                                                                                        | Decision                                                                  | Reason (RF)                                                                    | Milestone       |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------ | --------------- |
+| `providers/api_provider.ts`            | Registers `ctx.serialize()` with `wrap = 'data'`; `definePaginationMetaData` accepts only Lucid paginator keys (lines 10-35) | **Keep, fix**: PageMeta/CursorMeta, `meta`                                | Meets the envelope rule once the meta fix lands (06 §3.4)                      | M1              |
+| `app/transformers/shop_transformer.ts` | `pick` of `ownerId`, `email`, `phone`, camelCase keys (lines 6-19)                                                           | **Rewrite** per audience under `shops/`                                   | Exposes owner identity and personal contact (RF-36)                            | M0 (remove), M2 |
+| `app/transformers/user_transformer.ts` | `pick` of `id`, `fullName`, `email`, `createdAt`, `updatedAt`, `initials`                                                    | **Rewrite** as `identity/user_self_transformer.ts` with `snake_case` keys | Casing rule (OD-13); the shared prop must not carry more than the header needs | M1              |
+| `adonisrc.ts` hooks                    | `indexEntities({ transformers: { enabled: true, withSharedProps: true } })`, `indexPages`, `generateRegistry()`              | **Keep**; add `validationErrorType`                                       | Hooks already produce `Data.*` and the registry                                | M0              |
+| Route names                            | Controller-derived names such as `new_account.store`, `session.store`                                                        | **Rewrite**: API names = `operationId`                                    | One name across route, client, spec and tests                                  | M1 onward       |
+| `docs/openapi.yaml`                    | Foundation contract with `x-foundation-scope` and `x-pending-operations`                                                     | **Keep**                                                                  | Already the per-PR model                                                       | —               |
+| Contract CI                            | None (no CI, RF-09)                                                                                                          | **New**: §4.5 checks                                                      | RF-09                                                                          | M0              |
+
+---
+
+## 5. Error handling
+
+The error contract (problem+json shape, the code list, which failure maps to which code) is decided in [ADR-0018](adr/0018-error-contract-problem-details.md) and specified in [06 §5](06-api-design.md#5-error-contract). This section fixes the classes, files and handler logic that implement it, so that **one** translation point exists and a raw message can never reach a client (RF-36).
+
+### 5.1 Error taxonomy
+
+| Class (file)                                                                                                      | Thrown by                                                                                                                                                                                                                                                    | Carries                                                                                  | Rendered as                                                                                                                  | Reported                                                           |
+| ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `DomainError` (`app/exceptions/domain_error.ts`)                                                                  | Actions, policies, middleware (`seller_context`, the account check of [07 §3.3](07-security-threat-model-and-permissions.md#33-the-per-request-account-check-and-the-suspension-decision))                                                                   | A `ProblemCode`, optional `detail`, `errors[]`, extension members, `retry_after_seconds` | Its registry status and title                                                                                                | Log at `info` (4xx) only                                           |
+| `InvalidStateTransition extends DomainError` (same file)                                                          | `assertTransition()` in `app/modules/<module>/domain/*_machine.ts`, or `casStatus` when zero rows changed ([05 §9.1](05-order-payment-and-inventory-lifecycles.md#91-never-hold-a-database-transaction-open-while-calling-a-gateway) and the CAS rule of 05) | `current_status`, `allowed_events`                                                       | 409 `INVALID_STATE_TRANSITION`                                                                                               | `info`                                                             |
+| `VersionConflict extends DomainError`                                                                             | Version CAS with zero rows on an `If-Match` request                                                                                                                                                                                                          | `current` (the resource through the read transformer)                                    | 412 `VERSION_CONFLICT`                                                                                                       | `info`                                                             |
+| `ProviderUnavailableError`, `ProviderTimeoutError`, `ProviderRejectedError` (`app/exceptions/provider_errors.ts`) | Port adapters ([03 §11.2](03-system-architecture.md#112-paymentprovider-design-sketch))                                                                                                                                                                      | Provider name, operation, no provider payload                                            | Unavailable and timeout: 503 `PROVIDER_UNAVAILABLE`, `Retry-After: 30`; rejected must be caught by the action, otherwise 500 | `warn` (unavailable, timeout); `error` if a rejected error escapes |
+| `ProviderCallInsideTransaction` (`app/exceptions/programming_errors.ts`)                                          | Every port adapter when the `withTx` async-context mark is set ([03 §8.3](03-system-architecture.md#83-operations-that-must-not-hold-a-transaction)); throws in **every** environment                                                                        | Adapter and method name                                                                  | 500 `INTERNAL`                                                                                                               | `error` + error tracker                                            |
+| `InvariantViolation` (same file)                                                                                  | Code paths that "cannot happen" (an allocation that does not sum, an unknown enum from the database)                                                                                                                                                         | A developer message (never sent)                                                         | 500 `INTERNAL`                                                                                                               | `error` + error tracker                                            |
+| `RangeError` from `parseInt8`                                                                                     | The guarded int8 parser of [04 §18.4](04-domain-model-and-data-dictionary.md#184-lucid-and-node-postgres-bigint-handling)                                                                                                                                    | —                                                                                        | 500 `INTERNAL`                                                                                                               | `error` + error tracker                                            |
+| Framework and database errors (Vine, auth, Shield, body parser, router, `pg` `DatabaseError`)                     | Libraries                                                                                                                                                                                                                                                    | Library fields                                                                           | Per the [06 §5.3](06-api-design.md#53-domain-errors-to-http) table, detected as in §5.4                                      | 4xx `info`; unmapped `error`                                       |
+
+Rules:
+
+- Actions throw `DomainError` with a registry code; they never build HTTP responses, never catch errors to return `{ message }`, and never put an exception's `message` into `detail`. Today's `SessionController.store` catches everything and returns only for one error class, so other failures produce an empty response (RF-12) [Verified-repo `app/controllers/session_controller.ts:14-24`]; that pattern is **deleted**: controllers have no `try`/`catch` except around a provider call whose outcome they record.
+- `detail` is written for the end user in plain English, may quote the shop or product name the caller already sees, and never repeats submitted personal data (ADR-0018 decision 5).
+- Money in `detail` goes through the shared server formatter only ([06 §3.3](06-api-design.md#33-money-time-identifiers-enums)); clients act on machine members.
+- A job handler throws the same classes; the job runner (§3) classifies them as retryable (`ProviderUnavailableError`, `ProviderTimeoutError`, SQLSTATE `40P01` and `55P03`) or permanent (everything else), following the error classes of [03 §10.4](03-system-architecture.md#104-retries-backoff-and-error-classes).
+
+### 5.2 The code registry
+
+```ts
+// app/exceptions/problem_codes.ts — design sketch (plain TypeScript, no framework API)
+export const PROBLEM_CODES = {
+  VALIDATION_FAILED: { status: 422, title: 'Validation failed' },
+  NOT_FOUND: { status: 404, title: 'Not found' },
+  INVALID_STATE_TRANSITION: {
+    status: 409,
+    title: 'Action not allowed in the current state',
+  },
+  IDEMPOTENCY_KEY_REQUIRED: { status: 400, title: 'Idempotency key required' },
+  PROVIDER_UNAVAILABLE: {
+    status: 503,
+    title: 'Service temporarily unavailable',
+  },
+  INTERNAL: { status: 500, title: 'Something went wrong' },
+  // … every other code of 06 §5.2 …
+  MALFORMED_REQUEST: {
+    status: 400,
+    title: 'Malformed request',
+    proposed: true,
+  },
+  CHECKOUT_DISABLED: {
+    status: 503,
+    title: 'Checkout is paused',
+    proposed: true,
+  },
+} as const satisfies Record<string, { status: number; title: string; proposed?: true }>
+
+export type ProblemCode = keyof typeof PROBLEM_CODES
+export const problemType = (code: ProblemCode) =>
+  `https://dripnepal.com/problems/${code.toLowerCase().replaceAll('_', '-')}` // domain [Assumption], ADR-0018
+```
+
+- The list is exactly the [06 §5.2](06-api-design.md#52-codes) table. `IDEMPOTENCY_KEY_REQUIRED` is **400** (canon §6.6 "428? use 400", resolved in 06).
+- `MALFORMED_REQUEST` and `CHECKOUT_DISABLED` are present with `proposed: true` (proposed; not yet in canon §6.6) so the registry matches the `ProblemCode` enum of `openapi.yaml`, which already lists both as proposed. Until the product owner adopts them, code must not throw them: the kill switch throws `new DomainError('PROVIDER_UNAVAILABLE', { detail: maintenanceBanner })` with no `Retry-After`, and a non-JSON content type maps to 422 `VALIDATION_FAILED` with `errors[0].code = 'unsupported_media_type'` (06 §3.5), an unparseable JSON body to the same code and status with `errors[0].code = 'malformed_json'` (item code proposed here; 06 §5.3 names no item code). The registry test (§4.5) enforces this.
+- Titles are fixed English strings in R1; the R2 Nepali UI translates by `code` on the client (ADR-0018 decision 6), so titles never need i18n on the server.
+
+### 5.3 `DomainError`
+
+```ts
+// app/exceptions/domain_error.ts
+// design sketch: Exception (message, { code, status, cause }) verified in @poppinss/exception 1.2.3,
+// re-exported by @adonisjs/core/exceptions in core 7.3.4
+import { Exception } from '@adonisjs/core/exceptions'
+import { PROBLEM_CODES, type ProblemCode } from '#exceptions/problem_codes'
+
+export type ProblemErrorItem = {
+  field: string | null
+  code: string
+  message: string
+} & Record<string, string | number | null>
+
+type DomainErrorOptions = {
+  detail?: string
+  errors?: ProblemErrorItem[]
+  extensions?: Record<string, unknown> // snake_case members listed in 06 §5.1 only
+  retryAfterSeconds?: number
+  cause?: unknown
+}
+
+export class DomainError extends Exception {
+  readonly problemCode: ProblemCode
+  constructor(
+    code: ProblemCode,
+    readonly options: DomainErrorOptions = {}
+  ) {
+    // the message is the fixed title: safe even if some path logs or renders error.message
+    super(PROBLEM_CODES[code].title, {
+      code,
+      status: PROBLEM_CODES[code].status,
+      cause: options.cause,
+    })
+    this.problemCode = code
+  }
+}
+
+export class InvalidStateTransition extends DomainError {
+  constructor(currentStatus: string, allowedEvents: string[]) {
+    super('INVALID_STATE_TRANSITION', {
+      extensions: {
+        current_status: currentStatus,
+        allowed_events: allowedEvents,
+      },
+    })
+  }
+}
+```
+
+`DomainError` deliberately has **no** `handle()` method. The installed handler calls `error.handle()` before anything else when an error defines one [Verified-repo `@adonisjs/http-server` 9.1.0 `build/index.js:328`], which would bypass the single translation point.
+
+### 5.4 The exception handler
+
+`app/exceptions/handler.ts` is **rewritten** in M0. Its `handle()` checks whether the request is an API request **before** calling `super.handle()`, for two reasons found in the installed source: `super.handle()` hands self-handling exceptions (for example Shield's `E_BAD_CSRF_TOKEN`, which flashes and redirects back [Verified-doc gt/adonis_stack.md]) to their own `handle()` first, and the default JSON renderer sends `error.message` (ADR-0018 alternatives).
+
+Detection mechanism per source (the resulting code and status are the [06 §5.3](06-api-design.md#53-domain-errors-to-http) table; not repeated here):
+
+| Source                       | Detected by                                                                                                                                                             | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DomainError` and subclasses | `instanceof DomainError`                                                                                                                                                | Status and title from the registry; `options` fill `detail`, `errors`, extensions                                                                                                                                                                                                                                                                                                                                                                 |
+| Vine validation              | `error.code === 'E_VALIDATION_ERROR'`, `error.messages` as `SimpleError[]` (`field`, `message`, `rule`) [Verified-repo `@vinejs/vine` 4.4.0 `build/src/types.d.ts:601`] | `rule` becomes `errors[].code`; `unknown_field` items come from the `rejectUnknownFields` step (06 §3.5)                                                                                                                                                                                                                                                                                                                                          |
+| Auth guard                   | `error.code === 'E_UNAUTHORIZED_ACCESS'`                                                                                                                                |                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Shield CSRF                  | `error.code === 'E_BAD_CSRF_TOKEN'`                                                                                                                                     | 403 `FORBIDDEN` [Assumption in ADR-0018; 07 confirms]                                                                                                                                                                                                                                                                                                                                                                                             |
+| Router                       | `error.code === 'E_ROUTE_NOT_FOUND'` [Verified-repo `@adonisjs/http-server` 9.1.0 errors export]                                                                        |                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Body parser                  | `error.status === 413`; JSON syntax error by its error code, confirmed in M0 against `@adonisjs/bodyparser` 11.0.4 [Assumption]                                         |                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Limiter                      | The limiter's throttle exception (`@adonisjs/limiter` 3.0.1 is not installed; pseudocode)                                                                               | Sets `Retry-After` and `retry_after_seconds`                                                                                                                                                                                                                                                                                                                                                                                                      |
+| PostgreSQL                   | `error.code` is a SQLSTATE and `error.constraint` names the constraint (`pg` `DatabaseError` fields [Verified-repo `pg-protocol` `dist/messages.d.ts:34-53`])           | `23505`/`23514` only through the constraint allowlist `app/exceptions/constraint_map.ts`; `55P03` and `40P01` as in 06 §5.3; `22001` (value too long) carries no constraint name, so it maps to 422 `VALIDATION_FAILED` with one `field: null` item and a `warn` log naming the column, because it means a validator no longer mirrors a length rule (ADR-0018 decision 4, 06 §9.2 "never a 500 from SQLSTATE 22001"); everything else `INTERNAL` |
+| Provider errors              | `instanceof ProviderUnavailableError` / `ProviderTimeoutError`                                                                                                          | 503 with `Retry-After: 30`                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| Anything else                | Fallthrough                                                                                                                                                             | 500 `INTERNAL`, generic `detail` "Something went wrong. Quote the request ID to support."                                                                                                                                                                                                                                                                                                                                                         |
+
+The constraint allowlist maps a constraint name from [04a](04a-data-dictionary-tables.md) to a field and item code, for example `shops_slug_key` → field `slug`, item code `unique`; `product_variants_shop_sku_key` → field `sku` (the row index is not in the PostgreSQL error, so actions pre-check duplicates inside one request), item code `unique`, `payments_refunded_le_captured_check` → 422 `REFUND_EXCEEDS_REFUNDABLE`. `users_email_key` is **not** on it: `signUp` catches that violation itself and answers the neutral 202, so the handler can never become an account-existence oracle (RF-38).
+
+```ts
+// app/exceptions/handler.ts
+// design sketch: ExceptionHandler members (handle, report, statusPages, renderStatusPages, debug)
+// verified in @adonisjs/http-server 9.1.0 build/src/exception_handler.d.ts; response.header/status/send,
+// response.redirect().withQs().toPath(), session.flash() and ctx.logger.log(level, obj, msg) verified;
+// toProblem() and reportToTracker() are this document's plain TypeScript (unit-tested)
+import app from '@adonisjs/core/services/app'
+import { type HttpContext, ExceptionHandler } from '@adonisjs/core/http'
+import type { StatusPageRange, StatusPageRenderer } from '@adonisjs/core/types/http'
+import { toProblem } from '#exceptions/to_problem'
+import { reportToTracker } from '#exceptions/tracker'
+
+const isApiRequest = (ctx: HttpContext) => ctx.request.url().startsWith('/api/')
+const CLIENT_BUG_CODES = new Set([
+  'IDEMPOTENCY_KEY_REQUIRED',
+  'IDEMPOTENCY_KEY_REUSED',
+  'PRECONDITION_REQUIRED',
+])
+
+export default class HttpExceptionHandler extends ExceptionHandler {
+  protected debug = app.inDev // Youch pages only on a developer machine, never in test or staging
+  protected renderStatusPages = !app.inDev
+
+  protected statusPages: Record<StatusPageRange, StatusPageRenderer> = {
+    '403': (_, { inertia }) => inertia.render('errors/forbidden', {}), // PermissionDenied (08 §8.5)
+    '404': (_, { inertia }) => inertia.render('errors/not_found', {}),
+    '500..599': (_, { inertia, request }) =>
+      inertia.render('errors/server_error', {
+        request_id: request.id() ?? null,
+      }),
+  }
+
+  async handle(error: unknown, ctx: HttpContext) {
+    const problem = toProblem(error, ctx.request.id() ?? 'unavailable')
+    if (isApiRequest(ctx)) {
+      if (problem.retry_after_seconds !== undefined) {
+        ctx.response.header('Retry-After', String(problem.retry_after_seconds))
+      }
+      return ctx.response
+        .status(problem.status)
+        .header('Content-Type', 'application/problem+json; charset=utf-8')
+        .header('Cache-Control', 'no-store')
+        .send(problem)
+    }
+    // Pages: the account-status middleware (07 §3.3) throws these on GET visits too
+    if (problem.code === 'UNAUTHENTICATED') {
+      return ctx.response.redirect().withQs({ return_to: ctx.request.url() }).toPath('/login')
+    }
+    if (problem.code === 'ACCOUNT_SUSPENDED') {
+      ctx.session.flash('notice', 'account_suspended') // AC-J00-03: notice shown on /login
+      return ctx.response.redirect().toPath('/login')
+    }
+    if (problem.code === 'MFA_REQUIRED') {
+      return ctx.response.redirect().withQs({ return_to: ctx.request.url() }).toPath('/mfa')
+    }
+    return super.handle(error, ctx) // status pages, Inertia protocol, framework self-handling
+  }
+
+  // Replaces the base report(), which logs 4xx at `warn`, skips 400/401/422 and adds an
+  // `x-request-id` key [Verified-repo http-server 9.1.0 build/index.js:83-138, 301-315]
+  async report(error: unknown, ctx: HttpContext) {
+    const problem = toProblem(error, ctx.request.id() ?? 'unavailable')
+    const level =
+      problem.status >= 500 ? 'error' : CLIENT_BUG_CODES.has(problem.code) ? 'warn' : 'info'
+    ctx.logger.log(
+      level,
+      {
+        problem_code: problem.code,
+        status: problem.status,
+        ...(level === 'error' ? { err: error } : {}),
+      },
+      'http.error'
+    )
+    if (problem.status >= 500) await reportToTracker(error, ctx) // §5.6
+  }
+}
+```
+
+- The server calls `report()` and then `handle()` for every error thrown by middleware or a route [Verified-repo `@adonisjs/http-server` 9.1.0 `define_config-Cuq6_o-f.js:5221-5224`], so `toProblem()` runs twice on a failure path. It is a pure function over the error; the duplicate work is accepted for a simpler handler.
+- `toProblem()` decides the status from the source table above, never from `error.status`: the base `toHttpError()` sets `status = 500` on any error that has none [Verified-repo same package, `build/index.js:112-117`], which would log an allow-listed unique violation (a 422) as a 5xx.
+- `Content-Type` survives `send()` because the body writer sets it with `safeHeader` only when none is set [Verified-repo `@adonisjs/http-server` 9.1.0 `define_config-Cuq6_o-f.js:3907`].
+- `toProblem()` never reads `error.message` except from a `DomainError` (whose message is the title). A unit test feeds it one instance of every source above and asserts the exact body.
+- `debug` becomes `app.inDev` instead of `!app.inProduction` (today [Verified-repo `app/exceptions/handler.ts`]) so the test suite exercises the production rendering path; `renderStatusPages` follows. Trade-off: developers see the generic page when running tests, which is the point of the RF-36 test.
+- Log levels follow ADR-0018 decision 5 (4xx `info`, 5xx `error`), with `warn` for the client-bug codes of [08 §8.3](08-ui-ux-and-design-system.md#83-errors), so a broken client shows up in log queries before users report it.
+
+**Pages (Inertia).** Page routes only render GETs (writes go through `/api/v1`, ADR-0004). `DomainError('NOT_FOUND')` has status 404 and renders `errors/not_found`, identical for a missing and a foreign resource ([08 §8.5](08-ui-ux-and-design-system.md#85-permission-denied-404-versus-403)). `FORBIDDEN` renders `errors/forbidden`, a page added in M1 (08 §8.3) that shows `PermissionDenied` inside the seller or admin layout chosen from the URL. `UNAUTHENTICATED`, `ACCOUNT_SUSPENDED` and `MFA_REQUIRED` become redirects, not pages, as 08 §8.3 and AC-J00-02/AC-J00-03 require; `return_to` is validated by the login page (RF-37). Inertia's 409 asset-version response is protocol, not an error. Client-side handling of problem+json (the `apiCall()` wrapper and `useApiMutation`) is §13 and [08 §8.3](08-ui-ux-and-design-system.md#83-errors).
+
+```mermaid
+flowchart TD
+  E[Error thrown] --> RP[report: toProblem, one pino line, tracker if 5xx]
+  RP --> A{URL starts with /api/}
+  A -- yes --> P[toProblem: DomainError, framework code, SQLSTATE allowlist, provider class]
+  P --> U{Mapped?}
+  U -- yes --> R1[problem+json with request_id, no-store]
+  U -- no --> I[500 INTERNAL, generic detail]
+  A -- no --> C{UNAUTHENTICATED, ACCOUNT_SUSPENDED or MFA_REQUIRED}
+  C -- yes --> RD[Redirect to /login or /mfa]
+  C -- no --> S[super.handle]
+  S --> SP[Status page: not_found, forbidden, server_error with request_id]
+```
+
+### 5.5 Never leak raw messages (RF-36)
+
+The mechanism is structural, not a configuration flag: the API path never calls the default renderer, `toProblem()` builds `detail` only from registry titles or `DomainError` options, and unmapped database errors become `INTERNAL`. Verified by the RF-36 test proposed in ADR-0018 (with `NODE_ENV=production`, a forced unique violation outside the allowlist returns 500 `INTERNAL` with no SQL, constraint name or stack, and the log line carries the full error with the same `request_id`) and by T-SEC-027 (proposed in 07). The page path is covered by `renderStatusPages`: `errors/server_error` receives only `request_id`.
+
+### 5.6 Reporting to the error tracker
+
+- **What is sent.** 5xx responses, programming errors (`ProviderCallInsideTransaction`, `InvariantViolation`, `RangeError` from the int8 parser), job failures that reach the dead-letter queue `dlq.<queue>`, and the client-bug codes `IDEMPOTENCY_KEY_REQUIRED`, `IDEMPOTENCY_KEY_REUSED`, `PRECONDITION_REQUIRED` reported by the browser wrapper (08 §8.3). 4xx outcomes are logged, not tracked. The pino line comes from the `report()` override of §5.4 (the base `ignoreStatuses` and `shouldReport` are no longer used); the tracker filter is in `reportToTracker`. Worker failures reach the tracker from the job runner (§3) when a job is dead-lettered, and uncaught exceptions in either process through the SDK's default handlers, which covers NFR-OBS-002 "from `web` and `worker`".
+- **Tags.** `request_id`, route pattern (`ctx.route?.pattern` [Verified-repo `RouteJSON` has `pattern` and `name`]), route name (`operationId`), `APP_RELEASE`, `APP_ENV`, and a user reference `HMAC-SHA256(HMAC_KEY_TELEMETRY, user_id)` because NFR-OBS-002 requires hashed user identifiers.
+- **Scrubbing in code** (`beforeSend`, pseudocode): drop request bodies, cookies, query strings and all headers except `user-agent` and `x-request-id`; drop `event.user` fields other than the hashed ID; apply the §7.2 key list to `extra` and breadcrumbs. Project-level scrubbing settings, retention and region are configured in [11](11-deployment-and-operations.md) ([07 §5.8](07-security-threat-model-and-permissions.md#58-analytics-and-third-party-processors)).
+- **Tool and wiring.** Sentry is the provisional tool: the Developer plan allows 5k errors per month as published on 2026-09-25 [Verified-doc <https://sentry.io/pricing/>, accessed 2026-09-25], `@sentry/node` 11.0.0 supports Node 24 and must be initialised from an instrument file loaded with `node --import` [Verified-doc <https://docs.sentry.io/platforms/javascript/guides/node/>, accessed 2026-09-25], and no AdonisJS guide exists, so DripNepal writes its own small wiring instead of adopting a community wrapper [Verified-doc gt/infra_ops.md]: `bin/instrument.ts` (pseudocode) calls `Sentry.init` with `SENTRY_DSN`, `APP_RELEASE`, `APP_ENV` and the `beforeSend` below, and is loaded with `node --import` before `bin/server.js` and before `ace jobs:work`; `app/exceptions/tracker.ts` holds `reportToTracker`. The file names are additions to the §1.2 tree. If `@adonisjs/otel` is adopted, Sentry runs in its custom OpenTelemetry setup mode so spans are not duplicated [Verified-doc <https://docs.sentry.io/platforms/javascript/guides/node/opentelemetry/custom-setup/>, accessed 2026-09-25]. Tool choice and alert routing belong to 11. With `SENTRY_DSN` unset (development, test) `reportToTracker` is a no-op.
+- **Browser errors.** `@sentry/react` 11.0.0 (peer React 17–19 [Verified-doc gt/infra_ops.md]) reports uncaught render errors from an error boundary and the client-bug codes; it never receives props. Adding it requires the CSP `connect-src` entry owned by [07](07-security-threat-model-and-permissions.md).
+
+Verification: a unit test of `reportToTracker` with a fake transport asserts that a 422 sends nothing, a 500 sends one event with the tags above, and the event contains no body, cookie or email (proposed check, ID from 10).
+
+### 5.7 Current code → target (errors)
+
+| Area / file(s)                                                                                                                                          | Today [Verified-repo]                                                                                                                         | Decision                                                                 | Reason (RF)                                       | Milestone              |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------- | ---------------------- |
+| `app/exceptions/handler.ts`                                                                                                                             | Default `handle`/`report`; status pages for 404 and 5xx only in production; `debug = !app.inProduction`; JSON errors use the default renderer | **Rewrite** (§5.4)                                                       | Raw 5xx messages in JSON (RF-36); no problem+json | M0                     |
+| `app/exceptions/domain_error.ts`, `problem_codes.ts`, `to_problem.ts`, `constraint_map.ts`, `provider_errors.ts`, `programming_errors.ts`, `tracker.ts` | Absent                                                                                                                                        | **New**                                                                  | ADR-0018                                          | M0                     |
+| `inertia/pages/errors/not_found.tsx`, `server_error.tsx`                                                                                                | Exist; rendered by `statusPages`                                                                                                              | **Keep, fix**: `server_error` shows `request_id`; add `errors/forbidden` | AC-J00-01 reference on error screens              | M0 / M1                |
+| `app/controllers/session_controller.ts:14-24`                                                                                                           | `try`/`catch` returns a page only for invalid credentials, swallows the rest                                                                  | **Delete** (login moves to `/api/v1/auth/session`)                       | Blank responses (RF-12)                           | M1                     |
+| Error tracker                                                                                                                                           | None                                                                                                                                          | **New**: `bin/instrument.ts` + `reportToTracker`                         | NFR-OBS-002                                       | M0 (hook), M7 (alerts) |
+
+---
+
+## 6. Configuration validation and secrets
+
+Three kinds of configuration exist, and each has one home ([03 §12.6](03-system-architecture.md#126-configuration-and-secrets)):
+
+| Kind                                                          | Home                                                                                            | Changed by                            | Takes effect    |
+| ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------- | --------------- |
+| Infrastructure settings and secrets                           | Environment variables validated by `start/env.ts`                                               | Deploy (host secret store)            | Process restart |
+| Business settings (`checkout_enabled`, SLAs, windows, limits) | `platform_settings` rows, keys and defaults owned by [04a §15.1](04a-data-dictionary-tables.md) | Admin through `updatePlatformSetting` | Next request    |
+| Fixed rules (state machines, value lists, limits in code)     | TypeScript constants in the owning module's `domain/`                                           | Pull request                          | Deploy          |
+
+A value moves between kinds only by an ADR or a 04a change; in particular nothing in `platform_settings` is read from the environment, and no secret is ever a platform setting.
+
+### 6.1 Variable catalogue
+
+"Prod" means `APP_ENV=production`; staging runs the same image with `NODE_ENV=production` and `APP_ENV=staging` ([03 §5.2](03-system-architecture.md#52-environments)). Names not already in the repository or in 03/07 are proposed here. Secret variables are declared with `Env.schema.secret`, so `env.get()` returns a `Secret` whose `toJSON()` and `toString()` print a redacted keyword and whose value needs `.release()` [Verified-repo `@poppinss/utils` 7.0.1 `build/src/secret.d.ts`], which keeps an accidental `logger.info({ config })` harmless.
+
+| Variable                                                                                                    | Validation                                                                                                                                                                   | Dev (`.env.example`)                         | Test (`.env.test`)              | Staging / prod                                                                                                                                                                                | Secret | Origin                                                                   |
+| ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------ |
+| `NODE_ENV`                                                                                                  | enum `development`, `test`, `production`                                                                                                                                     | `development`                                | `test`                          | `production`                                                                                                                                                                                  | no     | repo                                                                     |
+| `APP_ENV`                                                                                                   | enum `development`, `test`, `staging`, `production`; must agree with `NODE_ENV` (§6.2)                                                                                       | `development`                                | `test`                          | `staging` / `production`                                                                                                                                                                      | no     | proposed                                                                 |
+| `TZ`                                                                                                        | enum `UTC` only                                                                                                                                                              | `UTC`                                        | `UTC`                           | `UTC`                                                                                                                                                                                         | no     | repo (`.env.example`), added to schema                                   |
+| `HOST`, `PORT`                                                                                              | host; number                                                                                                                                                                 | `localhost`, `3333`                          | same                            | host values                                                                                                                                                                                   | no     | repo                                                                     |
+| `LOG_LEVEL`                                                                                                 | enum `trace` … `fatal`, `silent`; staging and prod refuse `trace` and `debug`                                                                                                | `info`                                       | `silent` or `warn`              | `info`                                                                                                                                                                                        | no     | repo (was free string)                                                   |
+| `APP_NAME`                                                                                                  | string, `^[a-z0-9-]{3,32}$`                                                                                                                                                  | `dripnepal`                                  | `dripnepal-test`                | `dripnepal`                                                                                                                                                                                   | no     | read today by `config/logger.ts:21` but missing from the schema (RF-33)  |
+| `APP_KEY`, `APP_KEY_PREVIOUS`                                                                               | secret, at least 32 characters; previous optional, used for rotation (07 §5.5)                                                                                               | generated by `node ace generate:key`         | fixed test value                | host secret store                                                                                                                                                                             | yes    | repo; `APP_KEY_PREVIOUS` proposed                                        |
+| `APP_URL`                                                                                                   | URL; `https://` in staging and prod                                                                                                                                          | `http://localhost:3333`                      | same                            | public origin                                                                                                                                                                                 | no     | repo                                                                     |
+| `APP_RELEASE`                                                                                               | optional string (commit SHA); required in staging and prod                                                                                                                   | unset                                        | unset                           | set by the image build                                                                                                                                                                        | no     | proposed (release tag, NFR-OBS-002)                                      |
+| `SESSION_DRIVER`                                                                                            | enum `database`, `memory` (the `cookie` value is removed, RF-04); staging and prod require `database`                                                                        | `database`                                   | `memory`                        | `database`                                                                                                                                                                                    | no     | repo, narrowed                                                           |
+| `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_DATABASE`                                                              | host; number; string; string, must end in `_test` under `NODE_ENV=test` (RF-32)                                                                                              | docker-compose values                        | `dripnepal_test`                | runtime role `dripnepal_app`; the release step injects the migrator role's values into the same names ([07 §4.10](07-security-threat-model-and-permissions.md#410-database-roles-and-grants)) | no     | repo                                                                     |
+| `DB_PASSWORD`                                                                                               | secret                                                                                                                                                                       | docker-compose value                         | same                            | host secret store                                                                                                                                                                             | yes    | repo (now secret)                                                        |
+| `DB_SSL`, `DB_SSL_CA`                                                                                       | boolean; optional PEM string; prod requires `DB_SSL=true` (07 §5.5)                                                                                                          | `false`                                      | `false`                         | `true` + provider CA [Assumption; 11 confirms the CA]                                                                                                                                         | no     | proposed (RF-31)                                                         |
+| `DB_POOL_MAX`                                                                                               | number 1–20                                                                                                                                                                  | `8`                                          | `4`                             | web 8, worker 4 ([03 §3.4](03-system-architecture.md#34-postgresql-layout-and-connection-budget))                                                                                             | no     | proposed                                                                 |
+| `DB_DEBUG`                                                                                                  | optional boolean, default `false`; refused as `true` in staging and prod                                                                                                     | `false`                                      | `false`                         | `false`                                                                                                                                                                                       | no     | proposed (RF-26)                                                         |
+| `S3_ENDPOINT`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_BUCKET_PRIVATE`, `S3_BUCKET_PUBLIC`, `MEDIA_PUBLIC_URL` | URL; string (`auto` for R2 [Verified-doc gt/adonis_stack.md, Drive R2 example]); string; bucket names per [03 §3.5](03-system-architecture.md#35-object-storage-layout); URL | MinIO container values [Assumption, 03 §3.5] | MinIO service                   | R2 values                                                                                                                                                                                     | no     | proposed                                                                 |
+| `S3_SECRET_ACCESS_KEY`                                                                                      | secret                                                                                                                                                                       | MinIO value                                  | MinIO value                     | host secret store                                                                                                                                                                             | yes    | proposed                                                                 |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `MAIL_FROM_ADDRESS`, `MAIL_FROM_NAME`                            | host; number; optional string; email; string                                                                                                                                 | Mailpit from `docker-compose.yml`            | JSON/fake transport, SMTP unset | provider values ([Open OD-08])                                                                                                                                                                | no     | proposed                                                                 |
+| `SMTP_PASSWORD`                                                                                             | secret, optional outside staging and prod                                                                                                                                    | unset                                        | unset                           | host secret store                                                                                                                                                                             | yes    | proposed; replaced by a provider API key if OD-08 picks an API transport |
+| `PAYMENT_PROVIDER`                                                                                          | enum `fake`, `none`, `khalti`, `esewa`; staging and prod refuse `fake`                                                                                                       | `fake`                                       | `fake`                          | `none` in R1 (COD only), the chosen gateway in R1.1 ([Open OD-03])                                                                                                                            | no     | 03 §11.6; value `none` proposed                                          |
+| `KHALTI_BASE_URL`, `KHALTI_SECRET_KEY`                                                                      | URL; secret; required when `PAYMENT_PROVIDER=khalti`                                                                                                                         | unset                                        | unset                           | sandbox in staging, live in prod                                                                                                                                                              | key    | proposed                                                                 |
+| `ESEWA_FORM_URL`, `ESEWA_STATUS_URL`, `ESEWA_PRODUCT_CODE`, `ESEWA_SECRET_KEY`                              | URL; URL; string; secret; required when `PAYMENT_PROVIDER=esewa`                                                                                                             | unset                                        | unset                           | sandbox in staging, live in prod                                                                                                                                                              | key    | proposed                                                                 |
+| `ALLOW_LIVE_PAYMENT_HOSTS`                                                                                  | optional boolean; the explicit override of [03 §11.6](03-system-architecture.md#116-sandbox-and-production-configuration) for non-production                                 | unset                                        | unset                           | unset                                                                                                                                                                                         | no     | proposed                                                                 |
+| `DATA_ENCRYPTION_KEYS`, `DATA_ENCRYPTION_ACTIVE_KEY_ID`                                                     | secret key ring `<id>:<base64 of 32 bytes>[,…]`; active ID must be in the ring                                                                                               | a development ring (not a real key)          | fixed test ring                 | host secret store + offline copy ([07 §5.5](07-security-threat-model-and-permissions.md#55-encryption))                                                                                       | yes    | 07 §5.5 (ring format proposed here)                                      |
+| `BLIND_INDEX_KEY`, `HMAC_KEY_LIMITER`, `HMAC_KEY_AUDIT_IP`                                                  | secret, base64 of 32 bytes; in staging and prod all distinct from each other and from `APP_KEY`                                                                              | development values                           | fixed test values               | host secret store                                                                                                                                                                             | yes    | 07 §5.5 (names proposed there, adopted here)                             |
+| `HMAC_KEY_TELEMETRY`                                                                                        | secret, base64 of 32 bytes; required when `SENTRY_DSN` is set                                                                                                                | unset                                        | unset                           | host secret store                                                                                                                                                                             | yes    | proposed (hashed user reference, §5.6)                                   |
+| `SENTRY_DSN`                                                                                                | optional URL; required in prod                                                                                                                                               | unset                                        | unset                           | error-tracker project DSN ([11](11-deployment-and-operations.md))                                                                                                                             | low    | proposed                                                                 |
+
+Deliberately **not** in the schema: `SHADCNUIKIT_API_KEY` lives on a developer machine only and never in CI, the image or `.env.example` (R-15, [07 §5.6](07-security-threat-model-and-permissions.md#56-secret-management-and-rotation)); `OTEL_EXPORTER_OTLP_ENDPOINT` and `OTEL_EXPORTER_OTLP_HEADERS` are read by `@adonisjs/otel` itself if it is adopted [Verified-doc gt/infra_ops.md], and are added to the schema in the same PR; worker concurrency, heartbeat URL and trusted-proxy ranges are introduced with their owning work in [11](11-deployment-and-operations.md) and follow the same rules.
+
+### 6.2 `start/env.ts`: schema plus a cross-field policy
+
+The schema validates each variable on its own; a second step validates combinations. Both run when `start/env.ts` is first imported, which happens before any provider boots, for `node bin/server.js`, the worker, `node ace …` and the test runner alike.
+
+```ts
+// start/env.ts
+// design sketch: Env.create, Env.schema.{string,number,boolean,enum,secret} with .optional()
+// and .optionalWhen(fn), custom (key, value) => T validators, and errors.E_INVALID_ENV_VARIABLES
+// (with a writable `help`) are verified in @adonisjs/env 7.0.0 and @poppinss/validator-lite 2.1.2
+import { Env, errors } from '@adonisjs/core/env'
+import { Secret } from '@adonisjs/core/helpers'
+
+const key32 = (key: string, value?: string) => {
+  if (!value || Buffer.from(value, 'base64').length !== 32) {
+    throw new Error(`${key} must be base64 of exactly 32 bytes`)
+  }
+  return new Secret(value)
+}
+
+const keyRing = (key: string, value?: string) => {
+  const ring = new Map<string, string>()
+  for (const entry of (value ?? '').split(',').filter(Boolean)) {
+    const [id, material] = entry.split(':')
+    key32(`${key}[${id}]`, material)
+    ring.set(id, material)
+  }
+  if (ring.size === 0) throw new Error(`${key} must contain at least one <id>:<base64> entry`)
+  return new Secret(ring)
+}
+
+const provider = () => process.env.PAYMENT_PROVIDER // .env files are already in process.env when validators run
+
+const env = await Env.create(new URL('../', import.meta.url), {
+  NODE_ENV: Env.schema.enum(['development', 'production', 'test'] as const),
+  APP_ENV: Env.schema.enum(['development', 'test', 'staging', 'production'] as const),
+  TZ: Env.schema.enum(['UTC'] as const),
+  HOST: Env.schema.string({ format: 'host' }),
+  PORT: Env.schema.number(),
+  LOG_LEVEL: Env.schema.enum([
+    'trace',
+    'debug',
+    'info',
+    'warn',
+    'error',
+    'fatal',
+    'silent',
+  ] as const),
+  APP_NAME: Env.schema.string(),
+  APP_KEY: Env.schema.secret(),
+  APP_KEY_PREVIOUS: Env.schema.secret.optional(),
+  APP_URL: Env.schema.string({ format: 'url', tld: false }),
+  APP_RELEASE: Env.schema.string.optional(),
+  SESSION_DRIVER: Env.schema.enum(['database', 'memory'] as const),
+  DB_HOST: Env.schema.string({ format: 'host' }),
+  DB_PORT: Env.schema.number(),
+  DB_USER: Env.schema.string(),
+  DB_PASSWORD: Env.schema.secret(),
+  DB_DATABASE: Env.schema.string(),
+  DB_SSL: Env.schema.boolean(),
+  DB_SSL_CA: Env.schema.string.optional(),
+  DB_POOL_MAX: Env.schema.number(),
+  DB_DEBUG: Env.schema.boolean.optional(),
+  // … S3_*, SMTP_*, MAIL_FROM_*, SENTRY_DSN as in §6.1 …
+  PAYMENT_PROVIDER: Env.schema.enum(['fake', 'none', 'khalti', 'esewa'] as const),
+  KHALTI_BASE_URL: Env.schema.string.optionalWhen(() => provider() !== 'khalti', { format: 'url' }),
+  KHALTI_SECRET_KEY: Env.schema.secret.optionalWhen(() => provider() !== 'khalti'),
+  ESEWA_PRODUCT_CODE: Env.schema.string.optionalWhen(() => provider() !== 'esewa'),
+  ESEWA_SECRET_KEY: Env.schema.secret.optionalWhen(() => provider() !== 'esewa'),
+  DATA_ENCRYPTION_KEYS: keyRing,
+  DATA_ENCRYPTION_ACTIVE_KEY_ID: Env.schema.string(),
+  BLIND_INDEX_KEY: key32,
+  HMAC_KEY_LIMITER: key32,
+  HMAC_KEY_AUDIT_IP: key32,
+})
+
+// Cross-field policy: every violation is collected, then boot stops with one readable list.
+const violations: string[] = []
+const appEnv = env.get('APP_ENV')
+const deployed = appEnv === 'staging' || appEnv === 'production'
+if ((env.get('NODE_ENV') === 'production') !== deployed) {
+  violations.push('NODE_ENV=production exactly when APP_ENV is staging or production')
+}
+if (deployed && env.get('SESSION_DRIVER') !== 'database')
+  violations.push('SESSION_DRIVER must be database')
+if (deployed && ['trace', 'debug'].includes(env.get('LOG_LEVEL')))
+  violations.push('LOG_LEVEL too verbose')
+if (deployed && env.get('DB_DEBUG')) violations.push('DB_DEBUG must be off')
+if (appEnv === 'production' && !env.get('DB_SSL')) violations.push('DB_SSL must be true')
+if (env.get('NODE_ENV') === 'test' && !env.get('DB_DATABASE').endsWith('_test')) {
+  violations.push('DB_DATABASE must end in _test when NODE_ENV=test (RF-32)')
+}
+if (!env.get('DATA_ENCRYPTION_KEYS').release().has(env.get('DATA_ENCRYPTION_ACTIVE_KEY_ID'))) {
+  violations.push('DATA_ENCRYPTION_ACTIVE_KEY_ID is not in DATA_ENCRYPTION_KEYS')
+}
+// … staging/prod: https APP_URL, APP_RELEASE and (prod) SENTRY_DSN present, PAYMENT_PROVIDER not fake,
+// distinct keys, payment host rules of 03 §11.6 (below) …
+if (violations.length > 0) {
+  const error = new errors.E_INVALID_ENV_VARIABLES()
+  error.help = violations.map((v) => `- ${v}`).join('\n')
+  throw error
+}
+
+export default env
+```
+
+Payment host rules (03 §11.6), implemented in the same policy block: in production, refuse `dev.khalti.com`, the `rc-epay`/`rc` eSewa hosts, the eSewa UAT product code `EPAYTEST` and the UAT secret published on eSewa's test-credentials page (compared by SHA-256, so the literal is not repeated in code) [Verified-doc <https://developer.esewa.com.np/pages/Test-credentials>, accessed 2026-09-25]; outside production, refuse the live hosts unless `ALLOW_LIVE_PAYMENT_HOSTS=true`.
+
+Why this shape: the installed validator runs every schema function, collects all messages and throws one `E_INVALID_ENV_VARIABLES` whose `help` lists them [Verified-repo `@adonisjs/env` 7.0.0 `build/index.js:122-146`], so an operator sees every missing variable in one failed start, not one per attempt. The cross-field block reuses that error class for the same reason. Trade-off: a slightly longer `start/env.ts`; in return, a misconfigured deploy fails in the release step's first `node ace` command instead of at the first checkout.
+
+### 6.3 Where configuration is read
+
+- **Only `config/*.ts` and `start/*.ts` call `env.get()`.** Application code imports typed config (`config/payments.ts`, `config/storage.ts`, `config/mail.ts`, `config/crypto.ts`) or receives values through the container. `no-restricted-imports` bans `#start/env` in `app/**` and `inertia/**`, and `process.env` is banned everywhere except `start/env.ts` and `bin/*` (`no-restricted-properties`). Trade-off: one more file per concern; benefit: a variable's consumers are greppable, and tests override config, not the environment.
+- **Nothing from the environment reaches the browser** except values deliberately placed in a shared prop by a transformer (for example the public media origin). Vite `import.meta.env` is limited to build-time flags; secrets never use a `VITE_` prefix.
+- **Database connection** (`config/database.ts`): `ssl` is `false` or `{ rejectUnauthorized: true, ca }` (Lucid's pg connection type accepts `boolean | ConnectionOptions` [Verified-repo `@adonisjs/lucid` 22.4.2 `build/src/types/database.d.ts:390`]); `pool.max` from `DB_POOL_MAX`; `debug` from `DB_DEBUG` (§7.6). Timeouts have two layers. Inside transactions, `withTx` and `jobTx` set `lock_timeout` and `statement_timeout` per transaction (5 s/10 s for requests, 10 s/30 s for jobs; [§3.8](#38-actions-transactions-and-the-helpers-platform-owns), [03 §8](03-system-architecture.md#8-transactions)). Outside transactions, the web process's connection sets the same request values as connection parameters (`statement_timeout: 10_000`, `lock_timeout: 5_000`, accepted by `pg` 8.22.0 [Verified-repo `pg/lib/connection-parameters.js:121-122`]), which is what [03 §3.4](03-system-architecture.md#34-postgresql-layout-and-connection-budget) "every pool sets" means for a page read. They are applied only when `app.getEnvironment() === 'web'` [Verified-repo `@adonisjs/application` `AppEnvironments`], so `node ace migration:run` and the worker (both `console`) are not cut off at 10 s; migrations set their own `lock_timeout` ([04 §20](04-domain-model-and-data-dictionary.md#20-migration-from-the-current-schema)).
+- **Encryption config** (`config/encryption.ts`) keeps the `aes256gcm` driver and builds `keys: [APP_KEY, APP_KEY_PREVIOUS?]`: the first key encrypts and all keys decrypt, which is the rotation procedure of 07 §5.5 [Verified-repo `config/encryption.ts`, 07 §5.5]. The field-encryption key ring is separate and read only by the field encrypter in `app/modules/platform/crypto/` (the §2 allowlist).
+
+### 6.4 Environment files policy
+
+| File                   | Committed | Contents                                                                                                                           | Loaded when                                                                                                                                                              |
+| ---------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `.env.example`         | yes       | Every schema key with a working **development** value or an empty value; no real secret; comments name the owning section          | Never read by the app (`Env.create` does not load it [Verified-repo `@adonisjs/env` 7.0.0 loader, `loadExampleFile` defaults to false]); copied to `.env` by a developer |
+| `.env.test`            | yes       | Non-secret test overrides: `NODE_ENV=test`, `APP_ENV=test`, `SESSION_DRIVER=memory`, `DB_DATABASE=dripnepal_test`, test key values | `NODE_ENV=test` (`.env.<NODE_ENV>` is loaded [Verified-repo loader])                                                                                                     |
+| `.env`                 | **no**    | A developer's local values                                                                                                         | Development                                                                                                                                                              |
+| any other `.env*`      | **no**    | —                                                                                                                                  | `.gitignore` becomes `.env*` with `!.env.example` and `!.env.test`; today `.env.production` would not be ignored (TM-25, RF-33)                                          |
+| Staging and production | —         | No file in the image. Values are injected by the host secret store as process environment                                          | Real environment variables win over files [Verified-repo `@adonisjs/env` 7.0.0 `EnvProcessor`: a value already in `process.env` is kept]                                 |
+
+Load order matters for tests. With `NODE_ENV=test` the loader reads `.env.test.local`, `.env.test` and then `.env`, skipping `.env.local`, and the first file to define a key wins, while a real environment variable beats every file [Verified-repo `@adonisjs/env` 7.0.0 `build/loader-KsjAiZ3e.js:28-72`, `build/index.js:150-160`]. A developer's `.env` therefore still fills any key `.env.test` leaves out, so `.env.test` sets every key whose test value must differ (`APP_ENV`, `DB_DATABASE`, `SESSION_DRIVER` and the test key values), and the `_test` suffix rule of §6.2 catches the one mistake that would hit the development database.
+
+Production values, the secret store and rotation runbooks are documented in [11](11-deployment-and-operations.md), never in `.env.example`. A CI step compares the keys of `.env.example` with the schema keys and fails on a difference (proposed check, ID from 10); the secret scanner of [07 §7.2](07-security-threat-model-and-permissions.md) covers the committed files (T-SEC-025, proposed in 07).
+
+### 6.5 Fail-fast on boot
+
+Beyond variable validation, these checks stop a bad build or configuration before it accepts traffic or jobs:
+
+1. **Boot refusal:** environment policy violations (§6.2) throw from `start/env.ts`, so the web process, the worker and every `node ace` command in the release step exit non-zero.
+2. **Boot refusal (staging and prod):** the configured SSR bundle is missing ([03 §3.3](03-system-architecture.md#33-inside-the-web-process), RF-08); the web process checks for the file at boot rather than failing on the first page load.
+3. **Readiness failure:** the int8 parser preload (`start/database_types.ts`, [04 §18.4](04-domain-model-and-data-dictionary.md#184-lucid-and-node-postgres-bigint-handling)) is not registered. `GET /health/ready` adds one custom check next to Lucid's `DbCheck` (03 §12.8) that runs `SELECT 9007199254740991::int8` and fails unless it reads back a `number`, so the proxy never routes traffic to that instance.
+4. **CI failure, not a boot check:** the committed `database/schema.ts` differs from the migrations (T-ARCH-010, proposed in 04), because `schema:generate` does not run in production [Verified-doc gt/adonis_stack.md].
+
+Verified by T-SEC-025 (proposed in 07: production refuses a missing or default `APP_KEY` and a `NODE_ENV` other than `production`) and a table-driven unit test of the policy block that starts with a valid set and breaks one rule per case (proposed check, ID from 10).
+
+### 6.6 Current code → target (configuration)
+
+| Area / file(s)           | Today [Verified-repo]                                                                                                                               | Decision                                                | Reason (RF)               | Milestone |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- | ------------------------- | --------- |
+| `start/env.ts`           | 12 keys; no `APP_NAME` though `config/logger.ts` reads it; `SESSION_DRIVER` allows `cookie`; `DB_PASSWORD` is a plain string; no cross-field checks | **Rewrite** (§6.2)                                      | RF-33, RF-04, RF-31       | M0        |
+| `.env.example`           | `TZ`, `PORT`, `HOST`, `NODE_ENV`, `LOG_LEVEL`, `APP_KEY`, `APP_URL`, `SESSION_DRIVER=cookie`; no `DB_*`                                             | **Rewrite**: every schema key, development values       | RF-33 (fresh clone fails) | M0        |
+| `.env.test`              | Only `SESSION_DRIVER=memory`; tests hit the development database                                                                                    | **Fix**: separate test database and keys                | RF-32                     | M0        |
+| `.gitignore` (env block) | Ignores `.env`, `.env.local`, `.env.production.local`, `.env.development.local`                                                                     | **Fix**: `.env*` except `.env.example`, `.env.test`     | RF-33, TM-25              | M0        |
+| `config/database.ts`     | No `ssl` or pool; `debug: app.inDev`; `prettyPrintDebugQueries: true`; unused sqlite connection                                                     | **Rewrite** (§6.3, §7.6); sqlite removal is §10 (RF-39) | RF-26, RF-31, RF-39       | M0        |
+| `config/encryption.ts`   | `aes256gcm` with `keys: [APP_KEY]`                                                                                                                  | **Keep, fix**: add `APP_KEY_PREVIOUS` for rotation      | 07 §5.5                   | M0        |
+
+---
+
+## 7. Structured logging
+
+Logs are pino JSON lines on stdout, one event per line, shipped and retained as [11](11-deployment-and-operations.md) decides. Every line carries `request_id` (NFR-OBS-001), and redaction is a backstop behind the rule that code logs identifiers, not data.
+
+### 7.1 Logger configuration
+
+```ts
+// config/logger.ts
+// design sketch: defineConfig, targets(), targets.file() and syncDestination verified in
+// @adonisjs/logger 7.1.1; `redact` and `base` come from pino 10.3.1 LoggerOptions
+// (LoggerConfig = Omit<LoggerOptions, 'browser' | 'timestamp'> & { destination?, … })
+import env from '#start/env'
+import app from '@adonisjs/core/services/app'
+import { defineConfig, syncDestination, targets } from '@adonisjs/core/logger'
+import { REDACT_PATHS } from '#config/log_redaction'
+
+const loggerConfig = defineConfig({
+  default: 'app',
+  loggers: {
+    app: {
+      enabled: true,
+      name: env.get('APP_NAME'),
+      level: env.get('LOG_LEVEL'),
+      redact: { paths: REDACT_PATHS, censor: '[redacted]' },
+      base: {
+        pid: process.pid,
+        process: app.getEnvironment(), // 'web' for the server, 'console' for jobs:work and ace
+        release: env.get('APP_RELEASE') ?? null,
+      },
+      // development only: a synchronous pino-pretty stream; when `destination` is set the
+      // adapter ignores `transport` [Verified-repo @adonisjs/logger 7.1.1 build/logger-DFa9WtFu.js:9-11]
+      destination: app.inDev ? await syncDestination() : undefined,
+      transport: {
+        targets: targets()
+          .push(targets.file({ destination: 1 }))
+          .toArray(),
+      },
+    },
+  },
+})
+export default loggerConfig
+```
+
+- `pino-pretty` (a devDependency) is loaded only in development through `syncDestination()`; test, staging and production write raw JSON lines to stdout (file descriptor 1) for the log shipper.
+- `base` replaces pino's default `pid`/`hostname` bindings: every line carries `process` and `release` (`APP_RELEASE`), so one query separates the web process from the worker and one deploy from the next; the job runner adds `queue` (§7.4). The host name comes from the shipper's metadata, not from the line.
+- Redaction is configured once, at initialisation, from a constant list; pino requires paths not to come from user input [Verified-repo `pino` 10.3.1 `docs/redaction.md`, "Safety"].
+
+### 7.2 Redaction paths
+
+Pino redaction is path-based and case-sensitive, with `*` as a one-level wildcard [Verified-repo `pino` 10.3.1 `docs/redaction.md`]. It cannot find a key at an arbitrary depth, so the list covers the shapes the code actually logs (top level and one level down), and the conventions in §7.3 keep logged objects shallow. The list implements [07 TM-27](07-security-threat-model-and-permissions.md#tm-27-sensitive-data-in-logs-analytics-and-errors) and canon §11, plus the additions marked.
+
+| Group                 | Paths (`config/log_redaction.ts`)                                                                                                                                                                                                                                                                                     | Why                                                                                                           |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Credentials           | `password`, `*.password`, `current_password`, `*.current_password`, `new_password`, `*.new_password`, `totp_code`, `*.totp_code`, `secret`, `*.secret`                                                                                                                                                                | 07 TM-27, canon §11                                                                                           |
+| Tokens                | `token`, `*.token`, `token_enc`, `*.token_enc`, `idempotency_key` (added: a replayable key for 24–72 h)                                                                                                                                                                                                               | 07 TM-27; 06 §7                                                                                               |
+| HTTP headers          | `headers.authorization`, `headers.cookie`, `headers["set-cookie"]`, `headers["x-xsrf-token"]`, `headers["x-csrf-token"]`, `headers["idempotency-key"]` (added), the same six under `req.` and `res.`, and the bare keys `authorization`, `*.authorization`, `cookie`, `*.cookie` that 07 TM-27 lists without a prefix | 07 TM-27; outbound adapters log `headers`, and Khalti's `Authorization: Key …` must never appear              |
+| Personal contact      | `email`, `*.email`, `phone`, `*.phone`, `address`, `*.address`, `recipient`, `*.recipient`, `recipient_phone`, `*.recipient_phone`                                                                                                                                                                                    | 07 TM-27; canon §11 lists `email (hash)`: no email or its hash is logged, the `user_id` suffices              |
+| Money-routing secrets | `account_number`, `*.account_number`, `recipient_details`, `*.recipient_details` (added), `*_enc` values are never logged by rule (§7.3)                                                                                                                                                                              | 07 TM-27, 07 §5.5                                                                                             |
+| Database errors       | `err.detail`, `error.detail`                                                                                                                                                                                                                                                                                          | PostgreSQL puts key values in `detail` ("Key (email)=(…) already exists"); 07 TM-27's `*.detail` of pg errors |
+
+Trade-off: wildcard paths cost more than exact paths; pino's documentation reports about 2 % overhead for exact paths and a "non-trivial cost" (50 % in one benchmark) for wildcards [Verified-repo `pino` 10.3.1 `docs/redaction.md`, "Overhead"]. With at most one wildcard level and short lines this is accepted at launch volumes; the load test (T-PERF-001) runs with the production logger configuration so the cost is measured, not assumed.
+
+Verified by the log-redaction unit test of NFR-SEC-010 and T-SEC-027 (proposed in 07): a logger writing to an in-memory stream receives an object with every path above filled in, and the output contains none of the values; a forced unique violation logs `err.detail` as `[redacted]`.
+
+### 7.3 What to log and what never to log
+
+- **Event lines** use a stable dotted `msg` (`order.placed`, `payment.lookup`, `job.failed`), `snake_case` fields, and identifiers only: `user_id`, `shop_id`, `order_id`, `shop_order_number`, `payment_id`, `job_id`, `queue`. Durations are `duration_ms`. Money is logged as `amount_minor` integers only where an operator needs it.
+- **Never logged**, whatever the level: request or response bodies, Inertia props or page objects, Lucid model instances (`logger.info(product)`), job payloads (`data`), provider request or response bodies (the durable copy lives in `provider_events`, [04a §12.3](04a-data-dictionary-tables.md)), any `*_enc` column, decrypted values, free text typed by users (notes, messages: Personal per [04 §19.1](04-domain-model-and-data-dictionary.md#191-handling-rules-per-sensitivity-class)), environment or config objects.
+- **Levels:** `error` needs a human (5xx, programming errors, dead-lettered jobs); `warn` is degraded but handled (provider retry, lock timeout, 4xx that suggests a client bug); `info` is the access line and business events; `debug` and `trace` are for development only (§6.2 refuses them in staging and prod).
+- **Validation failures** are logged as the list of failing field names and rule names, never the submitted values (Vine's `SimpleError` can carry `meta`; the handler drops it).
+
+### 7.4 Request ID propagation
+
+The ID format and its uses are owned by [06 §11](06-api-design.md#11-correlation-and-request-ids); this is the mechanism.
+
+1. **Sanitize first.** The installed `request.id()` returns the incoming `x-request-id` header **unchecked** and only generates one when the header is absent, and `ctx.logger` is created as `logger.child({ request_id: request.id() })` before any middleware runs [Verified-repo `@adonisjs/http-server` 9.1.0 `define_config-Cuq6_o-f.js:1680-1687, 5428-5429`]. So `app/middleware/request_context_middleware.ts` (the §3.4 row 1 middleware) is registered as the **first server** middleware, not in the router stack, because router middleware never runs for a URL without a route and that 404 would echo an unchecked ID: if the header fails `^[A-Za-z0-9-]{8,64}$`, it replaces the header with a fresh UUID and rebuilds `ctx.logger` from the root logger. The response echo reads the same request header [Verified-repo `setRequestId`, same file line 4183], so the echoed value, the log bindings and `problem.request_id` agree. Verified by T-API-005 (proposed in 06: echo and body `request_id` equality), extended with an invalid incoming ID.
+2. **Container.** The existing `ContainerBindingsMiddleware` binds `Logger` to `ctx.logger` [Verified-repo `app/middleware/container_bindings_middleware.ts`]; it is **kept** and runs after step 1, so any service resolved from the container logs with the request's ID.
+3. **Actions and modules** receive the request ID in the context they already get for audit rows (§3) and log through the injected logger; nothing reads a global.
+4. **`useAsyncLocalStorage` stays `false`** [Verified-repo `config/app.ts`]. Explicit passing works the same in the worker, where no `HttpContext` exists, and keeps actions testable without a fake request. The one `AsyncLocalStorage` in the codebase remains the `withTx` transaction mark ([03 §8.3](03-system-architecture.md#83-operations-that-must-not-hold-a-transaction)). Trade-off: a parameter on every action signature; revisit only if a library needs `HttpContext.get()`.
+5. **Jobs.** Every payload carries `request_id` and `causation_id` ([03 §10.8](03-system-architecture.md#108-observability-of-jobs)); scheduled jobs get a fresh UUID. The job runner wraps each attempt in `logger.child({ request_id, causation_id, queue, job_id, attempt })` and writes one `job.attempt` line with `outcome` and `duration_ms`. Queue names are the underscore names of [03 §9](03-system-architecture.md#9-asynchronous-work) (`orders.acceptance_timeout`, `notifications.dispatch`, `notifications.send_email`, `platform.retention_purge`, `platform.purge_idempotency_keys`); dead-letter queues are `dlq.<queue>`; `payments.*` and `inventory.expire_reservations` handlers live in the `orders` module (03 §9 hosting rule), which does not change their log fields.
+6. **Outbound calls.** Port adapters take `CallContext.requestId` ([03 §11.2](03-system-architecture.md#112-paymentprovider-design-sketch)) and log one `provider.call` line: provider, operation, HTTP status, normalized outcome, `duration_ms`; never headers or bodies.
+
+```ts
+// app/middleware/request_context_middleware.ts
+// design sketch: ctx.request.header(), ctx.request.request (IncomingMessage), ctx.logger (a public
+// Logger property) and logger.child() verified in @adonisjs/http-server 9.1.0 and @adonisjs/logger 7.1.1
+import { randomUUID } from 'node:crypto'
+import logger from '@adonisjs/core/services/logger'
+import type { HttpContext } from '@adonisjs/core/http'
+import type { NextFn } from '@adonisjs/core/types/http'
+
+const ALLOWED = /^[A-Za-z0-9-]{8,64}$/
+
+export default class RequestContextMiddleware {
+  handle(ctx: HttpContext, next: NextFn) {
+    const incoming = ctx.request.header('x-request-id')
+    if (!incoming || !ALLOWED.test(incoming)) {
+      const id = randomUUID()
+      ctx.request.request.headers['x-request-id'] = id
+      ctx.logger = logger.child({ request_id: id })
+    }
+    return next()
+  }
+}
+```
+
+**Access line.** `app/middleware/access_log_middleware.ts`, the second server middleware, writes one `http.request` line per request at `info` with `method`, `route` (the pattern from `ctx.route?.pattern`, never the raw URL, so tokens in paths such as `/invitations/{token}` stay out of logs [03 §12.1](03-system-architecture.md#121-request-ids-and-logging)), `route_name` (the `operationId` for API routes), `status`, `duration_ms`, `user_id` when authenticated, `ip_hash` (`HMAC_KEY_AUDIT_IP`, the same hash as `audit_logs.ip_hash`) and `cf_ray`. It reads `ctx.response.getStatus()` after `await next()`, which is final even when a route throws: the server's middleware runner attaches the error responder at every level, so the exception handler has already written the error response when `next()` resolves [Verified-repo `@poppinss/middleware` 3.2.7 `build/index.js:29-33`, `@adonisjs/http-server` 9.1.0 `define_config-Cuq6_o-f.js:5278-5282`]. For a URL without a route, `route` is `null`.
+
+### 7.5 No `console.*` (RF-26)
+
+- `inertia/layouts/root_layout.tsx:28` logs every page prop, including emails and phones, with `console.info({ pageProps: rest })` [Verified-repo]; the line is **deleted** in M0.
+- ESLint `no-console: 'error'` applies to `app/**`, `start/**`, `config/**`, `providers/**`, `commands/**` and `inertia/**`. Ace commands print through the command's own logger, and server code through the injected pino logger. The browser has no logging of data at all; debugging uses React devtools in development only (RF-30 keeps them out of the production bundle).
+- SSR rendering errors are reported through the server logger with the request ID, never by printing the page object.
+
+Verified by the lint gate (ESLint in CI and pre-commit, §11) and a test that renders one page per surface in SSR and asserts that nothing was written to `console` (proposed check, ID from 10).
+
+### 7.6 SQL debug off by default
+
+- `config/database.ts` sets `debug: env.get('DB_DEBUG', false)` and `prettyPrintDebugQueries: false`, replacing `debug: app.inDev` and `prettyPrintDebugQueries: true` [Verified-repo `config/database.ts:10,60`] (RF-26: development SQL logs printed bindings, including password hashes).
+- When a developer turns `DB_DEBUG` on, a listener on Lucid's `db:query` event logs `sql`, `duration` and `inTransaction` and **drops `bindings`** (the event carries them [Verified-repo `@adonisjs/lucid` 22.4.2 `build/src/types/database.d.ts:636-645`]). §6.2 refuses `DB_DEBUG=true` in staging and prod.
+- Slow-query visibility in production comes from PostgreSQL's own statistics and the traces of `@adonisjs/otel` if adopted ([11](11-deployment-and-operations.md)), never from binding-level logs.
+
+### 7.7 Current code → target (logging)
+
+| Area / file(s)                                                             | Today [Verified-repo]                                                                    | Decision                                                                           | Reason (RF)                   | Milestone |
+| -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | ----------------------------- | --------- |
+| `config/logger.ts`                                                         | Name from undeclared `APP_NAME`, level from `LOG_LEVEL`, stdout file target, no `redact` | **Fix**: redaction, pretty only in dev, base bindings                              | RF-26, RF-33                  | M0        |
+| `config/log_redaction.ts`                                                  | Absent                                                                                   | **New** (§7.2)                                                                     | NFR-SEC-010, TM-27            | M0        |
+| `config/app.ts`                                                            | `generateRequestId: true`, `useAsyncLocalStorage: false`                                 | **Keep** (both meet the standard)                                                  | §7.4                          | —         |
+| `app/middleware/request_context_middleware.ts`, `access_log_middleware.ts` | Absent; incoming `X-Request-Id` trusted as is                                            | **New**                                                                            | 06 §11 allowlist              | M0        |
+| `app/middleware/container_bindings_middleware.ts`                          | Binds `HttpContext` and `Logger` (`ctx.logger`)                                          | **Keep**                                                                           | Already the propagation point | —         |
+| `inertia/layouts/root_layout.tsx:28`                                       | `console.info({ pageProps: rest })`                                                      | **Delete** the line                                                                | RF-26                         | M0        |
+| `start/kernel.ts` (server stack)                                           | `container_bindings`, `static`, `cors`, `vite`, `inertia` middleware                     | **Fix**: prepend `request_context`, then `access_log`, before `container_bindings` | 06 §11, NFR-OBS-001           | M0        |
+| `eslint.config.js`                                                         | `configApp(...react)` with no `no-console` rule                                          | **Fix**: add `no-console` and the §6.3 import bans                                 | RF-26                         | M0        |
+| `config/database.ts` (debug)                                               | `debug: app.inDev`, `prettyPrintDebugQueries: true`                                      | **Fix** (§7.6)                                                                     | RF-26                         | M0        |
+
 ## Consistency notes for editor
 
 1. **Route file names (ADR-0004 decision 6, canon §6.3).** ADR-0004 and canon §6.3 (`start/routes/{storefront,account,seller,admin,api_v1,webhooks,health}.ts`) name a single `start/routes/api_v1.ts`, and canon has no `auth.ts` or `dev.ts`; §3.3 splits it into `start/routes/api_v1/{auth,public,customer,seller,admin}.ts`. The rule (unsafe methods only under `/api/v1/` and `webhooks.ts`) is unchanged; ADR-0004 can say "`start/routes/api_v1/`".
@@ -723,3 +1429,28 @@ JSON responses go through `ctx.serialize(...)`, registered by `providers/api_pro
 14. **`platform.retention_purge` host.** 03 §9 lists the Owner as `platform`, but the purge deletes rows owned by `identity`, `shops`, `cart` and `notifications`, which `platform` may not import (03 §4.1). §2.3 item 6 hosts the handler in `start/jobs.ts` and calls one `purge_expired` entry action per owning module; 03 §9's Owner cell for this queue should read "composite (`start/jobs.ts`), see 09 §2.3".
 15. **Field-decrypter allowlist.** 07 §5.5's allowlist table does not list the `data:reencrypt` command, although its key-rotation row requires it to decrypt every `*_enc` value. §2.4 adds `commands/data_reencrypt.ts` to the generated T-SEC-034 rule; 07 §5.5 should add the row.
 16. **03 §4.3 cruiser sketch.** 03 §4.3 still shows an earlier sketch (`no-cycles` with `from: {}`, `pricing` repeated in the `orders` extras, no notifications, migration or SDK rules). §2.4 is the owner of the config; 03 §4.3 can link to it instead of repeating it.
+
+**From part 2 (§4–§7):**
+
+17. **Tuyau route names = `operationId`s** (§4.3). This settles the assumption that [03 §6.5](03-system-architecture.md#65-reads-through-inertia-props-writes-through-apiv1-adr-0004) and [06 §10](06-api-design.md#10-versioning-and-compatibility) left to 09. Page-route names are left to §3. The editor should check that §3 and the §12 vertical slice use `.as('createProduct')`.
+18. **`errors[]` scope.** ADR-0018 decision 1 allows `errors[]` only on `VALIDATION_FAILED`. 06 §5.1 and `openapi.yaml` (`ProblemErrorItem`) also allow it on `INVALID_QUERY_PARAMETER`, `OUT_OF_STOCK`, `CART_CHANGED`, `DELIVERY_NOT_AVAILABLE` and `CONFLICT`. 09 follows 06, which owns the API conventions. The difference is confirmed in the current files.
+19. **SQLSTATE `22001`.** ADR-0018 decision 4 maps `22001` (value too long) on allow-listed constraints to field errors, but the [06 §5.3](06-api-design.md#53-domain-errors-to-http) table has no `22001` row. A `22001` error carries no constraint name, so "on allow-listed constraints" cannot be implemented literally. §5.4 maps every `22001` to 422 `VALIDATION_FAILED` with a `field: null` item and logs it at `warn` as validator drift, which also meets 06 §9.2 ("never a 500 from SQLSTATE 22001"). 06 §5.3 should add the row.
+20. **`IDEMPOTENCY_KEY_REQUIRED` = 400.** Canon §6.6 still says "428? use 400", and ADR-0018 decision 2 quotes that text. 09 uses 400, as 06, `openapi.yaml` and ADR-0004 do.
+21. **Proposed codes in the registry.** `CHECKOUT_DISABLED` and `MALFORMED_REQUEST` (proposed; not yet in canon §6.6) are in `PROBLEM_CODES` with `proposed: true`, so the registry matches the `ProblemCode` enum in `openapi.yaml`. A test forbids throwing them until they are adopted. The kill switch stays 503 `PROVIDER_UNAVAILABLE`.
+22. **Money type in port signatures.** The `PaymentProvider` sketch in [03 §11.2](03-system-architecture.md#112-paymentprovider-design-sketch) types `amountMinor` and `refundedMinor` as `bigint`. [04 §18.4](04-domain-model-and-data-dictionary.md#184-lucid-and-node-postgres-bigint-handling) (the owner) rejects `BigInt` in favour of a guarded `number`. 09's `moneyJson()` and the job and log conventions follow 04. 03 §11.2 should change to `number`. The difference is confirmed in the current files.
+23. **Request IDs are not validated by the framework.** 06 §11 and 03 §12.1 cite `generateRequestId: true` as the existing mechanism, but the installed `request.id()` trusts any incoming header, and `ctx.logger` is bound before middleware runs [Verified-repo]. §7.4 implements the "request-context middleware" that 06 §11 and 03 §12.1 describe as `request_context_middleware.ts`, registered as the first **server** middleware. §3.4 row 1 lists it in the router stack; it must be the server stack, because router middleware does not run for unmatched URLs (§3.4 should be corrected when splicing).
+24. **New environment variable names (proposed here).** The new names are `APP_ENV`, `APP_RELEASE`, `APP_KEY_PREVIOUS`, `DB_SSL`, `DB_SSL_CA`, `DB_POOL_MAX`, `DB_DEBUG`, `S3_*`, `MEDIA_PUBLIC_URL`, `SMTP_*`, `MAIL_FROM_*`, `KHALTI_*`, `ESEWA_*`, `ALLOW_LIVE_PAYMENT_HOSTS`, `HMAC_KEY_TELEMETRY` and `SENTRY_DSN`. The key-ring format of `DATA_ENCRYPTION_KEYS` is also proposed here. `APP_ENV` is needed because staging runs `NODE_ENV=production` (03 §5.2), while 03 §11.6 has to tell staging's sandbox hosts apart from production. 11 must document the production values. §6.1 adopts the names 07 §5.5 proposed (`DATA_ENCRYPTION_KEYS`, `DATA_ENCRYPTION_ACTIVE_KEY_ID`, `BLIND_INDEX_KEY`, `HMAC_KEY_LIMITER`, `HMAC_KEY_AUDIT_IP`).
+25. **`PAYMENT_PROVIDER=none`.** [03 §11.6](03-system-architecture.md#116-sandbox-and-production-configuration) lists only `fake` and the gateway names, and gives production "same provider, live". R1 launches with COD only, so §6.1 adds `none` for R1 production. This value is proposed.
+26. **`SESSION_DRIVER` loses `cookie`.** [Verified-repo] `.env.example` sets `cookie` and `start/env.ts` allows it. The target enum is `database`/`memory`, and staging and production require `database`. This follows ADR-0005 and RF-04.
+27. **Redaction list.** Canon §11 lists `email (hash)`. 09 logs neither the email nor its hash, because `user_id` is enough for correlation. 07 TM-27's list is fully covered. §7.2 adds `idempotency_key`, the `idempotency-key` header, `recipient_details` and the `req.`/`res.` header variants (proposed additions). Pino redaction cannot match keys at any depth, so 07's "`*.detail` of pg errors" is implemented as `err.detail`/`error.detail`, and the rule is that logged objects stay shallow.
+28. **Error-tracker scrubbing.** [07 §5.8](07-security-threat-model-and-permissions.md#58-analytics-and-third-party-processors) says "configuration in 11". §5.6 puts the code-side scrubbing (`beforeSend`) in 09. Project-level settings stay in 11. The hashed user reference uses the new `HMAC_KEY_TELEMETRY`. NFR-OBS-002 requires hashed identifiers, and reusing `HMAC_KEY_AUDIT_IP` would mix purposes.
+29. **Test IDs.** Only canon §12 IDs are cited without a mark: T-API-001, T-ARCH-001, T-SEC-003, T-PERF-001. The following are cited from their proposing documents and stay proposed: T-API-002, T-API-005 and T-API-008 (06); T-ARCH-016 (§1.4 of this document); T-SEC-025, T-SEC-027 and T-SEC-034 (07); T-ARCH-010 (04); the code-registry and RF-36 tests (ADR-0018). These new checks are named without IDs and are left for 10 to number: route parity, the `.env.example` ↔ schema key diff, the environment-policy table test, the `reportToTracker` filter test, and the SSR no-console test.
+30. **Committed generated folders and worker command.** §1.4 keeps `.adonisjs/` committed with T-ARCH-016 (proposed in §1.4), and §1.2 fixes the worker command as `node ace jobs:work`; §4.3 and §5.6 follow both.
+31. **Inertia list props.** Pages pass `{ items, meta }` explicitly instead of `Transformer.paginate()`. The installed serializer always emits `metadata` for paginators, including in Inertia props. 06 §3.4 covers only API responses.
+32. **Review items outside this part.** The `seller_context` middleware name (03 §3.3) is used in §5.1. The capture orchestration (`orders.applyPaymentOutcome` → `payments.applyProviderResult` + `inventory.commitHeld`), `sumMinor` placement, migrations and the vertical slice are §3, §8 and §12 topics, and this part does not restate them. 08 asks 09 to name the theme cookie, the permission-list page prop, the intent storage key and the catalog loader. Those belong to §13 and are not addressed here.
+33. **§3 overlaps to reconcile when splicing.** (a) §3.11 shows `toObject()` returning `this.pick(this.resource, [...])`, and §1.5 says the `pick()` pattern "meets the standard"; §4.1 rule 2 requires explicit `snake_case` keys because `pick()` returns camelCase model properties (OD-13). §3.11 should point to §4.1. (b) The §3.5 controller sketch uses `ctx.response.status(201)` and a plain return; §4.2 uses `ctx.response.created(...)` so the Tuyau registry records 201. (c) §3.4 row 1 put the request-context middleware in the router stack; §7.4 requires the server stack (fixed in §3.4 when the parts were merged) (note 23).
+34. **Files missing from the §1.2 tree.** This part adds `app/exceptions/{problem_codes.ts, to_problem.ts, provider_errors.ts, programming_errors.ts, tracker.ts}`, `app/middleware/{request_context_middleware.ts, access_log_middleware.ts}`, `config/log_redaction.ts`, `shared/api/{problem.ts, money.ts}`, `app/transformers/shared/wire.ts` and `bin/instrument.ts`. The §1.2 tree lists only `handler.ts`, `domain_error.ts` and `constraint_map.ts` under `app/exceptions/` and only `shared/{constants/, format/}`.
+35. **Handler log levels and page redirects.** The installed base `report()` logs 4xx at `warn` and skips 400, 401 and 422 [Verified-repo]; ADR-0018 decision 5 asks for 4xx `info` and 5xx `error`. §5.4 overrides `report()` to follow the ADR, with `warn` for the client-bug codes. §5.4 also turns `UNAUTHENTICATED`, `ACCOUNT_SUSPENDED` and `MFA_REQUIRED` on page requests into redirects: 07 §3.3's account-status middleware throws them on page visits, and 08 §8.3 and AC-J00-02/03 expect redirects.
+36. **Pool-level timeouts.** 03 §3.4 says every pool sets `statement_timeout` and `lock_timeout`; 03 §8 and §3.8 set them per transaction. §6.3 does both, and applies the connection-level values only in the `web` environment so migrations and the worker are not cut off at 10 s.
+37. **Gateway disable flag.** 03 §12.6 names "the gateway disable flag" as an environment variable. §6.1 has no separate flag: `PAYMENT_PROVIDER=none` (proposed, note 25) disables the gateway with a restart, and `checkout_enabled` in `platform_settings` is the runtime kill switch. 03 §12.6 can cite `PAYMENT_PROVIDER`.
+38. **Other proposals introduced in this part.** The `request_id` shared prop (§4.2), the `malformed_json` item code for unparseable JSON until `MALFORMED_REQUEST` is adopted (§5.2; 06 §5.3 names no item code), the `notice` flash key for the suspension redirect (§5.4), and the log `msg` names `http.request`, `http.error`, `job.attempt` and `provider.call` (§7).
