@@ -6,25 +6,27 @@ Reviewed: critic pass B4 part 1 (2026-09-26)
 
 Reviewed: critic pass B4 part 2 (2026-09-26)
 
+Reviewed: critic pass B4 part 3 (2026-09-26)
+
 This document defines how DripNepal looks and behaves on its three surfaces: the public storefront, the seller dashboard and the platform admin. It turns the product requirements ([01](01-product-requirements.md)), the journeys ([02](02-user-journeys-and-acceptance-criteria.md)), the frontend architecture ([03 §6](03-system-architecture.md#6-frontend-architecture)) and the API contract ([06](06-api-design.md)) into pages, components, tokens and layout rules that a team of one or two developers can build and review. It owns the decisions registered against it in [risks-and-open-decisions.md](risks-and-open-decisions.md): VX-12 (NPR display), the UI side of OD-22 and VX-13 (Shadcn UI Kit use), and the accessibility target. The component-copying policy itself is [ADR-0015](adr/0015-ui-foundation-shadcn-and-kit-policy.md).
 
 ## Reading guide
 
-| §   | Title                                                | Status in this draft                                                       |
-| --- | ---------------------------------------------------- | -------------------------------------------------------------------------- |
-| 1   | Design direction                                     | Written                                                                    |
-| 2   | Route map and information architecture               | Written                                                                    |
-| 3   | Screen inventory by release                          | Written                                                                    |
-| 4   | Component inventory                                  | Written                                                                    |
-| 5   | Design tokens                                        | Written                                                                    |
-| 6   | Responsive and layout rules                          | Written                                                                    |
-| 7   | Interaction patterns                                 | Written                                                                    |
-| 8   | States                                               | Written                                                                    |
-| 9   | Keyboard, focus and WCAG 2.2 AA acceptance checklist | Written                                                                    |
-| 10  | Mobile and slow-network behaviour                    | Written                                                                    |
-| 11  | Behaviour specifications                             | Planned (filters, variants, cart changes, checkout recovery, localization) |
-| 12  | Maintaining copied shadcn and kit components         | Planned                                                                    |
-| 13  | Current-UI remediation list                          | Planned (RF frontend findings to fixes and milestones)                     |
+| §   | Title                                                | Status in this draft |
+| --- | ---------------------------------------------------- | -------------------- |
+| 1   | Design direction                                     | Written              |
+| 2   | Route map and information architecture               | Written              |
+| 3   | Screen inventory by release                          | Written              |
+| 4   | Component inventory                                  | Written              |
+| 5   | Design tokens                                        | Written              |
+| 6   | Responsive and layout rules                          | Written              |
+| 7   | Interaction patterns                                 | Written              |
+| 8   | States                                               | Written              |
+| 9   | Keyboard, focus and WCAG 2.2 AA acceptance checklist | Written              |
+| 10  | Mobile and slow-network behaviour                    | Written              |
+| 11  | Behaviour specifications                             | Written              |
+| 12  | Maintaining copied shadcn and kit components         | Written              |
+| 13  | Current-UI remediation list                          | Written              |
 
 **Labels.** [Confirmed] product-owner answer (canon §1). [Verified-repo] read in the repository at the current branch head. [Verified-doc] read in a primary source or a reviewed DripNepal document. [Assumption] a working value that can change. [Open] waits for an OD-xx decision. [Verify-external] waits for a VX-xx check. External facts cite the research digests and were accessed 2026-09-25 unless stated otherwise.
 
@@ -226,7 +228,7 @@ The admin order and user detail routes are proposed here because `adminGetOrder`
 - **Storefront footer** (every page, same order): help and support (`/account/support`, or `/grievance` for guests), return and refund policy, legal disclosures (`/legal`, AC-FR-ADM-011-1), grievance officer (`/grievance`), terms and privacy. Help is always in the same relative position in the header menu and footer, and on the checkout steps, to meet WCAG 2.2 SC 3.2.6 Consistent Help [Verified-doc <https://www.w3.org/TR/WCAG22/>].
 - **Kill-switch banner** (FR-ADM-010): when `checkout_enabled = false`, every storefront page shows the `maintenance_banner` setting text (≤ 280 characters, [04a §15.1](04a-data-dictionary-tables.md#151-platform_settings)) directly below the header within 60 seconds of the change (AC-FR-ADM-010-1, AC-J00-11), and the checkout page shows it instead of the place-order action (AC-FR-CHK-001-4). If the setting is empty, a fixed default message from the message catalog is shown [Assumption]. Component: `SiteBanner`, §4.3.
 - **Seller dashboard**: sidebar with Overview, Orders, Products, Inventory, Returns, Support cases, Finance, Shipping, Staff, Settings, filtered by the member's permissions ([07 §4.3](07-security-threat-model-and-permissions.md#43-shop-roles-and-permissions)); shop switcher and account menu in the header; a "Help" link in the same header position on every dashboard page.
-- **Admin**: sidebar grouped as Queues (overview, shop applications, moderation, support cases, returns, refunds), Records (orders, users, shops, ledger, payouts, audit logs) and Platform (staff, settings, catalog). Links the staff member's role cannot use are hidden; the server still enforces every permission (UI hides, server decides; §11 when written).
+- **Admin**: sidebar grouped as Queues (overview, shop applications, moderation, support cases, returns, refunds), Records (orders, users, shops, ledger, payouts, audit logs) and Platform (staff, settings, catalog). Links the staff member's role cannot use are hidden; the server still enforces every permission (UI hides, server decides; §11.6).
 
 ## 3. Screen inventory by release
 
@@ -321,12 +323,12 @@ Canon §2 lists pages that exist today. Several are prototypes, not working feat
 | `inertia/pages/auth/login.tsx`, `signup.tsx`                                         | Labels not tied to inputs; "Email or Phone" label on an email field (RF-12, RF-28)                            | Fixed in M1                                                                                                            |
 | `inertia/pages/shops/register/**`                                                    | Broken at HEAD, guest-only, drops server errors (RF-03, RF-21)                                                | Replaced by `/sell` for signed-in users in M2                                                                          |
 | `inertia/pages/shops/dashboard/**` and `shop-management/**` (about 50 files)         | Unrouted prototypes; dashboard page renders `<h1>hello</h1>` (RF-47)                                          | Reference prototypes for `seller/*` pages; not routed as they are                                                      |
-| `inertia/pages/landing/**` (17 files)                                                | Unrouted marketing page with heavy effects (RF-47)                                                            | Not used; removed or kept outside the build (§13, planned)                                                             |
+| `inertia/pages/landing/**` (17 files)                                                | Unrouted marketing page with heavy effects (RF-47)                                                            | Not used; removed or kept outside the build (§13)                                                                      |
 | `inertia/pages/design_system/**`                                                     | Routed publicly (RF-40)                                                                                       | Development-only route; becomes the living token and component preview for §5                                          |
 
 ## 4. Component inventory
 
-Components come from three sources, in this order of preference: shadcn/ui primitives copied into the repo (§4.1), free Shadcn UI Kit items once VX-13 is answered (§4.2), and DripNepal-owned composed components (§4.3). Folder rules, the upgrade chore and the review checklist are §12 (planned); the licence policy is [ADR-0015](adr/0015-ui-foundation-shadcn-and-kit-policy.md). No component, from any source, is assumed to be accessible or secure until it passes the review in §12 and the checks in §9.
+Components come from three sources, in this order of preference: shadcn/ui primitives copied into the repo (§4.1), free Shadcn UI Kit items once VX-13 is answered (§4.2), and DripNepal-owned composed components (§4.3). Folder rules, the upgrade chore and the review checklist are §12; the licence policy is [ADR-0015](adr/0015-ui-foundation-shadcn-and-kit-policy.md). No component, from any source, is assumed to be accessible or secure until it passes the review in §12 and the checks in §9.
 
 ### 4.1 shadcn/ui primitives (`radix-nova`)
 
@@ -539,7 +541,7 @@ This document owns the display decision (risks-and-open-decisions.md VX-12, with
 4. Negative amounts (vendor balance owed) print the minus before the prefix, as `Intl` does ("-Rs 1,000"; the local run above gave "-Rs 1,000.00"), and are always accompanied by a text label such as "You owe", never colour alone.
 5. `en-NP` is never used: it is not a CLDR locale and falls back to Western grouping; `ne-NP` gives Devanagari digits and is reserved for the R2 Nepali UI, where the digit choice (`ne-NP-u-nu-latn` or Devanagari) is a separate R2 decision [Verified-doc, gt/ui_frontend.md].
 
-**Verified by:** formatter unit tests for 0, 50 paisa, Rs 7,250, Rs 12,34,567.50 and a negative value, plus an SSR-versus-client snapshot test with identical output (NFR-I18N-002). Localization behaviour beyond money (dates, plurals, catalogs) is §11 (planned).
+**Verified by:** formatter unit tests for 0, 50 paisa, Rs 7,250, Rs 12,34,567.50 and a negative value, plus an SSR-versus-client snapshot test with identical output (NFR-I18N-002). Localization behaviour beyond money (dates, plurals, catalogs) is §11.8.
 
 ### 5.12 Mapping to Tailwind v4 `@theme`
 
@@ -720,7 +722,7 @@ export function applyServerErrors(form: AnyFormApi, problem: Problem, known: Set
 
 ### 7.2 Tables and lists
 
-Every seller and admin list is a `DataTable` (§4.3) over a cursor-paginated operation ([06 §6.2](06-api-design.md#62-cursors-everything-else)); the storefront listing uses page numbers and is specified in §11 (planned).
+Every seller and admin list is a `DataTable` (§4.3) over a cursor-paginated operation ([06 §6.2](06-api-design.md#62-cursors-everything-else)); the storefront listing uses page numbers and is specified in §11.1.
 
 **URL is the state.** Filters, sort and the cursor live in the query string, using exactly the parameter names of the operation's allowlist ([06 §6.3](06-api-design.md#63-filter-and-sort-allowlists)), for example `/seller/{shopSlug}/orders?status=awaiting_acceptance&late=true`. A refresh, a shared link and the Back button all restore the same view. The page controller validates the query with the same allowlist; an unknown or malformed parameter redirects to the URL without it instead of showing an error page (the page equivalent of 400 `INVALID_QUERY_PARAMETER`).
 
@@ -856,7 +858,7 @@ The exception handler already maps 404 and 500–599 to those two pages [Verifie
 | `NOT_FOUND` (404) on a write                                                                                                                                                                 | Form alert                                              | "This item no longer exists" and a link back to the list                                                                                                                                                                                                                                                     |
 | `INVALID_STATE_TRANSITION` (409)                                                                                                                                                             | Form or dialog alert                                    | "This order is now Cancelled" using `current_status` through `StatusBadge`; the page's data reloads with a partial reload                                                                                                                                                                                    |
 | `CONFLICT` (409)                                                                                                                                                                             | Alert, per-line when `errors[]` is present              | The reason and "Reload"; waits for `Retry-After` when sent                                                                                                                                                                                                                                                   |
-| `OUT_OF_STOCK`, `CART_CHANGED`, `PRICE_CHANGED` (409)                                                                                                                                        | Cart or checkout review, at the affected lines          | Behaviour in §11 (planned); AC-J05-06, AC-J05-07, AC-J05-15                                                                                                                                                                                                                                                  |
+| `OUT_OF_STOCK`, `CART_CHANGED`, `PRICE_CHANGED` (409)                                                                                                                                        | Cart or checkout review, at the affected lines          | Behaviour in §11.3 and §11.4; AC-J05-06, AC-J05-07, AC-J05-15                                                                                                                                                                                                                                                |
 | `VERSION_CONFLICT` (412)                                                                                                                                                                     | Editor panel (§7.1)                                     | Keep mine or reload                                                                                                                                                                                                                                                                                          |
 | `PAYLOAD_TOO_LARGE` (413)                                                                                                                                                                    | Form alert                                              | "This is too long to save" and the field most likely at fault (long description or many variants); values kept                                                                                                                                                                                               |
 | `DELIVERY_NOT_AVAILABLE`, `COD_LIMIT_EXCEEDED` (422)                                                                                                                                         | Checkout, at the shop group or payment method           | Change address or remove that shop's items; the COD limit in rupees                                                                                                                                                                                                                                          |
@@ -896,7 +898,7 @@ Many customers and vendors are on congested mobile data (01 §2.2, NFR-NET-001 t
 1. **Form state is kept** in memory through any failure (§7.1). A retry resends the same body.
 2. **Writes are never retried automatically** except `IDEMPOTENCY_IN_PROGRESS` (§8.3). The user presses "Try again", and a ⚷ retry reuses the intent's `Idempotency-Key`, so a request that did succeed on the server is replayed, not repeated ([06 §7.4](06-api-design.md#74-outcomes); T-CHK-004).
 3. **Reads retry once** automatically after the `online` event (partial reload with `only`), then wait for the user.
-4. **Checkout recovery** after a timeout on "Place order" shows "Checking your order…" and looks for the order before offering a retry; the full behaviour, including the `sessionStorage` key, is §11 (planned) and follows AC-J05-12 and the recovery row of J-05.
+4. **Checkout recovery** after a timeout on "Place order" shows "Checking your order…" and looks for the order before offering a retry; the full behaviour, including the `sessionStorage` key, is §11.4 and follows AC-J05-12 and the recovery row of J-05.
 
 **Verified by:** browser tests with the network set offline during a product save and during "Place order": the form values survive, the banner appears, the retry sends the same `Idempotency-Key`, and exactly one order exists (T-CHK-004 plus a T-UI test, proposed).
 
@@ -1085,6 +1087,477 @@ A 360 px phone at device pixel ratio 3 renders a two-column card at about 180 CS
 - Source maps are uploaded to the error tracker and not served publicly [Assumption; 11 decides].
 - Debug, mock and design-system pages are unrouted in production (RF-40). The Tuyau client registry still ships every route pattern to the browser; [07 §1.1](07-security-threat-model-and-permissions.md#11-scope-and-method) accepts that because no control depends on hidden routes (audit A5-17), so here it counts only as bundle weight, measured by the §10.1 check.
 
+## 11. Behaviour specifications
+
+This section specifies the behaviours that span several screens and that are easy to get subtly wrong: URL state, variant selection, cart revalidation, checkout recovery, confirmations, permission display, announcements and localization. The contracts underneath are owned elsewhere: query allowlists and idempotency in [06 §6](06-api-design.md#6-pagination-filtering-and-sorting) and [06 §7](06-api-design.md#7-idempotency), revalidation and repeated submission in [05 §8.2](05-order-payment-and-inventory-lifecycles.md#82-price-or-stock-changes-after-add-to-cart) and [05 §8.3](05-order-payment-and-inventory-lifecycles.md#83-repeated-checkout-submission), permissions in [07 §4](07-security-threat-model-and-permissions.md#41-principles). Every "Verified by" line names a canon §12 test or a check proposed for [10](10-testing-and-quality-gates.md).
+
+### 11.1 Search and filter URL state and back navigation
+
+**The URL is the only filter state** (AC-FR-SRCH-001-4, J-01 recovery row). Listing pages (`/men`, `/women`, the navigation entries `/men/{navSlug}` and `/women/{navSlug}` (proposed; not yet in canon §6.4), `/c/{categorySlug}`, `/search` and `/shops/{shopSlug}`) read their filters from the query string only; no React state, `localStorage` or cookie holds a filter. The page controller and `listProducts` share one query and one allowlist ([06 §2.1](06-api-design.md#21-reads-are-props-writes-are-json-adr-0004), [06 §6.3](06-api-design.md#63-filter-and-sort-allowlists)), so a page URL and an API call with the same parameters return the same products.
+
+**Parameter names** are exactly the `listProducts` allowlist. Size and colour filters are named by attribute code (`apparel_size`, `shoe_size_eu`, `waist_size_in`, `color`), not a generic `size` (Consistency notes item 33). Navigation entries and categories stay in the path: a page URL never carries `nav=`, and `category=` appears only on `/search` and `/shops/{shopSlug}`, where the path has no category.
+
+**Canonical order.** The client always writes parameters in one order, so the same filter set has exactly one URL. Back and Forward, shared links, the prefetch cache (§10.2) and analytics then treat it as one page, and tests can compare strings.
+
+| Position | Parameter(s)                                                                        | Rule                                                                                                                                                                  |
+| -------- | ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1        | `q`                                                                                 | Trimmed; sent only with 2–100 characters (§7.2); never sent while an input method is composing (§11.8)                                                                |
+| 2        | `category`                                                                          | Only where the path has no category                                                                                                                                   |
+| 3        | `audience`, `apparel_size`, `shoe_size_eu`, `waist_size_in`, `color`, in this order | Multi-value filters repeat the parameter (`apparel_size=l&apparel_size=m`, at most 20 values, 06 §6.3), values sorted by value code; the value lists wait for OD-15   |
+| 4        | `brand`, then `shop`                                                                | Repeated and sorted like position 3                                                                                                                                   |
+| 5        | `price_min_minor`, `price_max_minor`                                                | Integer paisa. The filter inputs show rupees and convert with `parseRupeesToMinor` (§4.3 `MoneyInput`); `min` > `max` shows an inline error and is not applied (J-01) |
+| 6        | `in_stock`                                                                          | Written only as `in_stock=true`                                                                                                                                       |
+| 7        | `sort`                                                                              | Omitted when it is the default (`newest`, or `relevance` when `q` is present)                                                                                         |
+| 8        | `page`, `per_page`                                                                  | Omitted when 1 and 24; any filter or sort change drops `page`                                                                                                         |
+
+The server accepts any order. It redirects only when it drops an unknown or invalid parameter, following 01 AC-FR-SRCH-001-3 ("dropped with a canonical redirect"); 02 AC-J01-03 instead expects `/men?colour=red` to render 200 with a canonical link that omits `colour`, which the redirect satisfies only if the test follows it (Consistency notes item 49). The canonical link of every filtered page points to the unfiltered page (AC-FR-SRCH-005-2). Canonical order is a client rule, not a validation rule, because a hand-typed URL in another order is still correct [Assumption: proposed here; 06 §6.3 defines no order].
+
+**Visits.** A filter change is an Inertia GET visit to the new URL:
+
+| User action                                                    | Visit options                                                                                                                                             | History                                                     | Focus and announcement                                                                                        |
+| -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Tick a filter, change the price or sort in the desktop sidebar | `preserveState: true`, `preserveScroll: true`, `replace: true`, `only` the listing props (names per [09](09-code-structure-and-engineering-standards.md)) | Replace: Back leaves the listing instead of undoing a click | Focus stays on the control; the new count is announced politely ("128 products", §7.4)                        |
+| "Show 128 results" in the phone filter sheet                   | Same, but `preserveScroll: false`                                                                                                                         | Replace                                                     | The sheet closes and focus moves to the results heading                                                       |
+| Remove a filter chip, or "Clear filters"                       | Same as the sidebar row                                                                                                                                   | Replace                                                     | Focus moves to the next chip, or to the results heading when none is left                                     |
+| Type in the search box                                         | Debounced 300 ms [Assumption] (§7.2), then as the sidebar row                                                                                             | Replace                                                     | Count announced after the results arrive                                                                      |
+| Submit a new search from the header                            | Plain visit to `/search?q=…`                                                                                                                              | Push: a new query is a new place                            | Focus on the results heading (§9.1)                                                                           |
+| Page number, "Next" or "Previous"                              | Plain `Link` visit, `preserveScroll: false`                                                                                                               | Push: Back returns to the previous page                     | Focus on the results heading, so keyboard users do not start again from the header                            |
+| Open a product, then Back                                      | Browser history                                                                                                                                           | —                                                           | Inertia restores the listing page from history state and restores the window scroll position (next paragraph) |
+
+Storefront pagination uses page links in R1: every page is an `<a href>` in the SSR HTML, so it works before JavaScript loads and is crawlable (AC-J01-06). A phone "Load more" with `merge()` props and `reset` on filter change (§7.2) is an R2 option [Assumption], not an R1 requirement.
+
+**Scroll restoration.** Inertia resets scroll on a new visit and restores it on Back and Forward; elements that scroll inside an overflow container are restored only when they carry the `scroll-region` attribute (gt/ui_frontend.md, Inertia "Scroll Management"; the attribute is queried in `@inertiajs/core` 2.3.27 `dist/index.esm.js` [Verified-repo]). The desktop filter sidebar, if it scrolls independently, and the dashboard main pane (§6.3) carry `scroll-region`. Product images keep their aspect-ratio boxes (§10.4), so the restored position lands on the same card even before the images load.
+
+**No-JavaScript path.** The filter panel is a real `<form method="get">` whose inputs carry the allowlisted names, so it submits a correct (if not canonically ordered) URL without JavaScript. With JavaScript the submit is intercepted and replaced by the visit above.
+
+**Building the URL.** Inertia 2.3.27 merges a `data` object into the query string with the `qs` library in `brackets` format, which writes `apparel_size[]=m` [Verified-repo `@inertiajs/core` 2.3.27 `mergeDataIntoQueryString`; `QueryStringArrayFormatOption` is only `'indices' | 'brackets'`]. The 06 allowlist would reject that name. Listing and table visits therefore build the URL string themselves and pass empty `data`, in which case Inertia leaves the URL untouched. The same applies to the dashboard filters of §7.2, whose sketch passes a query object (Consistency notes item 34). Sketch (`router.get(url, data, options)` and the option names are from the installed `@inertiajs/core` 2.3.27 `router.d.ts` and `types.d.ts`; `ListingFilters` and `listingUrl` are DripNepal code that 09 places):
+
+```ts
+import { router } from '@inertiajs/react'
+
+const MULTI = [
+  'audience',
+  'apparel_size',
+  'shoe_size_eu',
+  'waist_size_in',
+  'color',
+  'brand',
+  'shop',
+] as const
+
+export function listingUrl(path: string, f: ListingFilters): string {
+  const p = new URLSearchParams()
+  const q = (f.q ?? '').trim()
+  const hasQ = q.length >= 2 // 1 character is never sent (§7.2)
+  if (hasQ) p.set('q', q)
+  if (f.category) p.set('category', f.category)
+  for (const name of MULTI) for (const v of [...(f[name] ?? [])].sort()) p.append(name, v)
+  if (f.priceMinMinor !== null) p.set('price_min_minor', String(f.priceMinMinor))
+  if (f.priceMaxMinor !== null) p.set('price_max_minor', String(f.priceMaxMinor))
+  if (f.inStock) p.set('in_stock', 'true')
+  if (f.sort !== (hasQ ? 'relevance' : 'newest')) p.set('sort', f.sort)
+  if (f.page > 1) p.set('page', String(f.page))
+  if (f.perPage !== 24) p.set('per_page', String(f.perPage))
+  const qs = p.toString()
+  return qs ? `${path}?${qs}` : path
+}
+
+export function applyFilters(path: string, f: ListingFilters) {
+  router.get(
+    listingUrl(path, { ...f, page: 1 }),
+    {},
+    {
+      preserveState: true,
+      preserveScroll: true,
+      replace: true,
+      only: ['listing'], // prop name per 09
+    }
+  )
+}
+```
+
+**Verified by:** a unit test of `listingUrl` (the same filters in any click order give one string; defaults are omitted); a browser test that applies filters in two different orders and gets the same URL, pages to 2, opens a product, presses Back and finds page 2 at the same scroll position with focus on the results heading (T-UI area, proposed); AC-J01-02 and AC-J01-03; axe on listings (T-A11Y-001).
+
+### 11.2 Product variant selection and unavailable combinations
+
+**Data.** The product page props (the same data as `getProduct`) carry 0, 1 or 2 option axes (AC-FR-CAT-004-1) with their values in display order, and every active variant with its `option_values`, price, compare-at price and availability (J-02 step 2). The client derives what is selectable from those props and never asks the server per click. 06 §13.2 lists availability only as a per-variant `in_stock` flag; the "Only 2 left" badge and the quantity cap below need an available quantity, capped at 10 so exact stock is not exposed [Assumption], which `getProduct` must add (Consistency notes item 50).
+
+**Axes.** With two axes, the first axis in the props is the primary one (colour when present, because the gallery follows colour, J-02 step 3) and the second is secondary. This ordering avoids a dead end in which the current size disables the colour the customer wants:
+
+| Case                                                                            | Shown as                                                                                                                                         |
+| ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| A value no variant of this product offers                                       | Not rendered: the server sends only offered values                                                                                               |
+| Primary value with stock in at least one secondary value                        | Selectable                                                                                                                                       |
+| Primary value sold out in every secondary value                                 | Visible, not selectable, text "Sold out" next to the colour name                                                                                 |
+| Secondary value, no primary value chosen yet                                    | Selectable unless it is sold out in every primary value                                                                                          |
+| Secondary value not offered in the chosen primary value (no such variant)       | Visible, not selectable, text "Not available in Black"                                                                                           |
+| Secondary value offered but with no available stock in the chosen primary value | Visible, not selectable, text "Sold out"                                                                                                         |
+| Primary value changes and the chosen secondary value becomes unavailable        | The secondary selection is cleared, and a polite announcement says "Size XL is sold out in Black. Choose another size." (§7.4)                   |
+| Every variant sold out                                                          | Pickers visible and not selectable; "Add to cart" is replaced by the text "Sold out"; the page stays 200 while the product is `published` (J-02) |
+| Product with 0 axes                                                             | No picker; the default variant is used (J-02 empty row)                                                                                          |
+
+Every option stays visible, so the customer sees the full range (AC-FR-SRCH-004-2). The wording is "Sold out", as in 01; 02 J-02 step 3 says "Out of stock" (Consistency notes item 37).
+
+**Semantics.** Each axis is one `radio-group` (§4.3 `VariantPicker`). Non-selectable values use the item's `disabled` prop. In the installed `@radix-ui/react-radio-group` 1.4.1 a disabled item is rendered as a disabled button and registered with `focusable: false` in the roving focus group [Verified-repo `dist/index.mjs`], so arrow keys skip it, while screen readers in browse mode still read it. Its accessible name therefore includes the reason ("XL, sold out"; AC-J02-04 asks for "out of stock", item 37), and the visible text says the same thing in words, never by strike-through or colour alone (SC 1.4.1). Tradeoff: a keyboard user cannot land on a sold-out value to hear why; the per-axis summary under the group ("2 sizes sold out in Black") covers that.
+
+**Price and stock after a selection.** Before a full combination is chosen, the price area shows the single price, or a range ("Rs 1,299 – Rs 1,599", both ends through `formatNPR`) when variants differ. After the choice it shows that variant's price, compare-at price and discount (AC-J02-03), `StockBadge` "Only 2 left" when 3 or fewer are available [Assumption from J-02 step 4], and the quantity range 1 to min(10, available) (AC-FR-SRCH-004-3). The change is announced politely (§7.4).
+
+**"Add to cart" before every axis is chosen.** AC-J02-04 says the button "stays disabled", and J-02's validation row says pressing it shows "Select a size" without an API call. Both hold with `aria-disabled="true"`: the button looks disabled and is announced as dimmed or unavailable, but it stays focusable, and a press moves focus to the first unchosen axis and shows "Select a size" under it. A natively `disabled` button could not explain itself, and a keyboard user would not find it in the tab order.
+
+**URL `?variant=`.** The selected variant is kept in the URL as `?variant={variantId}` [Assumption, J-02 recovery row]:
+
+- When the combination becomes complete, the client replaces the URL with a client-side visit, `router.replace({ url, preserveScroll: true, preserveState: true })` (`ClientSideVisitOptions` in the installed `@inertiajs/core` 2.3.27 types [Verified-repo]), so no server request is made and Back leaves the product instead of stepping through selections. Clearing the selection removes the parameter.
+- On load, the server preselects a valid, active, available variant and renders its price and colour images in the SSR HTML, so a shared link shows the right variant without JavaScript. An unknown or archived ID is ignored silently. A sold-out variant is not preselected; the page says "The option in your link (Black, XL) is sold out" in a polite notice.
+- The canonical link omits `?variant=`, and JSON-LD `offers` keep the default variant (AC-J02-07).
+
+**Stale availability.** Stock can change between render and tap. `addCartItem` answering 409 `OUT_OF_STOCK` shows "This size just sold out" next to the button, announces it politely, and reloads only the product's variant props so the picker updates; the customer's other choices are kept (J-02 concurrency row).
+
+**Verified by:** a component test over an availability matrix (2 × 3 variants with one sold out and one not offered) that checks what is selectable, the accessible names, the clearing rule and the `?variant=` URL (T-UI area, proposed); AC-J02-04, AC-J02-05, AC-J02-08; T-A11Y-001 on the product page.
+
+### 11.3 Cart stock and price changes
+
+**Source of truth.** The server revalidates every line on each `getCart` and each quote and attaches notices (FR-CART-002, [05 §8.2](05-order-payment-and-inventory-lifecycles.md#82-price-or-stock-changes-after-add-to-cart)). The client never computes a notice, a total or a limit. `/cart` receives the same data as page props (J-03 step 1); the header count and the checkout review use the same server data.
+
+**Notices and actions.** The notice kinds below are the cases 01 and 02 list. Their machine names are proposed here for the `getCart` schema, which [06 §13.4](06-api-design.md#134-customer) and `openapi.yaml` have not yet specified (Consistency notes item 38).
+
+| Kind (proposed name) | Trigger                                                                  | Line shows                                                          | Blocks checkout                        | Actions                                                                                                                                  |
+| -------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `price_changed`      | Current `price_minor` differs from `unit_price_minor_at_add`, up or down | "Price changed from Rs 1,500 to Rs 1,650"; totals use the new price | Yes, until accepted (AC-FR-CART-002-2) | "Accept new price" (calls `updateCartItem` with the unchanged quantity; the server re-reads the price [Assumption, item 38]) or "Remove" |
+| `insufficient_stock` | Available quantity above 0 but below the line quantity                   | "Only 2 left"                                                       | Yes                                    | "Change quantity to 2" (`updateCartItem`) or "Remove"                                                                                    |
+| `out_of_stock`       | Available quantity 0                                                     | "Sold out"; excluded from totals                                    | Yes                                    | "Remove"                                                                                                                                 |
+| `unavailable`        | Product not `published`, variant archived, or shop not `active`          | "No longer available"; excluded from totals (AC-J03-04)             | Yes                                    | "Remove"                                                                                                                                 |
+| `merge_capped`       | Guest merge capped a quantity at 10 or dropped lines over 50 (AC-J03-02) | Information at the top of the cart                                  | No                                     | "Dismiss"                                                                                                                                |
+
+**Placement.** A summary at the top of the cart ("2 items in your cart changed. Review them before checkout.") links to each flagged line. Each line shows its own notice beside the price with an icon and text (SC 1.4.1). On load the summary is announced politely and focus is not moved (§7.4); a notice that interrupts the customer while they read would be worse than one they can find.
+
+**Checkout with flagged lines.** "Checkout" stays enabled. Pressing it with flagged lines opens a dialog that lists them, with "Remove unavailable items" (one tap removes every `out_of_stock` and `unavailable` line) and "Review cart" (J-03 step 5). `price_changed` and `insufficient_stock` lines are not removed automatically, because the customer may prefer to accept the new price or the smaller quantity.
+
+**After each action.** Cart writes are JSON calls ([ADR-0004](adr/0004-inertia-reads-json-api-writes.md)). On success the page reloads only the cart props, flushes the `cart` prefetch tag (§10.2) and announces the new total politely. Removing a line is tier 0 (§7.3): no confirmation, and the removed line leaves an inline "Removed Black Hoodie, M. Undo" row in its place until the customer leaves the page. Undo calls `addCartItem` with the old quantity; there is no timer (SC 2.2.1), and storefront toasts carry no action buttons (§7.4). A 404 on a line another tab already removed reloads the cart with "This item was already removed" (J-03 concurrency row).
+
+**At checkout.** `quoteCheckout` reports the same cases as `problems`, and `placeOrder` can still fail with 409 `PRICE_CHANGED`, `OUT_OF_STOCK` or `CART_CHANGED`. The review step then highlights the affected lines, updates the "Place order" label with the new total, asks for a new confirmation, and gets a new `Idempotency-Key` because the body changes (05 §8.2, AC-J05-06, AC-J05-07, AC-J05-17). Focus moves to the first affected shop group with a polite announcement (AC-J05-15).
+
+**Verified by:** AC-J03-03, AC-J03-04 and AC-J03-06; T-CART-002 (cart notices, proposed in 05) and T-CHK-002 (price up and down, proposed in 05); a component test of the notice table's actions and announcements (T-UI area, proposed); T-SEC-003 (a client `price` field has no effect).
+
+### 11.4 Checkout recovery without duplicate orders
+
+The server guarantees one order per intent: the `Idempotency-Key` row, the cart lock and the `orders_idempotency_key_key` backstop ([06 §7](06-api-design.md#7-idempotency), T-CHK-004). The client's job is to keep one key per intent across timeouts, reloads and retries, and to find out what happened when the answer is lost.
+
+**The checkout intent.** When the review step renders with a quote, the client creates a key with `crypto.randomUUID()` (AC-FR-CHK-003-4, [06 §7.1](06-api-design.md#71-the-key)) and stores one intent entry in `sessionStorage`:
+
+| Field        | Content                                                                                                                                                            |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Storage key  | `dn.checkout.intent.<user id>` (name proposed; 09 finalizes)                                                                                                       |
+| `key`        | The UUIDv4 sent as `Idempotency-Key`                                                                                                                               |
+| `body`       | The exact `placeOrder` body: `address_id`, `payment_method`, `expected_grand_total_minor`, `cart_version`, `customer_note`, so a retry is byte-identical (06 §7.2) |
+| `state`      | `ready` (not sent yet) or `sent` (at least one request left the browser)                                                                                           |
+| `created_at` | Client time of creation (used for the 72-hour expiry)                                                                                                              |
+| `sent_at`    | Client time of the first send, or `null` while `ready` (used for the order check below)                                                                            |
+
+Rules:
+
+1. **While `ready`**, any change to the body (another address, another method, a new quote after `PRICE_CHANGED`, an edited note) replaces the entry with a new key. Nothing was sent, so nothing can collide.
+2. **"Place order" sets `sent` and `sent_at` before the request leaves.** From then on the body is frozen: the review fields are locked until the outcome is known, because the same key with a different body is 422 `IDEMPOTENCY_KEY_REUSED` (AC-FR-CHK-003-3).
+3. **Cleared** on 201 (including a replay with `Idempotency-Replayed: true`), on any business failure that the server did not store (409 `PRICE_CHANGED`, `OUT_OF_STOCK`, `CART_CHANGED`; 422 `DELIVERY_NOT_AVAILABLE`, `COD_LIMIT_EXCEEDED`; 503 `PROVIDER_UNAVAILABLE`, 06 §7.4), by the `logOut` handler (§7.1), and when it is older than 72 hours, the `placeOrder` key retention [A-32].
+4. **Kept** on 401 `UNAUTHENTICATED` (nothing executed; the draft of §7.1 returns the customer to checkout) and through reloads of the same tab.
+5. **Clearing the entry never clears the form.** The address, payment method and note stay in the review fields and the §7.1 draft, so a 409 never loses what the customer entered (J-05 recovery row); only the key is new.
+
+Why `sessionStorage`: it survives a reload and in-tab navigation, disappears with the tab, and is not shared between tabs, so two tabs produce two keys and the second one gets `CART_CHANGED` (AC-J05-18) instead of silently sharing an intent. `localStorage` would outlive the session on a shared phone. Tradeoff: closing the tab loses the key; the server-side recovery below covers that case. The entry holds an address ID and the customer's note, the same exposure as the form drafts of §7.1 (Consistency notes item 40).
+
+**Outcomes of "Place order".**
+
+| Outcome                                                                                                 | UI                                                                                                                                                                                                                                                                                         |
+| ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 201                                                                                                     | Clear the entry, visit `next_action.url` (`/checkout/complete/{orderNumber}`), focus the page heading. R1.1 gateway orders: a replayed 201 has no `next_action`, so the client calls `startOrderPayment` ([05 §4.6](05-order-payment-and-inventory-lifecycles.md#46-idempotency-handling)) |
+| 403 `EMAIL_NOT_VERIFIED`, 422 `VALIDATION_FAILED`, 429 `RATE_LIMITED`                                   | Nothing was stored (06 §7.4, failure before the transaction): the §7.1 and §8.3 handling; the entry goes back to `ready` with the same key, so the customer can correct a field, and an edit then re-keys it under rule 1                                                                  |
+| 409 `IDEMPOTENCY_IN_PROGRESS`                                                                           | Keep "Placing order…", retry the same key after `Retry-After` up to 3 times (§8.3), then treat as unknown                                                                                                                                                                                  |
+| 409 `PRICE_CHANGED`, `OUT_OF_STOCK`, `CART_CHANGED`; 422 `DELIVERY_NOT_AVAILABLE`, `COD_LIMIT_EXCEEDED` | §11.3 "At checkout"; entry cleared, a new key on the next render. `CART_CHANGED` because the cart was already converted shows "This order was already placed" with a link (AC-J05-18)                                                                                                      |
+| 503 `PROVIDER_UNAVAILABLE`                                                                              | Kill-switch banner, "Place order" disabled, cart kept (AC-J05-14)                                                                                                                                                                                                                          |
+| 422 `IDEMPOTENCY_KEY_REUSED` or 400 `IDEMPOTENCY_KEY_REQUIRED`                                          | A client bug: report it to the error tracker, then run the order check below, because an earlier request with that key may have succeeded                                                                                                                                                  |
+| Timeout (30 s write timeout, §8.4), network error, or a 5xx without a problem body                      | Unknown: "Checking your order…"                                                                                                                                                                                                                                                            |
+
+**"Checking your order…".** The review actions are replaced by a status panel whose heading receives focus, and the text is announced politely. "Place order" is not offered, so no second key can be created.
+
+1. If the browser is offline, the panel says so and waits for the `online` event (§8.4).
+2. The client calls `listMyOrders` (first page, read-only). An order whose `placed_at` is no earlier than the intent's `sent_at` minus 5 minutes [Assumption: tolerance for a wrong phone clock] and whose `grand_total.amount_minor` equals `expected_grand_total_minor` is taken as the result. Matching on `sent_at` rather than `created_at` keeps an order placed earlier from another device, while this review sat open, from being mistaken for this one. The panel says "Your order DN-7Q4K2MX was placed", links to its confirmation page, and the entry is cleared.
+3. If no order matches, the panel says "We couldn't confirm your order yet. No order has been found." and offers "Try again". This resends the same key and body, which is safe either way: the server replays the stored 201 if the first attempt committed, or runs the order once if it rolled back (06 §7.4). The replay, not the list, is the final authority; the list check exists so that the customer usually gets an answer without another write.
+4. On a later visit to `/checkout` in the same tab, a `sent` entry starts this check automatically. Without an entry (the tab was closed, or another device), the server's own recovery applies: a cart converted within the last 72 hours shows "Your order DN-7Q4K2MX was placed" instead of an empty checkout (AC-J05-12, J-05 recovery row).
+
+This check needs `listMyOrders` items to include `number`, `placed_at` and `grand_total`. 06 §13.4 describes the result only as "Orders with shop-order statuses", and `openapi.yaml` lists the operation as pending (Consistency notes item 39).
+
+```mermaid
+flowchart TD
+  A[Review renders with a quote] --> B[Create key, store intent as ready]
+  B --> C{Body changed before sending}
+  C -- yes --> B
+  C -- no --> D[Place order: mark sent, lock fields, send with key]
+  D --> E{Response}
+  E -- 201 --> F[Clear intent, open confirmation page]
+  E -- business 409 or 422 --> G[Show changed lines, clear intent, new key on next render]
+  E -- 503 kill switch --> H[Banner, keep cart, clear intent]
+  E -- timeout or network error --> I[Checking your order panel]
+  I --> J[Read listMyOrders]
+  J -- match found --> F
+  J -- no match --> K[Try again with the same key and body]
+  K --> E
+```
+
+Sketch of the intent store (web platform APIs only: `sessionStorage`, `crypto.randomUUID()`, `JSON`; `PlaceOrderBody`, `sameBody` and `write` are DripNepal helpers that 09 places, and `write` swallows storage errors like `read`):
+
+```ts
+type Intent = {
+  key: string
+  body: PlaceOrderBody
+  state: 'ready' | 'sent'
+  created_at: number
+  sent_at: number | null
+}
+const slot = (userId: string) => `dn.checkout.intent.${userId}`
+const MAX_AGE_MS = 72 * 60 * 60 * 1000 // placeOrder key retention, A-32
+
+export function intentFor(userId: string, body: PlaceOrderBody): Intent {
+  const stored = read(userId)
+  if (stored && stored.state === 'sent') return stored // frozen: never re-key a sent intent
+  if (stored && sameBody(stored.body, body)) return stored
+  const fresh: Intent = {
+    key: crypto.randomUUID(),
+    body,
+    state: 'ready',
+    created_at: Date.now(),
+    sent_at: null,
+  }
+  write(userId, fresh)
+  return fresh
+}
+
+function read(userId: string): Intent | null {
+  try {
+    const raw = sessionStorage.getItem(slot(userId))
+    const intent = raw ? (JSON.parse(raw) as Intent) : null
+    return intent && Date.now() - intent.created_at < MAX_AGE_MS ? intent : null
+  } catch {
+    return null // storage blocked: the server-side recovery (AC-J05-12) still applies
+  }
+}
+
+export function markSent(userId: string, intent: Intent): Intent {
+  const sent: Intent = { ...intent, state: 'sent', sent_at: intent.sent_at ?? Date.now() }
+  write(userId, sent) // before the request leaves (rule 2)
+  return sent
+}
+```
+
+**Review step (SC 3.3.4).** The review lists each shop group with items, shipping, delivery estimate and the amount payable to each courier, the delivery address and the payment method (AC-FR-CHK-002-4). Every one of them has an "Edit" link that returns to its step and brings focus back to the review heading afterwards, so the order is checked and correctable before it is confirmed. The single submit button names the total, "Place order, Rs 7,250" (AC-J05-15), and is at least 44 px high (§6.4).
+
+**Verified by:** T-CHK-004 (same key replays; concurrent duplicates create one order); AC-J05-03, AC-J05-12 and AC-J05-18; a browser test that lets the server commit, drops the response, and asserts the "Checking your order…" panel, the order found through `listMyOrders`, "Try again" sending the same `Idempotency-Key`, and exactly one order in the database (T-UI area, proposed); T-CHK-005 (same key, different body, proposed in 05).
+
+### 11.5 Destructive action confirmation
+
+The tiers, dialog focus rules and type-to-confirm are §7.3. These rules add the behaviour around them:
+
+1. **Undo beats confirm for tier 0.** Reversible actions (remove a cart line, unpublish a product) act at once and leave an inline "Undo" at the same place, as in §11.3. Asking for confirmation on reversible actions trains people to click through the dialogs that matter.
+2. **One gesture, one visible control.** No destructive action is bound to swipe, long press or a keyboard shortcut alone; each has a labelled button (SC 2.5.7). Row menus in `DataTable` list destructive items last, after a separator, in destructive text colour plus the verb.
+3. **The dialog names the object and the consequence** with the data the server sent: "Reject order DN-7Q4K2MX-2 from Kathmandu Threads? The customer is told and 2 items return to stock." It never states a consequence the client computed itself.
+4. **Double submission.** A tier 1 or 2 dialog that calls a ⚷ operation creates its key when it opens (§7.3 rule 4), so a double click or a retry after a timeout replays instead of repeating.
+5. **The server decides.** The dialog is friction, not protection; the endpoint checks permission, status and state, and audits the action (AC-J00-09). A 409 `INVALID_STATE_TRANSITION` inside the dialog shows the current state (§8.3) and closes nothing until the user reads it.
+
+**Verified by:** the tier tests of §7.3 (T-UI area, proposed) and the endpoint tests that call destructive operations without the UI (T-SEC-001, T-SEC-002).
+
+### 11.6 Server-authoritative permissions and validation
+
+**UI hides, server decides** ([07 §1.5](07-security-threat-model-and-permissions.md#15-design-rules-that-every-section-relies-on); §8.5). What the client may do with each kind of server data:
+
+| Data in props                                                                            | The client may                                                                  | The client never                                                                         |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Resolved permission list for the current shop (proposed prop, §8.5), platform staff role | Hide navigation and actions the role can never use                              | Treat a hidden link as access control; every page and API route still checks (T-SEC-001) |
+| Shop status and `suspension_mode`, account status                                        | Show blocked actions disabled with the reason ("This shop is suspended…", §8.5) | Skip a call because it "would fail"; the server's 403 is the answer                      |
+| Order, shipment, refund states                                                           | Offer only the transitions that 05 allows from the current state                | Assume the state is still current; a 409 shows the new state                             |
+| Prices, totals, stock, COD availability                                                  | Display them                                                                    | Compute or send them; only IDs and quantities go to the server (T-SEC-003)               |
+| Validation limits (slug 3–40, title 3–120, quantity 1–10, ward within `ward_count`)      | Mirror them for early feedback (§7.1)                                           | Block a submit on a rule the server does not have; server errors are always rendered     |
+| `checkout_enabled`, `maintenance_banner`                                                 | Show the banner and disable "Place order" (AC-J05-14)                           | Hide the 503 handling; the switch can flip between render and submit                     |
+
+**Hidden or disabled.** An action the role can never perform is hidden. An action blocked by the current state (a suspended shop, an order already shipped, a COD limit) is shown disabled with the reason in visible text linked by `aria-describedby`, so the user learns why instead of hunting for a missing button.
+
+**Stale authority.** Roles and statuses can change during a session. A 403 inside the user's own scope renders `PermissionDenied` (§8.5) and the next page visit brings a fresh permission prop; nothing is cached in `localStorage`.
+
+**Drift between client and server rules.** Client mirrors of server limits come from one shared constants module that the validators also import (location per 09), so a limit changes in one place. If they still drift, the server error is shown under the field (§7.1), and the client never prevents a submit that the server would accept.
+
+**Verified by:** T-SEC-001, T-SEC-002 and T-SEC-003 call the API directly, without the UI; a component test that renders the seller navigation for each shop role against the 07 §4.3 role maps (T-UI area, proposed).
+
+### 11.7 Accessible status and error announcements
+
+The two live regions, the `announce(message, politeness)` helper and the event table are in §7.4; focus rules are in §9.1. The behaviours in this section add these events:
+
+| Event                                                               | Mechanism                                            |
+| ------------------------------------------------------------------- | ---------------------------------------------------- |
+| Listing count after a filter, sort or search change (§11.1)         | Polite, after the results arrive, never while typing |
+| Variant cleared or sold out after a selection (§11.2)               | Polite                                               |
+| Cart notices on load, cart totals after an action (§11.3)           | Polite; focus stays                                  |
+| "Checking your order…", "Your order … was placed" (§11.4)           | Focus on the panel heading; no extra announcement    |
+| Order placed and the confirmation page opens                        | Focus on the page heading (§9.1)                     |
+| Session expired before a redirect; `RATE_LIMITED` blocking a submit | Assertive (§7.4)                                     |
+
+Rules:
+
+1. **One message per event.** Rapid changes such as quantity stepper presses are debounced so only the settled value is announced [Assumption: 500 ms].
+2. **Never announce a countdown** (`RATE_LIMITED`, §8.3); announce the wait once and the end once.
+3. **Repeated identical messages are re-announced** by clearing the region before writing the same text again [Assumption: screen readers ignore an unchanged region].
+4. **Focus or announcement, not both.** When focus moves to a heading or summary that contains the message, nothing is written to a live region, so the message is not read twice.
+5. **Messages come from the catalogs** (§11.8) and are full sentences that make sense without the visual context.
+
+**Verified by:** component tests that assert the live-region text and the focused element for each row (T-UI area, proposed), and a screen-reader pass on cart and checkout before release (§9.4).
+
+### 11.8 Localization-ready text and formatting
+
+R1 ships English only, but every string and format goes through the mechanisms that the R2 Nepali UI needs (A-10, NFR-I18N-001).
+
+**Message catalogs.** UI text lives in `resources/lang/en/*.json`, one file per surface or feature (`storefront.json`, `checkout.json`, `seller.json`, `admin.json`, `errors.json`), with dotted keys such as `cart.notice.price_changed`. Messages use ICU MessageFormat. `@adonisjs/i18n` 3.0.1 is the server-side option (it depends on `intl-messageformat` ^11.1.2 [Verified-doc gt/adonis_stack.md, <https://registry.npmjs.org/@adonisjs/i18n>]); it is **not installed** and `resources/lang` does not exist yet [Verified-repo], so the formatting calls in this section are pseudocode until M0 adds them. On the client, each surface bundle imports its catalog files as static JSON, so SSR and the browser always use the same catalog version and pages carry no per-request message props [Assumption; 09 decides the loader]. R2 adds `resources/lang/ne` loaded the same way. Error messages are keyed by the problem `code` and `errors[].code` (§7.1), never by the English `detail`.
+
+**Writing rules.**
+
+| Rule                                               | Example                                                                                                                                                               |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Whole sentences with named placeholders            | `"cart.notice.price_changed": "Price changed from {old} to {new}"`, never `"Price changed from " + old`                                                               |
+| Plurals through ICU `plural`                       | `"{count, plural, one {# item} other {# items}}"`; Nepali plural categories are taken from CLDR through `Intl.PluralRules` in R2, not assumed here                    |
+| Money and dates are formatted first, then inserted | `{old}` receives `formatNPR(...)` output (§5.11), so there is one money path                                                                                          |
+| Links and emphasis inside a sentence               | ICU rich-text tags such as `"Read our <link>return policy</link>"`, so a translator can move the link [Assumption: tag support in `intl-messageformat` checked in M0] |
+| No text in images or CSS `content`                 | Badges, empty states and banners are text                                                                                                                             |
+| Room to grow                                       | The 30 % pseudo-locale of NFR-I18N-001 renders every core page without clipping (§5.3)                                                                                |
+
+A lint rule rejects raw text in page and component JSX (NFR-I18N-001 [Assumption]; rule defined in 09).
+
+**Numbers and money.** Money is shown only through `formatNPR`: `Intl.NumberFormat('en-IN')` grouping, Latin digits and the "Rs" prefix constant, for example "Rs 12,34,567" and "Rs 12,34,567.50" (§5.11; [Verify-external VX-12]). Counts use `Intl.NumberFormat('en-IN')` as well ("1,00,000 products"), so grouping is consistent on one page. `en-NP` is never used, because it is not a CLDR locale and falls back to Western grouping [Verified-doc gt/ui_frontend.md].
+
+**Dates and times.** Timestamps arrive as RFC 3339 UTC (06 §3.3) and are displayed with one shared `formatDateTime` that always passes `timeZone: 'Asia/Kathmandu'` (UTC+05:45, no DST [Verified-doc gt/nepal_regulatory_locale.md, IANA tz]) to `Intl.DateTimeFormat('en-IN', …)`. The explicit zone makes SSR (server `TZ=UTC`, audit A3-08) and browser output identical. The exact en-IN date pattern is fixed by a snapshot test, not assumed here. Deadlines (acceptance due, refund due) are computed on the server (NFR-I18N-003) and only displayed by the client. Relative phrases ("in 2 days") change with time and would differ between SSR and hydration, so the server HTML and the first client render show the absolute time, and dashboards switch to relative text after hydration [Assumption]. Dashboard tables label time columns "(Nepal time)"; the storefront shows no zone name.
+
+**Nepali text input.**
+
+- Inputs for names, addresses, titles, descriptions and notes accept any Unicode; no `pattern` restricts them to ASCII. Slugs are the exception and stay ASCII (NFR-I18N-004).
+- The server normalizes free text to NFC ([04 §2.8](04-domain-model-and-data-dictionary.md#28-text-normalisation-and-lengths)), because Devanagari typed on different keyboards can arrive as different code-point sequences.
+- Character counters count code points (`[...value].length`), which is what PostgreSQL `char_length` counts in the 04a CHECKs. `maxlength` is not used to cut pasted text, because it counts UTF-16 units and could cut a Devanagari cluster; an over-long value shows the counter in error and a message instead.
+- Search and filter inputs ignore `input` events while an input method is composing (`event.nativeEvent.isComposing`), so a romanized Nepali keyboard does not trigger a visit per keystroke (§11.1).
+- Text that is mostly Devanagari (product titles and descriptions, shop names) is wrapped in an element with `lang="ne"` so the font's Nepali `locl` forms apply (§5.3) and screen readers switch voice (SC 3.1.2) [Assumption: the "more than half of the letters in U+0900–U+097F" rule is proposed here and checked with the NFR-I18N-004 fixture in M4]. The page itself is `<html lang="en">` (RF-25, SC 3.1.1).
+- Location names have `name_en` and `name_ne` columns ([04a §9](04a-data-dictionary-tables.md#9-logistics-and-locations)); R1 shows `name_en`, and the R2 Nepali UI shows `name_ne`.
+
+**Bikram Sambat dates (R2).** Node 24 with ICU 78.3 has no Nepali calendar, and `ne-NP-u-ca-nepali` resolves to `gregory` [Verified-doc gt/nepal_regulatory_locale.md, local run]. BS display therefore needs a lookup-table library or an in-house month-length table, shared by SSR and the client and updated as the tables are published. R2 shows BS next to AD in order history, vendor statements and receipts; UTC stays the stored truth. Whether invoices must show BS is unverified (gt/nepal_regulatory_locale.md "could not verify") and belongs to OD-26 and VX-05. The R1 formatter signature leaves room for this (pseudocode: `formatDate(iso, { calendar: 'ad' })`, with `'bs'` added in R2).
+
+**Verified by:** formatter unit tests for money (§5.11) and for dates at the Kathmandu day boundary (18:15 UTC) (NFR-I18N-003); the SSR-versus-client snapshot test (NFR-I18N-002); the pseudo-locale run and the raw-text lint (NFR-I18N-001); the Devanagari fixture for input, search, `lang` and rendering (NFR-I18N-004). All four are T-UI area checks for 10 to number.
+
+## 12. Maintaining copied shadcn and kit components
+
+shadcn/ui is not a dependency that updates itself: the CLI copies source files into the repository, and there is no `upgrade` command (gt/ui_frontend.md; <https://ui.shadcn.com/docs/cli>). Shadcn UI Kit items arrive the same way, with fewer guarantees. Once a file is committed, DripNepal owns its bugs, its accessibility and its security. The licence policy is [ADR-0015](adr/0015-ui-foundation-shadcn-and-kit-policy.md); this section is the working procedure.
+
+### 12.1 Ownership and folders
+
+| Folder                                                                                                            | Holds                                                                                                                                            | Edit policy                                                                                                                                                                                                                |
+| ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `inertia/components/ui/`                                                                                          | Upstream shadcn/ui `radix-nova` copies only (§4.1), under their registry file names                                                              | As close to upstream as possible. A local change is allowed only for an accessibility, SSR or token fix, carries a `// dripnepal-change: <reason>` comment on the line above it, and is listed in the notices file (§12.4) |
+| `inertia/components/kit/`                                                                                         | Cleared Shadcn UI Kit free items (§4.2), one file per registry item, each with a provenance header; **empty until VX-13 is answered in writing** | Treated as our code after the move; the header records what changed                                                                                                                                                        |
+| `inertia/components/<domain>/` (for example `catalog`, `cart`, `checkout`, `orders`, `seller`, `admin`, `common`) | DripNepal-owned composed components (§4.3)                                                                                                       | Normal code review; exact folder names in [09](09-code-structure-and-engineering-standards.md)                                                                                                                             |
+| Repo-root `components/`                                                                                           | Nothing. The kit CLI writes here by default (§4.2); files are moved out before commit                                                            | CI fails if the directory exists (ADR-0015 verification)                                                                                                                                                                   |
+
+**Import direction.** Domain components import from `kit/` and `ui/`; `kit/` imports only from `ui/` and `~/lib/utils`; `ui/` imports nothing from the project except `~/lib/utils` (`cn`). An ESLint `no-restricted-imports` rule enforces the direction and bans `next/*` under `inertia/` (ADR-0015). This keeps `ui/` diffable against upstream and stops a domain rule from leaking into a primitive.
+
+**Clean-up of today's `ui/`** [Verified-repo, 34 files]: `scroll_area.tsx` is renamed to the upstream `scroll-area.tsx` so that `--diff` compares like with like; the local helpers `drip_circle_icon`, `show` and `typography` move to a project folder (§4.1). Both happen in M0 with the other clean-up.
+
+**Prefer wrapping to editing.** A storefront needs, for example, 44 px targets where the `radix-nova` button's default is 32 px (§6.4). That is done by the domain component passing a size class, not by editing `ui/button.tsx`, so the upstream diff stays empty.
+
+**Who owns what.** With one or two developers, the developer who adds or upgrades a copied file owns it until a second person has reviewed it with the checklist in §12.3. The other developer, or the product owner if there is only one developer, reviews it. The notices file records both names.
+
+### 12.2 Adding and upgrading components
+
+The CLI in the lockfile is `shadcn` 4.11.0; its `add` command accepts `--dry-run`, `--diff [path]`, `--view [path]` and `-o, --overwrite` [Verified-repo `node_modules/shadcn/dist/index.js`]. The separate `diff` command is deprecated in favour of `add --diff` (gt/ui_frontend.md). Commands run through the pinned CLI (`pnpm exec shadcn …`), so every developer gets the same output; `shadcn@latest` is used only for a migration the pinned CLI lacks, after a decision recorded in 09.
+
+**Adding a shadcn primitive** (for example the §4.1 "to add" list):
+
+1. `pnpm exec shadcn add radio-group --dry-run`: check the files it would write, the npm packages it would add and the `registryDependencies` it pulls in.
+2. Run it without `--dry-run`, then read the whole diff in the PR. Registry code is "data" to the CLI, but it runs in customers' browsers: "You trust what you install" (shadcn registry docs, gt/ui_frontend.md).
+3. **`cn` import.** Since 2026-09-03, registry items import `cn` from the npm package `cn` and declare it as a dependency (gt/ui_frontend.md). ADR-0015 keeps `~/lib/utils` as the only `cn` path, so the import is rewritten and the `cn` package is not added. A lint rule bans importing from `cn` [Assumption; 09 defines it].
+4. Review with §12.3, check it visually (step 5 of the upgrade below), add the row to the notices file.
+
+**Upgrading** (quarterly per ADR-0015, and whenever shadcn or Radix announces an accessibility or security fix):
+
+1. For each file in `ui/`, run `pnpm exec shadcn add <name> --diff` and save the output in the PR description.
+2. Classify each hunk: upstream fix to take, upstream style change to take or skip (with a reason), or conflict with a `dripnepal-change`.
+3. Apply by hand. `-o, --overwrite` is never used on a file that has a `dripnepal-change` comment, because it silently drops local fixes.
+4. Run typecheck, lint, the component tests and axe (T-A11Y-001).
+5. **Visual check:** open the dev-only component gallery (the existing `/design-system` page, which RF-40 makes development-only) in light and dark themes at 360 px and 1280 px, and tab through each changed component to confirm focus visibility and order. Screenshot comparison is optional [Assumption; 10 decides whether to automate it].
+6. Update the "last compared" date in the notices file.
+
+**Never re-initialize** with a bare `shadcn init`: since 2026-07-02 it selects Base UI, and `style` cannot change after initialization; a re-init must pass `-b radix` explicitly (gt/ui_frontend.md). The registry index docs and the namespace docs disagree on whether `add` can discover registries automatically, so every `components.json` diff is reviewed as a security-relevant change (gt/ui_frontend.md, "contradicted").
+
+**Adding a cleared kit item** (only after the VX-13 reply is stored with the register, ADR-0015 decision 4):
+
+1. Dry-run the item with the registry entry configured on the developer machine; kit items declare no `dependencies` or `registryDependencies` and write to repo-root `components/<name>.tsx` (§4.2). Whether the registry entry may be committed is Consistency notes item 44.
+2. Add the missing primitives with `shadcn add` and the npm packages with `pnpm add`, each justified in the PR as 07 §7.1 requires.
+3. Move the file to `inertia/components/kit/<item>.tsx`. The free `table` item collides with `ui/table`, so it becomes `kit/table1.tsx`.
+4. Replace `next/link` with the Inertia `Link` and typed routes, `next/image` with the project image component (§10.4), and Zod, React Hook Form, Formisch or Valibot wiring with TanStack Form (§7.1). Remove `"use client"` and demo data (hard-coded products, remote demo images).
+5. Add the provenance header and the notices-file row, then review with §12.3.
+
+Provenance header (a comment at the top of every `kit/` file):
+
+```ts
+/**
+ * Source: Shadcn UI Kit (Bundui), free item "Table 1", https://shadcnuikit.com/r/table.json
+ * Retrieved: 2026-10-05 with shadcn 4.11.0 (dry run reviewed)
+ * Licence: THIRD_PARTY_NOTICES.md#table1 (VX-13 reply of <date>, stored with the risk register)
+ * Local changes: moved from components/table.tsx; TanStack Table wiring; accessible names on row actions
+ */
+```
+
+**Verified by:** the ADR-0015 CI checks (no `@commercn`, no repo-root `components/`, provenance header on every `kit/` file, `kit/` empty until the VX-13 reply is linked, no `next/*` imports) and the notices check in §12.4.
+
+### 12.3 Review checklist for copied code
+
+Every copied or upgraded file passes this list in its PR, whether it comes from shadcn/ui or from the kit. **Nothing is assumed accessible or secure because of its source:** the kit publishes no WCAG conformance statement and only general claims ("accessible markup") (gt/shadcnuikit.md), CommerCN's blocks claimed WAI-ARIA compliance while having no accessible names on 13 icon buttons (gt/ui_frontend.md), and shadcn states that you trust what you install.
+
+| Area           | Check                                                                                                                                                                                                                                                                          | How it is verified                                                                  |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| Licence        | Source and licence recorded; no premium kit code (OD-22); a kit item only after the VX-13 reply                                                                                                                                                                                | Notices check (§12.4); ADR-0015 CI checks                                           |
+| Imports        | No `next/*`, no `cn` package, no direct `@base-ui/react` (kit `autocomplete3` and `autocomplete4` import it, §4.2), no second form library; every npm import is in `package.json` and justified                                                                                | ESLint `no-restricted-imports`; lockfile diff review (07 §7.1)                      |
+| SSR safety     | No `window`, `document`, `localStorage` or `matchMedia` at module scope or during render (only in effects); IDs from React `useId`, not `Math.random()`; no `Date.now()` in render output; no browser-only library rendered on the server without a client guard               | SSR render test of the page that uses it; no hydration warnings in the browser test |
+| Accessibility  | Accessible names on icon buttons; labels tied to inputs (§7.1); keyboard model of §9.2; visible focus not obscured (SC 2.4.11); targets per §6.4; no hover-only controls; no drag-only interaction (SC 2.5.7); reduced motion respected (§5.7); colour only from tokens (§5.2) | axe (T-A11Y-001) with the component open; keyboard walk-through in the PR           |
+| Forms          | TanStack Form state; server errors mapped through `applyServerErrors` (§7.1); `autocomplete` tokens on personal fields (SC 1.3.5)                                                                                                                                              | Component test with a 422 response                                                  |
+| Security       | No `dangerouslySetInnerHTML` with data; no inline `style` attributes that the CSP would block (§5.7, 07 §7.3); no external script, font or image URLs; no analytics or tracking code; links built from typed routes, not strings                                               | Lint rules; CSP report-only run in staging                                          |
+| Text and money | Strings from the catalogs (§11.8); money only through `formatNPR`; no `$`, `toFixed` or `toLocaleString` on money                                                                                                                                                              | Raw-text lint; formatter lint rule (audit A3-07)                                    |
+| Weight         | Size change of the storefront chunk within the §10.1 budget                                                                                                                                                                                                                    | Bundle-size check (T-UI area, proposed)                                             |
+
+### 12.4 Licence tracking file
+
+Third-party source code copied into the repository is tracked in one file at the repository root, `THIRD_PARTY_NOTICES.md` (name proposed; 09 may choose another). npm packages are covered by the CI licence report instead (ADR-0015 verification), and font files by their package metadata.
+
+| Column                | Content                                                                                                                       |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Path                  | `inertia/components/ui/button.tsx`                                                                                            |
+| Source                | Registry item URL, for example `https://ui.shadcn.com/r/styles/radix-nova/button.json`                                        |
+| Licence               | Licence name and where its text is kept (the shadcn/ui MIT text is copied into the file once; kit items link the VX-13 reply) |
+| Retrieved             | Date and CLI version                                                                                                          |
+| Last compared         | Date of the last `--diff` (§12.2)                                                                                             |
+| Local changes         | Summary matching the `dripnepal-change` comments or the provenance header                                                     |
+| Added by, reviewed by | Names (§12.1)                                                                                                                 |
+
+A CI script compares the file list of `ui/` and `kit/` with the rows and fails on a missing or extra row (T-UI area, proposed). The shadcn/ui licence is recorded as MIT per ADR-0015; the upstream licence text is copied and checked when the file is created in M0 [Assumption until then]. OD-23 (the repository's own MIT `LICENSE` versus `UNLICENSED` in `package.json`) does not change this file, but it decides what the repository itself grants to others.
+
+## 13. Current-UI remediation list
+
+The frontend findings of [00 §4.6](00-context-assumptions-and-questions.md#46-consolidated-repository-findings-rf-01--rf-47), mapped to the fix defined in this document, the milestone (the "Fix" column of 00 §4.6, which canon §16 matches) and the check that proves it. Evidence was re-read at the current branch head on 2026-09-26 where the table says [Verified-repo].
+
+| RF    | Finding (short)                                                                                                                                                                  | Fix                                                                                                                                                                                                                                                                                                                                                | Where specified                   | Milestone                                                  | Verified by                                                                                            |
+| ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| RF-02 | Storefront, cart and checkout behind `guest()` (`start/routes.ts:49,57,64` [Verified-repo]); two-segment catch-all                                                               | Routes of §2.2 with no `guest()` on storefront pages; products at `/p/{productSlug}-{publicId}`; navigation entries from code configuration (FR-SRCH-007); unknown paths render the 404 page (§8.3)                                                                                                                                                | §2.2, §8.3                        | M0                                                         | AC-J01-01, AC-J05-01; a route-table test that no storefront route has `guest()` (T-UI area, proposed)  |
+| RF-08 | SSR on in `config/inertia.ts`, off in `vite.config.ts:11`; `createRoot` in `inertia/app.tsx:30`; theme after JavaScript [Verified-repo]                                          | Both SSR flags on, `hydrateRoot`, theme class and `lang` rendered by the server from the theme cookie (§1.2). Starts after the OD-25 spike in the first days of M0 (risks register §5)                                                                                                                                                             | §1.2, §10.1                       | M0                                                         | AC-J01-06 (no JavaScript); theme-without-JavaScript test (T-UI area, proposed); no hydration warnings  |
+| RF-10 | `/cart` and `/checkout` crash without `CartProvider`; cart lost between layouts                                                                                                  | M0 hotfix: one persistent storefront layout that provides the cart. M5: cart from `getCart` props (§11.3), the client reducer removed                                                                                                                                                                                                              | §11.3                             | M0 hotfix, M5                                              | AC-J03-01                                                                                              |
+| RF-16 | Float money; savings subtracted twice; client computes totals and the order number                                                                                               | Integer paisa from the M0 baseline ([ADR-0007](adr/0007-money-integer-minor-units.md)); UI renders only server totals through `PriceTag` and `formatNPR`; client coupon, `TAX_RATE` and order-number code deleted                                                                                                                                  | §4.3, §5.11, §11.3                | M0 baseline, M5                                            | AC-J03-06, AC-J05-02, T-SEC-003                                                                        |
+| RF-25 | Mixed money and date formats; no i18n layer; `<html>` without `lang` (`resources/views/inertia_layout.edge:2` [Verified-repo])                                                   | M0: `<html lang="en">` and the catalog skeleton (`resources/lang/en`). M4: `formatNPR` and `formatDateTime` replace every ad-hoc call (22 files under `inertia/` call `toLocaleString` today [Verified-repo, grep 2026-09-26]); lint bans the old calls                                                                                            | §5.11, §11.8                      | M0 (lang), M4                                              | Formatter unit tests; SSR-versus-client snapshot (NFR-I18N-002); AC-J01-06 checks `lang`               |
+| RF-26 | Page props logged to the console and SSR logs (`inertia/layouts/root_layout.tsx:28` [Verified-repo])                                                                             | Remove the log; ESLint `no-console` under `inertia/**` (09)                                                                                                                                                                                                                                                                                        | §10.6                             | M0                                                         | AC-J00-10; production-bundle string check (T-UI area, proposed)                                        |
+| RF-27 | Catalog, product page, search and cart on mocks; filters not in the URL; add-to-cart does nothing                                                                                | Page props from the listing and product queries; URL-only filter state (§11.1); variant selection and `addCartItem` (§11.2); server cart (§11.3); `inertia/lib/mock-data` deleted once each page has its contract                                                                                                                                  | §11.1–§11.3                       | M4, M5                                                     | AC-J01-02, AC-J02-05, AC-J03-01                                                                        |
+| RF-28 | Unlabeled inputs, hover-only controls, small targets, no live regions, nested interactive elements; no cart on phones (`navbar/index.tsx:126` `hidden sm:block` [Verified-repo]) | Labels through `field` (§7.1); `ProductCard` without hover-only controls or nested links (§4.3); targets per §6.4; live regions (§7.4, §11.7); cart control visible at every width with its count in the name. Auth-page labels are fixed with the M1 auth pages                                                                                   | §4.3, §6.4, §7.1, §7.4, §9, §11.7 | M4, M5 (auth pages M1)                                     | AC-J03-07, AC-J02-08, T-A11Y-001                                                                       |
+| RF-29 | 75 of 77 districts; phone rule rejects valid numbers; shop form offers Bagmati only                                                                                              | `AddressForm` from location reference data and `NepalPhoneInput` (§4.3); the shop application reuses the same form                                                                                                                                                                                                                                 | §4.3, §7.1                        | M1 (addresses), M2 (shop form)                             | AC-J04-04, AC-J05-10                                                                                   |
+| RF-30 | Devtools in production (`inertia/app.tsx:12-13,34` [Verified-repo]), a 2.8 MB image, duplicate CSS imports, unused Geist                                                         | M0: devtools behind a development-only dynamic import, duplicate imports and Geist removed (§5.3, §10.5). M4: image pipeline and derivative widths 320, 640, 1024, 1600 px (§10.4), and the budget check (§10.1)                                                                                                                                   | §5.3, §10.1, §10.4, §10.5, §10.6  | M0, M4                                                     | Bundle-size and devtools-string checks (T-UI area, proposed); T-PERF-001; AC-J01-08                    |
+| RF-40 | Debug, mock and design-system pages routed in production (`start/routes.ts:51-71`)                                                                                               | Registered only outside production; `/design-system` becomes the development-only component gallery used by §12.2                                                                                                                                                                                                                                  | §10.6, §12.2                      | M0                                                         | A route-list test run with the production environment (T-UI area, proposed)                            |
+| RF-47 | Unrouted and dead UI (`pages/landing/**`, 17 files; `pages/shops/dashboard/shop-management/**`, 50 files [Verified-repo]); no frontend checks                                    | Frontend CI (typecheck, lint, component tests, axe, one browser smoke of home → product → cart → checkout) from M0, with the canon M0 CI work. M4: `landing/**` deleted or moved outside the build; the `shop-management` prototypes kept only as visual reference for the M2 seller settings screens, then deleted when those screens ship (§3.4) | §3.4, §9.4                        | M0 (checks), M4 (dead code; 00 gives M4 for the whole row) | CI pipeline in [10](10-testing-and-quality-gates.md); no unreferenced page files (T-UI area, proposed) |
+
+**Order of work.** M0 carries RF-02, RF-08, RF-26, RF-40, the M0 halves of RF-10, RF-16, RF-25 and RF-30, and the frontend CI of RF-47. RF-08 waits only for the OD-25 spike; if the Inertia v3 upgrade is chosen, it is done before the SSR fix, because the upgrade renames events used in §8.4 and changes the SSR entry. RF-29 lands with the M1 address book and the M2 shop application. RF-27 and RF-28 are M4 and M5 storefront work, where §11.1–§11.3 are built. No RF item here waits on VX-12 or VX-13: `formatNPR` keeps the "Rs" constant until VX-12 is answered (§5.11), and no fix uses a kit file.
+
 ## Consistency notes for editor
 
 1. **NPR prefix (VX-12, owned here).** §5.11 recommends "Rs" with no period ("Rs 12,34,567.50"), as used by 00 A-11, 02 AC-J00-05, 03 §6, 04 §18.1, ADR-0007, canon §17.8 and the register's M4 safe default. Canon §6.6 says "Rs." and should change if the product owner confirms. Still [Verify-external VX-12]. §5.11 also composes the prefix as a constant instead of taking ICU's `narrowSymbol` output; the visible string is the same.
@@ -1119,3 +1592,23 @@ A 360 px phone at device pixel ratio 3 renders a two-column card at about 180 CS
 30. **Suspended user response (§8.3).** The `ACCOUNT_SUSPENDED` row follows 07 §3.3 (403 while the session exists, 401 `UNAUTHENTICATED` after `identity.revoke_sessions`). 01 AC-FR-IAM-006-1/-2 and canon §12 T-SEC-010 still describe 403 only; 02 AC-J00-03 describes the 403 path.
 31. **Search `q` bounds (§7.2).** The storefront and table search boxes send `q` only with 0 or 2+ characters, using the 2–100 bound that 07 TM-24 proposes [Assumption]; 06 §6.3 sets no bound yet and should adopt one.
 32. **Route registry in the bundle (§10.6).** 07 §1.1 records that the Tuyau registry ships every route pattern (audit A5-17) and accepts it; §10.6 now treats it only as bundle weight. If 09 decides to trim the registry, that is a size optimisation, not a security control.
+33. **Filter parameter names (§11.1).** 02 J-01 step 3 and AC-J01-02 write `size=m`; 06 §6.3 names attribute filters by attribute code (`apparel_size`, `shoe_size_eu`, `waist_size_in`, `color`). §11.1 follows 06, the owner of the allowlist; 02 should change its examples. The value lists wait for OD-15.
+34. **Inertia query serialization (§11.1, §7.2).** `@inertiajs/core` 2.3.27 merges a `data` object into the URL with `qs` in `brackets` format (`apparel_size[]=m`) [Verified-repo], which the 06 §6.3 repeated-parameter form rejects. §11.1 builds the URL string and passes empty `data`; the `router.get(url, query, …)` sketch in §7.2 must be read the same way, and 09 implements one shared URL builder for listings and tables.
+35. **Canonical query order (§11.1)** is proposed here. 06 §6.3 defines names and limits but no order, and the server keeps accepting any order; only the client and tests rely on it. 06 may adopt it for API examples.
+36. **Variant behaviour (§11.2).** `?variant={variantId}` stays [Assumption] as in 02 J-02. New here: the primary/secondary axis rule, "Not available in <colour>" for combinations that are not offered, the canonical link without `?variant=`, and not preselecting a sold-out variant from a link. All wait for product-owner review with the M4 designs.
+37. **Sold-out wording and the disabled button (§11.2).** 01 AC-FR-SRCH-004-2 says "sold out"; 02 J-02 step 3 and AC-J02-04 say "Out of stock". §11.2 uses "Sold out" (01 owns the FR). AC-J02-04 ("Add to cart stays disabled") and the J-02 validation row (pressing it shows "Select a size") are both met with `aria-disabled`; 02 may state that explicitly. AC-J02-04 also expects the accessible name to include "out of stock"; with 08's wording the name is "XL, sold out", so 02 should change the AC text (or the product owner picks "Out of stock" and 08, 01 follow) before the M4 test is written.
+38. **Cart notice schema (§11.3).** 06 §13.4 describes `getCart` as returning "revalidation notices (FR-CART-002)" without a schema, and `openapi.yaml` lists `getCart` as pending. The kinds `price_changed`, `insufficient_stock`, `out_of_stock`, `unavailable` and `merge_capped` are proposed here. 05 §8.2 says cart lines are refreshed "when the customer acknowledges", but no operation acknowledges a price change; §11.3 assumes `updateCartItem` re-reads `unit_price_minor_at_add`. 06 should confirm that or add an operation (which would need canon §6.5).
+39. **Checkout recovery (§11.4).** 02 J-05 step 4 keys the `sessionStorage` entry "by cart version and expected total"; §11.4 keys it by user and stores the whole body (which includes both), so they are compatible. The frozen-after-send rule, the `sent_at` field and the 5-minute clock tolerance are [Assumption] here. The `listMyOrders` check needs items with `number`, `placed_at` and `grand_total` (a Money object, compared by `amount_minor`, as in the 06 §14.4 `placeOrder` example); 06 §13.4 says only "Orders with shop-order statuses" and `openapi.yaml` lists the operation as pending, so the implementing PR must include those fields.
+40. **Client storage (§11.4, extends item 20).** The checkout intent entry (key, address ID, payment method, expected total, cart version, customer note) is one more `sessionStorage` item that 07 §5.3 should list, with its clearing rules: success, business failure, logout and 72 hours.
+41. **Message catalogs (§11.8).** `@adonisjs/i18n` 3.0.1 is not installed and `resources/lang` does not exist [Verified-repo]. Bundling catalogs per surface as static JSON on the client, rich-text tag support in `intl-messageformat`, and the dashboard-only switch to relative times are [Assumption] here; 09 decides the loader.
+42. **`lang="ne"` on vendor text (§11.8).** The B4b critic left the rule open until M4. §11.8 proposes "more than half of the letters in U+0900–U+097F" [Assumption]; no document stores a language per field, so the heuristic is needed until one does.
+43. **File and naming conventions (§12).** `THIRD_PARTY_NOTICES.md`, the `// dripnepal-change:` marker, the `inertia/components/kit/<item>.tsx` naming (`kit/table1.tsx` for the colliding `table` item), renaming `ui/scroll_area.tsx` to `scroll-area.tsx`, the lint rule against the `cn` package and the domain folder names are proposals for 09 to confirm.
+44. **Kit registry in `components.json` (§12.2).** 07 TM-26 proposes T-SEC-026, which fails CI on "any registry other than `registry.npmjs.org` in the lockfile or `components.json`". ADR-0015's verification allows a committed `@shadcnuikit` entry as long as any header uses `${SHADCNUIKIT_API_KEY}` and never a literal. The two conflict if the entry is committed once VX-13 clears. §12.2 avoids the conflict by configuring the registry only on the developer machine during an add. 07 and ADR-0015 should agree on one rule.
+45. **RF-47 milestone (§13).** 00 §4.6 and canon §16 give M4 for the whole finding. §13 splits it: frontend CI checks from M0 (canon §4 M0 already includes CI and the test harness), dead-code removal in M4. RF-28's auth-page labels move to M1 with the auth pages (§3.4), earlier than the M4/M5 of 00.
+46. **Test IDs (§11–§13).** Numbered IDs cited from canon §12: T-A11Y-001, T-CHK-004, T-PERF-001, T-SEC-001, T-SEC-002, T-SEC-003. Cited as proposed in 05: T-CART-002, T-CHK-002, T-CHK-005. Every other check is "T-UI area, proposed" for 10 to register: listing URL builder and history, variant availability matrix, cart notice actions, checkout recovery after a dropped response, role-based navigation, live-region assertions, Kathmandu day-boundary dates, pseudo-locale, Devanagari fixture, notices-file check, storefront routes without `guest()`, production route list, bundle size and devtools strings, and unreferenced page files.
+47. **Proposed canon items used in §11–§13.** The routes `/men/{navSlug}` and `/women/{navSlug}` (item 2) and the kill-switch code, still shown as 503 `PROVIDER_UNAVAILABLE` (item 3). No other proposed operation, permission or error code is used in these sections.
+48. **NPR prefix (VX-12, items 1 and 28).** §11.8 keeps the one-constant formatter with "Rs" and no period. Still [Verify-external VX-12]; canon §6.6 ("Rs.") is the only outlier.
+49. **Unknown listing parameters on pages (§11.1).** 01 AC-FR-SRCH-001-3 drops unknown or invalid page parameters "with a canonical redirect"; 02 AC-J01-03 says `/men?colour=red` "renders 200 and the canonical link omits `colour`". §11.1 follows 01, the owner of FR acceptance criteria; the two agree only if the AC-J01-03 test follows the redirect. 02 should say "redirects to `/men`, which renders 200".
+50. **Variant availability in `getProduct` (§11.2).** 06 §13.2 lists variants with `option_values`, `price` and a boolean `in_stock`; 02 J-02 step 2 names `option_signature` and "availability per variant", and J-02 steps 4–5 show "Only 2 left" and cap the quantity at the available stock. §11.2 needs an available quantity per variant, capped at 10 [Assumption] so exact stock levels are not published. 06 and `openapi.yaml` should add it (for example `available_capped`, name for 06) when `getProduct` is specified, and 02 and 06 should agree on `option_values` versus `option_signature`.
+51. **Pinned CLI (§4.1 versus §12.2).** §4.1's "to add" note runs `pnpm dlx shadcn add … --dry-run`, which fetches the latest CLI; §12.2 runs the lockfile's `shadcn` 4.11.0 with `pnpm exec`, as ADR-0015 decision 2 ("with the pinned CLI") requires. §12.2 governs; §4.1 should read `pnpm exec` in the next edit of that section.
+52. **Paisa display in 05 (§11.3).** 05 §8.2 shows "Price changed from Rs 1,299.00 to Rs 1,399.00"; 00 A-11 and §5.11 show paisa only when non-zero ("Rs 1,299"), which 02 AC-J03-03 also uses ("Rs 1,500"). The example in 05 should drop ".00"; the formatter is the only source of the display string either way.
