@@ -6,6 +6,8 @@ Reviewed: critic pass B5 part 1 (2026-09-26)
 
 Reviewed: critic pass B5 part 2 (2026-09-26)
 
+Reviewed: critic pass B5 part 3 (2026-09-26)
+
 This document is the standard the DripNepal codebase must meet: where code lives, which module may depend on which, what each layer of a request may and may not do, and (in later sections) how errors, configuration, logging, migrations, dependencies, reviews and the frontend are handled. It describes the **target state**. Files in the repository today are evidence of what exists and are cited as [Verified-repo]; a file is kept only where it already meets the standard, and each "Current code → target" table says whether it is kept, fixed, rewritten or deleted (product owner, 2026-09-26: "rewrite is fine where needed").
 
 **What this document does not own.** Module map, dependency diagram and job catalogue: [03](03-system-architecture.md#4-modules-and-dependency-rules). Tables, columns, constraints and settings: [04](04-domain-model-and-data-dictionary.md) and [04a](04a-data-dictionary-tables.md). State machines, lock order and transaction rules for money and stock: [05](05-order-payment-and-inventory-lifecycles.md). Endpoints, status codes, error codes and idempotency: [06](06-api-design.md) and [openapi.yaml](openapi.yaml). Permissions, threats and privacy: [07](07-security-threat-model-and-permissions.md). UI behaviour: [08](08-ui-ux-and-design-system.md). Test ID registry and CI gates: [10](10-testing-and-quality-gates.md). Runbooks and job operations: [11](11-deployment-and-operations.md). Milestones: [12](12-roadmap-and-backlog.md).
@@ -14,22 +16,22 @@ This document is the standard the DripNepal codebase must meet: where code lives
 
 ## Reading guide
 
-| §   | Title                                                     | Status in this draft                       |
-| --- | --------------------------------------------------------- | ------------------------------------------ |
-| 1   | Repository structure                                      | Written                                    |
-| 2   | Module ownership and dependency rules                     | Written                                    |
-| 3   | Layer responsibilities                                    | Written                                    |
-| 4   | API serialization and shared contracts                    | Written                                    |
-| 5   | Error handling                                            | Written                                    |
-| 6   | Configuration validation and secrets                      | Written                                    |
-| 7   | Structured logging and request IDs                        | Written                                    |
-| 8   | Migrations and seeders                                    | Planned                                    |
-| 9   | Safe production initialization                            | Planned                                    |
-| 10  | Dependency policy                                         | Planned                                    |
-| 11  | Lint, format, typecheck and review                        | Planned                                    |
-| 12  | Vertical slice: vendor product creation (`createProduct`) | Planned                                    |
-| 13  | Frontend code standards                                   | Planned                                    |
-| —   | Consistency notes for editor                              | Written (for §1–§7; later parts add to it) |
+| §   | Title                                                     | Status in this draft                        |
+| --- | --------------------------------------------------------- | ------------------------------------------- |
+| 1   | Repository structure                                      | Written                                     |
+| 2   | Module ownership and dependency rules                     | Written                                     |
+| 3   | Layer responsibilities                                    | Written                                     |
+| 4   | API serialization and shared contracts                    | Written                                     |
+| 5   | Error handling                                            | Written                                     |
+| 6   | Configuration validation and secrets                      | Written                                     |
+| 7   | Structured logging and request IDs                        | Written                                     |
+| 8   | Migrations and seeders                                    | Written                                     |
+| 9   | Safe production initialization                            | Written                                     |
+| 10  | Dependency policy                                         | Written                                     |
+| 11  | Lint, format, typecheck and review                        | Written                                     |
+| 12  | Vertical slice: vendor product creation (`createProduct`) | Planned                                     |
+| 13  | Frontend code standards                                   | Planned                                     |
+| —   | Consistency notes for editor                              | Written (for §1–§11; later parts add to it) |
 
 A developer adding a feature reads §1.3 (names), §2.2 (what the module may import) and §3.2 (what each layer does). A reviewer uses §3.13 as the list of things to reject.
 
@@ -1411,6 +1413,823 @@ Verified by the lint gate (ESLint in CI and pre-commit, §11) and a test that re
 | `eslint.config.js`                                                         | `configApp(...react)` with no `no-console` rule                                          | **Fix**: add `no-console` and the §6.3 import bans                                 | RF-26                         | M0        |
 | `config/database.ts` (debug)                                               | `debug: app.inDev`, `prettyPrintDebugQueries: true`                                      | **Fix** (§7.6)                                                                     | RF-26                         | M0        |
 
+---
+
+## 8. Migrations and seeders
+
+The schema itself is owned by [04](04-domain-model-and-data-dictionary.md) and [04a](04a-data-dictionary-tables.md), and the re-baseline decision is owned by [ADR-0011](adr/0011-schema-rebaseline-before-production.md). This section sets the code standard for migration files, CI immutability, zero-downtime changes and seeders. It does not repeat the baseline file order ([04 §20.2.2](04-domain-model-and-data-dictionary.md#2022-baseline-files-and-their-order)) or the expand/contract SQL ([04 §20.2.4](04-domain-model-and-data-dictionary.md#2024-after-the-first-production-deploy-forward-only-expand-and-contract)).
+
+**Facts about the installed Lucid 22.4.2 that the rules below rely on** [Verified-repo `node_modules/@adonisjs/lucid`]:
+
+- Each migration file runs in its own transaction unless the class sets `static disableTransactions = true` (`build/src/migration/runner.js:117-128`, `:177`). The runner holds a PostgreSQL advisory lock while it runs (`runner.js:226`), so two release steps cannot migrate at the same time.
+- `migration:run` asks for confirmation in production unless `--force` is passed (`build/commands/migration/run.js:85`). It regenerates `database/schema.ts` except in production or with `--no-schema-generate` (`run.js:67`). `--dry-run` prints the SQL without running it.
+- `make:migration <name>` always writes `<Date.now()>_<create|alter>_<table>_table.ts` (`build/commands/make_migration.js:85-89`).
+- The connection config accepts `migrations.disableRollbacksInProduction` and `migrations.naturalSort`, plus `seeders.paths` and `seeders.naturalSort` (`build/src/types/database.d.ts:261-274`).
+- `db:seed` loads every script file under each seeder path **recursively** and sorts it by path (`build/src/seeders/source.js`; `@poppinss/utils` 7.0.1 `fsReadAll` uses `readdir(…, { recursive: true })`). A seeder runs only when its `static environment` includes the current `NODE_ENV` (`build/src/seeders/runner.js:57`). `db:seed` has no production confirmation.
+
+### 8.1 The M0 re-baseline (ADR-0011, OD-01)
+
+[ADR-0011](adr/0011-schema-rebaseline-before-production.md) is **Proposed** and waits for **OD-01**: the product owner must confirm in writing that no hosted database holds real data [Open OD-01]. The [risks §5](risks-and-open-decisions.md#5-decisions-that-block-implementation-by-milestone) matrix makes OD-01 a gate for merging the M0 baseline. What this document adds to ADR-0011 and 04 §20.2:
+
+1. **One PR, 14 files, in the order of [04 §20.2.2](04-domain-model-and-data-dictionary.md#2022-baseline-files-and-their-order).** Each file is created with `node ace make:migration`, so the timestamp comes from the clock and not from a person (RF-41). The generated suffix is then renamed to the 04 name, for example `…_create_baseline_identities_table.ts` becomes `1790000000003_baseline_identity.ts`. The prefix is never edited. Files are generated one after another so the timestamps follow the table order.
+2. **The same PR** deletes the 26 old files, adds the `schemaGeneration` block (§8.7), regenerates `database/schema.ts`, rewrites the models against it, and adds the reference seeders (§8.8). A baseline that compiles against the old models cannot be reviewed on its own.
+3. **Review evidence:** the `node ace migration:run --dry-run` output on an empty database (the full DDL, read against 04a) and green T-ARCH-010, T-ARCH-011, T-ARCH-012 and T-ARCH-015 (proposed in 04/04a). Two reviewers, or a product-owner walkthrough with one developer (ADR-0011).
+4. **Until the first production deploy** the baseline may still be re-squashed (ADR-0011); from then on it is frozen like every other file (§8.4).
+
+### 8.2 File naming and the file template
+
+| Rule      | Standard                                                                                                                                                                                             | Check                                                                                                                  |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| File name | `<13-digit generated timestamp>_<verb>_<subject>.ts`, `snake_case`. Verbs: `baseline`, `create`, `add`, `alter`, `drop`, `validate`, `index`, `grant`                                                | Regex `^\d{13}_(baseline\|create\|add\|alter\|drop\|validate\|index\|grant)_[a-z0-9_]+\.ts$` in the lock script (§8.4) |
+| Timestamp | Produced by `make:migration`, never typed. After the first deploy a new file's timestamp must be later than the newest locked file, so that a rebased branch cannot insert a migration "in the past" | Lock script                                                                                                            |
+| Imports   | `@adonisjs/lucid/schema` only. Never `#constants`, `#models`, `#modules`, `app/`, `shared/` or `start/` (ADR-0011 decision 3)                                                                        | dependency-cruiser rule 7 `migrations-self-contained` (§2.4)                                                           |
+| Timeouts  | The first statement is `SET LOCAL lock_timeout = '5s'` (transactional files) or `SET lock_timeout = '5s'` followed by a final `RESET lock_timeout` (files with `disableTransactions`)                | Lock script greps the first statement                                                                                  |
+| `down()`  | Written for development and CI rollback tests. `migrations.disableRollbacksInProduction: true` in `config/database.ts`, so production never runs it (ADR-0011 decision 5)                            | Config review                                                                                                          |
+
+```ts
+// database/migrations/1790000123456_add_products_scheduled_status.ts — design sketch.
+// BaseSchema, this.schema.raw() and static disableTransactions are verified in
+// @adonisjs/lucid 22.4.2 build/src/schema/main.d.ts. The status value is illustrative only.
+import { BaseSchema } from '@adonisjs/lucid/schema'
+
+export default class extends BaseSchema {
+  async up() {
+    // each file runs in its own transaction, so SET LOCAL ends with it
+    this.schema.raw(`SET LOCAL lock_timeout = '5s'`)
+    this.schema.raw(`
+      ALTER TABLE products ADD CONSTRAINT products_status_check_v2
+        CHECK (status IN ('draft','pending_review','published','unpublished',
+                          'rejected','archived','blocked','scheduled'))
+        NOT VALID
+    `)
+    // VALIDATE, DROP and RENAME follow in this file or the next release, as 04 §20.2.4 shows
+  }
+
+  async down() {
+    this.schema.raw(`ALTER TABLE products DROP CONSTRAINT IF EXISTS products_status_check_v2`)
+  }
+}
+```
+
+Value lists are written as literals. The same PR changes the TypeScript array in `app/modules/catalog/domain/product_status.ts`, and T-ARCH-011 (proposed in 04) fails if the two differ.
+
+### 8.3 One concern per migration
+
+- **One file changes one table for one reason.** The baseline is the only exception: one file per module group (04 §20.2.2).
+- **`CREATE INDEX CONCURRENTLY` goes in its own file** with `static disableTransactions = true` and nothing else, because the statement cannot run inside a transaction ([04 §20.2.4](04-domain-model-and-data-dictionary.md#2024-after-the-first-production-deploy-forward-only-expand-and-contract)). If it fails it leaves an `INVALID` index behind. The file therefore starts with `DROP INDEX CONCURRENTLY IF EXISTS <name>`, so re-running it is safe.
+- **No data backfill inside a migration.** A migration may run one bounded `UPDATE` on a small configuration table (under 1,000 rows, for example `platform_settings`). A backfill of a Record or Entity table runs as a batched, idempotent maintenance job (pg-boss queue owned by the table's module, [03 §9](03-system-architecture.md#9-asynchronous-work); 11 runs it). Long `UPDATE`s inside the release step hold locks while the old code is still serving traffic.
+- **No application behaviour in migrations.** Seeding reference rows is the job of seeders (§8.8). Migrations create structure, constraints, triggers and grants.
+- **Grants and runtime roles** go in `grant_*` files guarded like baseline file 14: `DO $$ BEGIN IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'dripnepal_app') THEN … END IF; END $$`. A developer database without the role still migrates ([04 §20.2.2](04-domain-model-and-data-dictionary.md#2022-baseline-files-and-their-order), [07 §4.10](07-security-threat-model-and-permissions.md#410-database-roles-and-grants)).
+
+### 8.4 Applied migrations are never edited (RF-41)
+
+Today migrations have been edited in place after they were applied (commit `9144745` changed `payments.paid_at` inside the create migration), and they import `#constants` ([ADR-0011](adr/0011-schema-rebaseline-before-production.md) context; RF-41). From the first production deploy the rule is mechanical.
+
+**`database/migrations.lock`** (committed; format proposed here) has one line per migration file, in timestamp order: `<sha256 of the file bytes>  <file name>`. The file is created by the release that first deploys production. From then on the lock script fails when a locked file is edited, renamed or deleted (the fix is a new migration), when a new file is older than the newest locked one (regenerate it after rebasing), when a file and its lock line do not match up, or when a name or first statement breaks §8.2 (the first-statement check is left out of the sketch).
+
+```js
+// scripts/check_migrations_lock.mjs — design sketch using only Node 24 built-ins
+// (node:crypto createHash, node:fs readFileSync/readdirSync). Proposed; wired into CI by 10.
+import { createHash } from 'node:crypto'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
+
+const dir = 'database/migrations'
+const LOCK = 'database/migrations.lock'
+const NAME = /^\d{13}_(baseline|create|add|alter|drop|validate|index|grant)_[a-z0-9_]+\.ts$/
+const files = readdirSync(dir)
+  .filter((f) => f.endsWith('.ts'))
+  .sort()
+// Before the first production deploy there is no lock file: only the name rules apply.
+const lockExists = existsSync(LOCK)
+const locked = lockExists
+  ? readFileSync(LOCK, 'utf8')
+      .trim()
+      .split('\n')
+      .map((line) => line.split(/\s+/))
+  : []
+const errors = []
+
+for (const [hash, name] of locked) {
+  if (!files.includes(name)) errors.push(`${name}: locked migration deleted or renamed`)
+  else if (
+    createHash('sha256')
+      .update(readFileSync(`${dir}/${name}`))
+      .digest('hex') !== hash
+  )
+    errors.push(`${name}: applied migration changed; write a new migration instead`)
+}
+const newest = locked.at(-1)?.[1] ?? ''
+for (const name of files.filter((f) => !locked.some(([, n]) => n === f))) {
+  if (!NAME.test(name)) errors.push(`${name}: file name does not follow 09 §8.2`)
+  if (name < newest) errors.push(`${name}: older than ${newest}; regenerate after rebasing`)
+  if (lockExists) errors.push(`${name}: add its line to ${LOCK}`) // the --write mode appends it
+}
+if (errors.length) {
+  process.stderr.write(errors.join('\n') + '\n')
+  process.exit(1)
+}
+```
+
+A `--write` mode (left out of the sketch) appends lines for new files. Until the lock file exists (M0 to the first production deploy), the script checks only file names, so the baseline can still be re-squashed (§8.1 item 4). Trade-off: a whitespace-only edit of an applied file also fails, which is intended. Verified by a script test with an edited fixture (proposed; ID from [10](10-testing-and-quality-gates.md)); this is ADR-0011's "migration immutability check".
+
+### 8.5 Zero-downtime changes: expand and contract
+
+The release step runs `node ace migration:run --force` **before** the new code starts ([03 §5.4](03-system-architecture.md#54-release-sequence); procedure in [11](11-deployment-and-operations.md)). For a short time the old code runs against the new schema. Every migration must therefore keep the **previous release** working. A change that the previous release cannot tolerate is split across releases:
+
+| Change                             | Release N (expand)                                                                                                                                    | Release N+1 (contract)                                                                                                                                                                                               |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Add a column                       | Add it nullable or with a constant default. Code writes it                                                                                            | Backfill by job; then `CHECK (col IS NOT NULL) NOT VALID`, `VALIDATE`, `SET NOT NULL` ([04 §20.2.4](04-domain-model-and-data-dictionary.md#2024-after-the-first-production-deploy-forward-only-expand-and-contract)) |
+| Rename a column                    | Add the new column; code writes both and reads the new one, falling back to the old one; backfill by job                                              | Code stops touching the old column; drop it in N+2 at the earliest                                                                                                                                                   |
+| Drop a column                      | Code stops reading and writing it, and the model no longer declares it (regenerated `schema.ts`)                                                      | `ALTER TABLE … DROP COLUMN`                                                                                                                                                                                          |
+| Add a value to a CHECK list        | New constraint `NOT VALID`, `VALIDATE`, swap (04 §20.2.4). The TypeScript array gains the value, but no code writes it yet                            | Code starts writing the value                                                                                                                                                                                        |
+| Remove a value from a CHECK list   | Code stops writing it; rows migrated by job                                                                                                           | Replace the CHECK                                                                                                                                                                                                    |
+| Add a foreign key or CHECK         | `ADD CONSTRAINT … NOT VALID` (new rows checked, no table scan)                                                                                        | `VALIDATE CONSTRAINT` (scans without blocking writes)                                                                                                                                                                |
+| Add an index                       | `CREATE INDEX CONCURRENTLY` in its own file (§8.3)                                                                                                    | —                                                                                                                                                                                                                    |
+| Change a column type               | Treated as add, backfill and drop. An in-place `ALTER TYPE` that rewrites the table is not allowed on a table with more than 10,000 rows [Assumption] | —                                                                                                                                                                                                                    |
+| Change a trigger or guard function | `CREATE OR REPLACE FUNCTION` that accepts both the old and the new column set                                                                         | Tighten the function                                                                                                                                                                                                 |
+
+A PR that contains a contract step names the expand PR it completes and the release in which that PR shipped. The PR template asks for this (§11.5).
+
+### 8.6 Raw SQL for what the Knex builder cannot say
+
+Migrations write DDL as SQL through `this.schema.raw(…)` ([04 §20.2.2](04-domain-model-and-data-dictionary.md#2022-baseline-files-and-their-order)). SQL is required for named CHECKs (`users_status_check`; the name is the key of `app/exceptions/constraint_map.ts`, §5), partial unique indexes (`user_tokens_live_key … WHERE consumed_at IS NULL`), composite tenant foreign keys (`product_variants_product_fkey`, [04 §2.5](04-domain-model-and-data-dictionary.md#25-tenant-isolation-with-composite-foreign-keys)), the guard and append-only triggers (`order_items_guard … EXECUTE FUNCTION allow_only_columns(…)`, `forbid_mutation()` on the nine tables of [04 §2.12](04-domain-model-and-data-dictionary.md#212-append-only-tables); SQL in [04 §16.3](04-domain-model-and-data-dictionary.md#163-constraint-sql)), storage parameters (`inventory_items … WITH (fillfactor = 80)`), BRIN indexes and guarded grants. The Knex builder can express none of these with an exact name. Rules:
+
+1. **Copy, do not retype.** SQL comes from 04a; a difference is fixed in 04a first ([04 §20.2.1](04-domain-model-and-data-dictionary.md#2021-preconditions) item 2).
+2. **Every constraint and index carries its [04 §2.14](04-domain-model-and-data-dictionary.md#214-naming) name.** A generated name is unknown to the constraint map and to T-ARCH-011.
+3. **Literals only.** No `${…}` in `this.schema.raw` (the migration form of 07 §7.4's raw-SQL rule; lint in §11.2). Template strings without expressions are fine for multi-line SQL.
+4. **After the baseline, functions change by `CREATE OR REPLACE` in a new file** (§8.4).
+5. **Triggers are tested by behaviour:** T-ARCH-012, T-ORD-101 and T-ARCH-015 (proposed in 04/04a).
+
+### 8.7 `schema:generate` and `schema_rules` wiring
+
+The configuration block and the rule contents are owned by [04 §20.3](04-domain-model-and-data-dictionary.md#203-seeders-factories-and-schema-generation) and [04 §18.4](04-domain-model-and-data-dictionary.md#184-lucid-and-node-postgres-bigint-handling). The code standard is:
+
+- `config/database.ts` sets `schemaGeneration: { enabled: true, outputPath: 'database/schema.ts', rulesPaths: ['database/schema_rules.ts'], excludeTables: ['sessions', 'rate_limits'] }` on the `pg` connection. All four keys are accepted by the installed connection type (`build/src/types/database.d.ts:285` [Verified-repo]). Today there is no block, so `database/schema_rules.ts` (an empty object) has no effect [Verified-repo `config/database.ts`].
+- Development `migration:run`/`rollback` regenerate the file; `--no-schema-generate` is never used on a PR branch, and a migration PR commits the regenerated `database/schema.ts` with the model changes. The file is never hand-edited: type fixes go into `database/schema_rules.ts`, then `node ace schema:generate`.
+- Production never regenerates the file (`app.inProduction`, §1.4). CI proves the committed file is current: T-ARCH-010 (proposed in 04) runs `migration:fresh` on `postgres:18.4` and then `git diff --exit-code database/schema.ts`, and fails on any `any` in the file.
+- Models extend the generated classes (§3.10), so a dropped column is a compile error in every model and query that uses it. This is why the contract step of §8.5 can rely on `pnpm typecheck`.
+
+### 8.8 Seeders: reference data versus development data
+
+Today one folder mixes reference data with an active demo vendor `demo@dripnepal.com` / `dripnepal`, no seeder declares `static environment`, and the documented `node ace db:seed` would create that login in production (RF-05, A5-01 [Verified-repo `database/seeders/shop_seeder.ts:14-26`]).
+
+**Layout and discovery.** Because `db:seed` scans recursively and sorts by path, the default seeder path would run `dev/…` before `reference/…`. It would also load any helper file in those folders as a seeder. The target configuration is therefore:
+
+```ts
+// config/database.ts (pg connection) — design sketch; option names verified in
+// @adonisjs/lucid 22.4.2 build/src/types/database.d.ts:261-274
+migrations: { naturalSort: true, paths: ['database/migrations'], disableRollbacksInProduction: true },
+seeders: { paths: ['./database/seeders/reference', './database/seeders/dev'], naturalSort: true },
+```
+
+- `reference/NN_<subject>_seeder.ts`, numbered in dependency order: `01_locations`, `02_delivery_zones`, `03_shop_categories`, `04_categories`, `05_attributes`, `06_category_attributes`, `07_brands`, `08_platform_settings`; CSV data in `reference/data/` is not a script file and is skipped. Paths run in the listed order and each folder is sorted [Verified-repo `build/src/seeders/source.js`], so plain `db:seed` runs reference data first, then `dev/NN_<subject>_seeder.ts` (`01_demo_marketplace`, …).
+- Helpers (CSV reader, `DevSeeder`) live in `database/support/`, outside both paths. The numbered files replace the single `reference/index_seeder.ts` of 04 §20.3 and the §1.2 tree; order and content are unchanged (Consistency note 40).
+
+**Reference seeders** are safe in every environment, including production:
+
+- **Idempotent upserts** keyed by `code`, `slug` or `key`, through `this.client.rawQuery(sql, bindings)`; a second run changes nothing (AC-FR-CAT-001-1). They **never delete** (a retired category becomes `is_active = false`, 04 §20.3), **never overwrite operator values** (`ON CONFLICT (key) DO NOTHING` for settings) and **create no users** (AC-FR-ADM-005-2).
+- The release step runs them after migrations with the migrator role. Plain `node ace db:seed` would be safe there (development seeders are ignored or refused), but 11 passes the reference files with `--files`, so a broken development seeder never even loads in production.
+
+```ts
+// database/seeders/reference/08_platform_settings_seeder.ts — design sketch.
+// BaseSeeder and this.client are verified in @adonisjs/lucid 22.4.2 build/src/seeders/base_seeder.d.ts;
+// rawQuery(sql, bindings) is verified on QueryClientContract. Defaults are those of 04a §15.1.
+import { BaseSeeder } from '@adonisjs/lucid/seeders'
+
+const DEFAULTS: Record<string, unknown> = {
+  checkout_enabled: true,
+  maintenance_banner: '',
+  default_commission_rate_bp: 1000,
+  cod_max_order_value_minor: 2000000,
+  // … every key of 04a §15.1; a unit test compares this list with the CHECK in pg_constraint
+}
+
+export default class extends BaseSeeder {
+  async run() {
+    for (const [key, value] of Object.entries(DEFAULTS)) {
+      await this.client.rawQuery(
+        'INSERT INTO platform_settings (key, value) VALUES (?, ?::jsonb) ON CONFLICT (key) DO NOTHING',
+        [key, JSON.stringify(value)]
+      )
+    }
+  }
+}
+```
+
+**Development seeders** have three independent guards (RF-05, ADR-0011 decision 4, AC-FR-ADM-005-2):
+
+1. `static environment = ['development', 'test']`: Lucid marks the seeder `ignored` under `NODE_ENV=production` [Verified-repo `runner.js:57`].
+2. A check in the base class that fails when `app.inProduction` is true or `APP_ENV` is `staging` or `production` (§6.1). This guard exits non-zero instead of skipping silently.
+3. A check of the database actually connected, independent of environment variables: `current_database()` must end in `_dev` or `_test`. The test database already must end in `_test` (§6.1, RF-32); the local database becomes `dripnepal_dev` (`docker-compose.yml` today creates `dripnepal` [Verified-repo]); staging and production names never carry either suffix [proposed here; 11 names the databases].
+
+```ts
+// database/support/dev_seeder.ts — design sketch. BaseSeeder, static environment, this.client,
+// app.inProduction (@adonisjs/application 9.0.1) and rawQuery are verified; env is start/env.ts (§6.2).
+import { BaseSeeder } from '@adonisjs/lucid/seeders'
+import app from '@adonisjs/core/services/app'
+import env from '#start/env'
+
+export class RefusedInThisEnvironment extends Error {}
+
+export abstract class DevSeeder extends BaseSeeder {
+  static environment = ['development', 'test'] // guard 1, inherited by every subclass
+
+  /** Subclasses implement seed(); run() is final by convention and checked by a test. */
+  protected abstract seed(): Promise<void>
+
+  async run() {
+    const appEnv = env.get('APP_ENV')
+    if (app.inProduction || appEnv === 'staging' || appEnv === 'production') {
+      throw new RefusedInThisEnvironment(`dev seeders refuse APP_ENV=${appEnv}`) // guard 2
+    }
+    const result = await this.client.rawQuery('SELECT current_database() AS name')
+    const name: string = result.rows[0].name
+    if (!/_(dev|test)$/.test(name)) {
+      throw new RefusedInThisEnvironment(`dev seeders refuse database ${name}`) // guard 3
+    }
+    await this.seed()
+  }
+}
+```
+
+A thrown error marks the seeder `failed`, and `db:seed` then exits non-zero (`build/commands/db_seed.js:119-121` [Verified-repo]). The shape of `rawQuery`'s result (`rows`) is the node-postgres result and is confirmed in M0.
+
+What development seeders may create:
+
+- Shops, products and orders **through the real actions** (04 §20.3), so every invariant holds. Actions that send jobs need the `pgboss` schema, created when pg-boss starts ([ADR-0010](adr/0010-postgres-jobs-pg-boss-transactional-send.md)); the M0 spike confirms this works from a console process.
+- Users under `dev.dripnepal.invalid`: RFC 2606 reserves `.invalid` for names "that are sure to be invalid" [Verified-doc <https://www.rfc-editor.org/rfc/rfc2606>, accessed 2026-09-27], so no seeded address reaches a real inbox.
+- **One random password per run** (`node:crypto` `randomBytes`), written to the git-ignored `tmp/dev_credentials.json` with mode `0600` [Verified-repo `.gitignore` has `tmp/*`], never printed (§7.5). No platform admin: developers use `platform:create-admin` like every other environment (§9.1).
+
+**Factories** follow [04 §20.3](04-domain-model-and-data-dictionary.md#203-seeders-factories-and-schema-generation). The code standard:
+
+- Vocabularies come from the owning module's `domain/` array (`faker.helpers.arrayElement(PRODUCT_STATUSES)`), so a factory can only produce values the CHECK accepts. Behaviour-changing randomness is opt-in through named states (`UserFactory.apply('suspended')`), using the verified `state()`/`apply()` APIs (`build/src/types/factory.d.ts:139,252` [Verified-repo]).
+- The default state is the happy path: `active` users with `email_verified_at` (`users_active_verified_check`), Nepali E.164 phones encrypted with the test key ring; aggregates whole (product + default variant + `inventory_items`). Composite-key rows come from the owning step action ([04 §2.15](04-domain-model-and-data-dictionary.md#215-lucid-mapping-rules)).
+- Only `tests/**` and `database/seeders/dev/**` import factories (dependency-cruiser rule, M0).
+
+**Verification** (proposed; IDs from [10](10-testing-and-quality-gates.md)): `db:seed` twice gives identical row counts; a development seeder under `APP_ENV=production`, or against a database whose name lacks `_dev`/`_test`, exits non-zero (ADR-0011's "seeder guard test"); every class in `database/seeders/dev/` extends `DevSeeder` and does not override `run()`.
+
+### 8.9 Current code → target (migrations and seeders)
+
+| Area / file(s)                          | Today [Verified-repo]                                                                                                            | Decision                                                                                                                                                                                                      | Reason       | Milestone   |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ----------- |
+| `database/migrations/*` (26 files)      | Knex builder, `varchar(255)` defaults, cascades, edited in place, import `#constants`, one hand-picked timestamp `1780080000000` | **Delete**; 14-file raw-SQL baseline (§8.1)                                                                                                                                                                   | RF-41, RF-06 | M0 (OD-01)  |
+| `config/database.ts` migrations/seeders | No `migrations`, `seeders` or `schemaGeneration` options                                                                         | **Fix**: §8.7 and §8.8 blocks, `disableRollbacksInProduction: true`                                                                                                                                           | RF-41, RF-05 | M0          |
+| `database/migrations.lock`              | Does not exist                                                                                                                   | **Create** at the first production deploy; script from M0                                                                                                                                                     | RF-41        | M0 / M7     |
+| `database/seeders/*.ts` (6 files)       | Reference and demo data mixed; demo vendor with a known password; no `static environment`                                        | **Rewrite** into `reference/NN_*` and `dev/NN_*`; `global_role`, `permission` and `customer` seeders deleted ([04 §20.3](04-domain-model-and-data-dictionary.md#203-seeders-factories-and-schema-generation)) | RF-05, RF-20 | M0          |
+| `database/factories/*.ts` (3 files)     | Random null passwords, soft deletes and stale statuses; `'dripnepal'` password; international phone format                       | **Rewrite** per §8.8                                                                                                                                                                                          | A5-14, RF-23 | M0 baseline |
+| `app/utils/random.ts`                   | Coin flips for factories                                                                                                         | **Delete** (§1.5)                                                                                                                                                                                             | A5-14        | M0          |
+| `docker-compose.yml` database name      | `POSTGRES_DB: dripnepal`                                                                                                         | **Fix**: `dripnepal_dev` (guard 3 of §8.8); test database `dripnepal_test`                                                                                                                                    | RF-05, RF-32 | M0          |
+
+---
+
+## 9. Safe production initialization
+
+A production database starts with reference data and **no users** (AC-FR-ADM-005-2). The first person with platform rights is created by one audited command. No credential that appears in the repository, a seeder, an image or shell history is valid in production (RF-05, [FR-ADM-005](01-product-requirements.md#fr-adm-005-safe-production-bootstrap), [07 §7.4](07-security-threat-model-and-permissions.md#74-code-rules-enforced-by-lint-or-architecture-tests)).
+
+### 9.1 `node ace platform:create-admin`
+
+| Aspect                   | Standard                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| File, class              | `commands/platform_create_admin.ts`, `commandName = 'platform:create-admin'` (§1.3), `options = { startApp: true }` [Verified-repo `@adonisjs/core` 7.3.4 `build/types/ace.d.ts:3`]                                                                                                                                                                                                                                                                                                                                      |
+| Inputs                   | `--email <email>` (required unless `--interactive`) and `--full-name <name>`. **No password flag exists**, so no password can reach shell history or the process list (AC-FR-ADM-005-1)                                                                                                                                                                                                                                                                                                                                  |
+| Default mode: invitation | User created `pending_verification` with the hash of 32 random bytes nobody sees ([04a §5.1](04a-data-dictionary-tables.md) `users_identity_required_check`), plus a `password_reset` token ([04a §5.2](04a-data-dictionary-tables.md)) e-mailed through the normal notification path. Redeeming it proves the inbox and verifies the account ([02 J-18](02-user-journeys-and-acceptance-criteria.md) step 3 [Assumption there])                                                                                         |
+| `--interactive` mode     | For a host without mail yet: `this.prompt.ask` for e-mail and name, `this.prompt.secure` (masked input) for the password [Verified-repo `@poppinss/prompts` 3.1.6 `build/src/base.d.ts:21,29`], signup rules (10–128 characters). The account is `active` with `email_verified_at` set; the audit row records the mode                                                                                                                                                                                                   |
+| Grant                    | Inserts `platform_staff (user_id, role = 'platform_admin', granted_by = NULL)`; `granted_by` is null only for this command ([04a §5.4](04a-data-dictionary-tables.md))                                                                                                                                                                                                                                                                                                                                                   |
+| MFA                      | Not enrolled by the command: with `users.mfa_enabled_at` null, the staff middleware forces enrolment at first login and blocks `/admin` until `confirmTotpEnrollment` (FR-IAM-007, [07 §3.9](07-security-threat-model-and-permissions.md#39-mfa-totp-for-platform-staff))                                                                                                                                                                                                                                                |
+| Bootstrap only           | Exit 1 when an active `platform_admin` exists; later staff come from `setPlatformStaffRole` with step-up ([07 §3.10](07-security-threat-model-and-permissions.md#310-step-up-for-money-staff-and-sensitive-settings)). The exception is `--recover`, the lost-admin procedure owned by 11 (AC-FR-IAM-007-5), audited with a `reason`                                                                                                                                                                                     |
+| Existing user            | If the e-mail belongs to an existing account, the command grants the role to that account only after `this.prompt.confirm`. It never changes that account's password                                                                                                                                                                                                                                                                                                                                                     |
+| Concurrency              | One `withTx`. It first takes a transaction-scoped advisory lock, `SELECT pg_advisory_xact_lock(hashtext('platform:create-admin'))`, and then locks the active admin rows `FOR UPDATE` as `setPlatformStaffRole` does ([04a §5.4](04a-data-dictionary-tables.md)). Then it checks, inserts and audits. The row lock alone is not enough: on an empty database there is no admin row to lock, so two concurrent runs could each insert an admin. The advisory lock serialises them. Verified by the concurrency test below |
+| Audit                    | `audit_logs` row: `actor_type = 'system'`, `action = 'platform_staff.bootstrap'` (action name proposed; it matches `audit_logs_action_check`), `subject_type = 'user'`, `subject_id` = the new admin's `users.id` (the column is `NOT NULL`), `changes` with the role and the mode, never the e-mail or a token ([04a §15.3](04a-data-dictionary-tables.md#153-audit_logs))                                                                                                                                              |
+| Output                   | Only "admin invitation sent to r•••@example.com; expires in 60 minutes" (the masked address, printed with `this.logger`). A reset token is never printed                                                                                                                                                                                                                                                                                                                                                                 |
+| Environments             | Works in every environment, development included; staging needs an admin too                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+
+```ts
+// commands/platform_create_admin.ts — design sketch. BaseCommand, flags, CommandOptions,
+// this.prompt.ask/secure/confirm, this.logger, this.exitCode and this.app.container.make are
+// verified for @adonisjs/core 7.3.4 / @adonisjs/ace 14.1.0. BootstrapPlatformAdmin is the identity
+// entry action (proposed, not an HTTP operation); its internals are pseudocode until M1.
+import { BaseCommand, flags } from '@adonisjs/core/ace'
+import type { CommandOptions } from '@adonisjs/core/types/ace'
+import BootstrapPlatformAdmin, {
+  AdminAlreadyExists,
+} from '#modules/identity/actions/bootstrap_platform_admin'
+
+export default class PlatformCreateAdmin extends BaseCommand {
+  static commandName = 'platform:create-admin'
+  static description =
+    'Create the first platform admin (invitation e-mail; TOTP enrolment at first login)'
+  static options: CommandOptions = { startApp: true }
+
+  @flags.string({ description: 'E-mail of the first admin' })
+  declare email?: string
+
+  @flags.string({ description: 'Full name', flagName: 'full-name' })
+  declare fullName?: string
+
+  @flags.boolean({ description: 'Ask for a password instead of sending an invitation' })
+  declare interactive?: boolean
+
+  async run() {
+    const email = this.email ?? (this.interactive ? await this.prompt.ask('E-mail') : undefined)
+    if (!email) {
+      this.logger.error('--email is required (or use --interactive)')
+      this.exitCode = 1
+      return
+    }
+    const fullName = this.fullName ?? (await this.prompt.ask('Full name'))
+    const password = this.interactive
+      ? await this.prompt.secure('Password (10-128 characters)')
+      : null
+
+    const action = await this.app.container.make(BootstrapPlatformAdmin)
+    try {
+      const result = await action.execute({ email, fullName, password })
+      this.logger.success(
+        password === null
+          ? `admin invitation sent to ${result.maskedEmail}; expires in 60 minutes`
+          : `platform_admin created for ${result.maskedEmail}; TOTP enrolment at first login`
+      )
+    } catch (error) {
+      if (error instanceof AdminAlreadyExists) {
+        this.logger.error('An active platform_admin exists; grant roles in /admin instead')
+        this.exitCode = 1
+        return
+      }
+      throw error
+    }
+  }
+}
+```
+
+`flagName` exists in `@adonisjs/ace` 14.1.0 flag types (`build/src/types.d.ts:138` [Verified-repo]). The existing-account confirmation and `--recover` are left out. The command only parses input and calls the identity **entry action**, so lock, audit and token issue live in one place and share step actions with `setPlatformStaffRole`.
+
+**Verification** (proposed; IDs from [10](10-testing-and-quality-gates.md), T-OPS area per FR-ADM-005):
+
+- On an empty database the command creates exactly one `platform_staff` row with `granted_by IS NULL`, one `user_tokens` row of purpose `password_reset`, one audit row, and no printed token.
+- A second run exits 1 and changes nothing.
+- Two runs started at the same moment on an empty database, with different e-mails, leave exactly one active `platform_admin`: one run commits and the other exits 1 (advisory lock).
+- The new admin is sent to enrolment and cannot use any `/admin` page or `/api/v1/admin` route until TOTP is confirmed ([07 §3.9](07-security-threat-model-and-permissions.md#39-mfa-totp-for-platform-staff)).
+- `ps` and shell history cannot contain a password: the command has no password flag, which a test reading the command's flag definitions asserts.
+
+### 9.2 No default credentials anywhere
+
+| Where a credential could hide    | Rule                                                                                                   | Check                                                                                                    |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| Seeders                          | Reference seeders create no users; development seeders are refused outside development and test (§8.8) | Seeder guard tests (§8.8)                                                                                |
+| Factories                        | No literal password; passwords are random per run                                                      | Lint: `no-restricted-syntax` on a `password:` property with a string literal under `database/**` (§11.2) |
+| `.env.example`, docs, README     | No usable secrets; `APP_KEY` empty; development keys marked "development only" (§6.4)                  | Secret scanner (07 §7.2) and the `.env.example` schema diff (§6)                                         |
+| `docker-compose.yml`             | Development-only passwords, services bound to `127.0.0.1` (audit A5-19)                                | Review; compose is never used in staging or production ([11](11-deployment-and-operations.md))           |
+| Images                           | Built with no `.env*` file; secrets come only from the host secret store                               | Image build check (11)                                                                                   |
+| Known seed e-mails in production | No user whose e-mail ends in `.invalid` or is `demo@dripnepal.com`                                     | Release check query run by the release step (A5-01 recommendation)                                       |
+
+### 9.3 Bootstrap checklist (first deploy of an environment)
+
+Owner: the tech lead; commands and evidence in [11](11-deployment-and-operations.md). Each step depends on the one before.
+
+1. Environment validated at boot (§6.5): `APP_ENV=production`, `DB_SSL=true`, keys distinct.
+2. Database roles exist and the runtime role has no DDL rights ([07 §4.10](07-security-threat-model-and-permissions.md#410-database-roles-and-grants)); baseline file 14 then applies the grants.
+3. `node ace migration:run --force` with the migrator credentials, then `node ace migration:status` shows nothing pending.
+4. `node ace db:seed --files database/seeders/reference/01_locations_seeder.ts …` (all eight reference files), then a row-count check: 7 provinces, 77 districts, 753 local levels (VX-10), 14 `platform_settings` keys.
+5. The release checks of §9.2 return no rows.
+6. `web` and `worker` start; `/health/ready` is green.
+7. `node ace platform:create-admin --email <operator>` is run over an SSH session to the host (11). The invitation must be used within 60 minutes, the `password_reset` expiry of [04a §5.2](04a-data-dictionary-tables.md) [Assumption there].
+8. The admin enrols TOTP, fills `platform_legal_disclosures`, and reviews `checkout_enabled`, `single_operator_mode` and the placeholders in 04a §15.1 that [Open OD-04] and [Open OD-18] still own.
+
+### 9.4 Current code → target (initialization)
+
+| Area / file(s)                    | Today [Verified-repo]                                                                       | Decision                                                                    | Reason       | Milestone                             |
+| --------------------------------- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | ------------ | ------------------------------------- |
+| `commands/`                       | Does not exist                                                                              | **Create** `platform_create_admin.ts` (§9.1)                                | RF-05        | M0 (command), M1 (MFA enrolment path) |
+| `database/seeders/shop_seeder.ts` | `demo@dripnepal.com` / `dripnepal`, active shop, runs in production                         | **Delete**; `dev/01_demo_marketplace_seeder.ts` under `DevSeeder`           | RF-05, A5-01 | M0                                    |
+| `README.md` setup                 | Calls `node ace db:seed` "optional, but recommended" with no environment note (audit A5-01) | **Fix**: development setup runs `db:seed`; production procedure lives in 11 | RF-42, RF-05 | M0                                    |
+| Release checks                    | None                                                                                        | **Create** the §9.2 queries in the release step                             | RF-05        | M0 (script), M7 (production use)      |
+
+---
+
+## 10. Dependency policy
+
+The security gates are owned by [07 §7.1](07-security-threat-model-and-permissions.md#71-dependency-policy) and threat TM-26. This section is the engineering procedure that meets them.
+
+### 10.1 Adding a dependency
+
+A PR that adds a direct dependency answers five questions in its description, which the PR template asks for (§11.5):
+
+| Question        | Acceptable answer                                                                                                                                                                                                                                                                                                         |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Need            | What it replaces, and why 30 lines of our own code or an installed package would not do                                                                                                                                                                                                                                   |
+| Licence         | MIT, ISC, BSD-2/3, Apache-2.0 or another permissive licence. Anything else, or no licence at all, needs the product owner's approval, because the repository is public ([ADR-0015](adr/0015-ui-foundation-shadcn-and-kit-policy.md), OD-23). A CI licence report fails on non-permissive licences (ADR-0015 verification) |
+| Maintenance     | Last release, open security advisories, number of maintainers. A single-maintainer package on a critical path (pg-boss, [ADR-0010](adr/0010-postgres-jobs-pg-boss-transactional-send.md)) records its exit plan in the ADR                                                                                                |
+| Size and reach  | For `inertia/**` imports: the bundle-size delta from the CI bundle report ([08](08-ui-ux-and-design-system.md)). For the server: native code, and whether it runs install scripts                                                                                                                                         |
+| Install scripts | Whether it needs a build script. If so, it is added to `allowBuilds` in `pnpm-workspace.yaml` in the same PR, with the reason in a comment                                                                                                                                                                                |
+
+Rules that need no discussion:
+
+- Server packages that talk to external services are imported only by adapters (§2.4 rule 8).
+- One library per job: no second form library, date library, HTTP client, validation library or icon set.
+- The frontend has no npm `cn` and nothing under `next/*` ([08 §12](08-ui-ux-and-design-system.md#12-maintaining-copied-shadcn-and-kit-components)).
+- Packages with a pre-1.0 version (`0.x`) are pinned to their minor (`~0.y.z`, which for `0.x` equals `^0.y.z`), because their minor releases may break (for example `@adonisjs/queue` 0.6.2 is documented as experimental [Verified-doc gt/adonis_stack.md, <https://registry.npmjs.org/@adonisjs/queue>, accessed 2026-09-25]).
+- Removing an unused dependency needs no justification and is always welcome.
+
+### 10.2 Lockfile, version ranges and install behaviour
+
+- **`pnpm-lock.yaml` is committed**; CI, the image and developers install with `pnpm install --frozen-lockfile` (07 §7.1). The lockfile diff is reviewed; a lockfile-only change is allowed only in the weekly update PR. T-SEC-026 (proposed in 07) fails on a lockfile change without a `package.json` change, so it needs an exemption for the weekly update branch (Consistency note 54).
+- **Majors are pinned** by caret ranges (`^10.1.0` allows 10.x only), and minor updates arrive through the lockfile. Exceptions: `0.x` packages are pinned to their minor (§10.1). `typescript` keeps `~` (today `~6.0.3` [Verified-repo]), because its minors change type checking. `@adonisjs/redis` stays `^10` if Redis is ever added, because 11.0.0 is outside the peer ranges of session, limiter, lock, cache and queue [Verified-doc gt/adonis_stack.md, <https://github.com/adonisjs/redis/releases>, accessed 2026-09-25].
+- **pnpm is pinned** by `"packageManager": "pnpm@11.9.0"` [Verified-repo]; CI enables Corepack.
+- **Release-age gate.** pnpm 11.9.0 has a default `minimum-release-age` of 1,440 minutes, so versions younger than one day are not resolved [Verified-repo: pnpm 11.9.0 bundle `dist/pnpm.mjs:146356`, installed through Corepack]. The gate stays at the default; `minimumReleaseAgeExclude` entries (today `framer-motion@12.41.0`, `motion-dom@12.41.0` [Verified-repo `pnpm-workspace.yaml`]) are allowed only for a security fix and removed in the next weekly update.
+- **Build scripts** run only for packages listed in `allowBuilds` [Verified-repo `pnpm-workspace.yaml`; pnpm 11.9.0 reports packages missing from the list]. Target list: `esbuild` and `@swc/core` (development tooling, already present), and `sharp` when it is added in M3. `better-sqlite3` is removed (§10.4). 07 §7.1 names only sharp and `@img/*`; see Consistency note 44.
+- **Production install** in the runtime image uses `pnpm install --prod --frozen-lockfile --ignore-scripts`. This skips the `prepare` (husky) and `preinstall` (`npx only-allow pnpm`) lifecycle scripts that would fail or reach the network there (audit A5-07; RF-31). The image owner is [11](11-deployment-and-operations.md). Whether sharp's prebuilt `@img/sharp-*` binaries load without their install script is checked by the image smoke test [Assumption; infra digest: prebuilt binaries cover linux glibc and musl, <https://sharp.pixelplumbing.com/install>, accessed 2026-09-25].
+
+### 10.3 Update cadence and advisories
+
+| Cadence                      | What happens                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Every PR                     | CI runs `pnpm audit --prod --audit-level high`: production dependencies only, and fails on high or critical advisories. Both flags exist in pnpm 11.9.0 [Verified-repo `dist/pnpm.mjs:234292,234301`]. `--ignore-registry-errors` is **not** used on `main`, so a registry outage is visible rather than silently green                                                                                                                                                             |
+| Weekly (Monday)              | One grouped update PR: patch and minor updates of all dependencies, with `@adonisjs/*`, `@inertiajs/*`, `@tuyau/*`, `@vinejs/*` and `@japa/*` in one group because they release together. A bot opens it (Renovate or Dependabot [Assumption: whichever supports pnpm 11 lockfiles is chosen in M0; the other is not added]); without a bot, the tech lead runs `pnpm outdated` and `pnpm update` by hand. The PR must pass the full CI, including the build and the SSR smoke test |
+| Within 7 days of an advisory | Security updates for sharp and libvips-related packages, `@adonisjs/*`, `pg`, `pg-boss` and anything in the auth or session path ([07 §7.1](07-security-threat-model-and-permissions.md#71-dependency-policy), 7-day window [Assumption there])                                                                                                                                                                                                                                     |
+| Majors                       | Never in the weekly PR. Each major is its own PR with a changelog summary, and framework majors get an ADR note when they change an API this documentation uses (Inertia, §10.5)                                                                                                                                                                                                                                                                                                    |
+
+**Advisory exceptions.** pnpm 11.9.0 reads `auditConfig.ignoreGhsas` from `pnpm-workspace.yaml` and drops those advisories from the report [Verified-repo `dist/pnpm.mjs:234462`]. It has no expiry field. Each ignored GHSA therefore also gets a line in `security/audit-exceptions.md` (path proposed) with the reason, who accepted it and an expiry date. A CI step fails when an ID is in one file and not the other, or when the date has passed. This is the "allowlist with expiry" of 07 §7.1.
+
+### 10.4 Removals decided for M0 (RF-39)
+
+| Item                                                    | Evidence [Verified-repo]                                                                                                                                                                           | Action                                                                                                                                              |
+| ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `D` `^1.0.0`                                            | Runtime dependency in `package.json`; the lockfile marks `D@1.0.0` deprecated as an npm name-holder; nothing imports it (A5-06, A3-18)                                                             | `pnpm remove D`                                                                                                                                     |
+| `better-sqlite3` `^12.10.0` and the `sqlite` connection | Used only by the never-selected `sqlite` block in `config/database.ts`; compiles a native addon on every install; `allowBuilds` lists it                                                           | `pnpm remove better-sqlite3`; delete the connection block and the `allowBuilds` entry; tests use PostgreSQL (`DB_DATABASE` ending in `_test`, §6.1) |
+| `@commercn` registry                                    | `components.json` `registries` points at `https://commercn.com/r/{name}.json`                                                                                                                      | Delete the `registries` entry (ADR-0015). T-SEC-026 (proposed) fails on any registry host other than the npm registry and the shadcn default        |
+| TanStack devtools in production                         | `@tanstack/react-devtools` and `@tanstack/react-form-devtools` are initialised in the client bundle (RF-30)                                                                                        | Keep as devDependencies, import only behind `import.meta.env.DEV` (§13)                                                                             |
+| `zod` `^4.4.3`                                          | Second validation library next to VineJS; the only importers are three files of the shop-registration and shop-management prototypes under `inertia/pages/shops/` [Verified-repo grep, 2026-09-27] | Replaced by the TanStack Form validators of §13 and removed in M4 when the forms are rewritten                                                      |
+
+### 10.5 The Inertia v5 upgrade (OD-25)
+
+**Facts.** Installed: `@adonisjs/inertia` 4.2.0, `@inertiajs/react` 2.3.27 and `@adonisjs/vite` 5.1.1. Adapter 5.0.1 (21 Aug 2026) needs `@inertiajs/react` ^3.4.0 and `@adonisjs/vite` ^6, and removes the `@adonisjs/inertia/vite` plugin that `vite.config.ts` uses today [Verified-doc gt/adonis_stack.md, <https://github.com/adonisjs/inertia/releases>, accessed 2026-09-25]. docs.adonisjs.com already documents the 5.x APIs. Status: **[Open OD-25]**; the register recommends a 2–3 day spike at the start of M0, before the SSR fix (RF-08), with R-22 as the risk.
+
+**Procedure.**
+
+1. **Spike branch** `harublank00/drip-NN-inertia-v5-spike` (§11.6). All three packages move together in one PR. Nothing else changes in it.
+2. **Pass criteria** from OD-25: the SSR bundle builds and hydrates (the RF-08 smoke test), the Tuyau client works, every existing page renders, and CI is green. In addition this document checks the CSP effect: adapter 5 renders the page object in a `<script type="application/json">` instead of a `data-page` attribute [Verified-doc gt/adonis_stack.md], and 07 §7.3's nonce policy must still pass.
+3. **Pass:** merge, record the answer in the register (OD-25 → Resolved) and in [ADR-0004](adr/0004-inertia-reads-json-api-writes.md)'s version note, and re-check every code sample in 08 and 09 marked with a 4.2.0 API (`useRouter` with `visit()` only, no `once()`). Those samples are listed by searching for "4.2.0".
+4. **Fail:** close the branch, pin `@adonisjs/inertia` `~4.2.0`, `@inertiajs/react` `~2.3.27` and `@adonisjs/vite` `~5.1.1`, and add an update-bot rule that blocks their majors. Record the reason and the revisit trigger of R-22: a security fix only in 5.x, or a needed 5.x API.
+5. Until OD-25 is resolved, every example in this document targets 4.2.0 and says so.
+
+### 10.6 sharp ≥ 0.35.4
+
+sharp is added in M3 with the media pipeline ([ADR-0013](adr/0013-media-direct-upload-async-processing.md)); it is not installed today [Verified-repo: no `sharp@` entry in `pnpm-lock.yaml`]. The first version allowed is **0.35.4**. GHSA-rgj7-g3m4-5g8c (high, libheif) affects sharp < 0.35.4, and GHSA-f88m-g3jw-g9cj (high, libvips) affects < 0.35.0 [Verified-doc <https://github.com/lovell/sharp/security/advisories>, accessed 2026-09-25]. The range is `^0.35.4`, which for a `0.x` version allows only 0.35 patches, so 0.36 arrives as a deliberate PR (§10.1). The runtime settings (`limitInputPixels`, `failOn: 'warning'`, `VIPS_BLOCK_UNTRUSTED`, concurrency 1 in the worker) belong to ADR-0013 and [11](11-deployment-and-operations.md). Verified by the 07 §7.5 checklist item 3 and T-SEC-026 (proposed).
+
+### 10.7 Current code → target (dependencies)
+
+| Area / file(s)                                            | Today [Verified-repo]                                                                                                                                                | Decision                                                                                     | Reason          | Milestone |
+| --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | --------------- | --------- |
+| `package.json` `dependencies`                             | `D`, `better-sqlite3`, `zod`; the `0.x` packages (`class-variance-authority`, `reflect-metadata`, both TanStack devtools) already use `^0.y.z`, which pins the minor | **Fix**: remove `D`, `better-sqlite3` (M0), `zod` (M4)                                       | RF-39           | M0, M4    |
+| `package.json` `scripts.preinstall`, `prepare`            | `npx only-allow pnpm`; `husky`                                                                                                                                       | **Keep** for developers; production installs use `--ignore-scripts` (§10.2)                  | RF-31, A5-07    | M0        |
+| `pnpm-workspace.yaml`                                     | `allowBuilds` includes `better-sqlite3`; release-age excludes for `framer-motion`                                                                                    | **Fix**: remove `better-sqlite3`; drop the excludes once the versions are older than one day | RF-39           | M0        |
+| `components.json`                                         | `registries.@commercn`                                                                                                                                               | **Fix**: delete the entry                                                                    | RF-39, ADR-0015 | M0        |
+| Update process                                            | None; no bot, no audit, no CI                                                                                                                                        | **Create**: weekly grouped PR, `pnpm audit` gate, exceptions file                            | RF-09, TM-26    | M0        |
+| `@adonisjs/inertia`, `@inertiajs/react`, `@adonisjs/vite` | 4.2.0 / 2.3.27 / 5.1.1                                                                                                                                               | **Decide** by the OD-25 spike (§10.5)                                                        | OD-25, R-22     | M0        |
+
+---
+
+## 11. Lint, format, typecheck and review
+
+CI and its gates are owned by [10](10-testing-and-quality-gates.md); this section defines tool configuration, hooks, the PR checklist and git conventions.
+
+**State today** [Verified-repo; run read-only on 2026-09-27 against the code of `main` at `0282605`]:
+
+- `eslint .` reports **56 errors**: 50 `@unicorn/filename-case` (shadcn files such as `inertia/components/ui/dropdown-menu.tsx` and the `inertia/pages/shops/**` and `landing/**` prototypes), 2 `eqeqeq`, and single hits of `react/jsx-key`, `react-hooks/purity`, `@typescript-eslint/consistent-type-imports` and `@adonisjs/prefer-adonisjs-inertia-link` (re-counted by the part 3 critic on 2026-09-27 with `eslint . -f json`).
+- `tsc --noEmit` reports 1 error, the stale route name of A5-02. `tsc --noEmit --project inertia/tsconfig.json` reports 38 errors.
+- `.husky/pre-commit` runs `lint-staged`, which only runs Prettier. `.husky/pre-push` runs `pnpm lint`, which fails, so either nobody pushes through the hook or it is bypassed. Typecheck is not run anywhere (A5-02, IAM-29), and there is no CI (RF-09).
+
+### 11.1 Tools and versions
+
+Installed [Verified-repo `node_modules`]: ESLint 10.5.0 on `@adonisjs/eslint-config` 3.1.0, Prettier 3.8.4 with `@adonisjs/prettier-config` 1.5.0, TypeScript 6.0.3, husky 9.1.7, lint-staged 17.0.8; dependency-cruiser arrives in M0 (§2.4). Scripts: `pnpm lint` (`eslint . --max-warnings 0`), `pnpm format:check` (`prettier --check .`, new), `pnpm typecheck` (exists, both projects), `pnpm lint:arch` (new, T-ARCH-001).
+
+`@adonisjs/eslint-config` 3.1.0 already brings `typescript-eslint`, `eslint-plugin-unicorn` (including `@unicorn/filename-case` set to `snakeCase`), `@stylistic`, Prettier as an ESLint rule, and the Adonis rules `prefer-lazy-controller-import` and, for `inertia/**`, `no-backend-import-in-frontend`, `prefer-adonisjs-inertia-link` and `prefer-adonisjs-inertia-form` [Verified-repo `node_modules/@adonisjs/eslint-config/index.js`]. DripNepal adds project rules on top of it and does not fork the preset.
+
+### 11.2 `eslint.config.js`
+
+Every rule below is either handed to this section by an earlier one or required by 07 §7.4, [08 §12](08-ui-ux-and-design-system.md#12-maintaining-copied-shadcn-and-kit-components) or [ADR-0007](adr/0007-money-integer-minor-units.md). The core ESLint rules used (`no-restricted-imports`, `no-restricted-syntax`, `no-restricted-properties`, `no-console`) and the `react/*` rules exist in the installed versions [Verified-repo: `eslint-plugin-react` 7.37.5 ships `jsx-no-literals` and `no-danger`]. `eslint-plugin-jsx-a11y` is **not installed** and is a proposal (last block).
+
+```js
+// eslint.config.js — design sketch. configApp and react are verified exports of
+// @adonisjs/eslint-config 3.1.0; the jsx-a11y block is pseudocode until the plugin is added.
+import { configApp } from '@adonisjs/eslint-config'
+import { react } from '@adonisjs/eslint-config/react'
+
+const MONEY_CODE = ['app/modules/**', 'shared/format/**', 'inertia/**']
+
+export default configApp(
+  ...react,
+  { ignores: ['.agents/**', 'docs/**', 'tmp/**'] },
+
+  // --- server layers (§2.4, §3, §6.3, 07 §7.4) ---------------------------------------------
+  {
+    files: ['app/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            { group: ['#start/env'], message: 'Read typed config, not env (09 §6.3)' },
+            {
+              group: ['#database/factories/*'],
+              message: 'Factories are for tests and dev seeders (09 §8.8)',
+            },
+          ],
+        },
+      ],
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'CallExpression[callee.property.name=/^(create|merge|fill)$/] > SpreadElement',
+          message: 'No mass assignment: assign columns one by one (07 §7.4, RF-36)',
+        },
+        {
+          selector:
+            'CallExpression[callee.property.name=/^(create|merge|fill)$/] > Identifier[name=/^(payload|data|body|input)$/]',
+          message: 'No mass assignment from a validated payload (07 §7.4)',
+        },
+        {
+          selector:
+            'CallExpression[callee.property.name=/^(rawQuery|raw|whereRaw|joinRaw)$/] > TemplateLiteral[expressions.length>0]',
+          message: 'Use bindings, never ${} in SQL (07 §7.4)',
+        },
+        {
+          selector: "CallExpression[callee.object.name='db'][callee.property.name='transaction']",
+          message: 'Open transactions only through withTx/jobTx (09 §3.8)',
+        },
+        {
+          selector: "CallExpression[callee.name='fetch']",
+          message: 'Outbound HTTP only inside providers/ adapters (09 §2.4 rule 8)',
+        },
+      ],
+      'no-restricted-properties': [
+        'error',
+        {
+          object: 'process',
+          property: 'env',
+          message: 'Only start/env.ts and bin/* read process.env (09 §6.3)',
+        },
+      ],
+      'no-console': 'error',
+    },
+  },
+  // tx.ts (the one db.transaction caller) and providers/ (allowed to fetch) get the list minus that entry
+  {
+    files: ['app/controllers/**/*.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'CallExpression[callee.property.name=/^(serialize|toJSON)$/]',
+          message: 'Controllers return transformer output, never models (09 §2.4, 06 §3.6)',
+        },
+      ],
+    },
+  },
+
+  // --- money (ADR-0007, 08 §12.3) -----------------------------------------------------------
+  {
+    files: MONEY_CODE,
+    ignores: ['shared/format/money.ts'],
+    rules: {
+      'no-restricted-globals': [
+        'error',
+        { name: 'parseFloat', message: 'Money is integer paisa (ADR-0007)' },
+      ],
+      'no-restricted-properties': [
+        'error',
+        { object: 'Number', property: 'parseFloat', message: 'Money is integer paisa (ADR-0007)' },
+        {
+          property: 'toFixed',
+          message: 'Format money only with formatNPR (shared/format/money.ts)',
+        },
+        { property: 'toLocaleString', message: 'Use formatNPR / formatDateTime (08 §11)' },
+      ],
+    },
+  },
+
+  // --- database/ (§8) -----------------------------------------------------------------------
+  {
+    files: ['database/**/*.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'Property[key.name=/^password/] > Literal[value=/./]',
+          message: 'No literal passwords in seeders or factories (09 §9.2)',
+        },
+        {
+          selector:
+            "CallExpression[callee.property.name='raw'] > TemplateLiteral[expressions.length>0]",
+          message: 'Migrations contain literals only (09 §8.6)',
+        },
+      ],
+      'no-console': 'error',
+    },
+  },
+
+  // --- frontend (08 §12, §13 of this document) ----------------------------------------------
+  {
+    files: ['inertia/**/*.{ts,tsx}'],
+    rules: {
+      'no-console': 'error',
+      'react/no-danger': 'error', // the reviewed JSON-LD helper disables it inline with a reason (07 §7.4)
+      'react/jsx-no-literals': [
+        'warn',
+        { noStrings: true, ignoreProps: true, allowedStrings: ['·', '/', '×'] },
+      ],
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [{ name: 'cn', message: 'Import cn from ~/lib/utils (ADR-0015, 08 §12)' }],
+          patterns: [
+            { group: ['next/*'], message: 'Not a Next.js app (ADR-0015)' },
+            { group: ['@base-ui/react', '@base-ui/react/*'], message: 'Radix only (08 §4.2)' },
+            {
+              group: ['zod', 'react-hook-form', 'formik'],
+              message: 'One form stack: TanStack Form (09 §13)',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ['inertia/components/ui/**'],
+    rules: {
+      '@unicorn/filename-case': 'off', // upstream registry names, 09 §1.1 principle 5
+      'react/jsx-no-literals': 'off',
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['~/components/*', '!~/components/ui/*'],
+              message: 'ui/ imports only ui/ and ~/lib/utils (08 §12.1)',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ['inertia/components/kit/**'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['~/components/*', '!~/components/ui/*'],
+              message: 'kit/ imports only ui/ and ~/lib/utils (08 §12.1)',
+            },
+          ],
+        },
+      ],
+    },
+  }
+
+  // --- accessibility (proposal; pseudocode until eslint-plugin-jsx-a11y is added in M0) -------
+  // { files: ['inertia/**/*.tsx'], ...jsxA11y.flatConfigs.recommended }
+)
+```
+
+Notes on the sketch:
+
+- ESLint flat config applies **the last matching block** for a rule name in a file, so a later block with the same rule replaces an earlier list instead of adding to it. The M0 implementation therefore builds each `no-restricted-syntax`, `no-restricted-imports` and `no-restricted-properties` list from shared arrays per path (controllers get the `app/**` list **plus** the serialize ban; `app/modules/**` gets the `process.env` ban **plus** the money bans). The sketch shows the entries, not the final merge. The AST selectors are checked with a fixture file per rule in M0; a selector that matches nothing is a silent hole.
+- **Raw text** (`react/jsx-no-literals`, 08 §11.8, NFR-I18N-001) is `warn` in M0, when every existing page would fail it; with `--max-warnings 0` it therefore applies to new files through lint-staged at once, and it becomes `error` per surface as [08 §13](08-ui-ux-and-design-system.md#13-current-ui-remediation-list) moves the surface to catalogs.
+- **Accessibility lint** is a proposal: add `eslint-plugin-jsx-a11y` (MIT, widely used [Assumption; licence and flat-config support confirmed when added]) with its recommended set for `inertia/**/*.tsx`. It catches static problems such as a missing `alt` or a click handler without a key handler. It does not replace axe (T-A11Y-001), which checks the rendered DOM. Trade-off: some false positives with Radix components that manage roles themselves, handled by inline disables with a reason.
+- **Rules that lint cannot express** stay in the architecture job (§2.4): the field-decrypter allowlist, "no controller returns a model" at run time, and "every seller and admin route declares a permission" (T-SEC-030, proposed in 07).
+- **Inline disables** must name the rule and give a reason: `// eslint-disable-next-line react/no-danger -- JSON-LD from jsonLd(), 07 §7.4`. `eslint-comments`-style enforcement is not added; review checks it.
+- **Clearing today's 56 errors** is part of the M0 lint PR. The shadcn files are exempted by the `ui/**` block, and `scroll_area.tsx` is renamed to its registry name `scroll-area.tsx` (08 §12.1). The prototype pages are deleted or moved by 08 §13, not fixed.
+
+### 11.3 Prettier and typecheck
+
+- **Prettier** keeps the Adonis preset. `proseWrap` is preserved, so Markdown lines are not re-wrapped. `.prettierignore` adds `docs/openapi.yaml` only if the contract linter and Prettier disagree [Assumption, checked when 10 adds the linter], plus `pnpm-lock.yaml` and `database/schema.ts` (generated). CI runs `pnpm format:check`. Formatting is never discussed in review.
+- **Typecheck** is `tsc --noEmit` for the server project and `tsc --noEmit --project inertia/tsconfig.json` for the client [Verified-repo `package.json`]. Both run in pre-push and CI. The client project includes `.adonisjs/client/**` and `.adonisjs/server/**`, so a stale generated file breaks typecheck. That is why `.adonisjs/` is committed and checked for freshness (§1.4, T-ARCH-016 proposed).
+- **Strictness.** `@adonisjs/tsconfig` 2.x turns on the strict checks one by one (`strictNullChecks`, `noImplicitAny`, `strictFunctionTypes`, `strictPropertyInitialization`, …) but does not set `strict` itself [Verified-repo `node_modules/@adonisjs/tsconfig/tsconfig.base.json`]. DripNepal adds `"strict": true` to both projects, which also enables `useUnknownInCatchVariables`, and never relaxes a flag. `// @ts-expect-error` is allowed with a reason; `// @ts-ignore` and `as any` are banned by `@typescript-eslint/ban-ts-comment` and `@typescript-eslint/no-explicit-any` (added to the `app/**` and `inertia/**` blocks).
+
+### 11.4 Git hooks (husky 9)
+
+Hooks give fast feedback on the developer's machine. They are not a control: `git commit --no-verify` and `HUSKY=0` skip them [Verified-repo `node_modules/husky/husky`: exits 0 when `HUSKY=0`]. CI ([10](10-testing-and-quality-gates.md)) runs the same commands and more, and branch protection requires CI.
+
+```sh
+# .husky/pre-commit — staged files only; target under 10 s [Assumption]
+pnpm exec lint-staged
+pnpm exec gitleaks protect --staged --redact   # pseudocode: scanner and flags chosen per 07 §7.2 [Assumption: gitleaks]
+```
+
+`package.json` excerpt:
+
+```json
+"lint-staged": {
+  "*.{ts,tsx,js,mjs,cjs}": ["eslint --max-warnings 0 --fix", "prettier --write"],
+  "*.{json,md,yml,yaml,css}": ["prettier --write"],
+  "database/migrations/*.ts": ["node scripts/check_migrations_lock.mjs"]
+}
+```
+
+```sh
+# .husky/pre-push — target under 90 s on a laptop [Assumption]
+pnpm typecheck
+node ace test unit
+```
+
+- Unit tests only on pre-push: they need no database. Functional, concurrency and browser suites run in CI.
+- `pnpm lint` moves from pre-push to CI, where it runs on the whole tree. Pre-commit lints the staged files, so the whole-tree run in pre-push was redundant; it also fails today.
+- If `gitleaks` is not installed, the hook prints how to install it and fails. The whole team is one or two people, so a required local tool is acceptable.
+
+### 11.5 Pull request template and review checklist
+
+`.github/pull_request_template.md` (created in M0):
+
+```md
+**What and why**
+
+<!-- One paragraph. Link the FR / J / OD / RF IDs and the milestone. -->
+
+**Evidence**
+
+- [ ] Tests added or changed (IDs: …); CI green
+- [ ] Screenshots or a short video for UI changes (mobile width first)
+
+**Checklist (tick or write "n/a")**
+
+**Security and privacy**
+
+- [ ] Every new seller/admin route declares a permission; cross-shop and cross-customer access returns 404 (T-SEC-001, T-SEC-002)
+- [ ] Inputs validated with an allowlist schema; no mass assignment; client prices, totals, shop_id and commission ignored (T-SEC-003)
+- [ ] No personal data, tokens or secrets in logs, props, error bodies or job payloads (09 §7.2)
+
+**Migrations**
+
+- [ ] One concern per file; applied migrations untouched; lock updated (09 §8.4)
+- [ ] Safe while the previous release runs (expand/contract, 09 §8.5); contract step links its expand PR
+- [ ] database/schema.ts regenerated, not edited; constraint names as in 04a
+
+**Money and stock**
+
+- [ ] Integer paisa only; sums through sumMinor; no parseFloat/toFixed (ADR-0007)
+- [ ] Stock and state changes use casStatus / row locks in the 05 lock order, inside one withTx
+
+**Idempotency and jobs**
+
+- [ ] Operations on the ⚷ list of 06 §7.7 require Idempotency-Key and replay correctly; a new operation that moves orders, stock or money is added to that list
+- [ ] Jobs are idempotent, sent in the same transaction, payload keys snake_case with request_id
+- [ ] No provider call inside a transaction
+
+**Accessibility and UI**
+
+- [ ] Keyboard path, visible focus, labels, 24 px targets; axe clean on touched pages (T-A11Y-001)
+- [ ] Strings from catalogs; money via formatNPR; works without JavaScript where 08 requires it
+
+**Dependencies and docs**
+
+- [ ] New dependency justified (need, licence, maintenance, size, install scripts – 09 §10.1)
+- [ ] Docs updated where behaviour changed (FR/AC, 06 endpoint table, openapi.yaml)
+- [ ] Does this change a decision listed in docs/adr? If yes, link the new or superseding ADR.
+- [ ] New or changed queries in queries.ts include EXPLAIN (ANALYZE, BUFFERS) on seeded data (04 §17)
+```
+
+The ADR line is the checkbox [ADR-0001](adr/0001-record-architecture-decisions.md) proposes, and the `EXPLAIN` line is the rule of [04 §17](04-domain-model-and-data-dictionary.md#17-query-patterns-and-index-summary). The **reviewer** additionally rejects anything listed in §3.13 ("What we do not build"). The reviewer also rejects a PR that relies on a TypeScript type to protect a money, stock, tenancy or history invariant ([04 §16.1](04-domain-model-and-data-dictionary.md#161-enforcement-layers-and-why-typescript-types-are-not-one)). For copied UI code, the checklist of [08 §12.3](08-ui-ux-and-design-system.md#123-review-checklist-for-copied-code) applies as well.
+
+**Who reviews.** With two developers, every PR to `main` needs the other developer's approval. With one developer, the author does a self-review on the PR diff the next working day [Assumption]. Changes to money, stock, auth, migrations or the dependency set also get a product-owner walkthrough before merge, as ADR-0011 allows for the baseline.
+
+### 11.6 Branches, commits and merges
+
+**Observed in the history** [Verified-repo `git log main`, `git branch -a`, 2026-09-27]:
+
+- Branches are named after the issue: `harublank00/drip-13-rename-route-from-vendordashboard-to-shopdashboard`, `harublank00/docs-planning-batch-a`.
+- PRs are squash-merged, and the squash subject carries the PR number: `chore: change url from /vendors/dashboard to /shops/:shopSlug/dashboard (#18)`, `feat: create shop dashboard layout (#16)`. Some squash subjects kept the branch title instead of a type: `Harublank00/drip 11 create a shop dashboard page (#14)`.
+- Some commits landed on `main` without a PR (`63667a3 regen pages.d.ts`, `a686979 feat: format and lint`).
+
+**Standard:**
+
+| Item           | Rule                                                                                                                                                                                                                         |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Branch name    | `harublank00/drip-<issue number>-<short-kebab-summary>` (the issue tracker's generated name); docs-only work `harublank00/docs-<topic>`. One branch per issue                                                                |
+| `main`         | Protected: no direct pushes, CI required, one approval (or the one-developer rule of §11.5), linear history. Generated-file updates also go through PRs                                                                      |
+| Merge          | Squash merge only. The squash subject is edited to the commit format below and keeps GitHub's ` (#NN)` suffix                                                                                                                |
+| Commit subject | Conventional Commits: `<type>(<scope>): <imperative summary>`, at most 72 characters. Types: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `build`, `ci`, `perf`. Scope = module or surface (`orders`, `seller`, `db`) |
+| Body           | Why, the IDs it implements (`FR-…`, `RF-…`, `OD-…`), and `BREAKING:` for an API or schema change that needs a contract step                                                                                                  |
+| Migration PRs  | Contain only migration, `database/schema.ts`, model and lock changes plus the code that needs them; no unrelated refactors                                                                                                   |
+| Commit linting | Not enforced by a hook. With one or two developers and squash merges, only the edited squash subject reaches `main`, and the reviewer checks it                                                                              |
+
+### 11.7 Current code → target (lint, format, typecheck, review)
+
+| Area / file(s)                     | Today [Verified-repo]                                         | Decision                                                                               | Reason              | Milestone |
+| ---------------------------------- | ------------------------------------------------------------- | -------------------------------------------------------------------------------------- | ------------------- | --------- |
+| `eslint.config.js`                 | `configApp(...react)` only; 56 errors on `eslint .`           | **Rewrite** per §11.2; clear the errors (rename, delete prototypes, fix 6 code errors) | RF-26, RF-36, A5-04 | M0        |
+| `package.json` scripts             | `lint`, `format`, `typecheck`; no `format:check`, `lint:arch` | **Fix**: add `format:check`, `lint:arch`; `lint` with `--max-warnings 0`               | RF-09               | M0        |
+| `.husky/pre-commit`, `lint-staged` | Prettier only                                                 | **Fix**: ESLint on staged files, secret scan, migration lock check                     | A5-02, 07 §7.2      | M0        |
+| `.husky/pre-push`                  | `pnpm lint` (fails today)                                     | **Rewrite**: `pnpm typecheck` + `node ace test unit`                                   | A5-02, IAM-29       | M0        |
+| Typecheck                          | Not run anywhere; 1 server and 38 client errors               | **Fix** the errors; run in pre-push and CI                                             | A5-02               | M0        |
+| `.github/pull_request_template.md` | Does not exist                                                | **Create** (§11.5)                                                                     | RF-09               | M0        |
+| Branch protection on `main`        | Direct commits in history                                     | **Configure** (§11.6)                                                                  | A5-04               | M0        |
+| `.prettierignore`                  | `.adonisjs`, `node_modules`, `build`                          | **Fix**: add `database/schema.ts`, `pnpm-lock.yaml`                                    | —                   | M0        |
+
+---
+
 ## Consistency notes for editor
 
 1. **Route file names (ADR-0004 decision 6, canon §6.3).** ADR-0004 and canon §6.3 (`start/routes/{storefront,account,seller,admin,api_v1,webhooks,health}.ts`) name a single `start/routes/api_v1.ts`, and canon has no `auth.ts` or `dev.ts`; §3.3 splits it into `start/routes/api_v1/{auth,public,customer,seller,admin}.ts`. The rule (unsafe methods only under `/api/v1/` and `webhooks.ts`) is unchanged; ADR-0004 can say "`start/routes/api_v1/`".
@@ -1454,3 +2273,23 @@ Verified by the lint gate (ESLint in CI and pre-commit, §11) and a test that re
 36. **Pool-level timeouts.** 03 §3.4 says every pool sets `statement_timeout` and `lock_timeout`; 03 §8 and §3.8 set them per transaction. §6.3 does both, and applies the connection-level values only in the `web` environment so migrations and the worker are not cut off at 10 s.
 37. **Gateway disable flag.** 03 §12.6 names "the gateway disable flag" as an environment variable. §6.1 has no separate flag: `PAYMENT_PROVIDER=none` (proposed, note 25) disables the gateway with a restart, and `checkout_enabled` in `platform_settings` is the runtime kill switch. 03 §12.6 can cite `PAYMENT_PROVIDER`.
 38. **Other proposals introduced in this part.** The `request_id` shared prop (§4.2), the `malformed_json` item code for unparseable JSON until `MALFORMED_REQUEST` is adopted (§5.2; 06 §5.3 names no item code), the `notice` flash key for the suspension redirect (§5.4), and the log `msg` names `http.request`, `http.error`, `job.attempt` and `provider.call` (§7).
+
+**From part 3 (§8–§11):**
+
+39. **Migration file names and `lock_timeout`.** [04 §20.2.2](04-domain-model-and-data-dictionary.md#2022-baseline-files-and-their-order) says the baseline files are "generated with `node ace make:migration`" and names them by suffix (`baseline_identity`). The installed generator always writes `<timestamp>_<create|alter>_<table>_table.ts` [Verified-repo Lucid 22.4.2 `build/commands/make_migration.js:85-89`]. §8.1/§8.2 keep the generated timestamp and rename the suffix. 04 §20.2.4 and ADR-0011 decision 5 write `SET lock_timeout = '5s'`. §8.2 uses `SET LOCAL` in transactional files, because Lucid runs each file in its own transaction [Verified-repo `runner.js:117-128`] and a plain `SET` would outlive it on the pooled connection. Files with `disableTransactions` use `SET` and `RESET`.
+40. **Seeder layout.** 04 §20.3 and the §1.2 tree have one `database/seeders/reference/index_seeder.ts`. `db:seed` loads every script file under the seeder path recursively and sorts by path [Verified-repo], so `dev/` would run before `reference/`, and helpers would be loaded as seeders. §8.8 uses `seeders.paths: [reference, dev]`, numbered files (`01_locations` … `08_platform_settings`) and a new `database/support/` folder. The §1.2 tree should read `seeders/reference/NN_*_seeder.ts` and add `database/support/`. Order and content are 04's.
+41. **Development-seeder guards.** 04 §20.3 says the `app.inProduction` check stops a misconfigured `NODE_ENV`. But `app.inProduction` is derived from `NODE_ENV`, so it adds nothing there. §8.8 adds an `APP_ENV` check and a database-name check (`current_database()` must end in `_dev` or `_test`, proposed). This needs `docker-compose.yml` to create `dripnepal_dev` (today `dripnepal`), and [11](11-deployment-and-operations.md) must name the staging and production databases without those suffixes. 04 §20.3 also says the random development password is "printed to the console". §8.8 writes it to the git-ignored `tmp/dev_credentials.json` instead, because of `no-console` (§7.5). There is no seeded development admin; developers use `platform:create-admin`.
+42. **`platform:create-admin` design.** The two modes are canon §11 ("prompts password interactively or sends invitation"): invitation, which is the default and matches 04a §5.1's "hash of a random secret, then a password-reset token", and `--interactive` (masked prompt). Proposed here: the `--interactive` flag name and the e-mail prompt in that mode (canon shows `--email` always), the transaction-scoped advisory lock that serialises concurrent bootstrap runs on an empty database (added by the part 3 critic), and a bootstrap-only refusal, `--recover` for AC-FR-IAM-007-5 (procedure owned by 11), the identity entry action `BootstrapPlatformAdmin` (a CLI action, not an `operationId`) and the audit action `platform_staff.bootstrap`. The interactive mode creates an `active`, e-mail-verified account without an e-mail round trip. The product owner should confirm that this is acceptable for the operator's own bootstrap. The invitation mode relies on 02 J-18's [Assumption] that redeeming a reset link verifies a `pending_verification` account.
+43. **New files not in the §1.2 tree:** `scripts/check_migrations_lock.mjs`, `database/support/{dev_seeder.ts, csv.ts}` and `security/audit-exceptions.md` (paths proposed). The `migrations.lock` line format (`<sha256>  <file>`) is also proposed. §1.4's "Detail in §8" now resolves to §8.4.
+44. **Build-script allowlist.** [07 §7.1](07-security-threat-model-and-permissions.md#71-dependency-policy) and TM-26 allow install scripts "only for sharp and `@img/*`". The repository also allows `esbuild` and `@swc/core` [Verified-repo `pnpm-workspace.yaml`], which the development toolchain needs. §10.2 keeps them for development installs and uses `--ignore-scripts` for the production install. 07 §7.1 should say "production image: none; development: the `allowBuilds` list". Whether sharp's prebuilt binaries work without its install script is an [Assumption] for the image smoke test (11).
+45. **pnpm 11 facts used** [Verified-repo pnpm 11.9.0 bundle installed through Corepack]: the default `minimum-release-age` is 1,440 minutes; `pnpm audit` has `--prod` and `--audit-level`; `auditConfig.ignoreGhsas` filters the report but has no expiry. 07 §7.1's "allowlist file with an expiry date" is therefore two files kept in step by a CI check (§10.3).
+46. **Dependency decisions introduced here:** remove `zod` in M4 (its only importers are prototype pages under `inertia/pages/shops/` [Verified-repo]); keep the TanStack devtools as devDependencies behind `import.meta.env.DEV` (RF-30, detail in §13); pin `0.x` packages to their minor; add a weekly grouped update PR with the bot choice left as an [Assumption] for M0. 07 §7.1's seven-day security window is cited as 07's [Assumption].
+47. **OD-25 handling.** §10.5 follows the register's recommendation (spike first in M0) and adds a CSP check to the pass criteria: adapter 5 moves the page object into a `<script type="application/json">` [Verified-doc gt/adonis_stack.md]. OD-25 stays [Open].
+48. **Lint rules owned here (§11.2)** cover the items handed over in notes 12 and 32 and in 07 §7.4: mass assignment, `${}` in raw SQL, `db.transaction` outside `tx.ts`, `fetch` outside adapters, `.serialize()`/`.toJSON()` in controllers, `#start/env` and `process.env`, `no-console`, `parseFloat`/`toFixed`/`toLocaleString` in money code (ADR-0007, 08 §12.3), `react/no-danger`, raw text (`react/jsx-no-literals`, `warn` until each surface moves to catalogs), the npm `cn`, `next/*`, `@base-ui/react` and second-form-library bans, and the `ui/` and `kit/` import direction (08 §12.1). The `ui/` folder is exempt from `@unicorn/filename-case`, which confirms 08's proposal to rename `scroll_area.tsx` to `scroll-area.tsx`. `eslint-plugin-jsx-a11y` is a proposal, because it is not installed. The theme cookie, permission-list prop, intent storage key, notices file, catalog loader and URL builder are still §13 items.
+49. **Hooks.** Today pre-push runs `pnpm lint`, which fails with 56 errors [Verified-repo, run 2026-09-27]. §11.4 moves whole-tree lint to CI, lints staged files in pre-commit, and runs `pnpm typecheck` plus `node ace test unit` on pre-push, as the spec for this document requires. The secret-scan hook command is pseudocode until 07 §7.2's tool is chosen.
+50. **Test IDs in part 3.** Canon §12 IDs cited without a mark: T-ARCH-001, T-SEC-001, T-SEC-002, T-SEC-003, T-A11Y-001. The following are cited from their proposing documents: T-ARCH-010, T-ARCH-011, T-ARCH-012 and T-ORD-101 (04); T-ARCH-015 (04a); T-SEC-026 and T-SEC-030 (07); T-ARCH-016 (§1.4). New checks are named without IDs for 10 to number: the migrations-lock script test, the seeder idempotency and guard tests, the `DevSeeder` subclass test, the `platform:create-admin` tests, the audit-exceptions consistency check and the per-rule lint selector fixtures.
+51. **Proposed canon additions used in part 3:** none. The operations cited (`setPlatformStaffRole`, `confirmTotpEnrollment`, `requestPasswordReset`, `updatePlatformSetting`) are in canon §6.5. `/admin` gating follows 07.
+52. **Release sequence.** [03 §5.4](03-system-architecture.md#54-release-sequence) runs migrations and then restarts the processes, but does not mention reference seeding or the §9.2 release checks. 11 should add "reference seeders with `--files`, then release checks" between migration and restart. ADR-0011's "`down` is never run in production" is implemented by `migrations.disableRollbacksInProduction: true` [Verified-repo option].
+53. **Review items for this part.** The 14-file baseline order of 04 §20.2.2 is adopted unchanged (§8.1), with `allow_only_columns()` guards written as SQL (§8.6) and `schemaGeneration.rulesPaths` wiring (§8.7). `withTx` is used by the bootstrap command (§9.1). Job-name, `seller_context`, capture-orchestration and vertical-slice items do not arise in §8–§11; the slice is §12.
+54. **T-SEC-026 and the weekly update PR.** [07 TM-26](07-security-threat-model-and-permissions.md#71-dependency-policy) defines T-SEC-026 (proposed) to fail "on a lockfile change without a `package.json` change". §10.3's weekly PR delivers patch and minor updates mostly through the lockfile, so it would fail that rule. §10.2 allows lockfile-only changes only on the weekly update branch. 07 and 10 should add that exemption; 10 picks the mechanism (branch name or label). 07's T-SEC-026 also allows only `registry.npmjs.org` in `components.json`, while §10.4 also allows "the shadcn default". The two agree in effect, because the default registry is not written in `components.json`.
+55. **Part 3 critic fixes (2026-09-27).** The lint count in §11 now names the `@adonisjs/prefer-adonisjs-inertia-link` hit (56 = 50 + 2 + 4 single hits). The lock script in §8.4 no longer fails before the lock file exists. §9.1 adds the advisory lock and `subject_id` to the bootstrap audit row. The PR template's idempotency item follows the ⚷ list of [06 §7.7](06-api-design.md#77-operations-that-require-a-key-) instead of "every unsafe endpoint". The §10.7 row now lists the `0.x` packages.
