@@ -23,12 +23,12 @@ Labels follow the canonical vocabulary in [00 Context](00-context-assumptions-an
 
 Notation used throughout:
 
-- **Money** is integer paisa in `bigint` columns named `*_minor`, with `currency = 'NPR'` (ADR-0007). `Rs 1,299.00` is written as `129900` in SQL and JSON. NPR amounts in prose use the `en-IN` lakh grouping produced by `Intl.NumberFormat('en-IN', { style: 'currency', currency: 'NPR' })`.
+- **Money** is integer paisa in `bigint` columns named `*_minor`, with `currency = 'NPR'` (ADR-0007). `Rs 1,299.00` is written as `129900` in SQL and JSON. NPR amounts in prose follow the `formatNPR` display of [08 §5.11](08-ui-ux-and-design-system.md#511-money-and-numeral-display-vx-12): the "Rs" prefix, `en-IN` lakh grouping and Latin digits.
 - **Rounding** is half-up at line level. `roundHalfUp(x)` for a non-negative rational `x = n / d` is `floor((2n + d) / (2d))` in integer arithmetic. No float ever touches money.
 - **Time** is stored as `timestamptz` in UTC. Every due time (`acceptance_due_at`, `expires_at`, `available_at`, `due_at`) is computed from UTC `now()` plus a duration. Schedules and statement periods are expressed in Asia/Kathmandu (UTC+05:45, no DST).
 - **TX** means one PostgreSQL transaction at READ COMMITTED, the PostgreSQL default [Verified-doc: https://www.postgresql.org/docs/18/transaction-iso.html, accessed 2026-09-25].
 - **CAS** means compare-and-set: `UPDATE … SET status = :to WHERE id = :id AND status = :from`. Zero affected rows means another actor won (§9.2).
-- **Job names** such as `orders.acceptance_timeout` are the queue names used by the `worker` process on pg-boss (ADR-0010). 03 and 05 share one convention, `<module>.<snake_case_name>`, and the same names. [03 System architecture §9](03-system-architecture.md) lists every queue with its owner module, retry policy and dead-letter configuration. This document says when each job is sent and what it must do.
+- **Job names** such as `orders.acceptance_timeout` are the queue names used by the `worker` process on pg-boss (ADR-0010). 03 and 05 share one convention, `<subject>.<snake_case_name>`, and the same names. The prefix names the subject, not necessarily the module that hosts the handler: `refunds.execute` runs in `payments` and `refunds.sla_monitor` in `orders`. [03 System architecture §9](03-system-architecture.md#9-asynchronous-work) lists every queue with its owner module, retry policy and dead-letter configuration. This document says when each job is sent and what it must do.
 - **Settings** are keys in `platform_settings`. [04a §15.1](04a-data-dictionary-tables.md#151-platform_settings) owns the keys, seeded defaults and allowed ranges. The keys this document uses, with their defaults:
 
 | Key                                | Default               | Used in                             | Decision                     |
@@ -153,7 +153,7 @@ erDiagram
     uuid shop_order_id FK
     int quantity "as placed"
     int rejected_quantity "vendor rejected"
-    int cancelled_quantity "cancelled before shipment"
+    int cancelled_quantity "cancelled before shipment or by RTO"
     int returned_quantity "returned after delivery"
     bigint line_total_minor "as placed"
     int commission_rate_bp "snapshot"
@@ -230,7 +230,7 @@ orders.grand_total_minor     = items_subtotal_minor + shipping_total_minor − d
 0 ≤ rejected_quantity + cancelled_quantity + returned_quantity ≤ quantity                            (DB CHECK)
 ```
 
-The cross-row sums (shop order equals the sum of its items, parent equals the sum of its shop orders) cannot be CHECK constraints. They are asserted by the checkout action before commit and by the nightly `ledger.integrity_check` job (§9.4), and tested by T-ORD-008.
+The cross-row sums (shop order equals the sum of its items, parent equals the sum of its shop orders) cannot be CHECK constraints. They are asserted by the checkout action before commit and by the nightly `ledger.integrity_check` job (§7.12 item 5; schedule in §9.4), and tested by T-ORD-102, the cross-row-sum test that [04 §16.4](04-domain-model-and-data-dictionary.md#164-rules-that-cannot-be-constraints) names.
 
 **Cumulative allocation rule.** When part of a line is rejected, cancelled or returned, the amount attributed to those units is computed cumulatively so that partial operations always add up exactly to the as-placed line amount:
 
@@ -240,7 +240,7 @@ C(c) = roundHalfUp(commission_minor × c / quantity)          commission for the
 amount for an operation that takes the count from c1 to c2 = A(c2) − A(c1)
 ```
 
-Units are consumed in a fixed order: rejected units first, then cancelled, then returned. So the refund for returning `r` units after `k` units were rejected is `A(k + r) − A(k)`. Because `A(quantity) = line_total_minor` exactly, rounding never leaks a paisa between operations. In R1 without discounts `A(c) = unit_price_minor × c` exactly. The rule matters from R2, when allocated discounts make `line_total_minor` indivisible. Property test T-ORD-008 checks `Σ operations = line_total_minor` for random splits.
+Units are consumed in a fixed order: rejected units first, then cancelled, then returned. So the refund for returning `r` units when `k` units of the line are already consumed (rejected + cancelled + previously returned, §7.4) is `A(k + r) − A(k)`. Because `A(quantity) = line_total_minor` exactly, rounding never leaks a paisa between operations. In R1 without discounts `A(c) = unit_price_minor × c` exactly. The rule matters from R2, when allocated discounts make `line_total_minor` indivisible. Property test T-ORD-008 checks `Σ operations = line_total_minor` for random splits.
 
 Effective amounts for a shop order:
 
@@ -275,10 +275,10 @@ Shipping is refunded at most once per shop order. The shipping part of a refund 
 
 **R2: one platform coupon per order (FR-PROMO-002).** Rules to implement then, recorded now so the R1 schema already fits:
 
-1. Eligibility is decided per line (coupon scope such as category, shop list or minimum order). The discount amount `D` is computed on the eligible lines' `line_subtotal_minor`.
+1. Eligibility is decided per line (coupon scope such as category, shop list or minimum order). The discount amount `D` is computed on the eligible lines' `line_subtotal_minor` and capped at their sum: `D = min(coupon amount, W)`, with `W` as in rule 2. A fixed-amount coupon larger than the eligible subtotal therefore discounts it to zero and no further, and no line's `discount_minor` can exceed its `line_subtotal_minor` (`order_items_discount_check`).
 2. `D` is allocated across **all eligible lines of all shops** by the largest-remainder method, weighted by `line_subtotal_minor`:
    - `share_i = floor(D × w_i / W)` where `w_i` is the line subtotal and `W = Σ w_i`.
-   - The leftover `D − Σ share_i` paisa goes one each to the lines with the largest fractional remainders `(D × w_i) mod W`. Ties go to the lower `order_items.id` so the result is deterministic.
+   - The leftover `D − Σ share_i` paisa goes one each to the lines with the largest fractional remainders `(D × w_i) mod W`. Ties go to the lower `variant_id` so the result is deterministic. `variant_id` is unique within an order (one line per variant per shop order, one shop order per shop) and is already known when `quoteCheckout` runs, unlike `order_items.id`, which `placeOrder` generates only in step 9. So the quote and the placement give each leftover paisa to the same line, and the per-parcel COD amounts the customer confirmed are the ones placed.
    - `discount_minor_i = share_i (+1 if chosen)`, and `Σ discount_minor_i = D` exactly.
 3. The coupon records `funded_by ∈ platform | shop` in `coupon_redemptions` (pricing module, R2). R3 shop coupons may only discount their own shop's lines. If R3 allows a platform and a shop coupon on the same order, per-line `discount_platform_minor` and `discount_shop_minor` columns are needed; that is an R3 schema change and does not affect R1.
 4. Effect on the vendor and commission:
@@ -288,7 +288,7 @@ Shipping is refunded at most once per shop order. The shipping part of a refund 
 | `platform`  | `line_total_minor` (net) | `line_subtotal_minor` (gross). The platform tops the vendor up | gross `line_subtotal_minor` | Platform, as a marketing cost |
 | `shop`      | `line_total_minor` (net) | `line_total_minor` (net)                                       | net `line_total_minor`      | Vendor                        |
 
-For a COD order with a platform-funded coupon the vendor holds only the net cash, so `cod_cash_held` is the net amount, while `sale` is gross. The difference automatically becomes a positive balance the platform owes the vendor. This is the canonical rule "`sale` + line_total (items net of shop-funded discount)" applied to both funding sources.
+For a COD order with a platform-funded coupon the vendor holds only the net cash, so `cod_cash_held` is the net amount, while `sale` is gross. The difference (gross − net, the platform-funded discount) is credited to the vendor through `sale` and offsets the commission, so the delivery group nets to `discount − commission` and may still be negative, as in [04 §18.3.3](04-domain-model-and-data-dictionary.md#1833-r2-a-platform-funded-coupon-allocated-across-shops). In the worked example below, shop A's lines carry 17777 of discount against 34480 of commission, so A's delivery group nets to −16703 and A still owes commission, reduced by the discount the platform funded. This is the canonical rule "`sale` + line_total (items net of shop-funded discount)" applied to both funding sources.
 
 **Worked example (R2, illustrative).** The cart of §7.11 with a Rs 500 platform coupon (`D = 50000`) whose scope excludes socks, so the eligible lines are A1, A2, B1 and B2 across both shops. `W = 259800 + 85000 + 249900 + 375100 = 969800`.
 
@@ -300,7 +300,7 @@ For a COD order with a platform-funded coupon the vendor holds only the net cash
 | B2   | 375100        | 18755000000 | 19339                          | 37800                       | 0              | 19339              | 355761                 |
 | Σ    | 969800        |             | 49999                          |                             | 1              | **50000**          |                        |
 
-`D − Σ share_i = 50000 − 49999 = 1` paisa goes to A1, the line with the largest remainder. Shop A's lines carry 17777 of the discount and shop B's 32223, which sum to `D`. Commission per line at the §7.11 rates (A 10%, B 12%):
+`D − Σ share_i = 50000 − 49999 = 1` paisa goes to A1, the line with the largest remainder. Shop A's lines carry 17777 of the discount and shop B's 32223, which sum to `D`. Commission per line at the §7.11 rates (A 10%, B 12%); the `funded_by = shop` column only compares the two commission bases of rule 4 on the same per-line discounts, since a real shop coupon discounts its own shop's lines only (rule 3):
 
 | Line | `funded_by = platform` (base gross `line_subtotal_minor`) | `funded_by = shop` (base net `line_total_minor`)                       |
 | ---- | --------------------------------------------------------- | ---------------------------------------------------------------------- |
@@ -309,7 +309,7 @@ For a COD order with a platform-funded coupon the vendor holds only the net cash
 | B1   | `roundHalfUp(249900 × 1200 / 10000)` = 29988              | 28442 (28441.92)                                                       |
 | B2   | 45012                                                     | 42691 (42691.32)                                                       |
 
-Test T-CHK-011 (proposed, R2) checks `Σ discount_minor_i = D` and the tie rule for random carts.
+Test T-CHK-011 (proposed, R2) checks `Σ discount_minor_i = D`, the cap `D ≤ W` and the tie rule for random carts.
 
 ### 3.5 Commission allocation per item
 
@@ -322,7 +322,7 @@ Commission is computed and snapshotted **per order item at placement**. It is ne
 - The client never sends a rate or a commission. Any such field in a request body is rejected by the validator (T-SEC-003).
 - Commission is posted to the ledger only when the shop order is delivered and paid (§7.3), and only on kept units. Rejected and cancelled units never generate commission.
 
-If the business decides that commission applies to shipping as well (OD-04), only `commission_base` changes: the shipping fee would be allocated to lines by largest remainder and added to each line's base. The snapshot columns and ledger rules stay the same.
+If the business decides that commission applies to shipping as well (OD-04 basis (b)), shipping must not be folded into each line's `commission_base`. Adding a share of the fee to line commission would break three things: `order_items_commission_check` (`commission_minor ≤ line_subtotal_minor`; a 1000-paisa line alone in a shop order with a 15000-paisa fee at 10% gives 1600), item-level rejection (`effective_commission` would drop the shipping part pro rata through `C(rejected + cancelled)` while `effective_shipping` stays at the full fee, §3.2), and returns (`C(k + r) − C(k)` would reverse the shipping part even when shipping is not refunded, §7.4). Commission on shipping would instead be its own shop-order snapshot, for example `shop_orders.shipping_commission_minor = roundHalfUp(shipping_fee_minor × commission_rate_bp / 10000)` at the shop override or default rate and bounded by `shipping_fee_minor`, posted as a separate `commission` entry of the delivery group (`dedupe_key` `delivery:<shop_order_id>:shipping_commission`, §7.3) and reversed only by a refund that includes a shipping part. That needs a new column and CHECK in [04a](04a-data-dictionary-tables.md) and new posting rules, so it is designed together with the OD-04 decision.
 
 ### 3.6 Partial cancellation and item-level rejection
 
@@ -350,12 +350,12 @@ Rules that make this safe:
 
 ### 3.7 Independent fulfillment per shop order
 
-Each shop order has its own acceptance deadline (`acceptance_due_at`), its own shipment (exactly one in R1; partial shipments are R2, FR-FUL-005), its own COD payment, its own return window (starting at its own `delivered_at`) and its own ledger postings. Nothing that happens to one shop order locks or changes another, except the parent status recompute, which locks the parent `orders` row (§4.4). Consequences:
+Each shop order has its own acceptance deadline (`acceptance_due_at`), its own shipment (exactly one in R1; partial shipments are R2, FR-FUL-005), its own COD payment, its own return window (starting at its own `delivered_at`) and its own ledger postings. Nothing that happens to one shop order locks or changes another, except the parent status recompute, which locks the parent `orders` row (§4.4), and, from R1.1, the one gateway payment that all shop orders of an order share: a customer cancellation while `awaiting_payment` and a verified capture move every shop order of the order together (§6.1). Consequences:
 
 - Vendor B's rejection never delays vendor A's shipment.
 - A customer with a two-shop COD order pays two couriers, each the amount on that parcel's COD payment.
 - Emails are per shop order event. The customer's order page shows one card per shop order with its own timeline ([08 UI/UX](08-ui-ux-and-design-system.md)).
-- Completion is per shop order: `accepted → completed` when the shipment is `delivered`, `now() ≥ delivered_at + return_window_days`, and no return request or refund on that shop order is open (§6.1).
+- Completion is per shop order: `accepted → completed` when the shipment is `delivered`, `now() ≥ shipments.return_window_ends_at` (set in the `delivered` TX, [04a §11.5](04a-data-dictionary-tables.md#115-shipments)), the payment is settled (COD `collected` or gateway `captured`), and no return request or refund on that shop order is open (§6.1).
 
 ### 3.8 Parent status derivation
 
@@ -1800,7 +1800,7 @@ Canonical test names used here: T-INV-003, T-CHK-004, T-PAY-005, T-PAY-008, T-SE
 
 - Checkout: T-CHK-001 quote equals placement pricing; 002 `PRICE_CHANGED`; 003 `CART_CHANGED`; 005 key reuse; 006 coverage; 007 COD limits and refusals; 008 rollback sends no job; 009 no deadlock with opposite-order carts; 010 single-shop equals multi-shop invariants; 011 R2 largest-remainder discount allocation (§3.4); T-CART-002 cart notices.
 - Inventory: T-INV-001 CHECK backstop; 002 below reserved; 004 expiry job exactly once; 005 drift repair; 006 append-only journal; 007 restock paths; T-OPS-002 drift drill.
-- Orders and fulfillment: T-ORD-001 derivation table; 002 cancel/accept race; 003 item rejection, including a line rejected in full; 004 full rejection and the `refundable(so)` system refund; 005 timeout; 006 auto-complete; 007 suspension; 008 cumulative allocation; 009 parent always derived; 010 late-delivery flag (§6.1, §8.15); T-FUL-001 shipment table; 002 consume only committed; 003 refusal to RTO; 004 delivered/collected in either order, and no failed delivery after `collected`; 005 tracking update while `shipped` (§6.3).
+- Orders and fulfillment: T-ORD-001 derivation table; 002 cancel/accept race; 003 item rejection, including a line rejected in full; 004 full rejection and the `refundable(so)` system refund; 005 timeout; 006 auto-complete; 007 suspension; 008 cumulative allocation; 009 parent always derived; 010 late-delivery flag (§6.1, §8.15); 102 cross-row sums (§3.2); T-FUL-001 shipment table; 002 consume only committed; 003 refusal to RTO; 004 delivered/collected in either order, and no failed delivery after `collected`; 005 tracking update while `shipped` (§6.3).
 - Payments and refunds: T-PAY-001 forged returns; 002 eSewa signature and failure redirect; 003 unknown outcomes; 004 late capture; 006 no provider call in a TX; 007 one key per attempt; 009 COD dispute; 010 amount mismatch; T-RET-001 return table; 002 refund SLA; 003 eSewa manual refund; 004 retry with lookup; 005 manual transfer; T-ADM-010 review queue.
 - Ledger and notifications: T-LED-001 golden example (§7.11); 002 append-only; 003 availability group rule; 004 payout failure carry-forward; 005 dedupe; 006 held shop orders excluded; 007 tax withholding flag; T-NOT-001 email outage.
 
@@ -1838,7 +1838,7 @@ Numbering is kept from the draft; resolved items say which document decided them
 9. **Error codes (open for [06](06-api-design.md)).** `IDEMPOTENCY_KEY_REQUIRED` uses 400 (canon says "428? use 400"). The checkout kill switch returns 503 `PROVIDER_UNAVAILABLE`, which 02 and 03 follow. A dedicated 503 `CHECKOUT_DISABLED` is only a proposal for 06, and canon §6.6 must list it if 06 adopts it. A lock timeout in checkout step 8 returns 409 `CONFLICT`.
 10. **Assumptions to register (open for [00](00-context-assumptions-and-questions.md) and [risks-and-open-decisions.md](risks-and-open-decisions.md)).** 00 A-08 already covers the repeat-refuser rule, and A-09 covers the 90-minute hold cap and the 30-minute eSewa expiry. Still unregistered: the 24 h needs-review stock hold; the delivery reattempt limit of 3; the platform paying COD refunds and recovering from the vendor; the ledger availability group rule (debits immediate, credits after the hold); second approval for adjustments above Rs 10,000; and the 10-second provider timeout.
 11. **`payout_entries` deletion (resolved by 04a).** The 04a §13.3 trigger `payout_entries_guard` allows insert and delete only while the payout is `draft`.
-12. **Job names (resolved between 03 and 05; open for [04a](04a-data-dictionary-tables.md) and [09](09-code-structure-and-engineering-standards.md)).** 03 §9 and this document share one queue catalogue with the underscore convention `<module>.<snake_case_name>`. 04a still uses hyphenated names: §5.3 `identity.revoke-sessions`, §7 `catalog.refresh-listing` and `catalog.rebuild-listings`, §10 `cart.expire-abandoned`, §14.3 `notifications.send-email` and §15.2 `platform.purge-idempotency-keys`. Test numbering belongs to [10](10-testing-and-quality-gates.md); every ID not in canon §12 is listed as proposed in §10.
+12. **Job names (resolved between 03 and 05; open for [04a](04a-data-dictionary-tables.md) and [09](09-code-structure-and-engineering-standards.md)).** 03 §9 and this document share one queue catalogue with the underscore convention `<subject>.<snake_case_name>`. 04a still uses hyphenated names: §5.3 `identity.revoke-sessions`, §7 `catalog.refresh-listing` and `catalog.rebuild-listings`, §10 `cart.expire-abandoned`, §14.3 `notifications.send-email` and §15.2 `platform.purge-idempotency-keys`. Test numbering belongs to [10](10-testing-and-quality-gates.md); every ID not in canon §12 is listed as proposed in §10.
 13. **Notification path (resolved, following 03 and 04a).** §4.3, §4.7 and §8.14 now send `notifications.dispatch` in the transaction. Dispatch creates `notification_deliveries` rows ([04a §14.3](04a-data-dictionary-tables.md#143-notification_deliveries)) and one `notifications.send_email` per row, as in [03 §9](03-system-architecture.md#9-asynchronous-work).
 14. **Late-delivery start point (decided here).** The clock starts when the shop order entered `awaiting_acceptance`: `orders.placed_at` for COD, and `payments.captured_at` for gateway orders. The deadline is that time plus `est_max_days_snapshot` × 24 h. The case category is `delivery`, and the rule is a read-time flag, not a transition (§6.1, §8.15). 01 AC-FR-ORD-005-4 and 02 J-07 (step 5, AC-J07-07) can drop "[Assumption on the start point]" and cite 05 §6.1. The legal ground stays [Verify-external VX-02].
 15. **Tracking correction (decided here).** `shipped → shipped` is an explicit tracking-update transition, audited as `shipment.update_tracking` (§6.3), and the 04a `shipment_events_status_check` accepts it. 02 J-12 and its note 10 can cite §6.3.
