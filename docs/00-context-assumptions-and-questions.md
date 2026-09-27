@@ -12,7 +12,7 @@ This is the entry document of the DripNepal documentation set. It records what w
 
 ### 1.1 What the set is for
 
-DripNepal is a multi-vendor fashion marketplace for Nepal, built on an existing AdonisJS 7 + Lucid + PostgreSQL 18 + Inertia React SSR repository (`/Users/blank/coding/drip-nepal`). The set is written for a team of one or two developers who build, operate and support the platform themselves. It has three jobs:
+DripNepal is a multi-vendor fashion marketplace for Nepal, built on an existing AdonisJS 7 + Lucid + PostgreSQL 18 + Inertia React SSR repository (this one). The set is written for a team of one or two developers who build, operate and support the platform themselves. It has three jobs:
 
 1. **Decide before building.** Money, stock, tenant isolation and legal duties are expensive to fix after real orders exist. The set fixes names, invariants and state machines before the M0 schema re-baseline ([ADR-0011](adr/0011-schema-rebaseline-before-production.md)).
 2. **Separate evidence from opinion.** Each claim carries a label (section 1.2). A developer can tell a verified repository fact from a legal question an accountant still has to answer.
