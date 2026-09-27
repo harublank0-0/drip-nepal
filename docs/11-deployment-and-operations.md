@@ -8,29 +8,31 @@ Reviewed: critic pass B6 part 2 (2026-09-26)
 
 Reviewed: critic pass B6 part 3 (2026-09-26)
 
+Reviewed: critic pass B6 parts 4 and 5 (2026-09-27; written in parallel, spliced by the editor)
+
 This document says how DripNepal is hosted, deployed, watched, backed up and recovered by a team of one or two developers [Confirmed, Q1]. It owns the operational procedures that other documents hand over to "11": the environment set, the hosting recommendation behind [ADR-0016](adr/0016-hosting-single-region-portable.md), the release and migration procedure, job operations, monitoring and alerts, runbooks, backups, targets, capacity and operational access. It does not restate rules owned elsewhere. Topology and the connection budget come from [03 §5](03-system-architecture.md#5-deployment) and [03 §3.4](03-system-architecture.md#34-postgresql-layout-and-connection-budget), secrets policy from [07 §5.6](07-security-threat-model-and-permissions.md#56-secret-management-and-rotation), environment variables from [09 §6.1](09-code-structure-and-engineering-standards.md#61-variable-catalogue), and test IDs from [10](10-testing-and-quality-gates.md).
 
 Labels follow [00 §1.2](00-context-assumptions-and-questions.md#12-evidence-labels). Prices are "as published on 2026-09-25" in the research digest `infra_ops` (accessed 2026-09-25). They are inputs to [Open OD-09] and [Verify-external VX-15], not quotes, and no figure here goes beyond arithmetic on those published prices.
 
 ## Reading guide
 
-| §   | Title                                                     | State                         |
-| --- | --------------------------------------------------------- | ----------------------------- |
-| 1   | Recommended cost-conscious deployment                     | Written (this part)           |
-| 2   | Environments and data policy                              | Written (this part)           |
-| 3   | Topology and networking                                   | Written (part 2)              |
-| 4   | Docker images and local setup                             | Written (part 2)              |
-| 5   | CI/CD and release promotion                               | Written (part 2)              |
-| 6   | Safe schema migrations                                    | Written (part 3)              |
-| 7   | Health checks, graceful shutdown and zero-downtime deploy | Written (part 3)              |
-| 8   | Jobs and queue operations                                 | Written (part 3)              |
-| 9   | Observability and alerting                                | Written (part 3)              |
-| 10  | Runbooks                                                  | Planned                       |
-| 11  | Backup policy and verified restore                        | Planned                       |
-| 12  | Availability, recovery and performance targets            | Planned                       |
-| 13  | Capacity assumptions and cost drivers                     | Planned                       |
-| 14  | Operational access and security operations                | Planned                       |
-| —   | Consistency notes for editor                              | Written (covers §1–§9 so far) |
+| §   | Title                                                     | State                   |
+| --- | --------------------------------------------------------- | ----------------------- |
+| 1   | Recommended cost-conscious deployment                     | Written (this part)     |
+| 2   | Environments and data policy                              | Written (this part)     |
+| 3   | Topology and networking                                   | Written (part 2)        |
+| 4   | Docker images and local setup                             | Written (part 2)        |
+| 5   | CI/CD and release promotion                               | Written (part 2)        |
+| 6   | Safe schema migrations                                    | Written (part 3)        |
+| 7   | Health checks, graceful shutdown and zero-downtime deploy | Written (part 3)        |
+| 8   | Jobs and queue operations                                 | Written (part 3)        |
+| 9   | Observability and alerting                                | Written (part 3)        |
+| 10  | Runbooks                                                  | Written (part 4)        |
+| 11  | Backup policy and verified restore                        | Written (part 5)        |
+| 12  | Availability, recovery and performance targets            | Written (part 5)        |
+| 13  | Capacity assumptions and cost drivers                     | Written (part 5)        |
+| 14  | Operational access and security operations                | Written (part 5)        |
+| —   | Consistency notes for editor                              | Written (covers §1–§14) |
 
 A reader choosing a host reads §1. A developer setting up a machine, CI or staging reads §2, then §4 and §5. Whoever is on call reads §9 and §10.
 
@@ -1388,9 +1390,786 @@ Before the R1 launch gate, and after any change to a rule or channel, an alert d
 
 ---
 
+## 10. Runbooks
+
+A runbook is what the person holding the phone does when an alert of §9.7 fires or a report arrives. Each one names its trigger, the first safe action, the steps, how recovery is proven, and what is written down afterwards. Policy stays with its owner: incident severity, roles, notification duties and evidence rules are [07 §6](07-security-threat-model-and-permissions.md#6-incident-response); state machines, reconciliation and correction rules are [05](05-order-payment-and-inventory-lifecycles.md); this section turns them into commands for a team of one or two.
+
+Commands are written for the production host layout of §4.6 (`/opt/dripnepal`, env files in `/etc/dripnepal`). Shell and SQL blocks are design sketches: table and column names come from [04a](04a-data-dictionary-tables.md); `node ace` commands that do not exist yet are marked proposed and are named by [09](09-code-structure-and-engineering-standards.md) when written.
+
+### 10.1 Conventions shared by every runbook
+
+**Runbook index.** Alert names are those of §9.7.
+
+| Runbook                                            | Triggered by                                                                                                                   | Out of hours?                                          |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------ |
+| 10.2 Payment gateway outage (R1.1)                 | Gateway unavailability condition of §9.7 (no alert name yet; `gateway_unavailable` proposed), provider notice, customer report | No: COD keeps checkout working (NFR-AVAIL-003)         |
+| 10.3 Payments and refunds in review                | `payments_needs_review`, `refund_sla`                                                                                          | No                                                     |
+| 10.4 Stuck jobs and dead-letter growth             | `dlq_not_empty`, `job_pickup_slow`, `worker_down`, `db_connections_high`                                                       | Only `worker_down` from R1.1 (§9.7)                    |
+| 10.5 Stock drift                                   | `stock_drift`                                                                                                                  | No                                                     |
+| 10.6 Failed deployment                             | Deploy job red, `verify-production` failure, `http_5xx_rate` or a new error class within 2 h of a deploy                       | Only if it becomes `site_down` or `checkout_errors`    |
+| 10.7 Lost database access                          | `site_down` with `/health/ready` failing, connection errors in the tracker, `host_resources`                                   | Yes (`site_down`)                                      |
+| 10.8 Financial reconciliation errors               | `ledger_integrity`, a vendor disputes a statement, the monthly export does not balance                                         | No, unless 07 §6.1 SEV-2 (money moved without consent) |
+| 10.9 Data breach or suspected compromise           | `checkout_switch_changed`, `staff_privilege_change`, `kyc_view_spike`, `sql_syntax_error`, `provider_event_anomaly`, a report  | Yes                                                    |
+| 10.10 Email provider outage                        | `email_failures`, `dlq_not_empty` on `notifications.*`                                                                         | No                                                     |
+| 10.11 Storage or CDN outage                        | `site_down`, `dlq_not_empty` on `media.process_upload`, `backup_missing`                                                       | Yes when the site is down                              |
+| 10.12 Support-case SLA at risk                     | `support_case_sla`                                                                                                             | No                                                     |
+| 10.13 Account recovery (staff MFA, vendor mailbox) | A staff member or vendor asks for help                                                                                         | No                                                     |
+
+**Acknowledge first.** Whoever acts writes "taking it" in `#alerts-page` or `#alerts` (§9.8), then opens an incident log for anything that is not resolved within 30 minutes or that touches money, personal data or secrets.
+
+**Incident log and records folders.** The application never holds incident or inspection records ([07 §6.3](07-security-threat-model-and-permissions.md#63-first-hour-checklist-sev-1) step 1, [01 REG-18](01-product-requirements.md#reg-18-keep-transaction-invoice-and-complaint-records-for-at-least-5-years)). They live in the company document store chosen by the product owner [Assumption: the tool is not chosen; it must support 2FA, per-folder sharing and version history]:
+
+| Folder                                          | Contents                                                                                                                                                                            | Access                                                                                                                                                | Kept                                                                                                                         |
+| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `Records/Inspections/<YYYY-MM-DD>-<authority>/` | The inspection or supervision order, documents handed over, findings, and a list of every report or database extract given under REG-19 with who produced it and when (REG-18)      | Owner: product owner. Write: tech lead (extracts). Read: counsel on request. No vendor, support agent or contractor access                            | At least 5 years from the inspection date (REG-18) [Assumption on the exact period, VX-08]                                   |
+| `Records/Incidents/<INC-YYYYMMDD-n>/`           | Time-stamped incident log, evidence exports (§10.9), decisions, notices sent, post-incident review ([07 §6.7](07-security-threat-model-and-permissions.md#67-post-incident-review)) | Incident lead and product owner; counsel on request. Exports holding personal data are encrypted archives whose passphrase is in the password manager | Log and review: 5 years [Assumption]. Personal-data exports: deleted when the review closes unless counsel asks to keep them |
+| `Records/Runbook-drills/`                       | Evidence of each rehearsal (§10.14) and of T-OPS-001 restore drills (§11)                                                                                                           | Developers and product owner                                                                                                                          | 2 years [Assumption]                                                                                                         |
+
+Folder membership is reviewed with the other access lists (§14). A database extract handed to an inspector is produced with `dripnepal_readonly` through the tunnel of §3.5, and its query text is stored next to the file so it can be reproduced.
+
+**Running SQL in production.** Three rules, all from §1.2, §3.5 and [07 §4.10](07-security-threat-model-and-permissions.md#410-database-roles-and-grants):
+
+1. **Reading** uses `dripnepal_readonly` through the SSH tunnel of §3.5. It cannot see `sessions`, `user_tokens`, `rate_limits` or `idempotency_keys`, and encrypted columns stay ciphertext.
+2. **Writing by hand** is limited to the statements this section names: `TRUNCATE sessions` and the break-glass kill switch with its audit row (§10.9), and the credential statements of §10.7, which run as the provider's admin user. The first two run as `dripnepal_migrator` on the host, never from a laptop (§3.5), through one helper that holds the deploy lock so it cannot overlap a release or the nightly dump:
+
+   ```sh
+   #!/bin/bash
+   # /opt/dripnepal/bin/psql-migrator — design sketch (pseudocode for load_env, to_libpq_env, fail; proposed helper)
+   set -eu
+   exec 9>/run/dripnepal-deploy.lock; flock -n 9 || fail "a deploy or dump is running"
+   load_env /etc/dripnepal/release.env            # DB_HOST, DB_PORT, DB_USER=dripnepal_migrator, DB_PASSWORD, DB_DATABASE
+   # to_libpq_env prints PGHOST, PGPORT, PGUSER, PGPASSWORD, PGDATABASE and PGSSLMODE=verify-full
+   docker run --rm -it --network host \
+     --env-file <(to_libpq_env) \
+     -v /etc/dripnepal/db-ca.pem:/ca.pem:ro -e PGSSLROOTCERT=/ca.pem \
+     postgres:18.4 psql -v ON_ERROR_STOP=1
+   ```
+
+   Every other data change goes through an application action (an admin operation or a `node ace` command), because only actions write `audit_logs`, movements and ledger entries together.
+
+3. **Budget.** One interactive session uses one of the two "migrations and admin" connections of [03 §3.4](03-system-architecture.md#34-postgresql-layout-and-connection-budget). A one-off `node ace` container runs with `-e DB_POOL_MAX=1`, as §5.9 and §8.3 do; if it also starts pg-boss it holds both admin connections (§8.3). So **one admin activity at a time**: close any `psql` session before a one-off command runs, and one-off commands take the deploy `flock` as `jobs:redrive` does (§8.3, proposed). Close sessions when done: the deploy step refuses to run while one is open (§5.4). All `docker compose` commands in this section run from `/opt/dripnepal` on the host.
+
+### 10.2 Payment gateway outage (R1.1)
+
+R1 is COD only (`PAYMENT_PROVIDER=none`, §5.7), so this runbook starts with R1.1. Goal: keep COD checkout open, stop sending customers to a gateway that cannot answer, and make sure no payment that did succeed is lost.
+
+**What already happens without anyone acting** ([03 §11.4](03-system-architecture.md#114-timeouts-and-simple-circuit-breaking)): after 5 consecutive timeouts, connection errors or 5xx within 60 s, the per-process breaker opens for 30 s; `quoteCheckout` marks the gateway method unavailable, and `placeOrder` or `startOrderPayment` with that method answer 503 `PROVIDER_UNAVAILABLE` before creating anything; verification jobs reschedule without consuming retries. COD stays available. A blip of a few minutes needs no action.
+
+Steps when the outage lasts longer than 15 minutes [Assumption], or the provider asks merchants to stop:
+
+1. **Confirm it is the provider.** Check the provider's merchant portal or support channel, and the `provider_events` rows of the last hour: many `lookup` rows with timeouts or eSewa's `{"code":0,"error_message":"Service is currently unavailable"}` point at the provider ([05 §8.5](05-order-payment-and-inventory-lifecycles.md#85-payment-timeout-with-unknown-provider-outcome-r11)). If only DripNepal's calls fail, suspect the host (DNS, outbound firewall §3.3, an IP allow-list at the provider, VX-14) and follow §10.7's network checks instead.
+2. **Disable the gateway method on `web` only.** Set `PAYMENT_PROVIDER=none` in `/etc/dripnepal/web.env` and run `docker compose up -d web` (the §7.4 deploy gap applies). Leave `worker.env` unchanged: the worker keeps its gateway adapter so `payments.verify` and `payments.reconcile_sweeper` go on looking up pending payments and succeed as soon as the provider answers. Why not rely on the breaker alone: it re-probes every 30 s, so a flapping provider still sends some customers into failed redirects. Why not `checkout_enabled`: that stops COD too, which NFR-AVAIL-003 forbids for a gateway outage. The flag is an environment variable, so turning it off and on costs a restart each time ([09 §6.1](09-code-structure-and-engineering-standards.md#61-variable-catalogue), note 37 there). Record the change in the release log with the `config:` prefix (§5.7).
+3. **Tell people.** A status-page note (§9.9): "Khalti payments are paused; cash on delivery works." The `maintenance_banner` setting belongs to the kill switch (shown automatically while checkout is disabled, [04a §15.1](04a-data-dictionary-tables.md#151-platform_settings)), so it is not used for a gateway outage; the quote already shows the method as unavailable.
+4. **Watch the pending pile** (read-only, tunnel):
+
+   ```sql
+   SELECT status, count(*), min(created_at) AS oldest, max(next_verification_at) AS latest_next_check
+     FROM payments
+    WHERE method <> 'cod' AND status IN ('initiated', 'pending', 'needs_review')
+    GROUP BY status;
+   ```
+
+   Nothing is cancelled by hand. Unknown outcomes stay `pending` with stock `held` for up to 24 hours after `expires_at`, then go to `needs_review` (05 §8.5).
+
+**After recovery:**
+
+1. Put the gateway back: `PAYMENT_PROVIDER=<gateway>` in `web.env`, `docker compose up -d web`, release-log entry, status-page note closed.
+2. Let `payments.reconcile_sweeper` (every 5 min) re-send overdue verifications. After 15 minutes, the query above should show `pending` falling and no payment whose `next_verification_at` is more than 5 minutes overdue.
+3. Work the `needs_review` items created during the outage with §10.3.
+4. Late captures: a payment that the provider confirms after its stock hold ended follows [05 §8.4](05-order-payment-and-inventory-lifecycles.md#84-payment-success-after-reservation-expiry-r11) automatically (re-reserve or cancel and refund). Check the day's `payment.capture_late` audit rows, and that each resulting refund is moving (§10.3).
+5. Run `payments.daily_reconciliation` once by hand for the outage days instead of waiting for 06:00 (§8.2 allows a manual re-run), and compare with the provider's merchant statement ([05 §9.4](05-order-payment-and-inventory-lifecycles.md#94-reconciliation-schedule)).
+
+The return route: while `web` runs with `none`, a customer coming back from the provider cannot be looked up by `web`. The return page must then show the "Confirming your payment" state that [06 §12.2](06-api-design.md#122-return-route-contract-get-paymentsproviderreturn) step 6 already defines for a timed-out lookup, and leave the lookup to the worker instead of failing (requirement for 09; Consistency notes). Tested with the other gateway fault-injection checks of NFR-AVAIL-003 (T-OPS area, proposed; ID from 10).
+
+### 10.3 Payments and refunds in `needs_review`
+
+Owner: finance; the platform admin is escalated after 24 h (`payments_needs_review`, [05 §9.5](05-order-payment-and-inventory-lifecycles.md#95-manual-review-queue-needs_review)). Queues: `/admin/orders?payment_status=needs_review` and `/admin/refunds?status=needs_review`, oldest first. Target: first look within 4 working hours [Assumption, 05 §9.5].
+
+1. Open the item; read the lookup history (`provider_events`) and the customer's support cases.
+2. **Check with the provider now** (`recheckPayment`, proposed; not yet in canon §6.5). A definite answer resolves the item through the normal transition; stop here.
+3. Still unknown: contact the provider with the references shown (`pidx`, `transaction_uuid`, `transaction_id`, `ref_id`) and log the ticket number.
+4. **Resolve** with the outcome and a mandatory evidence reference (provider ticket or statement line) through `resolvePaymentReview` or `resolveRefundReview` (both proposed; not yet in canon §6.5). A resolution to `captured` or `succeeded` requires a provider reference. Permission: `platform.ledger.adjust` today; `platform.payments.review` is proposed (not yet in canon §7) with the same grants ([07](07-security-threat-model-and-permissions.md)).
+5. **Refunds never re-sent blind.** A refund whose call may have reached the provider is looked up first; `retryRefund` is refused while the refund is `needs_review` and never re-sends without a lookup (T-PAY-008). A dead letter in `dlq.refunds.execute` is not redriven (§8.2); it is resolved here.
+6. Check the refund deadline: `refunds.due_at` and `return_requests.refund_due_at` drive `refund_sla` (due − 2 days, then the deadline). If a deadline will be missed because the provider is slow, the support agent tells the customer in writing on their case before the deadline passes.
+
+Done when the item has left `needs_review`, its audit row (`payment.resolve_review` or `refund.resolve_review`) exists, and the admin overview badge count has dropped.
+
+### 10.4 Stuck jobs and dead-letter growth
+
+```mermaid
+flowchart TD
+  alert["dlq_not_empty, job_pickup_slow or worker_down"] --> hb{"Heartbeat arriving?"}
+  hb -->|no| wk["Worker down or hung: step 1"]
+  hb -->|yes| age{"One queue old, others fine?"}
+  age -->|yes| handler["Hung or failing handler: step 2"]
+  age -->|no| db{"Connections at 20 of 22 or DB slow?"}
+  db -->|yes| dbrb["Database pressure: step 3, then 10.7"]
+  db -->|no| load["Backlog from a burst: watch it drain"]
+  wk --> fix["Fix the cause"]
+  handler --> fix
+  dbrb --> fix
+  fix --> redrive["Redrive or discard per 8.2 and 8.3"]
+```
+
+1. **Worker down or hung** (`worker_down`: no heartbeat for 10 minutes, §7.2). On the host: `docker compose ps worker` and `docker compose logs --since 30m worker`. Exited: read the last error, then `docker compose up -d worker`. Running but silent: `docker compose restart worker` (graceful stop with a 60 s grace, §7.3); jobs cut off mid-handler rerun after `expireInSeconds` and are idempotent ([03 §10.3](03-system-architecture.md#103-at-least-once-delivery-and-idempotent-handlers)). Out of memory (exit code 137, or `host_resources`): lower `media.process_upload` pressure first (it already runs with concurrency 1, §8.5) and check §13 sizing. From R1.1, a stopped worker also stops `inventory.expire_reservations`, so held stock stays locked; that is why `worker_down` pages from R1.1.
+2. **One queue stuck or failing.** Run the §8.6 queue query. `active` jobs older than their `expireInSeconds` mean a handler that hangs, most often on a provider call or a lock. Find the lock holder (read-only):
+
+   ```sql
+   SELECT pid, usename, state, wait_event_type, now() - xact_start AS tx_age, left(query, 120) AS query
+     FROM pg_stat_activity
+    WHERE datname = current_database() AND backend_type = 'client backend'
+    ORDER BY xact_start NULLS LAST;
+   ```
+
+   A long open transaction from `dripnepal_app` points at a code bug (provider calls inside transactions are already refused by `ProviderCallInsideTransaction`, [09 §3.8](09-code-structure-and-engineering-standards.md#38-actions-transactions-and-the-helpers-platform-owns)); fix it through the pipeline. Failing jobs: group the dead-letter events by error class in the tracker (§8.3 step 1).
+
+3. **Database pressure.** `db_connections_high` or slow queries slow every queue at once. Close any forgotten admin sessions, then treat as §10.7.
+4. **Redrive or discard** exactly as §8.2 and §8.3 say: preview, batches of at most 500, never `dlq.refunds.execute`, and discard the sweeper-covered queues after the fix. Remember the window: 7 days on the token-carrying notification queues, 14 days elsewhere (§8.1).
+5. **Proof of recovery:** `dlq.*` due count back to 0, oldest due job under 2 minutes on every queue, heartbeat green, and the `job_pickup_slow` alert resolved.
+
+A daily check that failed (`inventory.drift_check`, `ledger.integrity_check`, `payments.daily_reconciliation`) is re-run once by hand after the fix, as §8.2 requires, so a whole day is not left unchecked.
+
+### 10.5 Stock drift
+
+Trigger: `stock_drift`, raised by `inventory.drift_check` at 02:30 Asia/Kathmandu with the rows of the [05 §5.10](05-order-payment-and-inventory-lifecycles.md#510-drift-detection-and-repair) query. Every row is a bug: the job never repairs anything itself. Only a `platform_admin` may approve the correction (05 §5.10); `platform.catalog.manage` is not enough.
+
+1. **Record** the rows (shop, variant, `on_hand` against `journal_on_hand`, `reserved` against `journal_reserved` and `reservations_open`) in an incident log.
+2. **Decide whether to freeze.** No per-SKU freeze exists in the schema or the API. What matters is the direction of the error:
+   - The projection shows **more** sellable stock than is true (`on_hand − reserved` too high): customers could buy units that do not exist. Freeze by blocking the product with `blockProduct` (`platform.products.moderate`, reason "stock correction, INC-…"), which removes the listing at once. Tradeoff: it hides every variant of that product, not only the drifted one, and unblocking returns it to `unpublished` (`unblockProduct`, proposed; not yet in canon §6.5), so the vendor must publish again. Tell the vendor on a support case.
+   - The projection shows **less** stock than is true: the only harm is lost sales. No freeze; correct within the business day.
+3. **Recompute from the journal and the reservations** (read-only, tunnel):
+
+   ```sql
+   -- movements for one variant, oldest first
+   SELECT created_at, kind, reason_code, on_hand_delta, reserved_delta,
+          reference_type, reference_id, request_id, actor_user_id
+     FROM inventory_movements
+    WHERE variant_id = :variant_id
+    ORDER BY created_at, id;
+
+   -- reservations that should make up "reserved"
+   SELECT id, status, quantity, order_item_id, expires_at
+     FROM inventory_reservations
+    WHERE variant_id = :variant_id AND status IN ('held', 'committed');
+   ```
+
+   Reservations are the truth for `reserved`: check each one's order item state. For `on_hand`, the journal plus a physical count by the vendor is the truth; ask the vendor for a count on the support case.
+
+4. **Find the cause before touching data** (05 §5.10 step 2). A projection change with no movement usually means a write path outside the `inventory` module; the `request_id` values around the gap lead to the access and `job.attempt` lines (§9.2). Open the code fix first; T-ARCH-001 is the guard that should have caught it.
+5. **Correct through one action**: the proposed command `node ace inventory:correct` (proposed; name set by 09) runs 05 §5.10 step 3 in one transaction: `UPDATE inventory_items` to the true values, one `correction` movement with reason `drift_repair` whose deltas make the journal sums equal the corrected projection, and an `audit_logs` row `inventory.correct` with before and after values and the incident reference.
+
+   ```sh
+   docker compose run --rm -e DB_POOL_MAX=1 worker node ace inventory:correct \
+     --variant <variant_id> --on-hand <true_on_hand> --reserved <true_reserved> \
+     --incident INC-20261012-1 --approved-by <platform_admin email> --dry-run
+   ```
+
+   The dry run prints the computed deltas; a second person (or, alone, the product owner by message) checks them against step 3 before the command runs without `--dry-run`. The command uses the runtime role: it needs `UPDATE` on `inventory_items` and `INSERT` on the two append-only tables, which that role has ([07 §4.10](07-security-threat-model-and-permissions.md#410-database-roles-and-grants)); nothing is edited or deleted.
+
+6. **Prove it:** re-run the 05 §5.10 query for the variant; it must return no rows. Unblock the product if it was blocked, and tell the vendor.
+
+Rehearsed with T-INV-005 (proposed in 05: inject drift, alert, correct, clean re-run) and the operations drill before launch (§10.14).
+
+### 10.6 Failed deployment
+
+The mechanics are §5.8 (rollback) and §6.5 (forward fix); this is the decision sequence.
+
+1. **Where did it fail?**
+
+   | Symptom                                                                                    | Meaning                                                      | Action                                                                                                                                                              |
+   | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+   | Release step exited non-zero (migration, reference seed, release check)                    | New code never started; old `web` and `worker` still serve   | Nothing to roll back. Read the release container output in the deploy log and follow the §6.5 flowchart; re-run the same digest after the fix                       |
+   | `web` not ready within 120 s                                                               | The deploy step already restored `PREVIOUS_IMAGE_REF` (§5.4) | Confirm `/health/live` reports the previous `APP_RELEASE`; read the new container's logs (`docker compose logs web` from the failed attempt, in the log tool)       |
+   | Healthy, but errors after the deploy (`http_5xx_rate`, new error class, `checkout_errors`) | New code is wrong                                            | Roll back the image now, investigate later: `release.yml` with `workflow_dispatch` and the previous digest from `releases.log` (§5.8 step 2), or break-glass step 3 |
+   | Errors are constraint violations from a new rule                                           | Migration applied, rule too strict                           | Rolling back the image does not help. Hotfix migration relaxing the rule (§6.5 row 3); if checkout is affected, turn `checkout_enabled` off meanwhile               |
+   | Data written wrongly by the new release or a backfill                                      | Corruption                                                   | Stop the writer (kill switch, or `docker compose stop worker` for a backfill), then §6.5 last row; never an in-place restore                                        |
+
+2. **Checkout off only if needed.** Turning `checkout_enabled` off is right when orders are being created wrongly or fail for most customers. It answers 503 `PROVIDER_UNAVAILABLE` (`CHECKOUT_DISABLED` is proposed; not yet in canon §6.6), pages both developers through `checkout_switch_changed`, and turning it back on needs step-up ([07 §6.4](07-security-threat-model-and-permissions.md#64-the-kill-switch-and-directive-2082-s82)).
+3. **Proof of recovery:** the version check and SSR smoke of §5.5 pass against production, the error rate is back to its pre-deploy level for 30 minutes, and `releases.log` shows the rollback line.
+4. **Afterwards:** a forward fix through the normal pipeline; the release that was rolled back is never re-promoted as is. If the cause was a migration that failed in production, the lock exception of §6.5 applies.
+
+### 10.7 Lost database access
+
+The database is the only stateful service (§1.2). Work out which of four cases applies, cheapest first.
+
+| Case                                  | Signs                                                                                         | Action                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ------------------------------------- | --------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A. Credentials rejected               | `password authentication failed` in logs; the cluster is up in the provider console           | Rotation below                                                                                                                                                                                                                                                                                                                                                                                                                |
+| B. Network refused or timing out      | Connection timeouts from `web` and `worker`; the console shows the cluster healthy            | Check the cluster's trusted sources still name the production Droplet (a rebuilt Droplet is a new resource and must be re-added, §1.9, §3.5 [Assumption on the feature, confirmed on the drill cluster]); check the Droplet's VPC attachment and outbound rules (§3.3). Fix, then `docker compose restart worker web` so pools reconnect                                                                                      |
+| C. Cluster unhealthy or unreachable   | Provider console shows the cluster down or degraded; provider status page reports an incident | The recommended plan is a single node with no standby (§1.2; standby nodes are not available on some 1 vCPU plans [Verified-doc research digest `infra_ops`, <https://docs.digitalocean.com/products/databases/postgresql/details/limits/>, accessed 2026-09-25]). Wait for the provider up to 1 hour [Assumption]; after that, restore (below). Status page note in the meantime; the site shows errors, not stale data      |
+| D. Provider account lost or suspended | Cannot log in to the console; billing suspension; cluster deleted                             | Managed backups are destroyed with the cluster [Verified-doc `infra_ops`, <https://docs.digitalocean.com/products/databases/postgresql/how-to/restore-from-backups/>, accessed 2026-09-25]. Restore the nightly encrypted `pg_dump` from the separate R2 bucket onto a new cluster, on the same provider under a new account or on the §1.5 alternative (§1.9 portability, §11). The RPO for this case is the last dump (§12) |
+
+**Credential rotation (case A, and after any suspected leak of a database password).** [07 §5.6](07-security-threat-model-and-permissions.md#56-secret-management-and-rotation) owns when; this is how:
+
+1. Generate a new password in the password manager.
+2. As the provider's admin user (console or `psql` through the tunnel; a second use of that user beyond the role creation §3.5 names, see Consistency notes), `ALTER ROLE dripnepal_app PASSWORD '<new>';` (or `dripnepal_migrator`, or `dripnepal_readonly`). PostgreSQL checks passwords only when a connection opens, so pools already connected keep working until they reconnect [Assumption; standard PostgreSQL behaviour, confirmed on the drill cluster].
+3. Update `DB_PASSWORD` in the env files that use the role (`web.env` and `worker.env` for `dripnepal_app`; `release.env` for the migrator; §5.7).
+4. `docker compose up -d worker web` (worker first, §5.4 order). Readiness must be green within 2 minutes.
+5. If the rotation follows a leak, also end existing connections of the old credential: `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE usename = 'dripnepal_app' AND backend_start < '<time of step 2>';` as the admin user [Assumption: the managed admin user may signal other roles' backends; confirmed on the drill cluster]. The pools reconnect with the new password.
+6. Release-log entry `config: rotated <role> password`; update the break-glass copy (R-07).
+
+The provider's own admin user password is rotated in the console; it is not used by any container.
+
+**Restore (cases C and D).** A restore always creates a new cluster (§1.2). Outline; the full procedure, checks and RTO measurement are §11 and T-OPS-001:
+
+1. Turn `checkout_enabled` off if the application can still reach any database; otherwise the site is already down.
+2. Case C: restore to a new cluster from the managed backup or a point in time before the failure (within the 7-day window). Case D: create a cluster, create the three roles (§3.5), restore the latest dump.
+3. Point the app at it: new `DB_HOST`, `DB_PORT`, `DB_SSL_CA` if the CA differs, new passwords, in all three env files; add the Droplet to the new cluster's trusted sources.
+4. `docker compose run --rm release node ace migration:status` must show nothing pending; then start `worker` and `web`.
+5. Before reopening checkout: run the release checks, `inventory.drift_check` and `ledger.integrity_check` by hand, and replay anonymisations that happened after the backup with `node ace data:replay-anonymizations` ([04 §19.2](04-domain-model-and-data-dictionary.md#192-account-deletion-and-anonymisation); [07 §7.5](07-security-threat-model-and-permissions.md#75-pre-release-security-checklist) item 7). Case D loses up to a day of orders: the product owner decides the customer notice with the §10.9 template adapted.
+
+### 10.8 Financial reconciliation errors
+
+Three sources must agree: the vendor ledger (`ledger_entries`), the payments (`payments`, `refunds`, and in R1.1 the provider statement), and the vendor remittances (`vendor_remittances`). The ledger is append-only (a trigger and revoked privileges, [05 §7.1](05-order-payment-and-inventory-lifecycles.md#71-principles)), so **every correction is a new entry**: a reversal with `reverses_entry_id`, or an `adjustment` with a reason. No `UPDATE` or `DELETE` is ever run, not even as the migrator: the trigger stops it anyway.
+
+1. **Identify which identity failed.** `ledger.integrity_check` (03:00) names the failing check of [05 §7.12](05-order-payment-and-inventory-lifecycles.md#712-statements-and-integrity-checks) and the shop orders, refunds or payouts involved. For a vendor dispute or a monthly export that does not balance, run the cross-checks below (read-only, tunnel; sketches against 04a columns):
+
+   ```sql
+   -- COD cash: every collected COD payment has a matching cod_cash_held entry
+   SELECT p.shop_order_id, p.captured_minor, le.amount_minor AS ledger_amount
+     FROM payments p
+     LEFT JOIN ledger_entries le ON le.dedupe_key = 'delivery:' || p.shop_order_id || ':cod_cash'
+    WHERE p.method = 'cod' AND p.status = 'collected'
+      AND (le.id IS NULL OR le.amount_minor <> -p.captured_minor);
+
+   -- Remittances: every vendor_remittances row has exactly its ledger entry
+   SELECT vr.id, vr.shop_id, vr.amount_minor, le.amount_minor AS ledger_amount
+     FROM vendor_remittances vr
+     LEFT JOIN ledger_entries le ON le.dedupe_key = 'remittance:' || vr.id
+    WHERE le.id IS NULL OR le.amount_minor <> vr.amount_minor;
+   ```
+
+   The first query also returns a shop order whose shipment is not yet `delivered`, because the delivery posting waits for both events ([05 §7.3](05-order-payment-and-inventory-lifecycles.md#73-delivery-posting)); check the shipment before calling it an error. In R1.1, `payments.daily_reconciliation` compares captured and refunded amounts with the provider's merchant statement and puts mismatches in the review queue (§10.3).
+
+2. **Classify and correct.**
+
+   | Finding                                                                      | Correction                                                                                                                                                                                                                                                                                                                                        |
+   | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+   | A posting is missing (delivered and collected, no delivery group)            | A code bug in a transition. Fix it, then post the missing group with the posting function run as a one-off backfill job (§6.4 pattern). Its deterministic `dedupe_key` makes a second run a no-op, so the backfill cannot double-post                                                                                                             |
+   | An entry has the wrong amount or the wrong shop                              | `createLedgerAdjustment` with `reverses_entry_id` = the wrong entry and the opposite amount, then a second adjustment with the right amount and shop, both with a reason of at least 20 characters naming the incident (AC-FR-LED-005-1). `reverses_entry_id` is an input per 05 §7.8; 06's request body does not list it yet (Consistency notes) |
+   | A remittance was recorded twice or with the wrong amount                     | The `vendor_remittances` row stays as history; reverse its ledger entry with an adjustment (`reverses_entry_id` = the `vendor_remittance` entry) and record the right amount with `recordVendorRemittance` if money was received                                                                                                                  |
+   | A vendor was marked `delivered` by mistake and the money must be pulled back | Adjustment per [05 §7.8](05-order-payment-and-inventory-lifecycles.md#78-adjustments)                                                                                                                                                                                                                                                             |
+   | Payment and provider disagree (R1.1)                                         | Not a ledger fix: §10.3. The ledger follows the payment and refund state once it is resolved                                                                                                                                                                                                                                                      |
+   | Money moved without authorisation (payout to an unknown account)             | SEV-1 or SEV-2 ([07 §6.1](07-security-threat-model-and-permissions.md#61-severity-levels)): §10.9 first; the ledger correction comes after containment                                                                                                                                                                                            |
+
+3. **Maker-checker.** Adjustments above Rs 10,000 need a second finance officer's approval ([05 §7.8](05-order-payment-and-inventory-lifecycles.md#78-adjustments), [Assumption OD-14]); with `single_operator_mode` on, the approver may be the creator only with a fresh `totp_code` ([06 §13.6](06-api-design.md#136-admin)). Below that amount the rule is procedural: the person who found the error prepares the correction and a second person (the product owner when there is only one finance officer) reads the evidence before it is posted [Assumption]. Every adjustment writes `ledger.adjust` with the before and after balance.
+4. **Proof:** re-run `ledger.integrity_check` by hand; the shop's statement for the month shows the reversal and the corrected entry with their reasons; the vendor receives the corrected statement on a support case.
+5. **Before each monthly accountant export** (04 §19.1), the finance officer runs the two cross-checks above and confirms the last `ledger.integrity_check` was clean. The export is not sent while either shows a row.
+
+### 10.9 Data breach or suspected compromise
+
+Policy, roles and severity are [07 §6](07-security-threat-model-and-permissions.md#6-incident-response); its first-hour checklist is the order of work, with evidence preserved before secrets are rotated, as the 07 §6.3 flowchart and 07 §6.5 ("before cleaning up") require (07's numbered list puts rotation first; Consistency notes). This adds the commands.
+
+1. **Open the incident log** in `Records/Incidents/` (§10.1). Note the time of every step.
+2. **Stop transactions** (Directive 2082 s8(2) requires stopping transactions immediately after unauthorised access or a leak of user information [Verified-doc <https://giwmscdnone.gov.np/media/pdf_upload/ecommerce-directives_8errkt4.pdf>, accessed 2026-09-25]; whether a partial halt is enough is [Verify-external VX-02]):
+   - Normal path: `/admin/settings` (proposed; not yet in canon §6.4) → `checkout_enabled` = `false` through `updatePlatformSetting`, with a `maintenance_banner` text. No step-up is needed to turn it off. Effective within 60 seconds (settings cache). Checkout, gateway payment starts and payout approval answer 503 `PROVIDER_UNAVAILABLE` (`CHECKOUT_DISABLED` is proposed; not yet in canon §6.6).
+   - Break-glass, when no admin can sign in: with `psql-migrator` (§10.1):
+
+     ```sql
+     BEGIN;
+     UPDATE platform_settings SET value = 'false'::jsonb, updated_at = now() WHERE key = 'checkout_enabled';
+     INSERT INTO audit_logs (actor_type, action, subject_type, subject_id, changes, reason)
+     VALUES ('system', 'platform_setting.update', 'platform_setting', 'checkout_enabled',
+             '{"before": true, "after": false}'::jsonb, 'break-glass kill switch, INC-<id>, by <operator>');
+     COMMIT;
+     ```
+
+     This bypasses `updatePlatformSetting`, so the audit row above is written by hand (`audit_logs` accepts `INSERT`; column list from [04a §15.3](04a-data-dictionary-tables.md#153-audit_logs), sketch) and no `checkout_switch_changed` alert fires: the operator posts the change in `#alerts-page` instead. The incident log is the primary record.
+
+   - Do this **before** step 3: `TRUNCATE sessions` also signs the admins out.
+
+3. **Contain access** (07 §6.3 step 3):
+   - Suspected session or database leak: forced global logout, as the migrator: `TRUNCATE sessions;` ([04a §5.3](04a-data-dictionary-tables.md#53-sessions-session-store-table)). Every user, staff included, must sign in again; staff pass MFA again.
+   - A staff account: `revokePlatformStaff` (not possible for the last `platform_admin`, which must first be replaced); a user: suspend.
+   - Compromised provider keys: disable them in the provider portal (gateway, email, R2 tokens A, B or C of §3.6, error-tracker DSN).
+   - Host compromise suspected: do not destroy the Droplet (it is evidence); detach it from the firewall's public rules, take a provider snapshot [Assumption: Droplet snapshots, not in the research digests], and build a clean host from §4 and §5 with new secrets.
+4. **Preserve evidence** before cleaning up ([07 §6.5](07-security-threat-model-and-permissions.md#65-evidence-preservation)):
+   - Logs: run the log tool query for the incident window and save the export in the incident folder (§9.2; the tool keeps 30 days).
+   - Audit rows (read-only, tunnel): `\copy (SELECT * FROM audit_logs WHERE occurred_at BETWEEN '<from>' AND '<to>' ORDER BY id) TO 'audit-INC.csv' CSV HEADER` (literal timestamps; do not rely on `psql` variables inside `\copy`), stored as an encrypted archive.
+   - Database state: a point-in-time restore into a new cluster fixed at the detection time, or a manual run of the §11 dump job to the backup bucket; restricted to the incident lead.
+   - Provider-side: gateway transaction lists, R2 and Cloudflare logs where the plan offers them [Assumption].
+   - Do not delay containment for evidence, and do not rotate a key before copying evidence that needs it to be read.
+5. **Rotate secrets**, widest access first, per [07 §5.6](07-security-threat-model-and-permissions.md#56-secret-management-and-rotation): database passwords (§10.7), `APP_KEY` (the key list keeps sessions valid for 7 days unless `TRUNCATE sessions` has run), data and blind-index keys ([07 §5.5](07-security-threat-model-and-permissions.md#55-encryption), `node ace data:reencrypt`), R2 tokens, SMTP key, gateway keys, deploy keys and the provider API token (§5.7), and every console password with its 2FA (§14). Each rotation is a release-log line.
+6. **Notify, decided with counsel** ([07 §6.6](07-security-threat-model-and-permissions.md#66-notification)): the public (Directive 2082 s8(2), scope and timing [Verify-external VX-02]); the hosting provider and, if a forensic investigation is needed, the National Cyber Security Center in writing (DCCS Directive cl. 8(3), applicability [Verify-external VX-09]); affected users by email as a product decision; gateway and police on counsel's advice. The product owner decides; nothing is published before counsel has read it.
+7. **Recover and reopen**: fix the cause, verify it (the regression test 07 §6.7 requires), then `checkout_enabled` = `true` with step-up, only after the public-notice decision (07 §6.4).
+8. **Post-incident review** within 5 working days, stored in the incident folder.
+
+**Public notice template** (draft for counsel; published on the status page (§9.9), as the `maintenance_banner` in short form, and by email where 07 §6.6 decides) [Assumption: channels chosen by counsel]:
+
+> **Notice about a security incident on DripNepal** (date, time NPT)
+> On <date> we found <what happened, in one sentence>. As required, we stopped new orders and payments on DripNepal at <time> while we investigate and recover. Browsing remains available.
+> What may be affected: <data categories, or "we have found no evidence that … was accessed">. What is not affected: <for example, card or wallet credentials, which DripNepal never receives>.
+> What we have done: <containment steps in plain words: signed everyone out, changed keys, …>. What you should do: <for example, sign in again and change your password if you reuse it elsewhere>.
+> We will resume orders only after recovery is complete and will update this notice by <time>. Contact: <grievance officer name, email, phone> (see `/grievance`).
+
+The short banner version must fit the 280-character limit of `maintenance_banner` (04a §15.1): "We have paused orders while we investigate a security incident. Browsing is available. Details: <status page URL>."
+
+### 10.10 Email provider outage
+
+Nothing in ordering, payment or inventory waits for email ([05 §8.14](05-order-payment-and-inventory-lifecycles.md#814-email-outage)); the risk is late verification, reset and invitation emails, and late business alerts to finance and admins, which travel by email too (§9.7).
+
+1. **Confirm** on the provider's status page and in the tracker (SMTP or API errors on `notifications.send_email`). If only DripNepal fails: an expired API key or a sending suspension (bounce or complaint rates) is checked in the provider dashboard.
+2. **Let retries work.** `notifications.send_email` retries 8 times with backoff from 60 s up to 1 hour ([03 §9](03-system-architecture.md#9-asynchronous-work)); assuming the delay doubles each attempt (60 s, 2, 4, 8, 16, 32 min, then 1 h twice), a job dead-letters after roughly 3 hours of continuous failure [Assumption: arithmetic, confirmed in the §9.10 alert drill]. Do not redrive while the provider is still down.
+3. **Replace the lost alert path.** While email is down, the tech lead checks the `payments_needs_review`, `refund_sla` and `support_case_sla` counts on the admin overview twice a day and tells finance and support directly.
+4. **Switch provider only for a long outage** (more than 24 hours [Assumption]) or a suspended account: 09 §6.1 configures the SMTP transport, so a switch to a second provider's SMTP relay is new `SMTP_*`/`MAIL_FROM_*` values in `worker.env` and `docker compose up -d worker` [Assumption: the OD-08 providers offer SMTP relay]. `@adonisjs/mail` 10.4.0 also has first-party API transports (§1.2), but moving to one is a code and env-schema change through the pipeline, not a runbook step. It only works if the second provider's domain verification (SPF, DKIM) was prepared in advance [Assumption; OD-08 chooses the providers].
+5. **After recovery**: redrive `dlq.notifications.send_email` and `dlq.notifications.dispatch` per §8.3 within the 7-day window (§8.1). A row already `sent` is skipped by compare-and-set, and stale reminders are dropped by the handler (05 §8.14). Token emails older than their token expiry are discarded; users ask for a new link.
+6. **Proof:** the `email_failures` alert resolved, `dlq.notifications.*` at 0, and a test signup on production receives its email (the capture-inbox check of §5.5 is staging-only).
+
+### 10.11 Storage or CDN outage
+
+**R2 outage.** Uploads fail (the browser `PUT` to the presigned URL errors), `media.process_upload` fails and dead-letters after 3 attempts, product images on `media.<domain>` fail to load, KYC views fail, and the nightly dump cannot be written (`backup_missing`).
+
+1. Confirm on Cloudflare's status page. There is no second object store to fail over to in R1; `r2.dev` is never used as a fallback (rate-limited and for development only, §3.6).
+2. Tell vendors on the status page that uploads are paused. Checkout keeps working: nothing in `placeOrder` reads R2.
+3. After recovery: redrive `dlq.media.process_upload` (§8.2 allows it); vendors retry uploads whose browser `PUT` failed; run the dump job by hand if the night's run was missed (§11).
+
+**Cloudflare edge outage.** DNS, TLS and proxying all run through Cloudflare, so the site is down (`site_down` pages). The origin cannot be exposed directly as a stopgap: its firewall admits only Cloudflare's ranges (§3.3), its certificate is a Cloudflare origin certificate that browsers do not trust [Assumption, §1.2], and DNS itself is at Cloudflare. **Decision: accept the outage and communicate**, using the Better Stack status page, which is outside Cloudflare (§9.1). Tradeoff: no independent path for the length of a Cloudflare incident, in exchange for a single, simple edge. Revisit if Cloudflare outages use more than half of the monthly availability budget (§12) in any quarter.
+
+**Partial edge problem.** A WAF rule or cache rule that blocks or breaks one path (for example checkout `POST`s challenged): read Cloudflare's security events for the path, add a narrow skip rule or roll back the rule change, and record it in the release log with the `config:` prefix. Never switch the whole zone to "development mode" or turn the WAF off.
+
+### 10.12 Support-case SLA at risk
+
+E-Commerce Act s33 requires complaints to be decided within 15 days and answered in writing (FR-ADM-009, [Verify-external VX-02]); `due_at` is fixed at creation as creation time plus 15 calendar days (AC-FR-ADM-009-2), so the clock keeps running while a case waits for the customer or the shop. `platform.support_case_sla` warns at `due_at` − 3 days and alerts at breach.
+
+1. **Daily in business hours** (§2.7), the support agent opens `/admin/support-cases` (proposed; not yet in canon §6.4) sorted by due date and works every case due within 3 days first.
+2. **Per at-risk case:** `awaiting_shop` → message the shop on the case and phone the shop contact; `awaiting_customer` → one reminder, and if no answer by `due_at` − 1 day, decide on the information available; the answer needs a written `resolution_summary`.
+3. **Cannot be resolved in time:** before `due_at`, resolve with a `resolution_summary` that states the reasons and names the escalation route (DoCSCP) (AC-FR-ADM-009-3). A case is never left open past its due date by default.
+4. **Escalation:** more than 5 cases due within 3 days at once [Assumption], or any breach, goes to the product owner the same day, who takes cases or pauses non-urgent work.
+5. **Weekly review:** count of warnings and breaches; a breach is recorded with its cause (shop unresponsive, support capacity, email outage delaying messages).
+
+### 10.13 Account recovery: staff MFA reset and vendor lost mailbox
+
+Both procedures need host access and are kept in one place: [§14.6](#146-recovery-procedures-that-need-host-access). A staff member who lost their authenticator is reset with `platform:create-admin --recover` (09 §9.1, proposed); a vendor who lost their login mailbox goes through the KYC identity check and the proposed `identity:change-login-email` command. Support never changes a login email or resets a password by phone ([07 TM-09](07-security-threat-model-and-permissions.md#tm-09-account-recovery-abuse-and-enumeration)).
+
+### 10.14 How the runbooks are kept true
+
+- **Drill before the R1 launch gate** (the operations drill of 05 §5.10, numbered T-OPS-002 (proposed) there, which collides with the 03 §10.7 graceful-worker test; see Consistency notes): on staging, run §10.4 (stop the worker, force a dead letter, redrive), §10.5 (T-INV-005 drift injection and correction), §10.6 (the rollback rehearsal of §5.8), §10.9 steps 2–3 (kill switch in both paths, `TRUNCATE sessions`), and §10.10 (closed SMTP port, then redrive). §10.2 is drilled against the sandbox before the R1.1 gate. Evidence goes to `Records/Runbook-drills/`.
+- **Quarterly, the other person runs it** ([R-07](risks-and-open-decisions.md#42-register) mitigation): once a quarter the developer or product owner who did not write a runbook executes the deploy (§5), a rollback (§5.8) and the T-OPS-001 restore on staging from this section alone, and fixes every step they could not follow.
+- **After every real incident** the runbook used is corrected in the same week as the post-incident review.
+- **Twice a year** [Assumption] the runbooks are read against the current alert list (§9.7) and env tables (§5.7); a runbook that names a command or setting that no longer exists is fixed then.
+
+## 11. Backup policy and verified restore
+
+Backups here serve **recovery**, not retention. The live database keeps order, payment, ledger and complaint records for 7 years after the closing event, an approximation of the 6 years in VAT Rules r23(7) ([04 §19.3](04-domain-model-and-data-dictionary.md#193-retention-schedule); [Verify-external VX-08]). Backups keep days (§2.5). If OD-26 ever makes DripNepal an e-invoice issuer, the Electronic Invoice Procedure's per-fiscal-year database and log backups (s8(च), `nepal_regulatory_locale` digest, accessed 2026-09-25) add a separate requirement that this section does not cover.
+
+### 11.1 Layers
+
+| Asset                                                                | Primary copy                                   | Copy 1                                                                                                                                                                                                                                                                                      | Copy 2 (survives loss of the primary provider account)                                                                  | Kept                                                     | Protects against                                                                                                                    |
+| -------------------------------------------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| PostgreSQL (`dripnepal_production`)                                  | DigitalOcean Managed PostgreSQL 18             | Provider backups: daily, kept 7 days, with 7-day point-in-time recovery; a restore always creates a new cluster; destroying the cluster destroys its backups [Verified-doc <https://docs.digitalocean.com/products/databases/postgresql/how-to/restore-from-backups/>, accessed 2026-09-25] | Nightly encrypted `pg_dump` in the R2 bucket `dripnepal-production-backups` (§11.2)                                     | 7 days (provider); 35 days (dump)                        | Bad migration or data corruption (PITR); cluster loss; DigitalOcean account loss or lock-out (dump)                                 |
+| Private bucket `dripnepal-production-private` (originals, KYC files) | Cloudflare R2                                  | None inside R2 unless §11.4's feature check finds versioning                                                                                                                                                                                                                                | Nightly client-side-encrypted copy in a DigitalOcean Spaces bucket (§11.4)                                              | Live copy plus 35 days of deleted or overwritten objects | Accidental deletion; Cloudflare account loss                                                                                        |
+| Public bucket `dripnepal-production-public` (derived WebP)           | Cloudflare R2                                  | Can be derived again from the originals                                                                                                                                                                                                                                                     | Nightly plain copy in the same Spaces bucket (§11.4)                                                                    | As above                                                 | Faster media recovery than re-deriving every image                                                                                  |
+| Secrets and keys                                                     | Host env files (§4.6)                          | Password manager vault                                                                                                                                                                                                                                                                      | Break-glass copy held by the product owner (R-07; [07 §5.5](07-security-threat-model-and-permissions.md#55-encryption)) | Until rotated, then as §14.4 says                        | Loss of the host. Without the data keys a restored database cannot decrypt any `*_enc` column, so every restore depends on this row |
+| Code, image, configuration                                           | GitHub repository; GHCR image by digest (§5.3) | `deploy/` files in the repository                                                                                                                                                                                                                                                           | Developer clones                                                                                                        | Git history; images per registry policy [Assumption]     | Host loss; the Droplet holds no state (§1.2)                                                                                        |
+
+The design puts each backup at the provider that does **not** hold the primary. The database lives at DigitalOcean and its dump at Cloudflare. Media lives at Cloudflare and its copy at DigitalOcean. Losing either account leaves the other half recoverable. The cost is two providers holding a copy of personal data, and both are already processors in the [07 §5.8](07-security-threat-model-and-permissions.md#58-analytics-and-third-party-processors) register. Two things are **not** backed up: logs (30 days in the log tool, §9.2) and the `pgboss` job tables (§11.2).
+
+```mermaid
+flowchart LR
+  subgraph do["DigitalOcean"]
+    pg["Managed PostgreSQL 18"]
+    pitr["Provider backups and 7-day PITR"]
+    host["Production Droplet: backup and media-copy containers"]
+    spaces["Spaces bucket: media copy"]
+  end
+  subgraph cf["Cloudflare"]
+    priv["R2 private bucket"]
+    pub["R2 public bucket"]
+    bak["R2 backup bucket: encrypted dumps"]
+  end
+  pw["Password manager: age private key, data keys"]
+  pg --> pitr
+  host -->|"pg_dump as migrator, 04:30"| pg
+  host -->|"age-encrypted upload, token C"| bak
+  host -->|"read, token D"| priv
+  host -->|"read, token D"| pub
+  host -->|"encrypted copy, 05:00"| spaces
+  pw -.->|"only at restore time"| bak
+```
+
+### 11.2 Nightly logical dump
+
+| Aspect             | Decision                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| When               | 04:30 Asia/Kathmandu, which is host cron `45 22 * * *` because the host runs in UTC (§2.7). This is after the 01:30–04:00 job window (§8.4) and before `ledger.availability_digest` and `payments.daily_reconciliation` at 06:00                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Serialisation      | The script takes the deploy lock `/run/dripnepal-deploy.lock` (§5.4) and waits for it for up to 60 minutes. A release, a redrive (§8.3) and a dump therefore never share the two "migrations and admin" connections of the budget (§13.3). If the lock is not free after 60 minutes, the script exits without pinging the heartbeat, so `backup_missing` fires (§9.7)                                                                                                                                                                                                                                                                                                                                                                 |
+| Role               | `dripnepal_migrator`, as [07 §4.10](07-security-threat-model-and-permissions.md#410-database-roles-and-grants) assigns. This settles the role that the §3.1 diagram left open. `dripnepal_readonly` cannot read `sessions`, `user_tokens`, `rate_limits` or `idempotency_keys`, so a dump under that role would fail. The credential lives in `/etc/dripnepal/backup.env` (root, 0600), separate from `release.env`                                                                                                                                                                                                                                                                                                                   |
+| What is dumped     | The whole database in custom format (`pg_dump --format=custom`), which `pg_restore` can restore in parallel. Excluded: the `pgboss` schema (`--exclude-schema=pgboss`), so encrypted invitation and reset tokens in job payloads are never kept longer than their 7-day retention (07 §3.8; §8.1 of this document). Also excluded is the **data** of `sessions` and `rate_limits` (`--exclude-table-data`), because session IDs are bearer credentials (07 TM-30) and a restore should log everyone out anyway. pg-boss recreates its schema through the release step (§6.1), and every sweeper catches up from timestamps (03 §10.6). Delayed jobs that were pending at dump time are lost; their sweepers cover them (§11.5 step 8) |
+| Alongside the dump | A manifest of exact row counts for tables that only ever grow at this stage (`orders`, `shop_orders`, `order_items`, `payments`, `refunds`, `ledger_entries`, `inventory_movements`, `audit_logs`), taken just before the dump starts. Also the list of anonymised user IDs (IDs only, [04 §19.2](04-domain-model-and-data-dictionary.md#192-account-deletion-and-anonymisation)) and a SHA-256 of each file                                                                                                                                                                                                                                                                                                                          |
+| Encryption         | Client-side, with `age` to a public-key recipient [Assumption: tool not covered by the research digests; chosen because the host needs only the public key]. The private key is kept only in the password manager and in the product owner's break-glass copy. A compromised host can therefore write new backups but cannot read old ones. The tradeoff is that losing the private key makes every dump useless; the monthly drill (§11.6) proves the key is still available                                                                                                                                                                                                                                                         |
+| Upload             | To `dripnepal-production-backups/db/<UTC timestamp>/` with token C (§3.6), which is scoped to that bucket                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| Retention          | 35 days, through an R2 lifecycle rule on the `db/` prefix. If R2 offers a bucket-level retention lock, 35 days of undeletable objects is also set. Neither feature is in the research digests, so both are checked when the bucket is created (§11.4). Without a lock, a compromised host can delete old dumps with token C even though it cannot decrypt them; the monthly count of dump folders (§11.6) is then the only detective control                                                                                                                                                                                                                                                                                          |
+| Success signal     | The last step pings the Better Stack heartbeat `BACKUP_HEARTBEAT_URL` (proposed; in `backup.env`). `backup_missing` alerts if no ping arrives by 07:00 (§9.7)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| Tooling            | A small backup image built by the release pipeline from `postgres:18.4`, so `pg_dump` is the same major version as the server, with `age` and `rclone` added and pinned [Assumption: package availability checked when the image is first built]. It runs on the Droplet with `docker run --rm` and reaches the database over the VPC like `web`                                                                                                                                                                                                                                                                                                                                                                                      |
+
+Script sketch (pseudocode for the helper names; the `pg_dump`, `pg_restore` and `psql` options are standard PostgreSQL client options that the first staging run confirms, and the `age` and `rclone` flags are [Assumption] until then):
+
+```sh
+#!/bin/sh
+# /opt/dripnepal/bin/backup — design sketch; host cron "45 22 * * *" (UTC) = 04:30 Asia/Kathmandu
+set -eu
+exec 9>/run/dripnepal-deploy.lock
+flock -w 3600 9 || fail "deploy lock held for 60 min; no heartbeat, backup_missing will fire"
+trap 'rm -rf /var/tmp/dripnepal-backup/*' EXIT   # no plaintext dump is left on the host, even on failure
+STAMP=$(date -u +%Y%m%dT%H%M%SZ)
+docker run --rm --env-file /etc/dripnepal/backup.env -v /var/tmp/dripnepal-backup:/work \
+  <backup image digest> /backup/run "$STAMP"
+```
+
+```sh
+# /backup/run inside the backup image — design sketch
+# libpq variables PGHOST, PGPORT, PGUSER, PGPASSWORD, PGDATABASE, PGSSLMODE=verify-full, PGSSLROOTCERT come from backup.env
+psql -At -f /backup/manifest.sql > /work/manifest.tsv          # exact counts of the growing tables
+pg_dump --format=custom --exclude-schema=pgboss \
+  --exclude-table-data=public.sessions --exclude-table-data=public.rate_limits \
+  --file=/work/db.dump
+psql -At -c "SELECT id FROM users WHERE status = 'anonymized' ORDER BY id" > /work/anonymized_ids.txt
+sha256sum /work/db.dump /work/manifest.tsv /work/anonymized_ids.txt > /work/SHA256SUMS
+for f in db.dump manifest.tsv anonymized_ids.txt SHA256SUMS; do
+  age -r "$AGE_RECIPIENT" -o "/work/$f.age" "/work/$f"          # [Assumption] age CLI
+  rclone copyto "/work/$f.age" "r2backup:dripnepal-production-backups/db/$1/$f.age"   # [Assumption] rclone remote
+done
+curl -fsS -m 10 "$BACKUP_HEARTBEAT_URL"
+```
+
+The plaintext dump exists briefly in `/var/tmp/dripnepal-backup` on the Droplet, root-owned. It never exists in a place a production secret does not already reach. Streaming `pg_dump | age | rclone rcat` would avoid the temporary file, but then the checksum could not be computed on the dump before encryption; the file is kept at launch size and the choice is revisited if the dump grows past the §13.5 trigger.
+
+**Size and duration**, arithmetic on assumptions: §13.3 estimates about 1 GB of table data in year one, and a compressed custom-format dump is a fraction of that [Assumption; measured on the first run]. The first staging and production runs record the duration and size in `releases.log`. A dump that takes longer than 30 minutes is a §13.5 growth trigger.
+
+### 11.3 Provider-side protection
+
+- **Managed backups need no set-up** on DigitalOcean: they are automatic, and the 7-day window cannot be extended there. Longer managed retention exists only elsewhere (RDS up to 35 days, Akamai 14 days; §1.5).
+- **Deletion protection**: turn on the provider's database deletion protection if it exists [Assumption: not covered by the research digests; checked with the other provider facts of §1.2]. Destroying the cluster would take its backups with it, and R-29 names deletion protection as a mitigation.
+- **Point-in-time granularity** of DigitalOcean PITR is not documented in the research digests. Lightsail documents 5-minute increments, but that is a different product. So the RPO of 15 minutes in §12 is [Assumption] until the quarterly drill measures it (§11.6).
+
+### 11.4 Object storage backups
+
+**What the research does not settle.** R2 object versioning, bucket replication, lifecycle rules and retention locks are **not** covered by the research digests. When the buckets are created, the tech lead records under VX-15 (Consistency notes, note 10) which of them R2 offers. Even if R2 has versioning, that protects only against deletion inside the Cloudflare account, not against losing the account. The cross-provider copy below is therefore the baseline either way.
+
+| Aspect      | Decision                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Target      | One private DigitalOcean Spaces bucket in BLR1, `dripnepal-production-media-copy`. It costs $5/month including 250 GiB of storage and 1 TiB of outbound transfer, with overage at $0.02/GiB stored [Verified-doc <https://www.digitalocean.com/pricing/spaces-object-storage>, as published and accessed 2026-09-25]                                                                                                                                                                                   |
+| Schedule    | 05:00 Asia/Kathmandu (`15 23 * * *` UTC), after the dump. It does not take the deploy lock, because it opens no database connection                                                                                                                                                                                                                                                                                                                                                                    |
+| Method      | `rclone sync` from each R2 bucket into its own prefix, with deleted or overwritten objects moved to a dated `deleted/<date>/` prefix. A Spaces lifecycle rule removes those after 35 days [Assumption: rclone `--backup-dir` and Spaces lifecycle rules are not in the digests]. Originals and derived keys are write-once (03 §3.5), so a night's sync mostly adds new objects                                                                                                                        |
+| Encryption  | The private-bucket prefix goes through an rclone `crypt` remote, so KYC documents are encrypted before they leave the host [Assumption: rclone feature]. Its passwords are kept in the password manager. The public-bucket prefix is copied as-is, because it is public data                                                                                                                                                                                                                           |
+| Credentials | Token D: R2 **read-only** on the two production app buckets. One Spaces key limited to the copy bucket [Assumption: Spaces per-bucket keys]. Both are in a separate env file, `/etc/dripnepal/media-copy.env` (proposed; root, 0600), used only by the media-copy run, so `backup.env` never holds a media credential and §3.6's "a leaked backup token cannot read media" stays true. A leaked token D reads media but cannot change it. A leaked Spaces key can delete the copy but not the original |
+| Signal      | A second heartbeat, `MEDIA_COPY_HEARTBEAT_URL` (proposed). `backup_missing` covers both heartbeats                                                                                                                                                                                                                                                                                                                                                                                                     |
+| Retention   | The copy mirrors the live buckets. Objects that 04 §19.3 deletes (abandoned uploads, rejected originals, KYC of applications that were never approved, after 1 year) leave the copy 35 days later. This keeps the copy inside the retention schedule instead of holding deleted KYC indefinitely                                                                                                                                                                                                       |
+
+**Restoring media.** After an accidental deletion, copy the objects back from the Spaces prefix, or from `deleted/<date>/`, with `rclone copy`. After losing the Cloudflare account, either create new R2 buckets and copy everything back, or point `S3_ENDPOINT` and the bucket variables at Spaces and serve `media.<domain>` from it. Drive speaks the S3 API ([03 §3.5](03-system-architecture.md#35-object-storage-layout)), so the second option is a configuration change. At the §13.1 upper estimate of about 115 GB, the copy-back stays within Spaces' included 1 TiB of transfer.
+
+### 11.5 Restore procedures
+
+Restores always go into a **new** cluster (a DigitalOcean restore creates one anyway). There is never an in-place restore over production (§6.5). Every restore is done by the tech lead from the password-manager credentials. It is recorded in the incident log, or in the drill record for drills, with the timestamps of §11.7.
+
+**A. Point-in-time restore** (bad migration, corrupted rows, accidental deletion within 7 days):
+
+1. Decide the target time T, normally the minute before the harmful change (from `releases.log`, the audit rows or the error tracker).
+2. Turn `checkout_enabled` off if writes after T will be discarded (503 `PROVIDER_UNAVAILABLE`; `CHECKOUT_DISABLED` is proposed; not yet in canon §6.6).
+3. In the provider console, restore to T into a new cluster in the same region. Set its trusted sources to the production Droplet only (§3.5). Record whether the database roles and their passwords came across [Assumption until the first drill].
+4. **Preferred: repair, do not switch.** Read the old values from the restored cluster over the SSH tunnel (§3.5) and fix production with a forward migration or a job (§6.5). Writes after T survive this way.
+5. **Only if production is unusable: switch.** Stop `worker`, then `web`. Change `DB_HOST`, `DB_PORT` and, if it changed, `DB_SSL_CA` in the three env files. Run the deploy step with the current digest. It runs migrations (none pending), the pg-boss schema step, reference seeders and release checks (§5.4). Then start the processes. Every write after T is lost; step 9 deals with it.
+6. `TRUNCATE sessions` as the migrator, through the `psql-migrator` helper of §10.1 (proposed). The restored sessions predate T, and a forced global logout is cheap ([04a §5.3](04a-data-dictionary-tables.md#53-sessions-session-store-table)).
+7. Run `node ace data:replay-anonymizations` (04 §19.2) with the newest anonymised-ID list from the backup bucket and any `user.anonymize` log lines written after that list.
+8. Run the integrity checks by hand: the `ledger.integrity_check` and `inventory.drift_check` queries ([05 §7.12](05-order-payment-and-inventory-lifecycles.md#712-statements-and-integrity-checks), [05 §5.10](05-order-payment-and-inventory-lifecycles.md#510-drift-detection-and-repair)). Also check that the sweepers `orders.acceptance_timeout` and, from R1.1, `payments.reconcile_sweeper` ran at least once after start (the jobs dashboard, §9.9).
+9. **Lost window** (switch only): list orders and payments that the error tracker, `http.request` lines and provider records (R1.1) show after T. Reconcile them with vendors and customers through §10's financial-reconciliation runbook. Decide the customer notice with the product owner.
+10. Turn checkout back on with step-up. Keep the old cluster for 7 days, then destroy it and record the destruction.
+
+**B. Restore from the nightly dump** (the cluster and its backups are gone, the DigitalOcean account is lost, or the restore goes to a second provider as in §1.9):
+
+1. Create a PostgreSQL 18 instance on the target (managed, or a container for a drill). Create the three roles of 07 §4.10 with **new** passwords, and an empty `dripnepal_production` owned by `dripnepal_migrator`.
+2. On a drill VM or the new host, never a laptop (07 TM-30), fetch the newest `db/<timestamp>/` folder. Use a **read-only** R2 token for the backup bucket that exists only in the password manager, never token C.
+3. Decrypt with the `age` private key and check `SHA256SUMS`.
+4. `pg_restore --no-owner --exit-on-error --jobs=2 --dbname=<new database>` as `dripnepal_migrator`. `--no-owner` makes the migrator the owner, as 07 §4.10 requires. The grants to `dripnepal_app` and `dripnepal_readonly` come back with the dump because the roles already exist.
+5. Compare the manifest: for each listed table, the restored count must be at least the manifest count. These tables only grow at this stage, and the manifest was taken just before the dump started.
+6. Deploy the current image against the new database with the env files rebuilt from the password manager (§5.9 mechanics). The release step installs the `pgboss` schema, and the worker re-registers the crons (§8.4).
+7. Steps A.6 to A.10 as above. The lost window is everything after the dump started, up to 24 hours plus the dump duration.
+
+The **anonymised-ID replay** is not optional in either path. Without it a restore can bring back personal data that the platform already deleted (04 §19.2). `data:replay-anonymizations` is named in 04 but not yet in the [09 §1.2](09-code-structure-and-engineering-standards.md#12-target-tree) target tree (Consistency notes).
+
+### 11.6 Restore drills (T-OPS-001)
+
+T-OPS-001 runs at two depths. The monthly depth meets this document's specification and proves that the dumps can be restored. The quarterly depth meets the cadence of [01 NFR-AVAIL-002](01-product-requirements.md#83-availability-and-recovery-nfr-avail), [ADR-0016](adr/0016-hosting-single-region-portable.md) and R-29 and proves the whole recovery. Both run before the R1 launch gate.
+
+| Depth                             | When                                                                                                                                                                                                                                                                                      | What                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Environment and cost                                                                                                                                                                                                                                                              |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Monthly: dump restore             | First business week of every month (§2.7); from launch, alternate months are run by the second developer, when there is one, because R-07 asks for each runbook to be run by its non-author. This widens §2.6's "tech lead only" drill access to the second developer (Consistency notes) | Procedure B steps 2–5 into a `postgres:18.4` container. SQL checks only: `pg_restore` exits 0; the manifest comparison passes; no invalid index (§6.1 query); the newest `orders.placed_at` is within 24 h of the dump time; the number of `db/<timestamp>/` folders is between 30 and 36; a spot check that one derived image in the Spaces copy matches its R2 original in size, and that the encrypted private prefix lists with decrypted names. No KYC file content is downloaded, as §2.6 requires | Drill VM (§2.1), destroyed the same day. About $0.10 per drill, assuming a $24 Droplet billed pro rata for 3 hours [Assumption on hourly billing]. No application keys are needed, because no `*_enc` column is decrypted                                                         |
+| Quarterly: full recovery          | January, April, July and October (the July run is the day after the yearly rotation of §14.4, which proves the rotated keys)                                                                                                                                                              | Procedure A steps 3, 6, 7 and 8 into a drill cluster restored to "now minus 10 minutes", then the production image on a drill VM with `PAYMENT_PROVIDER=none` (value proposed in 09 §6.1) and **no mail transport and no worker**, so nothing reaches a customer. Smoke: `/health/ready`, the SSR smoke of §5.5, an admin login by the tech lead that shows a decrypted order address. Measure RPO and RTO (§11.7)                                                                                       | Drill cluster plus drill VM, destroyed the same day. The cluster at $0.02254/hour × 4 h = $0.09 [Verified-doc price <https://www.digitalocean.com/pricing/managed-databases>, accessed 2026-09-25; hourly billing of a short-lived cluster is [Assumption]], plus the VM as above |
+| Before launch and on OD-09 change | Once before the R1 gate, then after any provider change                                                                                                                                                                                                                                   | Both depths, plus the second-provider rebuild of §1.9 (procedure B on another provider)                                                                                                                                                                                                                                                                                                                                                                                                                  | As above. The provider fact checks of §1.2 are done on the same drill cluster                                                                                                                                                                                                     |
+
+**Drill checklist**, recorded as `T-OPS-001-<date>.md` in `Records/Runbook-drills/` of the company document store (§10.1; not the repository, because it names hosts and times):
+
+1. Who ran it, which depth, which backup (timestamp or PITR target).
+2. The timestamps t0 to t4 of §11.7, and the derived RPO and RTO.
+3. The result of each check, with the failing output pasted if any failed.
+4. Every step that was missing or wrong in §11.5, fixed in this document in the same week.
+5. When the drill environment was destroyed, as §2.6 rule 2 requires.
+
+A failed drill is a SEV-3 ([07 §6.1](07-security-threat-model-and-permissions.md#61-severity-levels)), fixed within 3 working days and then re-run. Two failed monthly drills in a row block the next production deploy that is not a fix.
+
+### 11.7 How RPO and RTO are measured in a drill
+
+| Mark | Moment                                                                                      |
+| ---- | ------------------------------------------------------------------------------------------- |
+| t0   | Decision to restore (in a drill, the start of the drill)                                    |
+| t1   | Restore requested in the console (A) or the dump download started (B)                       |
+| t2   | Database accepts connections                                                                |
+| t3   | Checks passed (A.8, or B.5 and the monthly SQL checks)                                      |
+| t4   | The application serves the smoke pages from the restored data (quarterly and real restores) |
+
+- **RTO** = t4 − t0 (quarterly), or t3 − t0 for the database part alone (monthly).
+- **RPO for PITR** = requested target time − the newest committed timestamp in the restored cluster. The newest committed timestamp is the latest of `max(created_on)` in `pgboss.job` and `max(occurred_at)` in `audit_logs`. `platform.heartbeat` and `platform.ops_metrics` (proposed, §8.6) create jobs every 5 minutes, so the measurement resolves to about 5 minutes, enough to check a 15-minute target [the column name is from the pg-boss documentation, confirmed in M0 like §8.6].
+- **RPO for the dump** = restore time − dump start time. `pg_dump` reads one consistent snapshot as of its start [Assumption: standard PostgreSQL behaviour, not in the digests].
+
+The results are appended to a running table in the drill folder and reported in the monthly review (§13.6). They are the evidence that A-25's RPO and RTO hold, or do not.
+
+## 12. Availability, recovery and performance targets
+
+Every target below is **[Assumption]**. They are A-25 working values, adopted by 01 as NFR-AVAIL and NFR-PERF, and reviewed at the M7 readiness review. This section adds how each one is measured in operation and where the number is reported. It sets no new values.
+
+### 12.1 Recovery targets per failure
+
+| Failure                                                   | Recovery path                                                                                           | RPO target                                                                                                                                | RTO target                                                | Proven by                                                        |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- | ---------------------------------------------------------------- |
+| `web` or `worker` crash                                   | Compose restart (§7.2)                                                                                  | 0 (nothing is stored in the process)                                                                                                      | Minutes                                                   | Alert drill (§9.10)                                              |
+| Droplet lost or unusable                                  | New Droplet from §3–§5, env files from the password manager, same database                              | 0                                                                                                                                         | ≤ 2 h [Assumption]                                        | Quarterly from-scratch staging deploy (§1.9)                     |
+| Bad migration, corrupted rows, accidental deletion        | PITR into a new cluster, repair or switch (§11.5 A)                                                     | **≤ 15 min** (NFR-AVAIL-002), unverified until measured (§11.3)                                                                           | **≤ 4 h** (NFR-AVAIL-002)                                 | Quarterly T-OPS-001 (§11.6)                                      |
+| Cluster destroyed, or DigitalOcean account lost or locked | Dump restore (§11.5 B) at the same or another provider                                                  | **≤ 24 h**, while every nightly dump succeeds; one missed dump that is re-run the same day keeps it; two missed nights make it about 48 h | **≤ 4 h**, if the second-provider rebuild of §1.9 met it  | Monthly T-OPS-001 (database part); §1.9 rebuild (relocation RTO) |
+| Cloudflare account lost (DNS, CDN, R2)                    | DNS at the registrar (§14.3), media from the Spaces copy (§11.4), origin without the CDN until replaced | 24 h for media                                                                                                                            | **No target** [Assumption: best effort, one business day] | Not drilled. The media copy is spot-checked monthly              |
+| Data keys lost                                            | Break-glass copy (§11.1, R-07)                                                                          | Total loss of every `*_enc` value if all copies are gone                                                                                  | —                                                         | Quarterly drill decrypts an address with the vault's keys        |
+
+The Cloudflare row is the honest gap. DNS, edge TLS and media all sit in one account, so losing it takes longer than 4 hours to recover. Keeping the domain at a separate registrar (§14.3) makes the recovery possible at all. A target is set only if the product owner decides the risk needs one, which would mean a second DNS provider and a second CDN.
+
+### 12.2 Availability: 99.5% per calendar month
+
+- **Budget.** A 30-day month has 43,200 minutes. 0.5% of that is 216 minutes, about 3 h 36 min. A 31-day month allows 223.2 minutes. Maintenance counts against the budget (NFR-AVAIL-001).
+- **Measurement.** Better Stack runs the `site_down` monitors (§9.7) on `/health/live` and `/men`. They use `/health/live` instead of the `/health/ready` that 01 names, because §7.1 keeps readiness internal (Consistency notes, notes 16 and 35). A minute counts as down when either check fails. The target check interval is 1 minute; whether the free tier allows it is [Assumption] (§9.1). If it allows only a longer interval, availability is measured at that interval and the report says so.
+- **Report.** The monthly uptime percentage (SM-16) goes into the monthly review (§13.6) with every incident's minutes. A deploy's gap (§7.4) shows up as seconds.
+- **Spending rule** [Assumption]: when more than half of the month's budget is spent before the 15th, routine deploys stop for the rest of the month (fixes still ship), and the review asks which failure used it.
+
+### 12.3 Performance targets
+
+| Target (owner: [01 §8.2](01-product-requirements.md#82-performance-nfr-perf))                        | Before launch                                                                                                                                                                                                                                  | In operation                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| NFR-PERF-001: LCP p75 ≤ 2.5 s, INP p75 ≤ 200 ms, CLS ≤ 0.1 under throttling                          | Lighthouse CI on each PR ([10](10-testing-and-quality-gates.md))                                                                                                                                                                               | 01 asks for weekly real-user p75. No document defines how real-user data is collected, and [07 §5.8](07-security-threat-model-and-permissions.md#58-analytics-and-third-party-processors) forbids third-party analytics (Consistency notes). Until 08 and 10 define a first-party mechanism, the weekly figure is a throttled Lighthouse run against production plus the TTFB of the §1.6 probe, repeated from one Nepali connection |
+| NFR-PERF-002: ≤ 250 KB gzip JS per storefront route                                                  | CI bundle check (10)                                                                                                                                                                                                                           | Same check; production serves only CI-built images (§5.2)                                                                                                                                                                                                                                                                                                                                                                            |
+| NFR-PERF-003: read p95 ≤ 300 ms at 20 req/s                                                          | T-PERF-001 (k6) in a temporary production-sized environment: a 4 GB Droplet and a 1 GiB managed cluster with synthetic data only (§2.6), destroyed afterwards. About (24 + 15.15) / 30 = $1.31 per day, assuming pro-rata billing [Assumption] | `latency_p95` alert (§9.7); SM-15 weekly from `http.request` lines                                                                                                                                                                                                                                                                                                                                                                   |
+| NFR-PERF-004: `placeOrder` p95 ≤ 800 ms, bursts of 10/min, zero oversells                            | T-PERF-001, T-INV-003                                                                                                                                                                                                                          | `latency_p95` and `checkout_errors` alerts; oversell shows as `stock_drift` (§9.7)                                                                                                                                                                                                                                                                                                                                                   |
+| NFR-PERF-005: pickup p95 ≤ 5 s; 95% of emails handed over within 2 min; listing staleness p95 ≤ 60 s | T-PERF-001 also watches the queues                                                                                                                                                                                                             | `job_pickup_slow`, `email_failures` and the listing-freshness metric (§9.3)                                                                                                                                                                                                                                                                                                                                                          |
+
+T-PERF-001 never runs against production after launch. The temporary environment has the production shape, so its connection budget (§13.3) is also tested: a pool-exhaustion error during the test fails it.
+
+---
+
+## 13. Capacity assumptions and cost drivers
+
+### 13.1 Launch load
+
+| Quantity               | Launch figure                                                                                            | Design and load-test figure (10×)                                            | Source                                                                                            |
+| ---------------------- | -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Shops                  | ≤ 50                                                                                                     | —                                                                            | A-02 [Confirmed Q1 for the order of magnitude]                                                    |
+| Orders                 | ≤ 2,000 per month                                                                                        | 20,000 per month; 100 in the peak hour; bursts of 10 `placeOrder` per minute | A-02                                                                                              |
+| Storefront traffic     | —                                                                                                        | About 20 requests/s                                                          | A-02, NFR-PERF-003                                                                                |
+| Catalogue              | ≤ 5,000 published products, ≤ 30,000 variants                                                            | Search engine trigger at 50,000 products                                     | A-03 (the specification for this document said 10,000 variants; A-03 wins, see Consistency notes) |
+| Images                 | ≤ 50,000 originals                                                                                       | —                                                                            | [Assumption] from this document's specification, not registered in 00                             |
+| Average original size  | 2 MB (upload limit 10 MB, A-31)                                                                          | —                                                                            | [Assumption]                                                                                      |
+| Derived WebP per image | About 0.3 MB for the four widths together ([ADR-0013](adr/0013-media-direct-upload-async-processing.md)) | —                                                                            | [Assumption]                                                                                      |
+
+Storage from these figures: 50,000 × 2 MB = 100 GB of originals and 50,000 × 0.3 MB = 15 GB of derived images. At 35 dumps of about 0.1 GB each [Assumption], the backups add 3.5 GB. That is 118.5 GB in R2 at the upper image figure. The launch catalogue will be a fraction of this.
+
+### 13.2 Droplet sizing: 4 GB / 2 vCPU
+
+The memory split below is [Assumption] until M0 measures SSR memory and M3 measures image processing. It decides whether 4 GB is enough, and whether the `mem_limit` hardening of §4.5 can be switched on.
+
+| Consumer                                                                      | Budget |
+| ----------------------------------------------------------------------------- | ------ |
+| OS, Docker, log shipper                                                       | 0.6 GB |
+| Caddy                                                                         | 0.1 GB |
+| `web` (Node 24, React SSR, Lucid pool 8)                                      | 1.0 GB |
+| `worker` (Lucid 4 + pg-boss 4; `media.process_upload` at concurrency 1)       | 1.0 GB |
+| One-off container (`release`, redrive, backup; serialised by the deploy lock) | 0.5 GB |
+| Headroom                                                                      | 0.8 GB |
+
+The worker line is driven by image decoding. One 40 MP upload (the A-31 limit) decoded to RGBA is 40,000,000 × 4 bytes = 160 MB per buffer before any resize copies. That is why §8.5 keeps image jobs at concurrency 1. CPU: 2 vCPU are shared by SSR and image processing. An upload burst during peak traffic shows as higher `web` p95, which the §13.5 CPU trigger watches. Disk: 80 GB [Verified-doc Droplet pricing] holds two image versions, Docker logs capped at 5 × 10 MB per container (§4.5) and the temporary dump file.
+
+### 13.3 Database sizing and connection budget
+
+**Size**, arithmetic on assumptions: about 25 KB per order across all the tables and indexes one order touches (order, shop orders, items, events, shipments, payments, ledger, movements, audit) [Assumption]. 24,000 orders a year × 25 KB = 600 MB a year at launch load. The catalogue, listings and reference data add about 100 MB [Assumption]. Year one is therefore about 1 GB, and a year at the 10× design load about 6 GB. How much storage the 1 GiB plan includes is unconfirmed (§1.2). Extra storage is $0.215/GiB-month in 10 GiB steps, so one step costs 10 × 0.215 = $2.15 a month [Verified-doc price <https://www.digitalocean.com/pricing/managed-databases>, accessed 2026-09-25].
+
+**Connections.** The 22-connection limit of the 1 GiB plan [Verified-doc <https://docs.digitalocean.com/products/databases/postgresql/details/limits/>, accessed 2026-09-25] is split as in [03 §3.4](03-system-architecture.md#34-postgresql-layout-and-connection-budget), unchanged. This table only adds who uses each line in operation:
+
+| Line                    | Max | Used by, in operation                                                                                                                                                                                                                                    |
+| ----------------------- | --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `web` Lucid             | 8   | Requests                                                                                                                                                                                                                                                 |
+| `worker` Lucid          | 4   | Job handlers                                                                                                                                                                                                                                             |
+| `worker` pg-boss        | 4   | Fetch, complete, schedule, maintain                                                                                                                                                                                                                      |
+| Migrations and admin    | 2   | One at a time, serialised by the deploy lock: the `release` container (pool 2), **or** `pg_dump` plus the sequential `psql` calls of the backup (1), **or** a redrive (Lucid 1 + pg-boss 1, §8.3), **or** an incident `psql` as `dripnepal_readonly` (1) |
+| `web` send-only pg-boss | 1   | Sends outside a transaction                                                                                                                                                                                                                              |
+| Headroom                | 3   | Monitoring; `platform:create-admin` and other one-off `web` commands with `DB_POOL_MAX=1` (§5.9)                                                                                                                                                         |
+
+The `db_connections_high` alert (≥ 20 of 22 for 10 minutes, §9.7) warns before exhaustion. §7.4 explains why a second `web` container of pool 8 cannot fit.
+
+### 13.4 Monthly cost estimate
+
+Prices as published on 2026-09-25 (`infra_ops` digest, accessed 2026-09-25; URLs in §1.2, §9.1 and §11.4). No figure goes beyond arithmetic on them. This table supersedes the §1.4 subtotal because it adds the media copy of §11.4 (Consistency notes).
+
+| Line                                           | At launch (USD/month)            | At the §13.1 upper image figure | Arithmetic and notes                                                                                                                         |
+| ---------------------------------------------- | -------------------------------- | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Production Droplet 4 GB / 2 vCPU               | 24.00                            | 24.00                           | Size [Assumption] until measured (§13.2)                                                                                                     |
+| Managed PostgreSQL 1 GiB                       | 15.15                            | 15.15                           | Or 15.00 per the docs page (§1.2); extra storage in 10 GiB steps of $2.15                                                                    |
+| Staging Droplet 2 GB / 1 vCPU                  | 12.00                            | 12.00                           | §2.4                                                                                                                                         |
+| DigitalOcean Spaces (media copy)               | 5.00                             | 5.00                            | 250 GiB included; the upper figure of about 115 GB fits                                                                                      |
+| R2 (app buckets and dumps)                     | 0.00                             | 1.63                            | Free tier 10 GB-month; (118.5 − 10) × 0.015 = 1.6275. Operations stay inside the free 1M Class A / 10M Class B at these volumes [Assumption] |
+| Restore drills                                 | < 1.00                           | < 1.00                          | §11.6: about $0.10 a month plus about $0.25 a quarter [Assumption on pro-rata billing]                                                       |
+| Sentry                                         | 0.00 (Developer) or 26.00 (Team) | same                            | Team once a second person needs access (§9.1)                                                                                                |
+| Logs, uptime (Axiom, Better Stack)             | 0.00                             | 0.00                            | Free tiers (§9.1)                                                                                                                            |
+| Cloudflare plan, email provider, domain        | not priced                       | not priced                      | [Verify-external VX-15]; [Open OD-08]                                                                                                        |
+| **Subtotal of priced lines** (drills excluded) | **56.15** / **82.15**            | **57.78** / **83.78**           | 24 + 15.15 + 12 + 5 = 56.15; + 26 = 82.15; + 1.63 gives 57.78 and 83.78                                                                      |
+| With 13% reverse-charge VAT, if it applies     | 63.45 / 92.83                    | 65.29 / 94.67                   | × 1.13, rounded; VAT Act s8(2) reverse charge as budgeted in §1.4, [Verify-external VX-05]                                                   |
+
+For the VX-15 payment-route limit (§1.8): 12 × 65.29 = $783.48 a year, or 12 × 94.67 = $1,136.04 with Sentry Team, before the unpriced lines.
+
+**Cost drivers**, in the order they will grow: the database plan (connections or CPU, §13.5); image storage beyond the R2 free tier ($0.015 per GB-month, so each extra 100 GB costs $1.50); a second Sentry seat; log volume past Axiom's 25 GB storage (§9.2). Bandwidth is not a driver while media is served from R2 (free egress) and the Droplet stays inside its included 4,000 GiB.
+
+### 13.5 Growth triggers
+
+Thresholds are [Assumption] unless a source is given. Each trigger has an owner check in the monthly review.
+
+| Signal                       | Threshold                                                                                           | Action                                                                                                                                                                              |
+| ---------------------------- | --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Orders or shops              | A week above 50% of the 10× target, > 5,000 orders/month or > 150 shops (A-02)                      | Re-run T-PERF-001 at the new 10×; revisit this section                                                                                                                              |
+| Database connections or CPU  | `db_connections_high` fires twice in a month, or database CPU above 60% at peak for a week (03 §13) | Next plan: 2 GiB / 1 vCPU at $30.45/month as published (§1.2). Its connection limit is not in the digests [Assumption]. Revise the 03 §3.4 budget before raising any pool           |
+| Need for automatic failover  | An outage caused by a single-node database, or a product-owner decision                             | DigitalOcean HA clusters "begin at $30.00" for a 2 GiB primary, per the docs page; Akamai's 3-node cluster is $37 (§1.5). Either changes the §12.1 RTO row                          |
+| `web` CPU or storefront TTFB | CPU above 70% at peak, or TTFB p75 from Nepal above 800 ms (03 §13)                                 | Option B of §7.4 (two `web` containers, pool 4 + 4), then a second Droplet. Droplet sizes above 4 GB are not in the digests                                                         |
+| Droplet memory or disk       | `host_resources` alert (§9.7)                                                                       | Measure per container; set `mem_limit` values; resize                                                                                                                               |
+| Search                       | > 50,000 products or search p95 > 300 ms (A-03, ADR-0014)                                           | ADR-0014's search-engine path                                                                                                                                                       |
+| R2 storage                   | More than 100 GB stored, the §13.1 figure for originals (R-20)                                      | Review originals kept for deleted products; check derivative sizes                                                                                                                  |
+| Dump                         | Duration above 30 min or compressed size above 5 GB                                                 | Directory format with parallel jobs, which needs more admin connections, so revise 03 §3.4 first; or a WAL-based tool if the host changes to self-run PostgreSQL (pgBackRest, §1.5) |
+| Error quota                  | Sentry's 5k errors hit two months running (§9.1)                                                    | Team plan                                                                                                                                                                           |
+| Log volume                   | Ingest above 20 GB a month, 80% of Axiom's 25 GB storage (§9.2)                                     | Sample `http.request` lines for health checks and static assets, or move to Axiom Cloud                                                                                             |
+| Uptime monitors              | More than 10 monitors and heartbeats needed (§9.1)                                                  | Paid tier or consolidation                                                                                                                                                          |
+
+### 13.6 Monthly operations review
+
+Earlier sections hand several checks to "the monthly review". This is that review. It is held in the first business week of each month (§2.7) by the tech lead, with the product owner for the cost and billing items. About an hour; the result is one dated note in the company document folder.
+
+1. **Money:** actual invoices against §13.4. Every provider's billing status and card validity (R-32, §1.8).
+2. **Availability:** the SM-16 uptime report, minutes lost per incident, and the error budget of §12.2.
+3. **Backups:** the monthly T-OPS-001 result, the RPO and RTO table, and the number of dumps in `db/` (30 to 36).
+4. **Capacity:** each §13.5 signal against its threshold, plus database storage.
+5. **Network and storage settings:** the §3.8 checks, the firewall rules (§3.5), private-bucket public access and `r2.dev` off (§3.6).
+6. **Jobs:** `platform.retention_purge` deleted counts per table (§8.7); dead letters older than 7 days (§8.1).
+7. **Logs:** ingest against the Axiom limits (§9.2), and the Monday redaction-check results (§9.2).
+8. **Access:** the §14.5 items that are due that month.
+9. **Findings** go into the backlog ([12](12-roadmap-and-backlog.md)) with an owner.
+
+---
+
+## 14. Operational access and security operations
+
+[07](07-security-threat-model-and-permissions.md) owns the policy: application roles and permissions (07 §4), secret custody and when to rotate (07 §5.6), audit-log access (07 §5.7) and incident roles (07 §6.2). This section says who holds which operational access, how it is protected, the rotation calendar, how operator actions are audited, two recovery procedures that need host access, and what "on call" means for one or two people.
+
+### 14.1 Who has production access
+
+| Person or role                                      | Infrastructure access                                                                                                                                       | Application access                                                                                                                                                                             |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tech lead                                           | Everything in §14.2: SSH to both hosts, every console, the production vault                                                                                 | A personal `platform_staff` account (07 §4.2) with mandatory TOTP                                                                                                                              |
+| Second developer (when there is one)                | The same as the tech lead, from the day they need to deploy or restore alone (R-07); until then, staging only                                               | As assigned by the platform admin                                                                                                                                                              |
+| Product owner                                       | No routine access. Holds the break-glass vault copy and the owner logins of the registrar, DigitalOcean and Cloudflare, sealed in the vault (R-07, 07 §6.2) | Platform admin, so they can turn `checkout_enabled` off without a developer (no step-up needed to turn it off per 07 §3.10; 06 §13.6 still asks for `totp_code` in both directions, 07 note 8) |
+| Finance officer, support agent, catalogue moderator | None                                                                                                                                                        | Their 07 §4.2 role only                                                                                                                                                                        |
+| CI (`release.yml`)                                  | The deploy key's forced command (§5.4) and the firewall-scoped API token (§3.3), in the protected GitHub environments                                       | None                                                                                                                                                                                           |
+
+Nobody holds shared logins. Every console account is personal, so provider audit logs name a person.
+
+### 14.2 Access matrix
+
+| System                                                                                              | Tech lead          | Second developer                  | Product owner                   | Protection                                                                                                                                                                                                                   |
+| --------------------------------------------------------------------------------------------------- | ------------------ | --------------------------------- | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Domain registrar (not Cloudflare, §14.3)                                                            | Admin              | —                                 | Owner (break-glass)             | 2FA; registrar transfer lock on [Assumption: registrar feature]                                                                                                                                                              |
+| DigitalOcean (Droplets, database, Spaces, firewall)                                                 | Owner              | Member                            | Break-glass owner login         | 2FA; team roles as the provider offers them [Assumption]                                                                                                                                                                     |
+| Cloudflare (DNS, WAF, R2)                                                                           | Admin              | Admin                             | Break-glass login               | 2FA; API tokens scoped per bucket and per purpose (§3.6)                                                                                                                                                                     |
+| GitHub organisation (repository, Actions, GHCR, environments)                                       | Owner              | Maintainer; `production` approver | Owner (break-glass)             | 2FA required for the organisation [Assumption: setting available on the plan]                                                                                                                                                |
+| Production and staging hosts                                                                        | `ops` user via SSH | `ops` user via SSH                | —                               | Keys only (§14.3); membership of `docker` is root-equivalent (§3.3)                                                                                                                                                          |
+| Password manager, production vault                                                                  | Full               | Full                              | Full (break-glass custodian)    | 2FA; the only place where the `age` private key, the key ring and the console recovery codes live                                                                                                                            |
+| Sentry, Axiom, Better Stack, Slack                                                                  | Admin              | Member (Sentry needs Team, §9.1)  | Better Stack status page editor | 2FA                                                                                                                                                                                                                          |
+| Email provider (OD-08)                                                                              | Admin              | Member                            | Billing                         | 2FA; the sending-domain DNS lives at Cloudflare                                                                                                                                                                              |
+| Gateway merchant portals (R1.1)                                                                     | —                  | —                                 | Admin                           | 2FA if offered; finance officer as a named user; keys rotated when anyone with portal access leaves (07 §5.6)                                                                                                                |
+| Company document folder (incident logs, drill records, monthly reviews, inspection records per §10) | Full               | Full                              | Full                            | 2FA; per-folder access as §10.1 sets it: `Records/Inspections/` owned by the product owner, `Records/Incidents/` for the incident lead and the product owner, `Records/Runbook-drills/` for developers and the product owner |
+
+### 14.3 Keys, logins and 2FA
+
+- **SSH.** One Ed25519 key per person and device, protected by a passphrase, never copied between machines [Assumption: key type chosen here]. Public keys go into that person's `ops` user; there is no shared `ops` key. Agent forwarding is off. The deploy keys are separate, one per environment, and restricted by the forced command of §5.4. The ops allow-list of §3.3 holds each person's current public IP. When a home or mobile IP changes, the person adds the new address in the provider console, removes the old one, and records a `config:` line in `releases.log`.
+- **Host privilege.** `sudo` asks for the user's password [Assumption], and host authentication and `sudo` events go to the log tool (§14.5).
+- **2FA on every console** in §14.2, with an authenticator app or a hardware key. SMS is not used where the provider offers anything else, because SIM swap is a known risk for phone-number-based factors [Assumption; not researched]. Recovery codes go into the production vault on the day 2FA is enabled.
+- **Domain at a separate registrar.** The domain is not registered with the DNS provider. If the Cloudflare account were lost, the registrar still controls the name servers, which is what makes the §12.1 Cloudflare row recoverable at all.
+- **Billing contacts.** Two people get billing and card-decline emails for every provider (§1.8).
+
+### 14.4 Secret rotation calendar
+
+07 §5.6 says **when** each secret must rotate (exposure, staff departure, yearly). This calendar puts the yearly rotations into one planned maintenance window in **July** [Assumption; chosen to sit next to the Shrawan fiscal-year start that R-26 already uses as a review point], outside business hours (§2.7). The next quarterly drill (§11.6) then proves the rotated keys.
+
+| Secret                                                                                         | Routine rotation                                                  | Constraint                                                                                                                                                                                                                                                                                   |
+| ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `APP_KEY`                                                                                      | July                                                              | Key list: the old key is kept 7 days, as 07 §5.5 describes. Dumps exclude sessions and `pgboss`, so no dump needs the old `APP_KEY`                                                                                                                                                          |
+| `DATA_ENCRYPTION_KEYS` (new active key ID)                                                     | July                                                              | After `node ace data:reencrypt` finishes, the retired key ID stays in the vault (not on hosts) for **35 more days**, because the dumps of the previous 35 days still hold ciphertext under it (§11.2). Only then is it deleted. 07 §5.5's "then remove it" should say so (Consistency notes) |
+| `BLIND_INDEX_KEY`, `HMAC_KEY_LIMITER`                                                          | Only on exposure (07 §5.5)                                        | —                                                                                                                                                                                                                                                                                            |
+| `HMAC_KEY_AUDIT_IP`                                                                            | July                                                              | Old hashes stop correlating (07 §5.5)                                                                                                                                                                                                                                                        |
+| Database passwords (`dripnepal_app`, `dripnepal_migrator`, `dripnepal_readonly`)               | July                                                              | New password, update env files, redeploy, revoke the old one (07 §5.6). The migrator password also goes into `backup.env`                                                                                                                                                                    |
+| R2 tokens A, B, C, D; Spaces key; rclone `crypt` passwords                                     | July (tokens and key); `crypt` passwords only on exposure         | Token C lives in `backup.env`; token D, the Spaces key and the `crypt` passwords in `media-copy.env`. Changing the `crypt` passwords means re-copying the encrypted prefix, so it happens only after exposure                                                                                |
+| Backup `age` key pair                                                                          | Only on exposure, or when someone who held the private key leaves | The new public key (`AGE_RECIPIENT`) goes into `backup.env` and `media-copy.env` is unaffected. The old private key stays in the vault for 35 days, until the last dump encrypted to it expires                                                                                              |
+| Email provider key, SSH user keys, deploy keys, firewall API token, heartbeat URLs, Sentry DSN | July (keys and token); URLs and DSN only on exposure              | Deploy keys are replaced in the GitHub environments and in `authorized_keys` in the same change                                                                                                                                                                                              |
+| Gateway keys (R1.1)                                                                            | On exposure or portal-user departure                              | 07 §5.6                                                                                                                                                                                                                                                                                      |
+| `SHADCNUIKIT_API_KEY`                                                                          | Only on exposure (07 §5.6)                                        | Developer machine only; never on a host, in CI or in the vault's production entries                                                                                                                                                                                                          |
+
+Each rotation is one `config:` line in `releases.log` (secret name, never its value). The vault keeps the previous value until its constraint above allows deletion. A departure triggers 07 §5.6's staff-departure checklist the same day, plus removal of that person's SSH keys, console accounts and IPs on the allow-list.
+
+### 14.5 Auditing admin and operator actions
+
+| What                                                                          | Where it is recorded                                                                                                                                                                                                   | Who reviews, when                                                                                                                                                                                                                                       |
+| ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Application admin actions: staff, settings, money, KYC views, audit-log reads | `audit_logs` (NFR-OBS-004; 07 §5.7)                                                                                                                                                                                    | Real time through `staff_privilege_change`, `checkout_switch_changed` and `kyc_view_spike` (§9.7); weekly by the product owner through `listAuditLogs`, whose reads are themselves audited (`audit_log.view`, proposed in 07)                           |
+| Deploys, rollbacks, redrives, discards, rotations, firewall and DNS changes   | `/opt/dripnepal/releases.log` (§4.6) with `config:` lines; GitHub deployment history                                                                                                                                   | The monthly review (§13.6) compares the log with the GitHub history; a production change without a line is a finding                                                                                                                                    |
+| SSH logins and `sudo`                                                         | Host authentication log, shipped by the §9.2 shipper as `service=host` [Assumption: the shipper reads the host log as well as container logs]                                                                          | A login with an unknown key is handled as SEV-1 until shown otherwise, because the host holds every production secret (07 §6.1 "leaked production secret"); a known key from an unexpected address is a SEV-2 investigation. Reviewed monthly otherwise |
+| Operator database sessions                                                    | Incident log entry for every `psql` session (role, purpose, start and end); `dripnepal_readonly` only, except the migrator statements that §10.1 names (`TRUNCATE sessions`, 07 §6.3, and the break-glass kill switch) | The product owner reviews the incident log within 24 hours when one person acted alone (07 §6.2), otherwise in the monthly review                                                                                                                       |
+| Console actions (DigitalOcean, Cloudflare, GitHub)                            | Each provider's own audit log, where the plan has one [Assumption]                                                                                                                                                     | Quarterly access review                                                                                                                                                                                                                                 |
+
+**Quarterly access review**, together with the quarterly drill: list every account in §14.2 and every active `platform_staff` row; remove anything unused for 90 days; confirm 2FA on each; compare each host's `authorized_keys` with the people entitled to it; confirm the ops allow-list; record the result in the monthly note.
+
+### 14.6 Recovery procedures that need host access
+
+Runbook [§10.13](#1013-account-recovery-staff-mfa-reset-and-vendor-lost-mailbox) points here; this is the only copy of both procedures. It follows the command that [09 §9.1](09-code-structure-and-engineering-standards.md#91-node-ace-platformcreate-admin) already names.
+
+**Lost staff authenticator.** [07 §3.9](07-security-threat-model-and-permissions.md#39-mfa-totp-for-platform-staff) and AC-FR-IAM-007-5 allow two paths: another `platform_admin` resets it (audited, rotates the stamp), or, in single-operator mode, the server-side procedure below. 06 defines no admin operation for the first path yet, so until one is added (proposed; not yet in canon §6.5) the procedure below is the only path, with any number of admins. 09 §9.1 leaves its `--recover` mode to this document:
+
+1. The product owner confirms the person's identity by a video call or in person before anything runs, and the call is recorded in the incident log. The person running the command is the tech lead, or the second developer if the tech lead is the one locked out; nobody resets their own authenticator without that confirmation.
+2. Over SSH: `docker compose run --rm -e DB_POOL_MAX=1 web node ace platform:create-admin --recover --email <staff email> --reason "<text>"`. `--email` is canon §11's flag, `--recover` is named by 09 §9.1 (proposed there), and `--reason` is proposed here for the "audited with a `reason`" of 09 §9.1. The command clears `mfa_totp_secret_enc`, `mfa_enabled_at` and `mfa_last_used_step` and rotates `security_stamp`, in one transaction. It writes an audit row (action name proposed: `platform_staff.mfa_reset`), which raises `staff_privilege_change` (§9.7).
+3. The person whose authenticator was reset logs in and is sent to enrolment (07 §3.9). The person who ran the command records a `config:` line and the new enrolment in the incident log.
+
+**Vendor who lost their mailbox.** Support never changes a login email or resets a password by phone ([07 TM-09](07-security-threat-model-and-permissions.md#tm-09-account-recovery-abuse-and-enumeration)). 06 has no operation that changes a login email in R1. The procedure:
+
+1. The vendor first tries to recover the mailbox with their email provider. That keeps the account's history intact.
+2. If that fails, the product owner checks identity against the shop's KYC documents on a video call. The result is recorded in the support case and in the incident log.
+3. With written approval from the product owner, the tech lead runs a one-off command that sets the new address as unverified, rotates `security_stamp`, invalidates open tokens, emails a verification link to the new address and a notice to the old one, and writes an audit row. The command, `identity:change-login-email` (proposed; not yet in 09 or canon), is built only when the first such request arrives. Until then the vendor waits, and the support-case SLA clock (15 days, FR-ADM-009) is the deadline for building it.
+
+### 14.7 On call for a team of one or two
+
+There is no 24/7 on-call (A-30). What is expected [Assumption; the product owner confirms with A-29 and A-30]:
+
+| Alert class (§9.7)          | Expected response                                                                                                                                                                                                                                                                                                                                                                  |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Page                        | Acknowledged in `#alerts-page` within 30 minutes between 07:00 and 22:00 Kathmandu time; best effort at night. If a suspected breach cannot be acknowledged within 60 minutes, the product owner turns `checkout_enabled` off (§14.1) and keeps trying the developers. For that, the product owner is also a member of `#alerts-page` [Assumption; §9.8 lists only the developers] |
+| Business hours              | Triaged the same business day if raised before 15:00, otherwise the next business day (§2.7)                                                                                                                                                                                                                                                                                       |
+| Business (finance, support) | Inside the refund and support SLAs that the alerts track (§9.7)                                                                                                                                                                                                                                                                                                                    |
+
+- **Rota.** With two developers, one person is primary each week and the handover is on Sunday morning, when the business week starts. The secondary is not expected to respond unless the primary has not acknowledged a page within 30 minutes. With one developer, that person is always primary, and the product owner is the fallback for the kill switch.
+- **Absences.** A developer who will be unreachable for more than one day says so in `#alerts`. If nobody with host access is reachable, no deploys happen and the product owner holds the kill switch. The monthly T-OPS-001 is moved, not skipped.
+- **Festival peaks.** Dashain and Tihar bring the campaign peaks that A-02's 10× target plans for. During the dates the product owner declares, routine deploys stop (fixes only), and each day has one named reachable developer.
+- **Load on people.** The §9.8 noise budget (at most 2 out-of-hours pages a week that needed no action) protects the only people who can respond. A breach of it is a finding for the weekly review (§9.8), and the rule is tuned or reclassified.
+- **Joining.** Before a new developer takes a primary week, they run one monthly drill, one rollback rehearsal (§5.8) and one redrive preview (§8.3) with the tech lead watching (R-07: every runbook executed once by its non-author before launch).
+
 ## Consistency notes for editor
 
-Notes 1–13 cover §1–§2; notes 14–31 cover §3–§5; notes 32–55 cover §6–§9 (53–55 from the critic pass). Later parts append their own.
+Notes 1–13 cover §1–§2; notes 14–31 cover §3–§5; notes 32–55 cover §6–§9 (53–55 from the critic pass); notes 56–71 cover §10 (part 4); notes 72–100 cover §11–§14 (part 5).
 
 1. **Portability check adopted.** The [Assumption] in [03 §5.3](03-system-architecture.md#53-portability-requirement-nfr-data-005-vx-09) (staging rebuild on a second provider before the R1 gate) is adopted in §1.9 and combined with NFR-DATA-005's quarterly from-scratch staging deploy. 03 §5.3 can drop "[Assumption]" and link §1.9.
 2. **Restore-drill cadence.** ADR-0016 Verification, NFR-AVAIL-002 and R-29 say T-OPS-001 runs before launch and **quarterly**; the specification for this document (item 11, canon-derived brief) says **monthly**. §11 (a later part) must pick one and the others must follow; §1–§2 only reference T-OPS-001 without a cadence.
@@ -1448,3 +2227,48 @@ Notes 1–13 cover §1–§2; notes 14–31 cover §3–§5; notes 32–55 cover
 53. **Other 07 detective alerts added in the critic pass.** §9.7 now also carries 07 TM-05 (`platform_staff` and `single_operator_mode` changes, folded into `staff_privilege_change`, which pages only outside business hours), TM-12 (`sql_syntax_error`, any SQLSTATE `42601`), TM-16 (`kyc_view_spike`, more than 20 KYC views per staff member per day) and TM-18 (`provider_event_anomaly`, R1.1). Thresholds are the 07 [Assumption] values. TM-15 worker memory is covered by `host_resources`.
 54. **Lock exception for a migration that failed in production.** [09 §8.4](09-code-structure-and-engineering-standards.md#84-applied-migrations-are-never-edited-rf-41) says a locked file is never edited and "the fix is a new migration". That cannot work for a file that failed in production: it stays pending and runs, and fails, before any newer file. §6.5 allows editing that one never-applied file, with production `migration:status` evidence and the tech lead's review. The 09 §8.4 lock script needs a matching override (proposed). 09 owns the script.
 55. **Metric definitions tightened.** "Refunds pending" counts `failed` refunds as pending, because 05 lets `retryRefund` move `failed` back to `processing`. The connection metric counts only client backends. A listing-freshness metric covers the NFR-PERF-005 read-model target (60 s p95), which §9.3 did not list before.
+56. **Gateway disable mechanism.** 03 §11.4 and §12.6 describe "an environment flag" that disables the gateway method; 09 §6.1 (its note 37) has no separate flag and uses `PAYMENT_PROVIDER=none`. §10.2 uses `PAYMENT_PROVIDER=none` in `web.env` only, keeping the gateway in `worker.env` so verification continues. This requires the return route (`/payments/{provider}/return`, proposed; not yet in canon §6.4) to render "confirming your payment" and leave the lookup to the worker when `web` has no gateway adapter; 09 and 03 §11 should state that behaviour, and 09's boot validation must allow different `PAYMENT_PROVIDER` values in `web` and `worker`.
+57. **Gateway-unavailable alert name.** §9.7 describes, from R1.1, "gateway unavailability" as a separate business-hours condition without a name. §10.1 proposes `gateway_unavailable`; §9.7 should add the row with its condition (breaker open for more than 15 minutes [Assumption]).
+58. **No inventory correction operation or freeze.** 05 §5.10 step 3 calls for "one admin `correction` action per variant", but neither 06 nor 09 defines it. §10.5 proposes `node ace inventory:correct` (with `--dry-run` and an approver) for 09. No per-SKU freeze exists in 04a or 06; §10.5 uses `blockProduct` when the error could oversell and records the tradeoff. If a finer freeze is wanted, 04a would need a column and 05 a rule.
+59. **Account recovery commands (resolved when splicing).** B6C had proposed `node ace platform:reset-mfa` and `identity:change-email`; the editor kept B6D's single copy in §14.6, which uses `platform:create-admin --recover` (already named by 09 §9.1) and `identity:change-login-email` (proposed). §10.13 now points to §14.6. Still open: 06 §13.6/§13.8 list no admin operation for the "another `platform_admin` resets it" path of 07 §3.9 and AC-FR-IAM-007-5; 06 should add one (proposed; not yet in canon §6.5) or 07 should name the command as the only path.
+60. **Proposed helper `psql-migrator` and the CA file.** §10.1 adds `/opt/dripnepal/bin/psql-migrator`, which takes the deploy lock, and a CA file `/etc/dripnepal/db-ca.pem` next to `DB_SSL_CA` (PEM in an env value is awkward for libpq). §4.6's host layout table should list both.
+61. **Break-glass kill switch.** The SQL fallback in §10.9 bypasses `updatePlatformSetting`, so the runbook writes the `platform_setting.update` audit row by hand in the same transaction (actor `system`, reason naming the operator and incident) and the operator posts in `#alerts-page`, because no `checkout_switch_changed` alert fires. Acceptable only when no admin can sign in; 07 §6.3 names only the admin path and may want to mention the fallback.
+62. **Maker-checker below Rs 10,000.** 05 §7.8 requires a second approval only above Rs 10,000 [Assumption OD-14], and 06 lists no approval operation for adjustments (06's `createLedgerAdjustment` row says "second approval above Rs 10,000 per 05 §7.8 [Assumption]" without an operation). §10.8 adds a procedural second reading below the threshold. 06 must define how the second approval is recorded (an approval operation, or a pending adjustment state) before M7.
+63. **Remittance correction.** 05 §7.5 has no operation to reverse a remittance; §10.8 uses `createLedgerAdjustment` with `reverses_entry_id` on the `vendor_remittance` entry and keeps the `vendor_remittances` row. 05 could state this explicitly.
+64. **Test ID collision T-OPS-002.** 05 §5.10 and §10 use T-OPS-002 for the operations drill; 03 §10.7 uses it for the graceful worker test (already noted in the main Consistency notes). §10.14 refers to the drill without renumbering; 10 assigns the IDs. Runbook drills in §10.14 are proposed checks (T-OPS area).
+65. **Proposed items used:** `recheckPayment`, `resolvePaymentReview`, `resolveRefundReview`, `unblockProduct` (not yet in canon §6.5); `platform.payments.review` (not yet in canon §7); routes `/admin/settings`, `/admin/support-cases`, `/payments/{provider}/return` (not yet in canon §6.4); `CHECKOUT_DISABLED` (not yet in canon §6.6). The kill switch stays 503 `PROVIDER_UNAVAILABLE` throughout.
+66. **REG-18 folder defined.** 01 REG-18 asked 11 to name the inspection-records folder and access rule; §10.1 does so. The document store itself is not chosen [Assumption]; the product owner records the choice. Kept periods other than REG-18's 5 years are [Assumption].
+67. **Email-outage alert threshold.** 05 §8.14 suggests alerting "when more than 20% of sends fail in 15 minutes"; §9.7 `email_failures` uses more than 5% in 1 hour with at least 20 attempts. §10.10 follows §9.7 (11 owns alert routing, as 05 §8.14 says); 05 §8.14 could point to §9.7.
+68. **Order of rotation and evidence.** 07 §6.3's numbered list rotates secrets (step 4) before preserving evidence (step 5); its own flowchart and 07 §6.5 ("before cleaning up") preserve evidence first. §10.9 follows the flowchart; 07 §6.3's list could be reordered.
+69. **`createLedgerAdjustment` inputs.** 05 §7.8 (owner of ledger rules) gives optional `reverses_entry_id`, `shop_order_id` and `available_at`; 06's catalogue row lists only `shop_id`, `amount_minor`, `reason` and `reference?`. §10.8 relies on `reverses_entry_id`, so 06 (and `openapi.yaml`) should add it.
+70. **Provider admin user.** §3.5 says the provider's admin user "is used once, to create these roles". §10.7 also uses it to rotate role passwords (`ALTER ROLE`) and to end old connections, which the migrator cannot do without `CREATEROLE`. §3.5 should list these uses; whether the managed admin user may terminate other roles' backends is confirmed on the drill cluster [Assumption].
+71. **Runbook drill cadence.** risks-and-open-decisions.md R-07 asks for a quarterly drill in which the person who did not write a runbook executes it (deploy, T-OPS-001 restore). §10.14 adopts it, alongside the twice-yearly read-through [Assumption]. The restore steps themselves belong to §11.
+72. **Restore-drill cadence (closes note 2).** §11.6 runs T-OPS-001 at two depths. The monthly dump restore meets this document's specification. The quarterly full recovery (PITR into a new cluster, the application, measured RPO and RTO) keeps the "quarterly" of 01 NFR-AVAIL-002, ADR-0016 Verification and R-29, which own that value. Those three can add "plus a monthly dump-restore check (11 §11.6)". [10](10-testing-and-quality-gates.md) registers T-OPS-001 with both depths, or splits the monthly depth into a new ID.
+73. **Dump role and scope.** The §3.1 diagram left the dump role to §11. §11.2 uses `dripnepal_migrator`, as 07 §4.10 already lists "`pg_dump`" for it; `dripnepal_readonly` cannot read four of the tables. The dump excludes the `pgboss` schema, so encrypted tokens in job payloads do not outlive the 7-day retention of 07 §3.8. It also excludes the data of `sessions` and `rate_limits`. As a consequence, delayed jobs pending at dump time are lost on a dump restore, and the sweepers re-derive them. 03 §10 and ADR-0010 could note this.
+74. **Backup tooling outside the research digests** ([Assumption]): `age` for public-key encryption, `rclone` (including `crypt` and `--backup-dir`) for uploads and the media copy, the libpq environment variables, and R2 lifecycle rules, retention locks, versioning and replication, and Spaces lifecycle rules and per-bucket keys. §11.2 also adds a second small image, the backup image built from `postgres:18.4`. The image checks proposed in note 23 should cover it, and 09 §10 should list its packages. Note 10's suggestion to widen VX-15 to provider capabilities would cover the R2 and Spaces feature questions.
+75. **New cost line and cost table.** §11.4 adds a DigitalOcean Spaces bucket ($5/month as published) for the cross-provider media copy. §13.4 therefore supersedes the §1.4 subtotal: 56.15 / 82.15 instead of 51.15 / 77.15 before VAT, or 57.78 / 83.78 at the upper image figure. §1.4 should gain the Spaces line or point to §13.4.
+76. **New secrets and env files.** `backup.env` (proposed) holds the migrator credential, token C, `AGE_RECIPIENT` and `BACKUP_HEARTBEAT_URL`. `media-copy.env` (proposed) holds token D (new: R2 read-only on the production app buckets), a Spaces key, the `crypt` passwords and `MEDIA_COPY_HEARTBEAT_URL`. All names are proposed. The split keeps §3.6's rationale for token C ("a leaked backup token cannot read media") true; §3.6's token table should add token D, and §4.6's host layout both files. It also needs a read-only backup-bucket token that exists only in the vault, for restores. These are host-script variables, not part of the 09 §6.2 application schema. The [07 §5.6](07-security-threat-model-and-permissions.md#56-secret-management-and-rotation) table should add the `age` key pair, tokens C and D, the Spaces key and the `crypt` passwords. The 07 §5.8 processor register should record that DigitalOcean also holds an encrypted copy of KYC files.
+77. **Retired data keys must outlive the dumps.** 07 §5.5 retires an old data key "then remove it" once no row uses it. Dumps up to 35 days old still hold ciphertext under the old key ID, so §14.4 keeps retired keys in the vault for 35 more days. 07 §5.5 should add this.
+78. **Anonymisation replay.** §11.2 and §11.5 adopt 04 §19.2: the anonymised-ID list travels with every dump, and every restore runs `node ace data:replay-anonymizations`. The command is not yet in the [09 §1.2](09-code-structure-and-engineering-standards.md#12-target-tree) target tree. The list is IDs only but is encrypted with the dump anyway.
+79. **Catalogue and image figures.** The specification for this part gave "catalogue ≤ 10k variants"; 00 A-03 gives ≤ 5,000 products and ≤ 30,000 variants. §13.1 follows A-03, the owner. "Images ≤ 50k", the 2 MB average original and the 0.3 MB derivative set are [Assumption] values that 00 does not register; 00 §6 could add them next to A-03.
+80. **Account-loss RPO and the Cloudflare gap.** The "≤ 24 h" RPO for account loss holds only while nightly dumps succeed (§12.1). Losing the Cloudflare account (DNS, CDN, R2) has no RTO target and is not drilled. §14.3 adds a new recommendation, a domain registrar separate from the DNS provider, without which that scenario cannot be recovered at all. The product owner decides whether a target is needed.
+81. **PITR RPO is unverified.** NFR-AVAIL-002's 15-minute RPO assumes a PITR granularity that the research does not document for DigitalOcean (§11.3). The quarterly drill measures it (§11.7). If it measures above 15 minutes, 01 must relax the target or OD-09 must weigh providers with documented granularity.
+82. **Availability check endpoint.** §12.2 measures availability on `/health/live` and `/men`, following §7.1 and notes 16 and 35. 01 NFR-AVAIL-001 and SM-16 still say `/health/ready`.
+83. **Real-user performance data.** 01 NFR-PERF-001 asks for weekly real-user p75 after launch, and 08 §10.1 repeats it. No document defines how the data is collected, while 07 §5.8 forbids third-party analytics. §12.3 uses a weekly throttled Lighthouse run plus the §1.6 probe until 08 and 10 define a first-party mechanism.
+84. **`platform:create-admin --recover` behaviour.** §14.6 defines the MFA reset that 09 §9.1 left to 11. It clears the three MFA columns and rotates the stamp in one transaction. `--email` is canon §11; `--recover` is proposed in 09 §9.1; the `--reason` flag and the audit action `platform_staff.mfa_reset` are proposed here for 09 to confirm, and the action must match `audit_logs_action_check`. Because 06 has no admin operation for 07 §3.9's two-admin reset path, this command is the only reset path in R1 until 06 adds one (proposed; not yet in canon §6.5).
+85. **Vendor mailbox loss.** 07 TM-09 hands this procedure to 11 and forbids email changes by phone. R1 has no operation that changes a login email. §14.6 proposes a one-off ace command `identity:change-login-email` (proposed; not yet in 09 or canon), built only when first needed and run only after the product owner's KYC identity check. The product owner may prefer adding an audited admin operation to 06 instead, which would need canon §6.5.
+86. **Rotation calendar.** §14.4 schedules 07 §5.6's yearly rotations in one July maintenance window [Assumption]. It adds SSH keys, deploy keys, the firewall API token, the backup tokens and the `age` key, which 07 §5.6 does not list.
+87. **Host log shipping.** §14.5 needs SSH and `sudo` events in the log tool. The §9.2 shipper is described as reading container logs only, so it must also read the host authentication log. §9.2 should say so when the document is finalised.
+88. **Product owner as platform admin.** §14.1 gives the product owner a platform-admin account so the kill switch can be turned off without a developer (A-30 out-of-hours scope; 07 §6.2 already makes the product owner the decision owner). This needs the product owner to enrol TOTP. With two admins, a lost authenticator follows the two-admin path of 07 §3.9. 07 §4.2 should confirm that a non-developer may hold the role.
+89. **Monthly review defined.** §13.6 is the "monthly review" that §1.4, §1.8, §3.5, §3.6, §3.8, §8.7 and §9.2 refer to. The quarterly access review (§14.5) is new.
+90. **Connection budget unchanged.** §13.3 keeps the 03 §3.4 split (send-only pg-boss pool 1, headroom 3). It records that the backup (1 connection), a redrive (2) and a `release` run (2) share the "migrations and admin" line one at a time through the deploy lock. The next plan's connection limit is not in the research digests.
+91. **On-call response times** (§14.7: 30-minute page acknowledgement between 07:00 and 22:00, weekly Sunday handover, festival deploy freeze) and the error-budget spending rule (§12.2) are [Assumption] values for the product owner to confirm with A-29 and A-30.
+92. **Proposed checks without IDs** for 10 to number (T-OPS area): the monthly depth of T-OPS-001 if 10 splits it, the media-copy spot check, the quarterly access review, and the rotation proof in the July drill. Numbered IDs cited here are canon (T-OPS-001, T-PERF-001, T-INV-003) or come from earlier notes.
+93. **Kill switch in these sections** stays 503 `PROVIDER_UNAVAILABLE`. `CHECKOUT_DISABLED` is proposed; not yet in canon §6.6.
+94. **Duplicate account-recovery procedures resolved.** B6C and B6D, written in parallel, both drafted the MFA reset and vendor mailbox-loss procedures. The editor kept §14.6 as the only copy (it uses 09 §9.1's `--recover`) and reduced §10.13 to a pointer.
+95. **Drill access versus §2.6.** §2.6's table limits restored production data in the drill environment to the tech lead. §11.6 lets the second developer run alternate monthly drills (R-07 non-author rule). §2.6 should read "the tech lead or the second developer (§14.1)".
+96. **`backup_missing` covers two heartbeats.** The §9.7 row names only the nightly dump heartbeat. §11.4 adds `MEDIA_COPY_HEARTBEAT_URL`; the row should say "dump or media-copy heartbeat not received by 07:00", and the §9.1 monitor count gains one heartbeat.
+97. **Product owner on the page channel.** §14.7 asks the product owner to turn the kill switch off when a suspected breach is not acknowledged within 60 minutes, so the product owner must see pages. §9.8 lists only the developers as page recipients; it should add the product owner as a member of `#alerts-page` [Assumption].
+98. **Page acknowledgement target versus "best effort".** §9.7 says out-of-hours response to a page is best effort. §14.7 sets a 30-minute acknowledgement between 07:00 and 22:00, which reaches outside the §2.7 business hours. Both are [Assumption]; the product owner confirms one wording with A-30 (note 20).
+99. **Drill records folder.** §11.6 now files drill records in `Records/Runbook-drills/` as §10.1 defines it (developers and the product owner), instead of a separate restricted folder. §14.2 points to the §10.1 access rules.
+100. **Kill switch step-up.** §14.1 relies on 07 §3.10 (turning checkout off needs no step-up and no `totp_code`); 06 §13.6 still asks for `totp_code` in both directions (07 note 8). Until 06 follows 07, the product owner needs the authenticator at hand to use the kill switch.
