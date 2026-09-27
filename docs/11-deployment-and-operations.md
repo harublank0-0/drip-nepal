@@ -4,6 +4,8 @@ Status: Draft v1 (2026-09-26)
 
 Reviewed: critic pass B6 part 1 (2026-09-26)
 
+Reviewed: critic pass B6 part 2 (2026-09-26)
+
 This document says how DripNepal is hosted, deployed, watched, backed up and recovered by a team of one or two developers [Confirmed, Q1]. It owns the operational procedures that other documents hand over to "11": the environment set, the hosting recommendation behind [ADR-0016](adr/0016-hosting-single-region-portable.md), the release and migration procedure, job operations, monitoring and alerts, runbooks, backups, targets, capacity and operational access. It does not restate rules owned elsewhere. Topology and the connection budget come from [03 §5](03-system-architecture.md#5-deployment) and [03 §3.4](03-system-architecture.md#34-postgresql-layout-and-connection-budget), secrets policy from [07 §5.6](07-security-threat-model-and-permissions.md#56-secret-management-and-rotation), environment variables from [09 §6.1](09-code-structure-and-engineering-standards.md#61-variable-catalogue), and test IDs from [10](10-testing-and-quality-gates.md).
 
 Labels follow [00 §1.2](00-context-assumptions-and-questions.md#12-evidence-labels). Prices are "as published on 2026-09-25" in the research digest `infra_ops` (accessed 2026-09-25). They are inputs to [Open OD-09] and [Verify-external VX-15], not quotes, and no figure here goes beyond arithmetic on those published prices.
@@ -14,9 +16,9 @@ Labels follow [00 §1.2](00-context-assumptions-and-questions.md#12-evidence-lab
 | --- | --------------------------------------------------------- | ----------------------------- |
 | 1   | Recommended cost-conscious deployment                     | Written (this part)           |
 | 2   | Environments and data policy                              | Written (this part)           |
-| 3   | Topology and networking                                   | Planned                       |
-| 4   | Docker images and local setup                             | Planned                       |
-| 5   | CI/CD and release promotion                               | Planned                       |
+| 3   | Topology and networking                                   | Written (part 2)              |
+| 4   | Docker images and local setup                             | Written (part 2)              |
+| 5   | CI/CD and release promotion                               | Written (part 2)              |
 | 6   | Safe schema migrations                                    | Planned                       |
 | 7   | Health checks, graceful shutdown and zero-downtime deploy | Planned                       |
 | 8   | Jobs and queue operations                                 | Planned                       |
@@ -26,7 +28,7 @@ Labels follow [00 §1.2](00-context-assumptions-and-questions.md#12-evidence-lab
 | 12  | Availability, recovery and performance targets            | Planned                       |
 | 13  | Capacity assumptions and cost drivers                     | Planned                       |
 | 14  | Operational access and security operations                | Planned                       |
-| —   | Consistency notes for editor                              | Written (covers §1–§2 so far) |
+| —   | Consistency notes for editor                              | Written (covers §1–§5 so far) |
 
 A reader choosing a host reads §1. A developer setting up a machine, CI or staging reads §2, then §4 and §5. Whoever is on call reads §9 and §10.
 
@@ -284,9 +286,608 @@ Rules behind the table:
 
 ---
 
+## 3. Topology and networking
+
+This section fixes the network choices that [03 §5.1](03-system-architecture.md#51-topology-adr-0016-provisional) and [ADR-0016](adr/0016-hosting-single-region-portable.md) Decision 2 left to this document: the reverse proxy, the origin firewall, the trusted-proxy setting (RF-31), database reachability and object-storage credentials. Everything here is provisional in the same way as §1 (OD-09, VX-09); a move to another provider keeps the shape and changes only provider names.
+
+### 3.1 Topology
+
+The diagram adds ports, trust decisions and credentials to the 03 §5.1 diagram. Staging has the same shape on its own Droplet, with a PostgreSQL container instead of the managed cluster (§2.4), and is left out for readability.
+
+```mermaid
+flowchart TB
+  users["Customers, sellers, staff (browsers)"]
+  ops["Tech lead laptop (SSH key)"]
+  gha["GitHub Actions deploy job"]
+
+  subgraph cf["Cloudflare"]
+    edge["Proxy, WAF, CDN for the app domain and staging"]
+    media["media domain, custom domain of the public bucket"]
+  end
+
+  subgraph do["DigitalOcean BLR1"]
+    fw["Cloud firewall: 443 from Cloudflare ranges, 22 from the ops allow-list"]
+    subgraph host["Production Droplet, Docker Compose, network dripnepal_net"]
+      caddy["caddy :443, origin certificate"]
+      web["web :3333, not published"]
+      worker["worker, no port"]
+      release["release, one-off"]
+      dump["nightly dump, host cron, section 11"]
+    end
+    subgraph vpc["Private VPC"]
+      pg["Managed PostgreSQL 18, trusted source: this Droplet only"]
+    end
+  end
+
+  subgraph r2["Cloudflare R2"]
+    priv["production private bucket"]
+    pub["production public bucket"]
+    bak["backup bucket"]
+  end
+
+  ext["SMTP provider, Sentry, gateway APIs from R1.1"]
+
+  users -->|"HTTPS"| edge
+  users -->|"HTTPS, cached images"| media
+  users -->|"presigned PUT and GET"| priv
+  edge -->|"HTTPS, Full strict"| fw
+  ops -->|"SSH key only"| fw
+  gha -->|"SSH forced command"| fw
+  fw --> caddy
+  caddy -->|"HTTP on dripnepal_net"| web
+  web -->|"TLS, role dripnepal_app"| pg
+  worker -->|"TLS, role dripnepal_app"| pg
+  release -->|"TLS, role dripnepal_migrator"| pg
+  web -->|"token A: private bucket"| priv
+  worker -->|"token B: private and public"| priv
+  worker -->|"token B"| pub
+  media --> pub
+  worker -->|"HTTPS"| ext
+  web -->|"HTTPS"| ext
+  dump -.->|"reads, role chosen in section 11"| pg
+  dump -.->|"token C"| bak
+```
+
+Reading the diagram: only Caddy publishes a port on the Droplet. `web` listens on `0.0.0.0:3333` inside the Compose network (`HOST=0.0.0.0`, because `HOST=localhost` would bind to loopback inside the container, audit A5-07), and nothing else can reach it. Browsers talk to R2 directly only through presigned URLs ([03 §3.5](03-system-architecture.md#35-object-storage-layout)); the app never proxies uploads.
+
+### 3.2 Edge: Cloudflare configuration
+
+Cloudflare plan features are [Verify-external VX-15]; the Free plan is the starting assumption (§1.2). Each row says what breaks if the setting is wrong.
+
+| Setting               | Value                                                                                                                                                                                                                                   | Why, and what goes wrong otherwise                                                                                                                                                                                                                                                       |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| DNS                   | `<domain>` and `staging.<domain>` proxied (orange cloud) to the Droplet IPs; `media.<domain>` as the R2 custom domain of the public bucket; no record exposes the origin IP unproxied                                                   | An unproxied record reveals the origin; the firewall (§3.3) still blocks it, but it invites direct probing                                                                                                                                                                               |
+| SSL/TLS mode          | Full (strict), with a Cloudflare origin certificate installed in Caddy [Assumption, ADR-0016 Decision 2]                                                                                                                                | "Flexible" would send plaintext from Cloudflare to the origin; "Full" without strict accepts any certificate                                                                                                                                                                             |
+| HTTP to HTTPS         | "Always Use HTTPS" at the edge; Caddy additionally answers only on 443                                                                                                                                                                  | Port 80 is closed at the firewall, so a plain-HTTP origin request cannot happen                                                                                                                                                                                                          |
+| HSTS                  | Sent by the app only (Shield, today `maxAge: '180 days'` [Verified-repo `config/shield.ts:71-80`]), not also configured at Cloudflare. `includeSubDomains: true` from the first production deploy; `preload` stays off                  | One source of truth for the header. `includeSubDomains` is safe because every subdomain (`staging`, `media`) is HTTPS-only. Raising `maxAge` to one year after launch and any preload decision follow [07 §7.3](07-security-threat-model-and-permissions.md#73-csp-and-security-headers) |
+| Minimum TLS version   | TLS 1.2 [Assumption]                                                                                                                                                                                                                    | Old Android devices common in Nepal may lack TLS 1.3; 1.2 is the floor that keeps them working                                                                                                                                                                                           |
+| Cache rules           | Cache only `/assets/*` (hashed Vite files) and `media.<domain>`; explicit bypass for everything else on the app domain, including `/health/*` and every HTML and `/api/v1` response ([03 §12.5](03-system-architecture.md#125-caching)) | A cached HTML page could hand one visitor's cookies or Inertia props to another (03 §12.5). The explicit bypass guards against a later "cache everything" rule                                                                                                                           |
+| WAF and rate rules    | Managed rules on; rate rules for `/login`, `/signup`, `/api/v1/auth/*` as an outer layer to the app limiter ([03 §12.4](03-system-architecture.md#124-rate-limiting)); which rules the plan includes is [Verify-external VX-15]         | The app limiter is the control; the edge rule only absorbs floods before they cost database upserts                                                                                                                                                                                      |
+| Staging               | Caddy basic authentication on every path except `/health/live` and, from R1.1, the gateway's server-to-server callback path; `X-Robots-Tag: noindex` on every response (§2.4)                                                           | Staging holds only synthetic data (§2.6), but it must not be indexed or used by the public                                                                                                                                                                                               |
+| Origin authentication | Authenticated Origin Pulls (Cloudflare presents a client certificate that Caddy verifies) if the plan provides it [Verify-external VX-15]; until then, see the residual risk in §3.3                                                    | The IP allow-list admits traffic from any Cloudflare customer's zone, not only DripNepal's                                                                                                                                                                                               |
+
+### 3.3 Origin firewall and host
+
+The firewall is DigitalOcean's cloud firewall attached to the Droplet [Assumption; product not covered by the research digests, confirmed on the drill account, §1.2], not `ufw` on the host. Reason: ports published by Docker are inserted into the host's `iptables` ahead of `ufw` rules [Assumption; widely reported Docker behaviour, to be checked in the from-scratch rebuild, §1.9], so a host firewall can silently fail to protect a published port. A firewall outside the VM does not have that problem.
+
+| Direction | Port and protocol       | Source or destination                                                                                                                                                                                 | Purpose                                                                |
+| --------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Inbound   | TCP 443                 | Cloudflare's published IPv4 and IPv6 ranges only (list published by Cloudflare at <https://www.cloudflare.com/ips/> [Assumption: URL not in the research digests; read when the firewall is created]) | All web traffic                                                        |
+| Inbound   | TCP 22                  | The ops allow-list: the tech lead's (and second developer's) current public IPs; GitHub Actions deploys use the same port (§5.4)                                                                      | Administration and deploys. Keys only, no passwords, no root login     |
+| Inbound   | everything else         | denied                                                                                                                                                                                                | Port 80, 3333, 5432 and Docker's API are never reachable               |
+| Outbound  | TCP 443                 | any                                                                                                                                                                                                   | R2, Sentry, image registry, OS updates, email API, gateway APIs (R1.1) |
+| Outbound  | TCP 587 or 465          | the email provider's SMTP host, if OD-08 picks SMTP                                                                                                                                                   | Email                                                                  |
+| Outbound  | UDP/TCP 53, UDP 123     | any                                                                                                                                                                                                   | DNS and NTP                                                            |
+| Outbound  | managed PostgreSQL port | the VPC only                                                                                                                                                                                          | Database                                                               |
+
+Two limits of this design:
+
+- **GitHub Actions has no fixed egress IP** on hosted runners [Assumption], so the deploy job cannot be allow-listed by address. Options, in order of preference: (a) the deploy job opens port 22 for its own runner IP through the provider API, deploys, then removes the rule; (b) port 22 open to all with key-only auth and a forced command (§5.4); (c) a pull-based deploy where the Droplet polls for new releases. This document chooses **(a)** and records (b) as the fallback if the API token needed for (a) is judged riskier than an open key-only port. The provider API token for (a) is scoped to firewall changes if the provider allows scoping [Assumption; checked when the account is opened].
+- **The Cloudflare IP allow-list authenticates Cloudflare, not DripNepal's zone.** Anyone can create a Cloudflare zone pointing at the Droplet's IP. Caddy answers only the configured hostnames and presents an origin certificate that only Cloudflare trusts, which blocks casual use; Authenticated Origin Pulls (§3.2) closes the gap if the plan has it. Residual risk until then: the origin can be reached through another zone with DripNepal's `Host` header, bypassing DripNepal's WAF rules but not the app's own limiter, authentication and authorization.
+
+Host rules (the from-scratch rebuild in §1.9 follows them): Ubuntu LTS image [Assumption]; unattended security upgrades on; one non-root `ops` user per person with an SSH key, in the `docker` group; `PermitRootLogin no` and `PasswordAuthentication no`; the Docker daemon listens only on its Unix socket; the env files of §4.6 are root-owned, mode `0600`. Membership of the `docker` group is equivalent to root, which is why only the one or two people with production access have accounts (§14, written in a later part).
+
+### 3.4 Trusted proxy configuration (RF-31)
+
+Requests pass through two proxies before `web`: Cloudflare, then Caddy. `request.ip()` must return the browser's address, because the login limiter, `audit_logs.ip_hash` and abuse rules key on it ([03 §12.2](03-system-architecture.md#122-authentication-and-sessions-adr-0005), [07 TB-3](07-security-threat-model-and-permissions.md#13-trust-boundaries)). Today `config/app.ts` sets no `trustProxy`, so the default trusts only loopback and every request would appear to come from Caddy's container address (RF-31, audit A5-12).
+
+What the installed code does [Verified-repo `@adonisjs/http-server` 9.1.0 `build/define_config-Cuq6_o-f.js:5559-5568`, `build/src/define_config.d.ts`; `proxy-addr` 2.0.7 `index.js:84-120`]:
+
+- `trustProxy` accepts a boolean, a string, or a function `(address: string, distance: number) => boolean`. A string is passed to `proxyaddr.compile()` as a **single** entry: a comma-separated list is not split, so `'10.0.0.0/8, 173.245.48.0/20'` does not work. Several ranges need the function form, which `proxyaddr.compile([...])` returns.
+- `proxy-addr` walks the address chain from the socket address leftwards through `X-Forwarded-For` and returns the first address that is not trusted. Entries a client forges at the left end of the header are never reached, because the real client address that Cloudflare appends sits to their right.
+- The same setting decides whether `X-Forwarded-Proto` and `X-Forwarded-Host` are honoured (`request.protocol()`, `request.secure()`, `request.host()`): they are read only when the socket address is trusted [Verified-repo same file, lines 1985 and 2020]. With the loopback default, the app behind Caddy would see `http` and Caddy's upstream host, which would break any absolute URL built from the request. Absolute URLs in emails and canonical links should therefore come from `APP_URL` (the public origin in [09 §6.1](09-code-structure-and-engineering-standards.md#61-variable-catalogue)) [Assumption; 09 owns the rule], with the forwarded headers as a second line.
+
+Decision:
+
+1. Caddy and the app share a Compose network with a fixed subnet, `172.30.0.0/24` (§4.5). The trusted set is that subnet plus Cloudflare's published ranges.
+2. The ranges come from a new variable `TRUSTED_PROXY_CIDRS` (proposed; comma-separated CIDRs, required in staging and production, validated as CIDRs by `start/env.ts`; 09 §6.1 left "trusted-proxy ranges" to this document). Updating the list is a config change and a restart, not a code change.
+3. `proxy-addr` becomes a direct dependency at the version `@adonisjs/http-server` already resolves (2.0.7), so the app compiles exactly what the framework evaluates.
+
+```ts
+// config/app.ts — design sketch; trustProxy function form verified against http-server 9.1.0 types,
+// proxy-addr 2.0.7 compile() verified from source; the default-import and @types/proxy-addr are [Assumption]
+import proxyAddr from 'proxy-addr'
+
+const trusted = env
+  .get('TRUSTED_PROXY_CIDRS', '')
+  .split(',')
+  .map((cidr) => cidr.trim())
+  .filter(Boolean)
+
+export const http = defineConfig({
+  // development and test: no proxy, keep the loopback default
+  trustProxy: trusted.length > 0 ? proxyAddr.compile(['loopback', ...trusted]) : 'loopback',
+  // ...existing options
+})
+```
+
+Caddy must pass the incoming `X-Forwarded-For` through and append Cloudflare's address. Caddy's handling of forwarded headers is not covered by the research digests, so the Caddyfile in §4.5 is [Assumption] and the behaviour is proven by the test below, not by reading Caddy documentation.
+
+Verification (proposed; T-OPS area, ID from 10): from a laptop, request `https://staging.<domain>/health/live` with a forged header `X-Forwarded-For: 203.0.113.9`; the access log line (09 §7) must show the laptop's public address, not `203.0.113.9`, not a Cloudflare address and not `172.30.0.x`. The same check runs once in production after the first deploy.
+
+### 3.5 Database access
+
+| Rule                          | Mechanism                                                                                                                                                                                                                                                                                                                                                                                                           | Verified by                                                                                                                                                                                  |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Private network only          | The app connects to the cluster's private (VPC) hostname. The cluster's trusted sources list contains only the production Droplet [Assumption on the feature name; confirmed on the drill cluster, §1.2]. The staging Droplet is **not** a trusted source                                                                                                                                                           | From the staging Droplet, `psql` to the production host times out (proposed check, T-OPS area)                                                                                               |
+| TLS with certificate checking | `DB_SSL=true` and `DB_SSL_CA` set to the provider's CA certificate, so `config/database.ts` uses `ssl: { rejectUnauthorized: true, ca }` ([09 §6.3](09-code-structure-and-engineering-standards.md#63-where-configuration-is-read)). The pg-boss connection uses the same TLS options ([07 §5.5](07-security-threat-model-and-permissions.md#55-encryption))                                                        | Boot refuses production without `DB_SSL=true` (09 §6.2); a drill-cluster connection with a wrong CA fails (confirms the check is real)                                                       |
+| Least-privilege roles         | `web` and `worker` use `dripnepal_app`; only the `release` container gets `dripnepal_migrator` credentials; incident reads use `dripnepal_readonly` ([07 §4.10](07-security-threat-model-and-permissions.md#410-database-roles-and-grants)). The provider's admin user is used once, to create these roles                                                                                                          | T-ARCH-012 and T-SEC-029 (proposed in 04 and 07); the drill confirms the managed plan lets the admin user create and grant roles (§1.2)                                                      |
+| No public admin access        | No database console or admin tool is exposed on the internet; the provider's web console is used only for cluster settings, behind 2FA (§14)                                                                                                                                                                                                                                                                        | Firewall review in the monthly check (§13)                                                                                                                                                   |
+| Operator access by SSH tunnel | The production Droplet is the bastion. `ssh -N -L 127.0.0.1:15432:<db-private-host>:<db-port> ops@<droplet>` then `psql "host=127.0.0.1 port=15432 user=dripnepal_readonly dbname=dripnepal_production sslmode=verify-full sslrootcert=<ca file>"`. With a tunnel, `verify-full` needs the certificate to name the private host; if it does not, use `sslmode=verify-ca` [Assumption; checked on the drill cluster] | One incident `psql` session uses one of the two admin connections of the budget (§1.2), so the deploy script refuses to run while a `dripnepal_readonly` or `pg_dump` session is open (§5.4) |
+| Staging database              | PostgreSQL container on the staging Droplet, on the Compose network only, no published port; the same three roles exist so grants are rehearsed                                                                                                                                                                                                                                                                     | `ss -ltn` on the staging host shows no 5432 listener on a public interface                                                                                                                   |
+
+A laptop never holds production credentials for `dripnepal_app` or `dripnepal_migrator` (§2.2). The `dripnepal_readonly` password lives in the password manager and is used only through the tunnel.
+
+### 3.6 Object storage access
+
+Bucket settings (R2 features are [Assumption] where the research digests do not cover them; each is checked when the bucket is created and again in the monthly review):
+
+| Bucket                         | Public access                                                                                                                                                                                                                                  | CORS                                                                                                         | Other settings                                                |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------- |
+| `dripnepal-<env>-private`      | Off; no custom domain; `r2.dev` off (07 TM-16 asks this document to verify it)                                                                                                                                                                 | Allow origin `APP_URL`, methods `PUT` and `GET`, header `Content-Type`; needed for presigned browser uploads | Location hint `apac` (best effort, §1.2)                      |
+| `dripnepal-<env>-public`       | Only through the custom domain `media.<domain>`; `r2.dev` off in staging and production (`r2.dev` is rate-limited and for development only [Verified-doc <https://developers.cloudflare.com/r2/buckets/public-buckets/>, accessed 2026-09-25]) | None (images are loaded by `<img>`, which needs no CORS)                                                     | Objects are content-addressed and never overwritten (03 §3.5) |
+| `dripnepal-production-backups` | Off                                                                                                                                                                                                                                            | None                                                                                                         | Retention, encryption and versioning owned by §11             |
+
+Credentials are one API token per process and purpose, each scoped to named buckets (R2 per-bucket token scoping [Assumption; confirmed when tokens are created]). The variable names stay `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` ([09 §6.1](09-code-structure-and-engineering-standards.md#61-variable-catalogue)); each container gets its own values from its own env file (§4.6).
+
+| Token                  | Held by                      | Scope                                      | Why this scope                                                                                                          |
+| ---------------------- | ---------------------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| A, `<env>-web`         | `web`                        | Read and write on `-private` only          | Presigning uploads and 5-minute KYC views needs a signer allowed to do the operation; `web` never writes derived images |
+| B, `<env>-worker`      | `worker`                     | Read and write on `-private` and `-public` | Reads originals, writes derived WebP, deletes abandoned uploads (`media.cleanup_abandoned`)                             |
+| C, `production-backup` | The backup job only (§11)    | Read and write on the backup bucket only   | A leaked app token cannot delete backups, and a leaked backup token cannot read media                                   |
+| none                   | CI, `release`, staging hosts | —                                          | CI uses MinIO; the release step needs no objects; staging tokens are separate and scoped to staging buckets             |
+
+If `web` is compromised, the attacker can read KYC originals with token A. That is the accepted residual risk of presigning from `web`; the alternative (a separate signing service) is out of proportion for R1. The detective control is the `shop.kyc_view` audit rows and alert in [07 TM-16](07-security-threat-model-and-permissions.md#tm-16-unauthorised-access-to-private-media-kyc).
+
+### 3.7 Outbound dependencies and the static IP
+
+The Droplet's static public IPv4 is the source address of every outbound call, which matters if a gateway or SMS provider requires IP allow-listing ([Verify-external VX-14]; ADR-0016 Risks). Rebuilding the Droplet from scratch (§1.9) changes that IP unless a reserved IP is attached [Assumption; DigitalOcean feature not in the research digests]. If VX-14 finds any allow-listing requirement, a reserved IP is attached before the first gateway onboarding (M8) and the rebuild procedure moves it.
+
+### 3.8 How the network design is verified
+
+All checks below are proposed for the T-OPS area and get their IDs from [10](10-testing-and-quality-gates.md). They run once when production is created, after every change to the firewall or Cloudflare, and in the monthly review (§13).
+
+| Check                         | Command sketch                                                                                              | Pass                                                                                                                               |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Origin not directly reachable | `curl -m 10 -k https://<droplet-ip>/health/live` from a network outside the ops allow-list                  | Connection times out (ADR-0016 edge check)                                                                                         |
+| Port scan                     | `nmap -Pn -p 1-65535 <droplet-ip>` from outside the allow-list                                              | No open port                                                                                                                       |
+| HTTPS only and HSTS           | `curl -sI http://<domain>/` and `curl -sI https://<domain>/`                                                | Redirect to HTTPS; `Strict-Transport-Security` present with `includeSubDomains` (T-SEC-035, proposed in 07, snapshots the headers) |
+| Client IP                     | Forged `X-Forwarded-For` test of §3.4                                                                       | Logged IP is the real client's                                                                                                     |
+| Private bucket closed         | Unauthenticated `curl` of a known private object key via the account endpoint and via `r2.dev`              | Denied (T-SEC-019, proposed in 07)                                                                                                 |
+| Public bucket only via domain | Request a derived image via `r2.dev`                                                                        | Not served                                                                                                                         |
+| Database not public           | `psql` to the cluster's public hostname from a laptop, and to the private hostname from the staging Droplet | Both refused or time out                                                                                                           |
+| Health endpoints not cached   | Two requests to `/health/live`; inspect `cf-cache-status`                                                   | Never `HIT`                                                                                                                        |
+
+---
+
+## 4. Docker images and local setup
+
+### 4.1 One image, three commands
+
+One OCI image is built per commit (canon §6.1) and runs everywhere outside development. Only the command and the environment differ.
+
+| Process   | Command                                                                                                                | Environment specifics                                                                                                                                                                                                                                  |
+| --------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `web`     | `node --import ./bin/instrument.js bin/server.js`                                                                      | `DB_POOL_MAX=8`, token A, listens on 3333                                                                                                                                                                                                              |
+| `worker`  | `node --import ./bin/instrument.js ace jobs:work` (name fixed in [09](09-code-structure-and-engineering-standards.md)) | `DB_POOL_MAX=4` plus the pg-boss pool of 4 (03 §3.4), token B, `VIPS_BLOCK_UNTRUSTED=1` (read by libvips itself, not by `start/env.ts`; research digest `infra_ops`, <https://www.libvips.org/API/8.17/developer-checklist.html>, accessed 2026-09-25) |
+| `release` | `node ace migration:run --force`, then the reference seeders and release checks (§5.4)                                 | `dripnepal_migrator` credentials, `DB_POOL_MAX=2`; exits when done                                                                                                                                                                                     |
+
+`--import ./bin/instrument.js` loads the error-tracker wiring before the application, as [09 §5.6](09-code-structure-and-engineering-standards.md#56-reporting-to-the-error-tracker) requires (`bin/instrument.ts` is pseudocode there and compiles to `bin/instrument.js` in `build/`). The `release` commands leave it out: a failed release step is seen in the deploy job's output, not in the error tracker.
+
+`migration:run` does not run `schema:generate` in production, because Lucid 22.4.2 skips it when `app.inProduction` is true [Verified-doc `gt/adonis_stack.md`, Lucid `build/commands/migration/run.js`]; the committed `database/schema.ts` is checked in CI instead (T-ARCH-010, proposed in 04).
+
+### 4.2 Dockerfile
+
+Design sketch for M0. Facts it relies on are marked; the file is proven by the CI image build and the T-ARCH-002 smoke test (§5.2), not by this document.
+
+```dockerfile
+# syntax=docker/dockerfile:1
+# Dockerfile — design sketch (M0). Pin the base image by digest when the file is created.
+ARG NODE_IMAGE=node:24-slim
+
+FROM ${NODE_IMAGE} AS base
+ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH TZ=UTC
+# pnpm 11.9.0 comes from "packageManager" through Corepack [Assumption: Corepack ships with the Node 24 image;
+# fallback: npm install -g pnpm@11.9.0]
+RUN corepack enable
+WORKDIR /src
+
+FROM base AS build
+# husky's prepare script would fail without .git (audit A5-07); HUSKY=0 makes it exit 0 [Verified-repo husky 9]
+ENV HUSKY=0
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN pnpm install --frozen-lockfile
+COPY . .
+# node ace build compiles TypeScript, runs the Vite build hook (client and, when enabled, SSR)
+# and copies package.json, pnpm-lock.yaml and metaFiles into build/ [Verified-repo assembler 8.4.0, @adonisjs/vite 5.1.1]
+RUN node ace build
+# RF-08 guard: fail the image build if the SSR bundle is missing
+RUN test -f build/ssr/ssr.js
+# the build copies neither pnpm-workspace.yaml nor the lockfile settings it holds [Verified-repo assembler 8.4.0]
+RUN cp pnpm-workspace.yaml build/
+
+FROM base AS runtime
+ENV NODE_ENV=production HOST=0.0.0.0 PORT=3333
+ARG APP_RELEASE
+ENV APP_RELEASE=${APP_RELEASE}
+WORKDIR /app
+COPY --from=build --chown=node:node /src/build ./
+# production dependencies only; --ignore-scripts skips "prepare" (husky) and "preinstall" (npx only-allow)
+# ([09 §10.2]); sharp's prebuilt @img binaries must load without their install script: checked by the smoke test
+RUN pnpm install --prod --frozen-lockfile --ignore-scripts && pnpm store prune
+USER node
+EXPOSE 3333
+CMD ["node", "--import", "./bin/instrument.js", "bin/server.js"]
+```
+
+Decisions in the file and their tradeoffs:
+
+| Choice                                                                    | Why                                                                                                                                                                                                                                                      | Cost or risk                                                                                                                                               |
+| ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `node:24-slim` (Debian, glibc), pinned by digest                          | Node 24 is the repo's engine (`package.json` `engines`) [Verified-repo]; sharp's prebuilt binaries cover glibc and musl [Verified-doc `infra_ops`, <https://sharp.pixelplumbing.com/install>, accessed 2026-09-25]; glibc avoids musl-specific surprises | A Debian base is larger than Alpine. Digest pinning means base-image security updates arrive only when the weekly dependency PR bumps the digest (07 §7.1) |
+| Multi-stage, runtime has no dev dependencies, no source, no `.git`        | Smaller image and attack surface; `vite`, TypeScript and test tools never reach production                                                                                                                                                               | Two installs per build (about a minute of CI time [Assumption])                                                                                            |
+| `USER node` (non-root, the user the official image provides [Assumption]) | A process escape does not start as root inside the container                                                                                                                                                                                             | Files written at runtime must go to paths `node` owns; the app writes nothing to disk in R1 (media go to R2)                                               |
+| No secrets, no `.env*` in the image                                       | Secrets come only from the host (09 §9.2 "Images" row, [03 §12.6](03-system-architecture.md#126-configuration-and-secrets))                                                                                                                              | Checked by the image content check below                                                                                                                   |
+| `APP_RELEASE` baked in as the commit SHA                                  | Every log line and Sentry event names the release (09 §6.1, NFR-OBS-002)                                                                                                                                                                                 | None; the image is already per commit                                                                                                                      |
+| No `HEALTHCHECK` in the Dockerfile                                        | `web` and `worker` need different checks, so Compose defines them per service (§4.5)                                                                                                                                                                     | The image alone does not report health outside Compose                                                                                                     |
+
+`.dockerignore` excludes `.git`, `node_modules`, `build`, `tmp`, `coverage`, `.env*`, `docs`, `screenshots`, `.agents` and `*.tsbuildinfo`. The `.env*` line is what keeps a developer's `.env` out of the build context.
+
+Image checks run in CI on every image (proposed; T-OPS area, ID from 10): the container runs as a non-root user (`docker run --rm <image> id -u` is not `0`); no file matching `.env*` exists under `/app`; `build/ssr/ssr.js` exists; the image boots against the CI database and serves `/` with server-rendered markup (T-ARCH-002, proposed in 03).
+
+### 4.3 Development Compose: RF-43 fix list
+
+`docker-compose.yml` is for development only. Staging and production use `deploy/compose.yml` (§4.5), which is why 09 §9.2 says the development file is never used outside development. Current file [Verified-repo `docker-compose.yml`] against the target:
+
+| Item              | Today                                                                   | Target                                                                                              | Finding           |
+| ----------------- | ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ----------------- |
+| Postgres password | `POSTGRES_PASSWORD: secret` in the file                                 | `${DB_PASSWORD:?set DB_PASSWORD in .env}` read from the developer's `.env`; still development-only  | RF-43 (A5-19)     |
+| Port bindings     | `'5432:5432'`, `'6379:6379'` on all interfaces                          | `'127.0.0.1:5432:5432'`, `'127.0.0.1:1025:1025'`, `'127.0.0.1:8025:8025'`, MinIO on `127.0.0.1` too | RF-43 (A5-19)     |
+| Mailpit image     | `axllent/mailpit:latest`                                                | A pinned version tag chosen in M0, updated by the dependency bot                                    | RF-43 (A5-19)     |
+| Databases         | One database `dripnepal`                                                | An init script under `docker/postgres/init/` creates `dripnepal_dev` and `dripnepal_test` (§2.1)    | RF-32, RF-43      |
+| Healthchecks      | None                                                                    | `pg_isready -U dripnepal` for Postgres; `depends_on: condition: service_healthy` where needed       | RF-43 (A5-19)     |
+| Redis             | Always started, no auth, all interfaces                                 | Compose profile `redis`, off by default; nothing in R1 uses it (§2.2)                               | RF-43, canon §6.1 |
+| Object storage    | None                                                                    | MinIO, pinned, profile default from M3 (§2.2)                                                       | 03 §3.5           |
+| Dev CORS          | `config/cors.ts:21` reflects any origin with credentials in development | Explicit allowlist of `APP_URL` in every environment; code change in M0 (RF-43 includes A5-20)      | RF-43 (A5-20)     |
+
+Target file (sketch; image versions other than `postgres:18.4` and `redis:8.6` are chosen and pinned in M0):
+
+```yaml
+# docker-compose.yml — development only (design sketch)
+services:
+  postgres:
+    image: docker.io/postgres:18.4
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: dripnepal
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+      POSTGRES_DB: dripnepal_dev
+    ports: ['127.0.0.1:5432:5432']
+    volumes:
+      - postgres_data:/var/lib/postgresql
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro # creates dripnepal_test
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U dripnepal -d dripnepal_dev']
+      interval: 5s
+      retries: 10
+
+  mailpit:
+    image: docker.io/axllent/mailpit:<pinned-version>
+    ports: ['127.0.0.1:1025:1025', '127.0.0.1:8025:8025']
+
+  minio:
+    image: <pinned minio image>
+    command: server /data --console-address ':9001'
+    ports: ['127.0.0.1:9000:9000', '127.0.0.1:9001:9001']
+    volumes: [minio_data:/data]
+
+  redis:
+    image: docker.io/redis:8.6
+    profiles: [redis]
+    ports: ['127.0.0.1:6379:6379']
+
+volumes:
+  postgres_data:
+  minio_data:
+```
+
+The init script runs only when the volume is empty [Assumption; standard behaviour of the official `postgres` image's `/docker-entrypoint-initdb.d`], so an existing developer volume must be recreated once (`docker compose down -v`), which deletes local data. The M0 PR says so in its description.
+
+### 4.4 Local setup in five commands
+
+The README carries these steps ([09 §9.4](09-code-structure-and-engineering-standards.md#94-current-code--target-initialization) moves the production procedure out of it):
+
+```sh
+cp .env.example .env            # then set DB_PASSWORD and run: node ace generate:key
+docker compose up -d            # postgres, mailpit, minio
+pnpm install --frozen-lockfile
+node ace migration:run && node ace db:seed   # reference + dev seeders; refused outside *_dev/_test (09 §8.8)
+node ace serve --hmr            # and, when working on jobs: node ace jobs:work
+```
+
+### 4.5 Staging and production Compose
+
+One file, `deploy/compose.yml`, is committed to the repository and copied to `/opt/dripnepal/` on each host by the deploy step. Staging adds `deploy/compose.staging.yml` (the PostgreSQL container and basic authentication). Sketch:
+
+```yaml
+# deploy/compose.yml — design sketch; values in <> are per host
+name: dripnepal
+x-app: &app
+  image: ${IMAGE_REF:?} # ghcr.io/<owner>/dripnepal@sha256:<digest>, written by the deploy step
+  init: true # PID 1 forwards SIGTERM and reaps zombies
+  restart: unless-stopped
+  security_opt: ['no-new-privileges:true']
+  cap_drop: [ALL]
+  networks: [dripnepal_net]
+  logging:
+    driver: json-file
+    options: { max-size: '10m', max-file: '5' } # a full disk must not stop the database clients
+
+services:
+  caddy:
+    image: <pinned caddy image>
+    restart: unless-stopped
+    ports: ['443:443']
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - /etc/dripnepal/tls:/etc/caddy/tls:ro # Cloudflare origin certificate and key
+    networks: [dripnepal_net]
+    depends_on:
+      web: { condition: service_healthy }
+
+  web:
+    <<: *app
+    command: ['node', '--import', './bin/instrument.js', 'bin/server.js']
+    env_file: [/etc/dripnepal/web.env]
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3333/health/ready').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  worker:
+    <<: *app
+    command: ['node', '--import', './bin/instrument.js', 'ace', 'jobs:work']
+    env_file: [/etc/dripnepal/worker.env]
+
+  release:
+    <<: *app
+    profiles: [release] # never started by "up"; only by "compose run"
+    restart: 'no'
+    command: ['node', 'ace', 'migration:run', '--force']
+    env_file: [/etc/dripnepal/release.env]
+
+networks:
+  dripnepal_net:
+    ipam:
+      config: [{ subnet: 172.30.0.0/24 }] # the trusted proxy subnet of section 3.4
+```
+
+```text
+# deploy/Caddyfile — [Assumption]: Caddy directives are not covered by the research digests;
+# `caddy validate` runs in CI and the section 3.4 client-IP test proves the forwarding behaviour
+{
+  servers {
+    trusted_proxies static <Cloudflare ranges, same list as TRUSTED_PROXY_CIDRS>
+  }
+}
+<domain> {
+  tls /etc/caddy/tls/origin.pem /etc/caddy/tls/origin-key.pem
+  @readyz path /health/ready
+  respond @readyz 404
+  reverse_proxy web:3333
+}
+```
+
+Notes on the file:
+
+- **Readiness is internal.** Caddy answers `/health/ready` with 404 from outside, so the database state is not public; Compose and the deploy step use it on the private network. The external uptime check uses `/health/live` (§9). The checks themselves are defined in §7.
+- **Connection budget.** `web` 8 and `worker` 4 + 4 are the 03 §3.4 values; the web send-only pg-boss instance takes 1 from the headroom; `release` sets `DB_POOL_MAX=2`, the "migrations and admin" line. Adding services here without revisiting 03 §3.4 is not allowed.
+- **Stop timeouts** (`stop_grace_period`) and how `web` is replaced during a deploy are §7's decisions; Compose defaults are not relied on.
+- **Staging** adds a `postgres` service (`postgres:18.4`, no `ports`, volume on the Droplet) started with `-c max_connections=25`, which leaves 22 connections for non-superuser roles under the default `superuser_reserved_connections` of 3 [Assumption on the PostgreSQL 18 default; confirmed with `SHOW` on first start], matching the managed plan's 22 so pool exhaustion shows up in staging (§2.4). It also adds basic authentication and `X-Robots-Tag` in its Caddyfile.
+- **Hardening not adopted yet**: `read_only: true` root filesystems and memory limits. Both need measured behaviour (SSR memory, temporary files) and are revisited with the capacity figures in §13 [Assumption].
+
+### 4.6 Host layout
+
+| Path                                                  | Owner and mode | Contents                                                                                      |
+| ----------------------------------------------------- | -------------- | --------------------------------------------------------------------------------------------- |
+| `/opt/dripnepal/compose.yml`, `Caddyfile`             | root, 0644     | Copied from `deploy/` in the repository at the deployed commit                                |
+| `/opt/dripnepal/.env`                                 | root, 0600     | Only `IMAGE_REF` and `PREVIOUS_IMAGE_REF` (Compose interpolation), written by the deploy step |
+| `/opt/dripnepal/releases.log`                         | root, 0644     | One line per deploy: UTC time, environment, commit SHA, image digest, actor, result           |
+| `/etc/dripnepal/web.env`, `worker.env`, `release.env` | root, 0600     | Per-process variables and secrets (§5.7); written from the password manager, never from CI    |
+| `/etc/dripnepal/tls/`                                 | root, 0600     | Cloudflare origin certificate and key                                                         |
+
+The env files are the "host secret store" of [03 §12.6](03-system-architecture.md#126-configuration-and-secrets) and [07 §5.6](07-security-threat-model-and-permissions.md#56-secret-management-and-rotation) for this topology. They are plain files readable by root: that is the tradeoff of a single VM without a secrets service. The mitigations are the small number of people with root (§14), provider disk encryption at rest [Assumption; confirmed with the other provider facts of §1.2], and rotation per 07 §5.6.
+
+---
+
+## 5. CI/CD and release promotion
+
+[10](10-testing-and-quality-gates.md) owns which checks run and their IDs; this section owns the pipeline shape, the promotion rules, configuration per environment and rollback. There is no CI today (RF-09 [Verified-repo: no `.github` directory]); the pipeline is built in M0 up to the image push, and the deploy jobs are added when staging exists (§2.4).
+
+### 5.1 Pipeline
+
+```mermaid
+flowchart LR
+  pr["Pull request"] --> ci["ci.yml: lint, typecheck, unit, functional, image build without push"]
+  ci --> merge["Squash merge to main"]
+  merge --> build["release.yml: build image once, push to registry by digest"]
+  build --> smoke0["Image checks and T-ARCH-002 smoke in CI"]
+  smoke0 --> stg["Deploy digest to staging"]
+  stg --> checks["Staging smoke and e2e suite"]
+  checks --> gate{"Manual approval, environment production"}
+  gate -->|"approved"| prod["Deploy same digest to production"]
+  gate -->|"rejected or expired"| stop["Stays on staging only"]
+  prod --> psmoke["Production smoke"]
+  psmoke -->|"fails"| rb["Rollback: redeploy previous digest"]
+  psmoke -->|"passes"| tag["Git tag and release log"]
+```
+
+### 5.2 Workflows
+
+| Workflow                | Trigger                                                                                                        | Jobs                                                                                                                                                                                                                                                                       | Secrets it can use                                                                                       |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `ci.yml`                | Every pull request and every push to `main`                                                                    | Install (`pnpm install --frozen-lockfile`), lint, typecheck, unit and functional suites against `postgres:18.4` and MinIO service containers (§2.3), `pnpm audit --prod` and secret scan (07 §7.1–§7.2), `caddy validate`, and a Docker build of the image without pushing | None. Pull requests from forks get no secrets [Assumption: GitHub's default for fork pull requests]      |
+| `release.yml`           | `ci.yml` succeeded on `main` (`workflow_run`), or `workflow_dispatch` with an existing digest (rollback, §5.8) | `build` (skipped when a digest is given) → `deploy-staging` → `verify-staging` → `deploy-production` (environment `production`, manual approval) → `verify-production`                                                                                                     | `GITHUB_TOKEN` with `packages: write` for the push; the staging and production deploy credentials (§5.7) |
+| Scheduled (from §8/§11) | Cron                                                                                                           | Not part of release promotion; listed where the jobs are defined                                                                                                                                                                                                           | —                                                                                                        |
+
+Rules for the workflows:
+
+- **Build once.** The `build` job is the only place an image is built for deployment. Staging and production deploy the same `sha256` digest; nothing is rebuilt for production. A rebuild could pick up a different base image or dependency, so "tested in staging" would no longer be true.
+- **One deploy at a time per environment**: `concurrency: deploy-<env>` with `cancel-in-progress: false`, so a second merge queues behind the first instead of interrupting a migration.
+- **Actions pinned by commit SHA**, updated by the dependency bot. Tradeoff: more update PRs, in exchange for a tag change upstream never running unreviewed code with deploy credentials.
+- **Registry**: GitHub Container Registry, public package `ghcr.io/<owner>/dripnepal` [Assumption: no charge for public packages; confirm under VX-15]. The repository is public (Q7) and the image holds no secrets (§4.2), so hosts pull without a credential. A private package would need a read-only pull token per host.
+- **Pushing** uses the workflow's short-lived `GITHUB_TOKEN`, so no long-lived registry credential exists. This refines §2.3, which counted a stored registry push credential.
+
+### 5.3 Versioning
+
+| Identifier             | Form                                                                                                                              | Used for                                                                                                                                                                                             |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Image digest           | `sha256:…`                                                                                                                        | What is deployed. `IMAGE_REF` always names a digest, never a mutable tag                                                                                                                             |
+| Image tag              | `sha-<40-char commit SHA>`                                                                                                        | Humans and the registry UI; immutable by convention (never re-pushed)                                                                                                                                |
+| `APP_RELEASE`          | The commit SHA, baked into the image (§4.2)                                                                                       | Log lines, Sentry releases, `releases.log`                                                                                                                                                           |
+| Production release tag | Git tag `release-YYYY.MM.DD-N` on the deployed commit, created by `verify-production`; the date is the Asia/Kathmandu date (§2.7) | The change log a non-developer reads; `N` counts deploys that day. No semantic versioning: there is no external package, and the public API is versioned by path (`/api/v1`, [06](06-api-design.md)) |
+
+### 5.4 The deploy step on a host
+
+The deploy job opens port 22 for its runner (§3.3), connects with a per-environment deploy key, and runs one fixed command. In `~/.ssh/authorized_keys` of a dedicated `deploy` user, the key is restricted with a forced command (`command="/opt/dripnepal/bin/deploy",no-port-forwarding,no-pty`), so a leaked deploy key can only deploy an image digest, not open a shell. The command reads the digest from the SSH session's original command and refuses anything that is not a `sha256` digest of the `ghcr.io/<owner>/dripnepal` repository.
+
+```sh
+#!/bin/sh
+# /opt/dripnepal/bin/deploy — design sketch (pseudocode for helper names)
+set -eu
+DIGEST=$(validate_digest "${SSH_ORIGINAL_COMMAND:-${1:-}}")  # forced command, or argument for break-glass; sha256:<64 hex> only
+exec 9>/run/dripnepal-deploy.lock; flock -n 9 || fail "another deploy or dump is running"
+refuse_if_admin_sessions_open                            # §1.2: pg_dump or dripnepal_readonly psql uses the admin budget
+cd /opt/dripnepal
+record_previous_image                                    # PREVIOUS_IMAGE_REF=<current IMAGE_REF> in .env
+set_image "ghcr.io/<owner>/dripnepal@$DIGEST"            # IMAGE_REF=... in .env
+docker compose pull web worker release
+docker compose run --rm release                          # node ace migration:run --force (migrator role)
+docker compose run --rm release node ace db:seed --files <reference seeders>   # idempotent reference data (09 §9.3)
+docker compose run --rm release node ace <release checks>                      # 09 §9.2 queries; any row fails the deploy
+docker compose up -d worker                              # worker first (03 §5.4)
+docker compose up -d web                                 # replacement strategy and grace period: section 7
+wait_healthy web 120 || { rollback_images; fail "web not ready"; }
+append_release_log "$DIGEST" ok
+```
+
+The order is the one fixed in [03 §5.4](03-system-architecture.md#54-release-sequence): migrations first, while the old code still runs, which is safe only because migrations are expand/contract (§6, written in a later part); then the worker; then `web`. `rollback_images` restores the previous image references; it never reverses a migration (§5.8).
+
+The nightly `pg_dump` (§11) takes the same `flock`, so a dump and a release never run together and never compete for the two admin connections of the budget (§1.2). A deploy that finds the lock held fails fast rather than waiting; the pipeline is rerun after the dump finishes.
+
+### 5.5 What staging must prove before promotion
+
+`verify-staging` runs against `https://staging.<domain>` with the basic-authentication credentials. Every check is proposed for the T-OPS area or owned by [10](10-testing-and-quality-gates.md); none of the numbered IDs below is new.
+
+| Check                            | Content                                                                                                                                                                | Fails the promotion when                                                      |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Release step                     | Migrations, reference seed and release checks exited 0 (§5.4)                                                                                                          | Any non-zero exit                                                             |
+| Health                           | `/health/live` 200 through Cloudflare; `/health/ready` healthy on the host                                                                                             | Either fails for 2 minutes                                                    |
+| Version                          | The `APP_RELEASE` reported by the app (a response header or the readiness payload, chosen in §7) equals the commit SHA                                                 | Mismatch, meaning the old container is still serving                          |
+| SSR smoke                        | `/`, one category page and one product page return 200 with server-rendered markup and no `X-Inertia` header (same assertion as T-ARCH-002, proposed in 03)            | Any failure                                                                   |
+| Media                            | A presigned upload of a test image to the staging private bucket, then its derived image served from the staging media domain                                          | Upload or derivative fails (worker, tokens or CORS broken)                    |
+| Email                            | A signup sends a verification email to the capture inbox (§2.4)                                                                                                        | No email within 2 minutes                                                     |
+| e2e suite                        | The browser journeys that [10](10-testing-and-quality-gates.md) marks as release-blocking (at least sign-up, browse, cart, COD checkout, vendor accept and ship)       | Any failure; flaky tests are fixed or quarantined by 10, not retried silently |
+| Kill switch (before launch only) | `checkout_enabled` toggled off and on; checkout returns 503 `PROVIDER_UNAVAILABLE` while off (`CHECKOUT_DISABLED` is proposed; not yet in canon §6.6) (07 §7.5 item 8) | Wrong status or code                                                          |
+
+Staging cannot prove performance (§2.4) or lock behaviour on large tables; the migration review checklist (§6) and T-PERF-001 (§12) cover those.
+
+### 5.6 Production promotion
+
+- **Approval.** `deploy-production` uses the GitHub environment `production` with a required reviewer [Assumption: environment protection rules are available for this public repository on the current GitHub plan; if not, `deploy-production` becomes a separate `workflow_dispatch` that only the tech lead can run]. With one developer, the approver is the same person who merged; the approval is still a deliberate second step taken after reading the staging results. With two developers, the other person approves when available, following the one-developer rule of [09 §11.5](09-code-structure-and-engineering-standards.md#115-pull-request-template-and-review-checklist) otherwise.
+- **Approval expiry.** An approval not given within 24 hours [Assumption] lets the run expire. Production always receives the newest digest that passed staging, never an older one out of order.
+- **When.** Routine deploys happen Sunday to Thursday, 10:00–15:00 Asia/Kathmandu, inside the business hours of §2.7, so someone is awake to watch errors for two hours afterwards. No routine deploy on Friday or before a public holiday. Planned maintenance with expected downtime is different and happens outside business hours (§2.7). These windows are [Assumption] and change after launch data shows the traffic peak.
+- **`verify-production`** repeats the health, version and SSR checks against `https://<domain>` (no test orders, no uploads in production) and, on the first deploy only, asserts that `checkout_enabled` is `false` (§2.5). A failure triggers the rollback in §5.8 automatically for health and version, and pages the tech lead for the rest.
+- **After a deploy**, the approver watches the error tracker and alerts (§9) for two hours; a new error class in that window is presumed caused by the release.
+
+### 5.7 Configuration per environment
+
+Where each kind of configuration lives:
+
+| Kind                                    | Development          | CI                                                                                                                                   | Staging and production                                                                           | Changed by                                                      |
+| --------------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------- |
+| Application variables and secrets       | `.env` (git-ignored) | `.env.test` plus workflow `env:`                                                                                                     | `/etc/dripnepal/*.env` on the host (§4.6)                                                        | The tech lead over SSH, then a restart (`docker compose up -d`) |
+| Image reference                         | —                    | —                                                                                                                                    | `/opt/dripnepal/.env` (`IMAGE_REF`)                                                              | The deploy step only                                            |
+| Deploy credentials                      | —                    | GitHub environment secrets `staging` and `production`: one SSH private key each, plus the firewall-scoped provider API token of §3.3 | —                                                                                                | The tech lead; rotated per 07 §5.6                              |
+| Business settings (`platform_settings`) | Seeded defaults      | Seeded defaults                                                                                                                      | Admin UI through `updatePlatformSetting`, audited ([04a §15.1](04a-data-dictionary-tables.md))   | Platform admin                                                  |
+| Edge, firewall, DNS                     | —                    | —                                                                                                                                    | Provider consoles, behind 2FA (§14); changes recorded in the release log with a `config:` prefix | The tech lead                                                   |
+
+Production values, completing the list promised in §2.5. Names and validation are owned by [09 §6.1](09-code-structure-and-engineering-standards.md#61-variable-catalogue); this table gives the values and which env file carries each.
+
+| Variable                                                                                                            | `web.env`                                                                               | `worker.env`       | `release.env`                | Note                                                                                                                                     |
+| ------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | ------------------ | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_ENV`, `APP_ENV`, `TZ`                                                                                         | `production`, `production`, `UTC`                                                       | same               | same                         | Staging: `APP_ENV=staging`                                                                                                               |
+| `HOST`, `PORT`                                                                                                      | `0.0.0.0`, `3333`                                                                       | same (unused)      | same (unused)                | Also set in the image (§4.2)                                                                                                             |
+| `APP_NAME`, `LOG_LEVEL`                                                                                             | `dripnepal`, `info`                                                                     | same               | same                         |                                                                                                                                          |
+| `APP_URL`                                                                                                           | `https://<domain>`                                                                      | same (email links) | same                         | Staging: `https://staging.<domain>`                                                                                                      |
+| `APP_KEY`, `APP_KEY_PREVIOUS`                                                                                       | secret                                                                                  | same value         | same value                   | `APP_KEY_PREVIOUS` only during a rotation (07 §5.5)                                                                                      |
+| `SESSION_DRIVER`                                                                                                    | `database`                                                                              | `database`         | `database`                   |                                                                                                                                          |
+| `DB_HOST`, `DB_PORT`                                                                                                | the cluster's private host and port                                                     | same               | same                         | Staging: `postgres`, `5432`                                                                                                              |
+| `DB_USER`, `DB_PASSWORD`                                                                                            | `dripnepal_app`, secret                                                                 | same               | `dripnepal_migrator`, secret | 07 §4.10                                                                                                                                 |
+| `DB_DATABASE`                                                                                                       | `dripnepal_production`                                                                  | same               | same                         | Staging: `dripnepal_staging` (§2.1)                                                                                                      |
+| `DB_SSL`, `DB_SSL_CA`                                                                                               | `true`, the provider's CA certificate (PEM)                                             | same               | same                         | CA confirmed on the drill cluster (§1.2). Staging: `false` inside the Docker network                                                     |
+| `DB_POOL_MAX`, `DB_DEBUG`                                                                                           | `8`, `false`                                                                            | `4`, `false`       | `2`, `false`                 | 03 §3.4                                                                                                                                  |
+| `TRUSTED_PROXY_CIDRS` (proposed)                                                                                    | `172.30.0.0/24` plus Cloudflare's ranges                                                | unset              | unset                        | §3.4                                                                                                                                     |
+| `S3_ENDPOINT`, `S3_REGION`                                                                                          | the R2 account endpoint, `auto`                                                         | same               | unset                        |                                                                                                                                          |
+| `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`                                                                          | token A                                                                                 | token B            | unset                        | §3.6                                                                                                                                     |
+| `S3_BUCKET_PRIVATE`, `S3_BUCKET_PUBLIC`, `MEDIA_PUBLIC_URL`                                                         | `dripnepal-production-private`, `dripnepal-production-public`, `https://media.<domain>` | same               | unset                        |                                                                                                                                          |
+| `SMTP_*`, `MAIL_FROM_*`                                                                                             | unset (`web` sends no mail directly)                                                    | provider values    | unset                        | [Open OD-08]; `web` enqueues `notifications.*` jobs (03 §9)                                                                              |
+| `PAYMENT_PROVIDER`                                                                                                  | `none` (R1)                                                                             | `none` (R1)        | `none`                       | Value `none` proposed in 09 §6.1; the gateway name and its keys from R1.1 ([Open OD-03])                                                 |
+| `DATA_ENCRYPTION_KEYS`, `DATA_ENCRYPTION_ACTIVE_KEY_ID`, `BLIND_INDEX_KEY`, `HMAC_KEY_LIMITER`, `HMAC_KEY_AUDIT_IP` | secret                                                                                  | same               | same                         | 07 §5.5; offline copy per 07. Required by the 09 §6.2 schema, so every `node ace` command in the release step fails to boot without them |
+| `SENTRY_DSN`, `HMAC_KEY_TELEMETRY`                                                                                  | the production project DSN, secret                                                      | same               | same                         | Project and scrubbing settings in §9                                                                                                     |
+| `VIPS_BLOCK_UNTRUSTED`                                                                                              | unset                                                                                   | `1`                | unset                        | §4.1                                                                                                                                     |
+
+`APP_RELEASE` is not in any env file: the image carries it (§4.2), and 09 §6.2 requires it in staging and production. `KHALTI_*` or `ESEWA_*` join `web.env` and `worker.env` in R1.1 when `PAYMENT_PROVIDER` names that gateway. The `release` container boots the same `start/env.ts` as `web` and `worker`, so `release.env` must satisfy the whole schema: every variable the schema requires unconditionally is present there even if the release step never uses it (the key ring and HMAC keys above). The "unset" cells for `SMTP_*` and the S3 variables hold only if the M0 schema makes them optional; if it does not, `release.env` gets the worker's values and this table is updated.
+
+### 5.8 Rollback
+
+Rollback means running the previous image again; it never means reversing a migration.
+
+1. **Automatic, during a deploy**: if `web` does not become ready within 120 s, the deploy step restores `PREVIOUS_IMAGE_REF` for `web` and `worker` and exits non-zero (§5.4).
+2. **Manual, after a deploy**: run `release.yml` with `workflow_dispatch`, input `digest` = the previous production digest from `releases.log` or the GitHub deployments list. It skips `build` and the staging jobs, still requires the production approval, and runs the same deploy step. Target: back on the previous image within 15 minutes of the decision [Assumption; measured in the first rollback rehearsal before launch].
+3. **Break-glass**, when GitHub is unavailable: the tech lead runs `sudo /opt/dripnepal/bin/deploy sha256:<previous digest>` over SSH (the forced command applies only to the `deploy` user; the script takes the digest from its first argument when `SSH_ORIGINAL_COMMAND` is unset, §5.4). The run is recorded in `releases.log` like any other, with the operator as actor.
+
+Why the previous image is safe: the expand/contract rules of §6 guarantee that release N−1 works against release N's schema. The rule has one consequence for promotion: a **contract** migration (dropping or renaming what old code uses) ships only in a release whose predecessor already stopped using that column, so rolling back one release is always safe and rolling back two may not be. A release whose only fix is "roll back" is followed by a forward fix through the normal pipeline; a failed migration is also forward-fixed, per §6.
+
+Rollback is rehearsed on staging once before the R1 launch gate and after any change to the deploy step (proposed; T-OPS area, ID from 10): deploy N, deploy N−1 by digest, and confirm the version check and the SSR smoke pass.
+
+### 5.9 First deploy of an environment
+
+The first deploy follows [09 §9.3](09-code-structure-and-engineering-standards.md#93-bootstrap-checklist-first-deploy-of-an-environment) step by step, using this section's mechanics: provision the host and firewall (§3.3); write the env files (§4.6, §5.7); create the database roles with the provider's admin user (§3.5); run the normal deploy step with the first digest (which runs migrations, reference seeders and release checks); run `docker compose run --rm -e DB_POOL_MAX=1 web node ace platform:create-admin --email <operator>` over SSH (the runtime role, not the migrator; pool 1 so the one-off container stays inside the "migrations and admin" line of 03 §3.4; the invitation email is sent by the running worker through the normal notification path, [09 §9.1](09-code-structure-and-engineering-standards.md#91-node-ace-platformcreate-admin)); set `checkout_enabled` to `false` before the production hostname is published in DNS (§2.5); run the §3.8 network checks; then publish DNS. Evidence (command output, timestamps) goes into the release log and the launch checklist (M7).
+
+---
+
 ## Consistency notes for editor
 
-Notes 1–13 cover §1–§2. Later parts append their own.
+Notes 1–13 cover §1–§2; notes 14–31 cover §3–§5. Later parts append their own.
 
 1. **Portability check adopted.** The [Assumption] in [03 §5.3](03-system-architecture.md#53-portability-requirement-nfr-data-005-vx-09) (staging rebuild on a second provider before the R1 gate) is adopted in §1.9 and combined with NFR-DATA-005's quarterly from-scratch staging deploy. 03 §5.3 can drop "[Assumption]" and link §1.9.
 2. **Restore-drill cadence.** ADR-0016 Verification, NFR-AVAIL-002 and R-29 say T-OPS-001 runs before launch and **quarterly**; the specification for this document (item 11, canon-derived brief) says **monthly**. §11 (a later part) must pick one and the others must follow; §1–§2 only reference T-OPS-001 without a cadence.
@@ -301,3 +902,21 @@ Notes 1–13 cover §1–§2. Later parts append their own.
 11. **Retention approximation.** §2.5 cites 04 §19.3's 7 years (approximating the 6 years of VAT Rules r23(7), VX-08). 05 §5.11 rule 5 ("at least 6 years") and 01 REG-18 (6-year default) still differ in wording; 04 is the owner.
 12. **Items handed to later parts, not addressed in §1–§2:** `platform.retention_purge` scope (03 §9 narrower than 04 §19.3/04a: carts 30 days after leaving active and 12-month `notification_deliveries` must be covered, §8); SM-03/SM-05 daily page-view store (§9); the REG-18 inspection-records folder and access rule, `TRUNCATE sessions` as forced global logout (04a §5.3), the stock-drift runbook around `inventory.drift_check` at 02:30 (05 §5.10) and the `needs_review` payments queue under `platform.ledger.adjust` (§10); the kill switch in runbooks stays 503 `PROVIDER_UNAVAILABLE` (`CHECKOUT_DISABLED` is proposed; not yet in canon §6.6). Also deferred from 07 and 09: error-tracker project scrubbing, its CSP endpoint and data region, and log retention and export (§9); the MFA reset and vendor mailbox-loss procedures (§10, §14); the full production environment-variable values (§4, §5).
 13. **`checkout_enabled` default.** [04a §15.1](04a-data-dictionary-tables.md) defaults `checkout_enabled` to `true`, while risks §5 (M7 row) requires the switch to stay off in production until the launch gate passes. §2.5 closes the gap operationally (bootstrap sets `false`, first-deploy smoke test checks it). The editor may prefer changing the 04a default to `false` or having 09 §9.3 step 8 say "set" instead of "review"; either removes the dependency on a manual step.
+14. **`trustProxy` mechanism.** [03 §12.2](03-system-architecture.md#122-authentication-and-sessions-adr-0005) and 07 TB-3 say `trustProxy` is "set to the reverse proxy and Cloudflare's published ranges". The installed `@adonisjs/http-server` 9.1.0 passes a string to `proxy-addr` as one entry, so a comma-separated list of ranges does not work [Verified-repo]. §3.4 uses the function form built with `proxyAddr.compile([...])`, adds `proxy-addr` 2.0.7 as a direct dependency and introduces `TRUSTED_PROXY_CIDRS` (proposed). [09 §6.1](09-code-structure-and-engineering-standards.md#61-variable-catalogue) should add the variable to its catalogue (it deferred "trusted-proxy ranges" to 11), and 09 §10 should list `proxy-addr` as an accepted direct dependency.
+15. **Cloudflare allow-list is not zone authentication.** 03 §5.1, 07 TB-3 and ADR-0016 Decision 2 present "443 only from Cloudflare's ranges" as the origin control. §3.3 records that any Cloudflare customer's zone can reach the origin through those ranges, and proposes Authenticated Origin Pulls, subject to the plan ([Verify-external VX-15]). 07 TB-3 should carry the residual risk.
+16. **Readiness endpoint exposure.** 03 §12.8 and ADR-0016 say `/health/*` is never cached. §4.5 also blocks `/health/ready` at Caddy from outside, so the external uptime check uses `/health/live`. §7 (a later part) defines both checks and must keep this split.
+17. **CI secrets.** §2.3 says the only CI secrets are "the registry push credential and the staging deploy key". §5.2 and §5.7 replace the stored push credential with the workflow's `GITHUB_TOKEN` and add the production deploy key and a firewall-scoped provider API token in the protected `production` and `staging` environments. §2.3 should be reworded when this document is finalised; the rule that pull requests from forks get no secrets is unchanged.
+18. **"Compose is never used in staging or production."** [09 §9.2](09-code-structure-and-engineering-standards.md#92-no-default-credentials-anywhere) says this about `docker-compose.yml`. It is true of that development file only; staging and production run Docker Compose with `deploy/compose.yml` (§4.5), as ADR-0016 and canon require. 09 §9.2 could say "the development compose file".
+19. **Release order and release contents.** §5.4 follows 03 §5.4 (migrations, then worker, then web) and adds the reference seeders and the 09 §9.2 release checks to every deploy, not only the first (09 §9.3 lists them as bootstrap steps). Reference seeders must therefore stay idempotent, which 09 §8.8 already requires.
+20. **Deploy windows versus maintenance windows.** §2.7 puts planned maintenance outside business hours; §5.6 puts routine deploys inside business hours (Sunday–Thursday, 10:00–15:00) so someone can watch them. Both are [Assumption] for the product owner to confirm with A-29.
+21. **Staging `max_connections`.** §2.4 left the value to §4; §4.5 sets 25, leaving 22 non-superuser connections, on the [Assumption] that PostgreSQL 18's default `superuser_reserved_connections` is 3 (checked with `SHOW` on first start).
+22. **RF-43 includes the development CORS fix.** Canon §16 and 00 RF-43 include A5-20 (development CORS reflects any origin). No other document assigns the `config/cors.ts` change; §4.3 puts it in the M0 fix list.
+23. **Proposed checks without IDs** (for [10](10-testing-and-quality-gates.md) to number, T-OPS area unless 10 decides otherwise): the forged `X-Forwarded-For` client-IP test (§3.4); the eight network checks of §3.8, which include ADR-0016's two edge checks; the image content checks (non-root, no `.env*`, SSR bundle present, §4.2), which answer 09 §9.2's "Image build check (11)"; the staging promotion checks (§5.5); the rollback rehearsal (§5.8). Numbered IDs cited here are canon (T-OPS-001, T-PERF-001) or already proposed elsewhere (T-ARCH-002, T-ARCH-010, T-ARCH-012, T-SEC-019, T-SEC-029, T-SEC-035).
+24. **Items 07 handed to 11, status after §3–§5.** Private-bucket public access and `r2.dev` off: procedure and check defined (§3.6, §3.8), result recorded when buckets are created. Role creation on the managed plan and the database CA (`DB_SSL_CA`): check defined on the drill cluster (§3.5, §5.7). Provider at-rest encryption, error-tracker scrubbing and CSP endpoint, log retention, the inspection-records folder (01 REG-18), and the MFA reset and vendor mailbox-loss procedures are still open for §9, §10 and §14.
+25. **Kill switch in the staging checks.** §5.5 asserts 503 `PROVIDER_UNAVAILABLE`; `CHECKOUT_DISABLED` is proposed; not yet in canon §6.6. If canon adopts it, the check changes with 06 and openapi.yaml.
+26. **Provider and tool facts outside the research digests**, used as [Assumption] in §3–§5: DigitalOcean cloud firewall, trusted sources, reserved IPs; R2 per-bucket tokens and bucket CORS; Cloudflare origin certificates, Authenticated Origin Pulls and the published IP list URL; Caddy directives; GitHub environment protection on this plan, GHCR pricing for public packages, fork-secret behaviour and runner egress IPs; Corepack in the Node 24 image; Docker's interaction with `ufw`. Each is checked when the account or file is created. Note 10 suggests widening VX-15 to cover such provider facts.
+27. **Still open from note 12**, not affected by §3–§5: `platform.retention_purge` scope (§8), the SM-03/SM-05 daily page-view store (§9), and the runbook items (§10).
+28. **Process commands and the error-tracker preload.** [09 §1.2](09-code-structure-and-engineering-standards.md#12-target-tree) fixes the `web` command as `node bin/server.js` and the worker as `node ace jobs:work`, while [09 §5.6](09-code-structure-and-engineering-standards.md#56-reporting-to-the-error-tracker) requires `bin/instrument.ts` to be loaded with `node --import` before both. §4.1, §4.2 and §4.5 use `node --import ./bin/instrument.js bin/server.js` and `node --import ./bin/instrument.js ace jobs:work`; 09 §1.2 should say the same. The `release` container runs without the preload.
+29. **`release.env` carries the key ring.** The 09 §6.2 schema declares `DATA_ENCRYPTION_KEYS`, `DATA_ENCRYPTION_ACTIVE_KEY_ID`, `BLIND_INDEX_KEY`, `HMAC_KEY_LIMITER` and `HMAC_KEY_AUDIT_IP` as required, so every `node ace` command in the release step needs them even though migrations do not read them (§5.7). Keeping them out of the release container would need a schema that makes them optional for a release mode; 09 owns that choice. Until then the key material is present in three env files on the host, not two.
+30. **Staging basic-authentication exceptions.** §2.4 (part 1) exempts `/health/*`; §3.2 exempts only `/health/live`, and §4.5 answers `/health/ready` with 404 from outside anyway. The effect is the same; §2.4 should say `/health/live` when the document is finalised.
+31. **One-off admin commands and the connection budget.** §5.9 runs `platform:create-admin` in a one-off `web` container with `DB_POOL_MAX=1`, so it counts against the "migrations and admin sessions" line of [03 §3.4](03-system-architecture.md#34-postgresql-layout-and-connection-budget), like an incident `psql` session. 09 §9.3 step 7 only says "over an SSH session to the host"; the pool override is an addition here.
