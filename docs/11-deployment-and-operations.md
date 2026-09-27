@@ -6,6 +6,8 @@ Reviewed: critic pass B6 part 1 (2026-09-26)
 
 Reviewed: critic pass B6 part 2 (2026-09-26)
 
+Reviewed: critic pass B6 part 3 (2026-09-26)
+
 This document says how DripNepal is hosted, deployed, watched, backed up and recovered by a team of one or two developers [Confirmed, Q1]. It owns the operational procedures that other documents hand over to "11": the environment set, the hosting recommendation behind [ADR-0016](adr/0016-hosting-single-region-portable.md), the release and migration procedure, job operations, monitoring and alerts, runbooks, backups, targets, capacity and operational access. It does not restate rules owned elsewhere. Topology and the connection budget come from [03 §5](03-system-architecture.md#5-deployment) and [03 §3.4](03-system-architecture.md#34-postgresql-layout-and-connection-budget), secrets policy from [07 §5.6](07-security-threat-model-and-permissions.md#56-secret-management-and-rotation), environment variables from [09 §6.1](09-code-structure-and-engineering-standards.md#61-variable-catalogue), and test IDs from [10](10-testing-and-quality-gates.md).
 
 Labels follow [00 §1.2](00-context-assumptions-and-questions.md#12-evidence-labels). Prices are "as published on 2026-09-25" in the research digest `infra_ops` (accessed 2026-09-25). They are inputs to [Open OD-09] and [Verify-external VX-15], not quotes, and no figure here goes beyond arithmetic on those published prices.
@@ -19,16 +21,16 @@ Labels follow [00 §1.2](00-context-assumptions-and-questions.md#12-evidence-lab
 | 3   | Topology and networking                                   | Written (part 2)              |
 | 4   | Docker images and local setup                             | Written (part 2)              |
 | 5   | CI/CD and release promotion                               | Written (part 2)              |
-| 6   | Safe schema migrations                                    | Planned                       |
-| 7   | Health checks, graceful shutdown and zero-downtime deploy | Planned                       |
-| 8   | Jobs and queue operations                                 | Planned                       |
-| 9   | Observability and alerting                                | Planned                       |
+| 6   | Safe schema migrations                                    | Written (part 3)              |
+| 7   | Health checks, graceful shutdown and zero-downtime deploy | Written (part 3)              |
+| 8   | Jobs and queue operations                                 | Written (part 3)              |
+| 9   | Observability and alerting                                | Written (part 3)              |
 | 10  | Runbooks                                                  | Planned                       |
 | 11  | Backup policy and verified restore                        | Planned                       |
 | 12  | Availability, recovery and performance targets            | Planned                       |
 | 13  | Capacity assumptions and cost drivers                     | Planned                       |
 | 14  | Operational access and security operations                | Planned                       |
-| —   | Consistency notes for editor                              | Written (covers §1–§5 so far) |
+| —   | Consistency notes for editor                              | Written (covers §1–§9 so far) |
 
 A reader choosing a host reads §1. A developer setting up a machine, CI or staging reads §2, then §4 and §5. Whoever is on call reads §9 and §10.
 
@@ -799,7 +801,7 @@ wait_healthy web 120 || { rollback_images; fail "web not ready"; }
 append_release_log "$DIGEST" ok
 ```
 
-The order is the one fixed in [03 §5.4](03-system-architecture.md#54-release-sequence): migrations first, while the old code still runs, which is safe only because migrations are expand/contract (§6, written in a later part); then the worker; then `web`. `rollback_images` restores the previous image references; it never reverses a migration (§5.8).
+The order is the one fixed in [03 §5.4](03-system-architecture.md#54-release-sequence): migrations first, while the old code still runs, which is safe only because migrations are expand/contract (§6.2); then the worker; then `web`. `rollback_images` restores the previous image references; it never reverses a migration (§5.8).
 
 The nightly `pg_dump` (§11) takes the same `flock`, so a dump and a release never run together and never compete for the two admin connections of the budget (§1.2). A deploy that finds the lock held fails fast rather than waiting; the pipeline is rerun after the dump finishes.
 
@@ -885,9 +887,510 @@ The first deploy follows [09 §9.3](09-code-structure-and-engineering-standards.
 
 ---
 
+## 6. Safe schema migrations
+
+Ownership is split three ways, and this section repeats neither of the other two: [04 §20.2.4](04-domain-model-and-data-dictionary.md#2024-after-the-first-production-deploy-forward-only-expand-and-contract) owns the expand/contract SQL patterns, [09 §8](09-code-structure-and-engineering-standards.md#8-migrations-and-seeders) owns the file standard (naming, the `SET LOCAL lock_timeout = '5s'` first statement, one concern per file, `CREATE INDEX CONCURRENTLY` files, the `database/migrations.lock` immutability check), and [ADR-0011](adr/0011-schema-rebaseline-before-production.md) owns the one-time re-baseline ([Open OD-01]). This section owns how migrations run during a release, what the operator does when one fails, how backfills run, and the review checklist.
+
+### 6.1 Where and how migrations run
+
+- **Only in the `release` container** of §5.4, as `dripnepal_migrator` ([07 §4.10](07-security-threat-model-and-permissions.md#410-database-roles-and-grants)), after the image is pulled and **before** the worker and `web` are replaced ([03 §5.4](03-system-architecture.md#54-release-sequence)). Never from a laptop, and never at `web` boot: a web process that migrated on start would race the worker and would need DDL rights that `dripnepal_app` does not have.
+- **Command:** `node ace migration:run --force`. In the installed Lucid 22.4.2 [Verified-repo `node_modules/@adonisjs/lucid`]: production asks for interactive confirmation unless `--force` is passed (`build/commands/migration/run.js`, `runAsSubCommand`), which a non-interactive release container cannot give; each file runs in its own transaction unless it sets `static disableTransactions = true` (09 §8); and the runner takes `pg_try_advisory_lock(1)` before it starts (`build/src/dialects/pg.js:218-221`), which **fails at once** with `E_UNABLE_ACQUIRE_LOCK` instead of waiting (`build/src/migration/runner.js`, `acquireLock`). The lock is session-level, so a crashed release step releases it when its connection closes. The deploy `flock` and the GitHub `concurrency` group (§5.2, §5.4) already serialise releases; the advisory lock is the database-side backstop. `--disable-locks` is never used.
+- **`schema:generate` never runs outside development and CI.** `generateSchemaClasses()` returns early when `app.inProduction` is true (`run.js:67`) [Verified-repo], and staging also runs with `NODE_ENV=production` (§5.7), so neither environment rewrites `database/schema.ts`. CI proves the committed file matches the migrations (T-ARCH-010, proposed in 04; 09 §8.7).
+- **No `migration:rollback` in production.** `migrations.disableRollbacksInProduction: true` (09 §8.2) makes the runner refuse it (`runner.js:508`) [Verified-repo]. Rollback is by image, §5.8 and §6.5.
+- **The `pgboss` schema.** 07 §4.10 makes `dripnepal_migrator` the owner of `pgboss` and gives `dripnepal_app` DML only, but pg-boss creates and upgrades its own schema when it starts ([04a §15.5](04a-data-dictionary-tables.md#155-pg-boss-schema-pgboss)). The worker, running as `dripnepal_app`, therefore cannot do it. The release step runs the pg-boss schema install or upgrade as the migrator, and the worker starts pg-boss with its own migration step disabled [pseudocode: the pg-boss 12 option and call are confirmed by the M0 spike T-ARCH-004, proposed in 03]. Consequence: a pg-boss version bump is a release with a schema step and is reviewed like a migration (§6.6 item 13).
+- **After the run**, the release checks of [09 §9.2](09-code-structure-and-engineering-standards.md#92-no-default-credentials-anywhere) run (§5.4), plus two proposed here (T-OPS area, IDs from [10](10-testing-and-quality-gates.md)): `node ace migration:status` reports no pending file, and no index is left invalid by a failed concurrent build:
+
+```sql
+-- release check: any row fails the deploy
+SELECT indexrelid::regclass AS invalid_index
+  FROM pg_index
+ WHERE NOT indisvalid;
+```
+
+### 6.2 Expand and contract across releases
+
+The change patterns are in 09 §8.5. Operationally, a schema change that the previous release cannot tolerate takes at least two production deploys:
+
+1. **Release N (expand)** ships the additive migration and code that works with both shapes. It must pass staging and run in production.
+2. **Backfill** (§6.4), if the change needs one, runs after release N is live and is checked complete.
+3. **Release N+1 (contract)** ships only when release N is the production image and the backfill check returns nothing. From then on the rollback target is N, which already tolerates the contracted schema, so the rule "rolling back one release is always safe" of §5.8 holds.
+
+A contract migration that depends on a backfill starts with a guard, so it cannot run early even if someone merges it too soon:
+
+```sql
+-- pattern for the first statements of a contract migration; <table> and <column> are placeholders
+SET LOCAL lock_timeout = '5s';
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM <table> WHERE <column> IS NULL LIMIT 1) THEN
+    RAISE EXCEPTION 'backfill of <table>.<column> is not complete';
+  END IF;
+END $$;
+```
+
+The exception rolls the file back, the release step exits non-zero, and nothing else in the deploy happens (§6.5).
+
+### 6.3 Lock timeouts in practice
+
+Every migration file's first statement sets `lock_timeout` to 5 s (09 §8.2). The reason is operational: a statement that needs a strong lock (for example `ALTER TABLE … ADD CONSTRAINT`) waits in the lock queue, and every later query on that table queues **behind** it, so a migration stuck behind one long transaction can stall checkout for as long as it waits [Assumption: PostgreSQL lock-queue behaviour, not covered by the research digests; the drill-environment timing of §6.6 item 12 shows it]. Five seconds bounds that stall.
+
+When a file hits the timeout (SQLSTATE `55P03`), its transaction rolls back, `migration:run` exits non-zero, `set -e` stops the deploy script before the worker and `web` are touched (§5.4), and the old release keeps serving on the partly expanded schema, which it tolerates by construction. The operator then:
+
+1. Reads the deploy log for the file and table.
+2. Looks for the blocker over the SSH tunnel with the `dripnepal_readonly` role (§3.5):
+
+   ```sql
+   SELECT pid, usename, state, now() - xact_start AS xact_age, left(query, 80) AS query
+     FROM pg_stat_activity
+    WHERE datname = current_database() AND xact_start IS NOT NULL
+    ORDER BY xact_start;
+   ```
+
+3. Waits out a legitimate long transaction (a report query, an operator's `psql`), then re-runs the same digest with `release.yml` `workflow_dispatch` (§5.8 item 2). Files that already succeeded are skipped, so a re-run is safe.
+4. After two failed attempts, schedules the release in the maintenance window (§2.7) or splits the migration. The timeout is raised only for a single file through a reviewed PR, never on the command line.
+5. Never terminates `dripnepal_app` connections to push a migration through. The only sessions an operator may end are their own and ones that have been `idle in transaction` for more than 5 minutes [Assumption], and each one is recorded in the release log.
+
+The `release` environment sets no connection-level `statement_timeout` (09 note 36), so the checklist (§6.6) is what keeps long statements out of the release step. The deploy job itself stops after 15 minutes [Assumption], which bounds a runaway statement.
+
+### 6.4 Indexes, validation and backfills on live tables
+
+- **Concurrent index builds** go in their own non-transactional file (09 §8.3). A concurrent build waits for older transactions on the table to finish [Assumption: PostgreSQL behaviour], so the blocker query of §6.3 also explains a slow build. A failed build leaves an `INVALID` index, which the release check of §6.1 catches; the file drops the index with `IF EXISTS` first, so re-running the deploy is enough.
+- **Constraints** are added `NOT VALID` and validated in a later file (04 §20.2.4). Validation scans the table without blocking writes (09 §8.5), so it can run in a routine deploy at launch scale.
+- **Size rule.** At launch scale (§13), every table is small and these statements take seconds. A migration whose statements are expected to take longer than 5 minutes on production row counts (the tech lead supplies the counts from `pg_class.reltuples`) runs as a planned maintenance release in the §2.7 window, announced to sellers the day before [Assumption].
+- **Backfills are jobs, not migrations** (09 §8.3). The mechanics:
+  - A queue `<module>.backfill_<subject>` (proposed naming pattern; each queue is added to [03 §9](03-system-architecture.md#9-asynchronous-work) when created) in the module that owns the table.
+  - Each run updates one batch of at most 1,000 rows selected by the predicate that defines "not yet done" (`WHERE <column> IS NULL … LIMIT 1000 FOR UPDATE SKIP LOCKED`), commits, logs one `backfill.progress` line with the rows left, and sends the next run with a 1-second `startAfter`. A second chain (the start command run twice) would do no harm, because batches claim rows with `SKIP LOCKED` and done rows drop out of the predicate, but it would double the load, so the start command refuses to run while the queue has a queued or active job (pseudocode: the pg-boss 12 call is confirmed in the M0 spike T-ARCH-004, proposed in 03). A `singletonKey` is not relied on, because whether pg-boss 12 accepts a send with the same key while the sending job is still active is not verified [Assumption]. Re-running is harmless because done rows no longer match the predicate.
+  - It is started after release N is live by a one-line ace command added in the same PR (named per the 09 `<namespace>:<verb>` rule) and run over SSH in a one-off container with `DB_POOL_MAX=1`, which counts against the "migrations and admin" line of the connection budget (§1.2).
+  - It runs in business hours and is watched on the service dashboard (§9.9). If read p95 rises above the NFR-PERF-003 target, the operator raises the pause between batches.
+  - It is complete when the predicate returns no rows; that is also what the contract guard of §6.2 checks.
+  - **Append-only tables cannot be backfilled.** `dripnepal_app` has no `UPDATE` on the nine tables of [04 §2.12](04-domain-model-and-data-dictionary.md#212-append-only-tables). A new column on one of them stays nullable for older rows, or is populated only by new writes. Needing a backfill there is a design error to raise in review.
+
+### 6.5 Forward fix, not rollback
+
+A migration is never reversed in production. What to do instead:
+
+| Situation                                                               | Effect                                                                                                                  | Action                                                                                                                                                                                                                                                                |
+| ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A file fails (lock timeout, guard, error)                               | That file's transaction rolled back; earlier files of the same release are applied (all expand); old code still serving | §6.3 procedure, then re-run the digest. If the file itself is wrong, a new file cannot fix it: the runner applies pending files in order, so the broken file would fail first on every deploy. Correct the never-applied file in place under the lock exception below |
+| A non-transactional file fails                                          | Possibly an `INVALID` index                                                                                             | Re-run the deploy; the file drops and rebuilds the index                                                                                                                                                                                                              |
+| The migration applied, but a constraint or trigger rejects valid writes | Errors on some actions; the error tracker shows constraint violations mapped to 409 or 422 (09 §5.4)                    | Hotfix PR with a new migration that relaxes the rule, through the normal pipeline (§5). If checkout is affected, turn `checkout_enabled` off meanwhile (503 `PROVIDER_UNAVAILABLE`; `CHECKOUT_DISABLED` is proposed; not yet in canon §6.6)                           |
+| New code is wrong, schema fine                                          | Errors after the deploy                                                                                                 | Roll back the image (§5.8); the expand-only schema keeps working with N−1                                                                                                                                                                                             |
+| A migration or backfill corrupted data                                  | Wrong values in rows                                                                                                    | Stop the writer (kill switch or stop the worker), then repair with a forward migration or job built from the rows' history; point-in-time recovery into a new cluster to read the old values is the last resort, never an in-place restore over production (§11)      |
+
+```mermaid
+flowchart TD
+  fail["Release step exits non-zero"] --> which{"What failed?"}
+  which -->|"Lock timeout"| blk["Find blocker, wait, re-run same digest"]
+  which -->|"Guard: backfill incomplete"| bf["Finish backfill, then re-run"]
+  which -->|"SQL error in the file"| fix["Correct the unapplied file under the lock exception"]
+  which -->|"Release check: invalid index"| idx["Re-run deploy; file rebuilds the index"]
+  blk --> ok["Old release keeps serving meanwhile"]
+  bf --> ok
+  fix --> ok
+  idx --> ok
+```
+
+**Lock exception for a file that never reached production.** [09 §8.4](09-code-structure-and-engineering-standards.md#84-applied-migrations-are-never-edited-rf-41) forbids editing a locked file, because an applied migration must match what ran. A file that failed in production was never applied there (its transaction rolled back), yet it stays pending and blocks every later deploy. The rule for that one case: the PR edits the file and regenerates its lock line, carries production `node ace migration:status` output showing the file as pending, and needs the tech lead's review. If staging already applied the old version, staging is reset (§2.4, "Staging data") or reconciled by a follow-up file in the same PR. The 09 §8.4 lock script needs an override for this (proposed; Consistency notes). A non-transactional file (`disableTransactions`) that fails part-way may have applied some statements, so it must be written to be re-runnable (`IF NOT EXISTS`, `IF EXISTS`) and is corrected the same way.
+
+### 6.6 Migration review checklist
+
+The PR template ([09 §11.5](09-code-structure-and-engineering-standards.md#115-pull-request-template-and-review-checklist)) links this list. Items 3 and 11 are also checked mechanically (the lock script of 09 §8.4 and T-ARCH-010, proposed in 04); the rest need a human.
+
+1. The PR says **expand** or **contract**; a contract names the expand PR and the release it shipped in (09 §8.5).
+2. The previous release still works against the new schema: the reviewer finds every query that touches the changed table in the previous release's code.
+3. The first statement sets `lock_timeout`; a non-transactional file sets and resets it (09 §8.2).
+4. Names and SQL come from 04a, which is updated first (09 §8.6).
+5. For each statement: the lock it takes and its expected duration at production row counts (§6.4). No table rewrite on a table above 10,000 rows (09 §8.5).
+6. Indexes: `CONCURRENTLY`, one per file, `DROP INDEX CONCURRENTLY IF EXISTS` first.
+7. New foreign keys and checks: `NOT VALID`, then `VALIDATE` in a later file.
+8. No data change beyond one bounded `UPDATE` of a configuration table; anything larger is a backfill job (§6.4).
+9. Append-only tables: additive nullable columns only (§6.4).
+10. New tables: grants in a `grant_*` file (09 §8.3), a sensitivity class and retention row in 04 §19, and the role tests T-ARCH-012 and T-SEC-029 (proposed in 04 and 07) still pass.
+11. `database/schema.ts` regenerated and committed; `down()` written for development and CI.
+12. Evidence: `node ace migration:run --dry-run` output in the PR, and the staging deploy of §5.5 passed. A migration that touches a table with more than 100,000 production rows [Assumption] is also timed on a restored copy in the drill environment (§2.1) before promotion, because staging has too little data to show lock or duration problems.
+13. A `pg-boss` version bump is flagged as a schema change (§6.1).
+
+---
+
+## 7. Health checks, graceful shutdown and zero-downtime deploys
+
+### 7.1 Endpoints
+
+| Endpoint        | Checks                                                                                                                                                                                               | Answers                                                                         | Used by                                                                                                    | Reachable from outside                       |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| `/health/live`  | Nothing beyond "the process serves HTTP"                                                                                                                                                             | 200 `{"status":"ok","release":"<APP_RELEASE>"}`                                 | External uptime monitor (§9), the version check of §5.5 and §5.6                                           | Yes, through Cloudflare, never cached (§3.2) |
+| `/health/ready` | Lucid `DbCheck` on the default connection; the int8 parser check of [09 §6.5](09-code-structure-and-engineering-standards.md#65-fail-fast-on-boot) item 3; "not shutting down" (`app.isTerminating`) | 200 `{"status":"ok"}` or 503 `{"status":"error"}`; details only in the log line | Compose `healthcheck` (§4.5), the deploy step's `wait_healthy`, Caddy when two `web` containers run (§7.4) | No: Caddy answers 404 from outside (§4.5)    |
+
+This settles the choice §5.5 left open: the running release is read from the `/health/live` body. Publishing the commit SHA costs nothing, because the repository is public (Q7).
+
+Three decisions, with their reasons:
+
+- **The external check uses `/health/live` plus one listing page**, not `/health/ready`. The listing page (`/men`) exercises the database, the read model and SSR through Cloudflare, which is more than `/health/ready` proves, and readiness details stay private. [01 NFR-AVAIL-001 and SM-16](01-product-requirements.md#83-availability-and-recovery-nfr-avail) name `/health/ready` as the external target; see Consistency notes.
+- **`DbConnectionCountCheck` is not used in readiness.** Lucid 22.4.2's check counts all rows of `pg_stat_activity` and by default warns above 10 and fails above 15 connections [Verified-repo `build/src/database/checks/db_connection_count_check.js`]. With the 22-connection budget, 15 is normal load, so the check would take a healthy instance out of service. Connection use is a metric with its own alert instead (§9.7).
+- **Readiness is not cached.** Compose probes every 10 s and one `SELECT 1 + 1` [Verified-repo `db_check.js`] costs almost nothing, so `cacheFor` is not used. A cached "ok" would hide a lost database connection for the whole cache period.
+
+Design sketch (APIs verified in the installed packages: `HealthChecks.register()` and `run()`, `BaseCheck` and `Result` from `@adonisjs/core/health` [Verified-repo `@adonisjs/health` 3.1.0, re-exported by `@adonisjs/core` 7.3.4]; `DbCheck` from `@adonisjs/lucid/database` [Verified-repo Lucid 22.4.2 `build/src/database/main.d.ts:14`]; `app.isTerminating` [Verified-repo `@adonisjs/application` 9.0.1 `src/application.d.ts:94`]; `response.serviceUnavailable()` [Verified-repo `@adonisjs/http-server` 9.1.0 `response.d.ts:829`]):
+
+```ts
+// start/health.ts — design sketch
+import app from '@adonisjs/core/services/app'
+import db from '@adonisjs/lucid/services/db'
+import { DbCheck } from '@adonisjs/lucid/database'
+import { BaseCheck, HealthChecks, Result } from '@adonisjs/core/health'
+
+class Int8ParserCheck extends BaseCheck {
+  name = 'int8 parser'
+  async run() {
+    const { rows } = await db.rawQuery('SELECT 9007199254740991::int8 AS v')
+    return typeof rows[0].v === 'number'
+      ? Result.ok('int8 parsed as number')
+      : Result.failed('int8 parser not registered')
+  }
+}
+
+export const readiness = new HealthChecks().register([
+  new DbCheck(db.connection()),
+  new Int8ParserCheck(),
+])
+
+export async function isReady() {
+  if (app.isTerminating) return false
+  const report = await readiness.run()
+  return report.isHealthy
+}
+```
+
+The controller for `/health/ready` calls `isReady()`, logs the full report at `warn` when it fails, and answers `response.ok({ status: 'ok' })` or `response.serviceUnavailable({ status: 'error' })`. The routes live in `start/routes/health.ts` (09 §1.2), outside every session, CSRF and rate-limit middleware group, so a probe never writes a session row.
+
+### 7.2 Worker liveness
+
+The worker has no HTTP port ([03 §12.8](03-system-architecture.md#128-errors-health-and-telemetry)). Three signals cover it:
+
+1. **Crash:** Compose `restart: unless-stopped` (§4.5) restarts a worker that exits.
+2. **Hung scheduler or dead worker:** the `platform.heartbeat` cron (every 5 min, 03 §9) makes an HTTP request to a heartbeat URL of the uptime tool (§9.1). The monitor expects a ping every 5 minutes with a 5-minute grace, so a stop is noticed within about 10 minutes. Because the ping travels cron → pg-boss → handler, it proves the whole scheduling path, not only that the process exists. The URL is a secret (anyone holding it could fake liveness), so it lives in `worker.env` as `HEARTBEAT_URL` (proposed; not in the [09 §6.1](09-code-structure-and-engineering-standards.md#61-variable-catalogue) catalogue).
+3. **A stuck queue in a live worker:** the oldest-due-job age per queue (§8.6) catches a handler that hangs while the heartbeat queue keeps working.
+
+No Compose `healthcheck` is defined for the worker: a check that only proves the process answers would add nothing to signal 1, and one that queried pg-boss would need its own database connection outside the budget.
+
+### 7.3 SIGTERM handling
+
+Both processes already turn SIGTERM into an orderly shutdown: `bin/server.ts` and `bin/console.ts` call `app.listen('SIGTERM', () => app.terminate())` [Verified-repo]. `app.terminate()` runs the `terminating` hooks in reverse order of registration and then shuts the providers down, which closes the Lucid pools [Verified-repo `@adonisjs/application` 9.0.1, `terminate()`]. `init: true` in Compose (§4.5) makes the container's PID 1 forward the signal to Node.
+
+**`web`** (`stop_grace_period: 30s`):
+
+1. SIGTERM → `app.terminate()`.
+2. The HTTP server's own `terminating` hook calls Node's `server.close()` [Verified-repo `@adonisjs/core` 7.3.4 `build/main-BZSwUaVy.js`, `#monitorAppAndServer` and `#close`]: no new connections are accepted and the hook resolves when the in-flight requests have finished. Idle keep-alive connections from Caddy are closed by Node 24's `server.close()` [Assumption: Node behaviour since v19, not covered by the digests; checked by the shutdown test below].
+3. A `terminating` hook registered in a preload (pseudocode for the pg-boss call) stops the send-only pg-boss instance of 03 §3.4 and flushes the page-view counters of §9.4. Preloads register before the HTTP server starts, and `terminate()` runs hooks with `runReverse` [Verified-repo `@adonisjs/application` 9.0.1], so this hook runs after step 2 has drained the last requests and the final flush includes them.
+4. Providers shut down; Lucid closes its pool; the process exits 0.
+5. A request still running after 30 s is cut off when Docker sends SIGKILL. Nothing on the request path should take that long: `placeOrder` targets 800 ms p95 (NFR-PERF-004), provider calls time out after 10 s (03 §11.4), and database statements are cut at the `web` `statement_timeout` (09 §6.3). A request cut off mid-transaction rolls back; a client retrying `placeOrder` with the same `Idempotency-Key` gets the stored result or a clean retry (06, ADR-0004).
+
+**`worker`** (`stop_grace_period: 60s`, as [03 §10.7](03-system-architecture.md#107-graceful-shutdown) requires):
+
+1. SIGTERM → `app.terminate()`; the `jobs:work` command is a long-running (`staysAlive`) command, so the ace kernel does not exit on its own [Verified-repo `@adonisjs/core` 7.3.4 ace kernel sets `process.exitCode` in a `terminating` hook for `staysAlive` commands].
+2. A `terminating` hook registered by `jobs:work` stops pg-boss gracefully with a 30-second wait: no new fetches, active handlers finish (pseudocode; the exact `stop()` options of pg-boss 12 are confirmed in M0, as 03 §10.7 says).
+3. Providers shut down and the Lucid pool closes.
+4. A handler still running at 60 s is killed; its transaction rolls back, and the job runs again after its `expireInSeconds` (120 s by default, 03 §9). That is safe because handlers are idempotent ([03 §10.3](03-system-architecture.md#103-at-least-once-delivery-and-idempotent-handlers)).
+
+Verification (proposed; IDs from [10](10-testing-and-quality-gates.md)): the graceful worker test of 03 §10.7 (numbered T-OPS-002 there; the number collides with 05, see note 3), and a `web` test that sends SIGTERM during a slow request and asserts that the request completes with 200 and that a new connection is refused.
+
+### 7.4 Deploying `web` on one VM: what "zero downtime" costs
+
+`docker compose up -d web` with a new image stops the old container (it drains, as in §7.3) and then starts the new one, which is not ready until it has booted and loaded the SSR bundle. There is a gap. Three ways to handle it:
+
+| Option                                                                                                                          | Gap seen by users                                                                                                                                                           | Connection budget (03 §3.4)                                                | Cost and complexity                                                                                                                                                        |
+| ------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A. Stop, start, and let Caddy hold requests** (chosen for R1)                                                                 | Requests that arrive during the gap wait in Caddy and are sent to the new container when it answers; they fail with 502 only if the gap is longer than the hold time (20 s) | Unchanged: one `web` pool of 8                                             | Two lines in the Caddyfile. Honest limit: every deploy adds a few seconds of latency to the requests in flight at that moment, and a boot slower than 20 s produces errors |
+| B. Two permanent `web` containers (`web_a`, `web_b`), `DB_POOL_MAX=4` each, replaced one at a time behind Caddy's health checks | None if the health checks work                                                                                                                                              | Fits: 4 + 4 Lucid, 1 + 1 send-only pg-boss, headroom drops from 3 to 2     | Double SSR memory; a deploy script that replaces and waits twice; each container has half the pool, so a burst queues sooner. Also protects against one process crashing   |
+| C. Blue/green: start a second `web` with pool 8 next to the first                                                               | None                                                                                                                                                                        | **Does not fit**: 8 more connections than the headroom of 3 (§1.2, note 6) | Rejected while the 1 GiB plan is in use                                                                                                                                    |
+
+**Decision for R1: option A.** Its gap is measured before launch rather than assumed away: during the staging rollback rehearsal (§5.8), a loop requests `/men` every 250 ms while `web` is replaced, and records the longest wait and every non-2xx (proposed check; T-OPS area, ID from 10). A routine deploy happens in business hours at low traffic (§5.6), and NFR-AVAIL-001's 99.5% budget includes maintenance, so seconds per deploy are affordable. Option A adds to the §4.5 Caddyfile [Assumption: Caddy directive names, not covered by the research digests; `caddy validate` in CI and the measurement above prove them]:
+
+```text
+reverse_proxy web:3333 {
+  lb_try_duration 20s   # hold and retry while the upstream refuses connections
+  lb_try_interval 250ms
+}
+```
+
+Caddy retries only requests it could not hand to an upstream [Assumption, same source], so a `POST` is never sent twice; a request that reached the old container was already drained by §7.3.
+
+**Move to option B** when any of these is measured: the deploy gap exceeds 10 s or produces any 5xx in two consecutive measurements; the 03 §13 "second web container" trigger fires; or a `web` crash causes an outage. Moving means a revised 03 §3.4 budget (web 4 + 4), a new `deploy/compose.yml`, and Caddy active health checks on `/health/ready`. The switch from `web` 8 to `web_a`/`web_b` 4 + 4 is itself a configuration change tested on staging first.
+
+**The worker and migrations.** Replacing the worker leaves jobs queued for a few seconds; schedules missed during the gap catch up on their next run ([03 §10.6](03-system-architecture.md#106-scheduling)). Migrations run while the old `web` serves (§6.1); that is safe only because of §6.2.
+
+---
+
+## 8. Jobs and queue operations
+
+[03 §9](03-system-architecture.md#9-asynchronous-work) is the catalogue: 29 queues with underscore names, their owner module, trigger, idempotency rule, retry count and release. [03 §10](03-system-architecture.md#10-reliable-job-delivery) defines delivery, retries, dead letters and shutdown; [05 §9.4](05-order-payment-and-inventory-lifecycles.md#94-reconciliation-schedule) owns the schedules of the order, payment, refund, inventory and ledger jobs. This section adds what an operator needs: the schedule list as cron expressions, how to treat each queue's dead letters, the retention purge scope, and how queues are watched. It changes no retry value.
+
+### 8.1 Retries and dead letters: the operating rules
+
+- Every queue except `platform.heartbeat` has a dead-letter queue `dlq.<queue>` (03 §9; 09 §2.3 item 5). Dead-letter queues have **no workers**; they are parking lots (03 §10.5).
+- A dead-lettered job is kept only as long as pg-boss keeps an unprocessed job: 14 days by default (`retentionSeconds`) [Verified-doc research digest `infra_ops`, <https://github.com/timgit/pg-boss/blob/master/docs/api/jobs.md>, accessed 2026-09-25], and 7 days on `notifications.dispatch`, `notifications.send_email` and their dead-letter queues, which may carry an encrypted token ([07 §3.8](07-security-threat-model-and-permissions.md#38-email-verification-reset-and-invitation-tokens)). **The redrive window is therefore 7 or 14 days.** After that the payload is gone, and recovery means recomputing from the database (every handler reads current rows; payloads carry IDs only, [04a §15.5](04a-data-dictionary-tables.md#155-pg-boss-schema-pgboss)).
+- The `dlq_not_empty` alert (§9.7) fires on the first dead letter, so a dead letter is looked at on the next business day at the latest, well inside the window.
+- A job that dead-letters is also sent to the error tracker with its queue, job ID, attempt count and error class, but never its payload (09 §5.6, §7.3).
+
+### 8.2 Dead-letter handling per queue
+
+Queues are grouped by what a redrive may do. The retry counts behind each row stay in 03 §9.
+
+| Group                                         | Queues                                                                                                                                                                                                                                                                                                                                                                                                                                 | Rule                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Redrive after the fix                         | `catalog.refresh_listing`, `notifications.dispatch`, `notifications.send_email`, `media.process_upload`, `identity.revoke_sessions`, `orders.handle_shop_suspension`, `orders.acceptance_timeout`, `orders.acceptance_reminder`, `orders.cod_outcome_reminder`, `payments.process_provider_event`                                                                                                                                      | Handlers use compare-and-set, unique dedupe keys or recompute, so a redrive does the remaining work once (03 §10.3). For reminders and timeouts the handler re-reads the status first, so a redrive after the state moved on does nothing. A token email older than its token's expiry is not redriven: the user asks for a new link                                                                                                                  |
+| Never redrive; resolve by lookup              | `refunds.execute`                                                                                                                                                                                                                                                                                                                                                                                                                      | The provider call is never retried by a job and never re-sent without a lookup (03 §9). A dead letter here means the job failed before or around the call: the refund goes to `needs_review`, and finance resolves it in the refund review queue with a provider lookup and evidence (05 §9.5; `resolveRefundReview` is proposed; not yet in canon §6.5) under `platform.ledger.adjust` (`platform.payments.review` is proposed; not yet in canon §7) |
+| Do not redrive; the sweeper re-sends          | `payments.verify`, `refunds.verify`                                                                                                                                                                                                                                                                                                                                                                                                    | Each run schedules the next as a new job; a dead letter means job-level errors. `payments.reconcile_sweeper` re-sends any payment whose `next_verification_at` is overdue (05 §9.4). Refunds stuck in `processing` reach `needs_review` through `refunds.sla_monitor`. Discard these dead letters after the cause is fixed                                                                                                                            |
+| Discard; the next scheduled run does the work | `inventory.expire_reservations`, `payments.reconcile_sweeper`, `payments.daily_reconciliation`, `orders.auto_complete`, `refunds.sla_monitor`, `platform.support_case_sla`, `ledger.availability_digest`, `ledger.integrity_check`, `inventory.drift_check`, `catalog.rebuild_listings`, `catalog.generate_sitemap`, `media.cleanup_abandoned`, `platform.purge_idempotency_keys`, `platform.retention_purge`, `cart.expire_abandoned` | Sweepers select by timestamps and catch up (03 §10.6). A daily check that failed (`inventory.drift_check`, `ledger.integrity_check`, `payments.daily_reconciliation`) is re-run once by hand after the fix rather than waiting a day                                                                                                                                                                                                                  |
+| No dead-letter queue                          | `platform.heartbeat`                                                                                                                                                                                                                                                                                                                                                                                                                   | A failed ping is logged at `warn`; the missing heartbeat alert is the signal                                                                                                                                                                                                                                                                                                                                                                          |
+
+That covers all 29 queues of 03 §9.
+
+### 8.3 Redrive procedure
+
+The command is `node ace jobs:redrive` ([09 §1.2](09-code-structure-and-engineering-standards.md#12-target-tree) lists `commands/jobs_redrive.ts`); it wraps pg-boss `previewRedrive` and `redrive` (03 §10.5). The flags below are the 03 §10.5 example and stay [Assumption] until 09 writes the command.
+
+1. **Read before acting.** In the error tracker, open the dead-letter events for the queue; group them by error class. In the log tool, read the `job.attempt` lines of one failed job ID (09 §7.4). Decide which group of §8.2 the queue is in.
+2. **Fix the cause first**: a code fix through the normal pipeline (§5), a provider back up, a configuration value. Redriving into the same bug only burns retries.
+3. **Preview** in a one-off container that stays inside the "migrations and admin" line of the budget (§1.2):
+
+   ```sh
+   docker compose run --rm -e DB_POOL_MAX=1 worker \
+     node ace jobs:redrive dlq.notifications.send_email --dry-run
+   ```
+
+   The preview shows the count and the oldest and newest job times.
+
+4. **Redrive in batches** of at most 500 with `--limit 500` [Assumption], and watch the queue's due count and the error tracker between batches.
+5. **Discard** instead of redriving where §8.2 says so, with the same command's discard mode (to be named by 09) and a note in the release log explaining why.
+6. **Record** in the release log (`config:` prefix, §5.7): queue, count redriven or discarded, cause, and the fix's commit.
+
+The one-off container also runs a pg-boss instance, which needs its own pool of 1 [pseudocode until M0]. With `DB_POOL_MAX=1` for Lucid, that is 2 connections, the whole admin line, so a redrive and a deploy or dump never overlap: the redrive takes the same `flock` as §5.4 (proposed).
+
+### 8.4 Schedules
+
+All crons are registered at worker start with `tz: 'Asia/Kathmandu'` (03 §9, §10.6). Minute fields not fixed by 03 or 05 are proposed here to spread load, and are marked.
+
+| Queue                                     | Cron (Asia/Kathmandu) | From                                   | Release |
+| ----------------------------------------- | --------------------- | -------------------------------------- | ------- |
+| `inventory.expire_reservations`           | `* * * * *`           | 05 §5.4, §9.4                          | R1.1    |
+| `platform.heartbeat`                      | `*/5 * * * *`         | 03 §9                                  | R1      |
+| `payments.reconcile_sweeper`              | `*/5 * * * *`         | 05 §9.4                                | R1.1    |
+| `platform.ops_metrics` (proposed, §8.6)   | `*/5 * * * *`         | this document                          | R1      |
+| `orders.acceptance_timeout` (sweeper run) | `*/15 * * * *`        | 05 §8.11, §9.4                         | R1      |
+| `platform.purge_idempotency_keys`         | `5 * * * *`           | 05 §9.4                                | R1      |
+| `orders.auto_complete`                    | `15 * * * *`          | 05 §9.4                                | R1      |
+| `platform.support_case_sla`               | `25 * * * *`          | 03 §9                                  | R1      |
+| `refunds.sla_monitor`                     | `35 * * * *`          | 05 §9.4 (hourly; minute proposed here) | R1      |
+| `platform.retention_purge`                | `30 1 * * *`          | 03 §9                                  | R1      |
+| `cart.expire_abandoned`                   | `0 2 * * *`           | 03 §9                                  | R1      |
+| `inventory.drift_check`                   | `30 2 * * *`          | 05 §5.10                               | R1      |
+| `media.cleanup_abandoned`                 | `45 2 * * *`          | 03 §9                                  | R1      |
+| `ledger.integrity_check`                  | `0 3 * * *`           | 05 §7.12                               | R1      |
+| `catalog.rebuild_listings`                | `30 3 * * *`          | 03 §9                                  | R1      |
+| `catalog.generate_sitemap`                | `0 4 * * *`           | 03 §9                                  | R1      |
+| `ledger.availability_digest`              | `0 6 * * *`           | 03 §9                                  | R1      |
+| `payments.daily_reconciliation`           | `0 6 * * *`           | 05 §9.4                                | R1.1    |
+
+The other queues are event-driven or delayed sends. Two operating notes:
+
+- **Night cluster.** The daily jobs run from 01:30 to 04:00, when traffic is lowest [Assumption until §1.6 data shows the traffic curve]. The nightly `pg_dump` (§11) is scheduled outside this window so it does not read tables while they are being purged or rebuilt.
+- **Missed runs.** A cron missed while the worker was down is not replayed; the next run catches up because every sweeper selects by timestamps (03 §10.6). A deploy therefore never needs to avoid a cron minute.
+
+### 8.5 Overlap and singleton rules
+
+A schedule sends at most one job a minute [Verified-doc `infra_ops`, pg-boss scheduling], but the documented scheduler does not wait for the previous run to finish, so a slow run can overlap the next one [Assumption]. The intended behaviour, with pg-boss policy names from its documentation (standard, short, singleton, stately, exclusive, `key_strict_fifo`) [Verified-doc `infra_ops`, <https://github.com/timgit/pg-boss/blob/master/docs/api/queues.md>, accessed 2026-09-25]; which policy gives each behaviour is confirmed in M0 [Assumption]:
+
+| Behaviour                                       | Queues                                                                                                                                                                                                         | Why                                                                                                                                                                                                                |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| At most one run active and one waiting          | Every cron in §8.4                                                                                                                                                                                             | A slow sweep must not pile up copies; a second waiting run is enough to catch up. The row claims inside the handlers (`FOR UPDATE SKIP LOCKED`, compare-and-set) keep two runs correct even if the policy is wrong |
+| One job per entity at a time (`singletonKey`)   | `payments.verify` (payment ID), `refunds.verify` (refund ID), `orders.acceptance_timeout` (shop order ID), `catalog.refresh_listing` (product ID); backfills are guarded by their start command instead (§6.4) | Set by 03 §9; bursts coalesce and lookups never run twice in parallel                                                                                                                                              |
+| Worker concurrency 1 for `media.process_upload` | `media.process_upload`                                                                                                                                                                                         | Image decoding is the worker's largest memory user; sharp itself runs one thread on glibc Linux [Verified-doc `infra_ops`, <https://sharp.pixelplumbing.com/api-utility>, accessed 2026-09-25]                     |
+| Default concurrency                             | Everything else                                                                                                                                                                                                | The worker's Lucid pool of 4 bounds parallel handlers anyway (03 §3.4)                                                                                                                                             |
+
+### 8.6 Watching the queues
+
+The proposed cron `platform.ops_metrics` (every 5 min; name proposed for 03 §9, owner `platform`) reads the pg-boss job table and the business tables of §9.3, writes one `ops.metrics` log line, and raises the queue and business alerts of §9.7. It keeps each alert's last state in memory and reports only changes (ok → firing, firing → resolved), so a firing alert produces one event, not one every 5 minutes; a worker restart can repeat one event, which is acceptable. It is read-only apart from the log line and uses the worker's pool.
+
+Queue figures per queue (sketch; the `pgboss.job` column and state names are those of the pg-boss documentation and are confirmed against the installed pg-boss 12 schema in M0, so this is pseudocode):
+
+```sql
+SELECT name AS queue,
+       count(*) FILTER (WHERE state IN ('created', 'retry') AND start_after <= now())             AS due,
+       max(now() - start_after) FILTER (WHERE state IN ('created', 'retry') AND start_after <= now()) AS oldest_due_age,
+       count(*) FILTER (WHERE state = 'active')                                                   AS active,
+       count(*) FILTER (WHERE state = 'failed' AND completed_on > now() - interval '1 hour')      AS failed_last_hour
+  FROM pgboss.job
+ GROUP BY name;
+```
+
+- **Depth** is `due`; **age** is `oldest_due_age`, the time the oldest job has waited since it became runnable. Age is the better signal: a deep queue that drains fast is fine; one old job means a stuck worker or handler.
+- **Dead-letter size** is `due` for names starting with `dlq.`.
+- **Pickup latency** (NFR-PERF-005, p95 ≤ 5 s) is measured per attempt: the job runner adds `pickup_ms` (start time minus `start_after`) to its `job.attempt` line (proposed addition to [09 §7.4](09-code-structure-and-engineering-standards.md#74-request-id-propagation)), and the log tool computes the p95.
+- **Stalled reservations** (R1.1): `held` reservations more than 5 minutes past `expires_at` mean `inventory.expire_reservations` is not running, so stock is locked away from buyers.
+
+### 8.7 `platform.retention_purge` scope
+
+03 §9 describes this job with a narrower scope (expired `user_tokens`, archived addresses, old invitations) than [04 §19.3](04-domain-model-and-data-dictionary.md#193-retention-schedule) and 04a require. This document adopts the 04 scope, as 09 §2.3 item 6 already does, with the job hosted in `start/jobs.ts` calling one `purge_expired` action per owning module. Batches of 1,000 rows (the batch size 03 §9 gives `platform.purge_idempotency_keys`), each its own transaction, until nothing is left or 5 minutes have passed [Assumption; 04 §19.3 sets no batch values]:
+
+| Module        | Rows deleted                                                                                                                                                        | Rule (04 §19.3, 04a)                          |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| identity      | `user_tokens`                                                                                                                                                       | 7 days after `expires_at`                     |
+| identity      | archived `user_addresses`                                                                                                                                           | 30 days after `archived_at`                   |
+| identity      | `sessions` past `expires_at` (proposed backstop: 04 §19.3 relies on the store's own clean-up, which runs only after a write and then with 2% probability, 04a §5.3) | Expired                                       |
+| shops         | archived `shop_addresses`                                                                                                                                           | 30 days after `archived_at`                   |
+| shops         | `shop_invitations`                                                                                                                                                  | 1 year after acceptance, revocation or expiry |
+| cart          | `carts` in `converted`, `merged` or `abandoned`, with their `cart_items`                                                                                            | 30 days after leaving `active`                |
+| notifications | `notification_deliveries`                                                                                                                                           | 12 months after `created_at`                  |
+
+Not in this job: `idempotency_keys` (`platform.purge_idempotency_keys`), `rate_limits` (the limiter store's own expiry), abandoned uploads (`media.cleanup_abandoned`), guest and idle carts becoming `abandoned` (`cart.expire_abandoned`), and every Record-class table, which only the future `node ace data:retention` command may touch (04 §19.3). Each run logs the count deleted per table; a run that deletes nothing for 30 days while rows should qualify is a bug worth a look in the monthly review (§13).
+
+---
+
+## 9. Observability and alerting
+
+The code side is owned by [09 §5.6](09-code-structure-and-engineering-standards.md#56-reporting-to-the-error-tracker) (what reaches the error tracker, tags, `beforeSend` scrubbing) and [09 §7](09-code-structure-and-engineering-standards.md#7-structured-logging) (pino JSON, redaction, request IDs, the `http.request` and `job.attempt` lines). This section picks the tools, fixes retention, defines the metrics, the alert rules and who receives them, and the dashboards. The alert list implements NFR-OBS-003 and the detective controls that 07 hands to this document.
+
+### 9.1 Tools
+
+All figures as published on 2026-09-25 [Verified-doc research digest `infra_ops`, accessed 2026-09-25]. Each tool is also a processor in the 07 §5.8 register; where each stores data is [Assumption] until recorded when the account is opened (note 10).
+
+| Need                                   | Provisional tool                                                               | Published free-tier limits                                                                              | Why this one                                                                                                                  | Tradeoff, and when to pay                                                                                                                                                                                                                          |
+| -------------------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Error tracking                         | Sentry, Developer plan (<https://sentry.io/pricing/>)                          | One user, 5k errors, 5M spans, 50 replays, 1 cron monitor, 1 uptime monitor, 5 GB logs, 30-day lookback | Already the 09 §5.6 wiring; `@sentry/node` 11.0.0 supports Node 24                                                            | **One user**: a second developer cannot log in. Team is $26/mo billed annually; buy it when a second developer joins or when the 5k quota is hit two months running                                                                                |
+| Logs                                   | Axiom, Personal plan (<https://axiom.co/pricing>)                              | 500 GB/mo data loading compute, 30-day retention, 25 GB storage                                         | The only free option researched with 30-day retention, which is the 04 §19.3 log retention and covers 07 §6.5 evidence export | Whether a "Personal" plan may be used by a company is not researched [Assumption; check the terms when opening the account]. Fallback: Axiom Cloud ($25/mo plus usage) or Grafana Cloud Free with 14-day retention (see note in Consistency notes) |
+| Uptime checks, heartbeats, status page | Better Stack, free tier (<https://betterstack.com/pricing>)                    | 10 monitors and heartbeats, 1 status page, Slack and e-mail alerts                                      | External to the host; covers the site checks, the worker heartbeat and the backup heartbeat (§11) in one place                | Its 3-day log retention is too short, so it is not used for logs. The check interval on the free tier is [Assumption]; NFR-AVAIL-001 wants 1 minute                                                                                                |
+| Traces (optional)                      | Grafana Cloud Free (<https://grafana.com/pricing/>) via `@adonisjs/otel` 1.2.3 | 10k active metric series, 50 GB logs, traces and profiles per month, 14-day retention, 3 users          | OTLP from `@adonisjs/otel`, vendor-neutral                                                                                    | Not enabled at launch (§9.5)                                                                                                                                                                                                                       |
+| Host and database metrics              | The hosting provider's built-in monitoring                                     | [Assumption; confirmed with the other provider facts of §1.2]                                           | CPU, memory, disk and database storage without another agent                                                                  | Provider-specific; replaced on a provider move (§1.9)                                                                                                                                                                                              |
+
+Three free accounts instead of one paid suite: each covers a gap the others leave (Sentry's 30-day errors, Axiom's 30-day logs, Better Stack's external checks). The cost is three more consoles to protect with 2FA (§14) and three processors in the register. The paid alternative is Sentry Team plus Axiom Cloud, about $51/mo at the published entry prices before usage.
+
+Staging uses separate projects and datasets in every tool (§2.6 rule 5). Its events count against the same Sentry organisation quota [Assumption on quota scope]. Staging keeps every event, because NFR-OBS-002 is checked by a deliberate staging error after each deploy; it has little traffic, and if it ever uses more than 20% of the monthly quota it moves to a separate free organisation [Assumption].
+
+### 9.2 Logs
+
+- **Path.** Processes write pino JSON to stdout (09 §7.1) → Docker's `json-file` driver keeps 5 × 10 MB per container on the host (§4.5), a local buffer of hours to days → a log-shipping container reads those files read-only and sends them to the log tool. The shipper (for example Vector or Grafana Alloy) is not covered by the research digests; it is chosen and pinned when staging is built [Assumption]. It mounts `/var/lib/docker/containers` read-only and never the Docker socket, which would give it root on the host. Tradeoff against a pino transport inside the app: one more container, but a log-tool outage or slow network never blocks a request.
+- **Datasets:** `dripnepal-production` and `dripnepal-staging`; the host adds `service` (`web`, `worker`, `caddy`, `release`) and `release` comes from the line itself (09 §7.1).
+- **Retention: 30 days** in the log tool (the figure 04 §19.3 left to this document). The Docker buffer on the host is overwritten by rotation.
+- **Volume** (arithmetic on assumptions, not a measurement): one `http.request` line of about 400 bytes per request. At an average of 1 request per second that is about 35 MB a day, about 1 GB a month; at the NFR-PERF-003 peak of 20 requests per second sustained all day, it would be about 21 GB a month, close to the 25 GB storage limit. The monthly review (§13) compares actual ingest with the limit.
+- **Incident export** ([07 §6.5](07-security-threat-model-and-permissions.md#65-evidence-preservation)): the incident lead runs the tool's query for the incident window and saves the result as a file in the restricted incident folder (§10), before the 30 days run out. The export format is [Assumption] until the account exists.
+- **Redaction check** (07 TM-27 detective control): every Monday the tech lead runs a saved query over the previous week for the patterns `9[678]\d{8}` (Nepali mobile numbers) and `@` inside values, and records the result. A hit is a SEV-3 ([07 §6.1](07-security-threat-model-and-permissions.md#61-severity-levels)) and a redaction fix in 09 §7.2.
+- **Who reads them:** the developers. Logs hold identifiers and hashed IPs, not personal values, but they are still Internal data (04 §19.1).
+
+### 9.3 Metrics
+
+R1 runs no metrics server. HTTP metrics come from the access lines in the log tool; queue and business metrics come from `platform.ops_metrics` (§8.6); host metrics come from the provider. Tradeoff: no high-resolution time series, and log queries cost more than a Prometheus lookup, but there is nothing extra to run or secure. The trigger for a real metrics backend (Grafana Cloud Free, 10k series) is a question the logs cannot answer fast enough during an incident.
+
+**HTTP (RED)**, from `http.request` lines grouped by `route_name` (09 §7.4), per 5 minutes: request **rate**; **errors**, the share of `status >= 500` (4xx is shown separately and never alerts on its own); **duration**, p50, p95 and p99 of `duration_ms`. Route groups: storefront pages, checkout (`quoteCheckout`, `placeOrder`), seller, admin, `/api/v1`, health.
+
+**Business and operational metrics:**
+
+| Metric                                 | Definition                                                                                                                                                                                                                                                                      | Source                                                                                | Cadence             | Target or trigger                                                |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ------------------- | ---------------------------------------------------------------- |
+| Orders placed                          | Parent orders by `placed_at`, per hour and per day                                                                                                                                                                                                                              | `ops_metrics` count                                                                   | 5 min               | A zero hour in the day while checkout is on is worth a look      |
+| COD refusal rate                       | SM-07 definition ([01 §10](01-product-requirements.md#10-success-metrics))                                                                                                                                                                                                      | Admin report query (FR-ADM-007)                                                       | Weekly; daily gauge | ≤ 10% (SM-07)                                                    |
+| Reservation expiries (R1.1)            | Held reservations released by `inventory.expire_reservations`, per hour; plus stalled ones (§8.6)                                                                                                                                                                               | A `released` count on the job's `job.attempt` line (proposed field, like `pickup_ms`) | Hourly              | Stalled > 0 alerts                                               |
+| Listing freshness                      | p95 of `pickup_ms` + `duration_ms` on `catalog.refresh_listing` attempts, a lower bound on staleness because `singletonKey` coalescing can add a wait                                                                                                                           | `job.attempt` lines                                                                   | 5 min               | ≤ 60 s p95 (NFR-PERF-005)                                        |
+| Dead-letter size                       | Due jobs in `dlq.*` per queue                                                                                                                                                                                                                                                   | `ops_metrics`                                                                         | 5 min               | > 0 alerts (NFR-OBS-003)                                         |
+| Queue age and pickup latency           | §8.6                                                                                                                                                                                                                                                                            | `ops_metrics`, `job.attempt`                                                          | 5 min               | Pickup p95 ≤ 5 s (NFR-PERF-005)                                  |
+| Stock drift                            | Rows returned by `inventory.drift_check` (05 §5.10)                                                                                                                                                                                                                             | The job                                                                               | Daily 02:30         | Any row alerts                                                   |
+| Refunds pending more than 5 days       | Refunds not `succeeded` or `cancelled` whose `created_at` is more than 5 days ago; `failed` counts as pending because `retryRefund` can still pay it ([05 §8.8](05-order-payment-and-inventory-lifecycles.md#88-refund-failure-and-retry-including-esewa-without-a-refund-api)) | `ops_metrics` count; alerts from `refunds.sla_monitor`                                | 5 min               | Any is shown; alerts follow `refunds.sla_monitor` (due − 2 days) |
+| Payments and refunds in `needs_review` | Count and oldest age (05 §9.5)                                                                                                                                                                                                                                                  | `ops_metrics`                                                                         | 5 min               | Finance on entry; platform admin after 24 h                      |
+| Support cases near the 15-day SLA      | Open cases (`open`, `awaiting_customer`, `awaiting_shop`) with `due_at` within 3 days                                                                                                                                                                                           | `ops_metrics`; alerts from `platform.support_case_sla`                                | 5 min               | Warn at `due_at` − 3 days, breach at `due_at` (03 §9)            |
+| Email hand-off                         | SM-20: share of `notification_deliveries` sent within 2 min; failures per hour                                                                                                                                                                                                  | `ops_metrics`                                                                         | 5 min               | ≥ 95% within 2 min; failures > 5% per hour alert                 |
+| Database connections                   | `count(*)` of `pg_stat_activity` rows with `datname = current_database()` and `backend_type = 'client backend'`, so PostgreSQL's own background processes are not counted                                                                                                       | `ops_metrics`                                                                         | 5 min               | ≥ 20 of 22 for 10 min alerts                                     |
+| Page views (SM-03, SM-05)              | §9.4                                                                                                                                                                                                                                                                            | `web` counters                                                                        | Daily totals        | Weekly review                                                    |
+
+### 9.4 Where SM-03 and SM-05 page-view totals live
+
+[01 §10](01-product-requirements.md#10-success-metrics) says a daily job counts product-page and checkout-review views in the request logs and keeps only daily totals, and leaves the store to this document and 04. **Decision: a daily aggregate table in PostgreSQL, not the log tool.** Reasons: log lines are deleted after 30 days, while the launch review compares 12 weekly values (01 §10, "Launch period"); the admin and shop dashboards that show these metrics (FR-ADM-001, FR-ADM-007) read PostgreSQL, not a third-party API; and a query from the app to the log tool would add a credential and a runtime dependency on a free-tier service.
+
+- **Table** (proposed for 04/04a; name and columns are proposals): `page_view_daily_totals` with `day` (date in Asia/Kathmandu), `page_kind` (`product` or `checkout_review`), `shop_id` and `category_id` (both nullable; null means the platform total), and `views` (bigint); unique on (`day`, `page_kind`, `shop_id`, `category_id`) with `NULLS NOT DISTINCT`. Internal class, no personal data, kept for the life of the platform.
+- **Filling it**: instead of parsing logs, `web` counts successful (200) SSR and Inertia responses of the product and checkout-review pages in memory, skipping Inertia partial reloads (requests with the `x-inertia-partial-data` header [Verified-repo `@adonisjs/inertia` 4.2.0], for example a variant change) and user agents on a bot list [Assumption], and adds the counts every 60 seconds with one `INSERT … ON CONFLICT … DO UPDATE SET views = views + excluded.views`. The flush also runs in the `terminating` hook (§7.3). Up to 60 seconds of counts are lost if the process crashes, which does not move a daily ratio.
+- **Consequence**: this changes the mechanism 01 §10 describes (counting in logs) while keeping its rule of daily totals only; see Consistency notes.
+
+### 9.5 Traces (optional)
+
+`@adonisjs/otel` 1.2.3 traces incoming and outgoing HTTP and Lucid queries, injects `trace_id` and `span_id` into pino lines, exports OTLP set by `OTEL_EXPORTER_OTLP_ENDPOINT` and `OTEL_EXPORTER_OTLP_HEADERS`, supports `samplingRatio`, and is disabled when `NODE_ENV` is `test` [Verified-doc `infra_ops`, <https://docs.adonisjs.com/guides/digging-deeper/opentelemetry>, accessed 2026-09-25].
+
+- **Not enabled at launch.** The access lines and the error tracker answer the launch questions; tracing adds an SDK pinned to the `@opentelemetry/sdk-node` 0.213 line and memory in both processes.
+- **Enabled when** a p95 latency alert cannot be explained from access lines and slow-query logs within one working day, or before the load test T-PERF-001 if the team wants per-query timing.
+- **How:** Grafana Cloud Free as the OTLP target; `samplingRatio` 0.1 in production [Assumption; keeps within 50 GB/month]; the OTel provider starts first and Sentry runs in its custom OpenTelemetry mode, as Sentry documents for an existing setup (`enableOpenTelemetrySetup: false`, OTel initialised before `Sentry.init()`) [Verified-doc `infra_ops`, <https://docs.sentry.io/platforms/javascript/guides/node/opentelemetry/custom-setup/>, accessed 2026-09-25]. The two OTLP variables stay outside the 09 §6.2 schema, as 09 §6.1 decided.
+
+### 9.6 Error tracker configuration
+
+Project-level settings that 09 §5.6 and [07 §5.8](07-security-threat-model-and-permissions.md#58-analytics-and-third-party-processors) leave here. Setting names are Sentry's as far as known and are [Assumption] until the organisation is created; the check at the end proves the behaviour.
+
+| Setting                  | Value                                                                                                                                                                                                                                                                  |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Projects                 | `dripnepal-production` and `dripnepal-staging`, one DSN each; browser and server events share the project and are told apart by the platform tag                                                                                                                       |
+| Data region              | Chosen when the organisation is created (US or EU), recorded in the 07 §5.8 processor register; it cannot be changed later [Assumption]                                                                                                                                |
+| Server-side scrubbing    | Default scrubbers on; IP address storage off; additional sensitive field names = the 09 §7.2 redaction keys. This is a second layer behind `beforeSend`                                                                                                                |
+| Retention                | 30-day lookback on the Developer plan (published); nothing is exported from the tracker                                                                                                                                                                                |
+| Releases                 | `APP_RELEASE` (the commit SHA), so "new issue after a deploy" works (§5.6)                                                                                                                                                                                             |
+| Quota                    | 5k errors a month is about 166 a day. Spike protection on [Assumption]. One bug in a loop can use the month's quota, which is why every page-class alert also has a source outside Sentry (uptime checks, `ops_metrics`)                                               |
+| CSP reports              | Sent to the tracker's security-report endpoint if the plan provides one [Assumption, 07 §7.3]; then the proposed `POST /csp-reports` fallback (proposed; not yet in canon §6.4) is not built. Reports count against the error quota, so report-only mode is kept short |
+| Cron and uptime monitors | Not used: the plan has one of each; Better Stack covers these                                                                                                                                                                                                          |
+
+Check (proposed; T-OPS area, ID from 10), after each change to the settings: send a staging event containing a test email address, a fake phone number and a cookie in `extra`; the stored event must show none of them.
+
+### 9.7 Alert rules
+
+Classes: **Page** reaches both developers' phones at any hour; **Business hours** goes to the alerts channel and is handled in the §2.7 hours; **Business** alerts go by email to finance or the platform admin through the app's own notification path. Out of hours, only the page class interrupts anyone, and only for site down, checkout errors or suspected breach (A-30, NFR-OBS-003). Response to a page out of hours is best effort, because nobody is on call (§2.7, §14). Thresholds are [Assumption] unless a requirement gives them, and are reviewed after 4 weeks of production data.
+
+| Alert                     | Condition                                                                                                                                                | Source                                                                                | Class                                                                    | Basis                                                                                            |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| `site_down`               | `/health/live` or `/men` fails 2 consecutive checks                                                                                                      | Better Stack                                                                          | Page                                                                     | NFR-AVAIL-001, A-30                                                                              |
+| `checkout_errors`         | 3 or more 5xx on `placeOrder` in 10 min; or, in R1, any 503 `PROVIDER_UNAVAILABLE` from checkout while `checkout_enabled` is `true`                      | Sentry (tag `route_name`); log tool                                                   | Page                                                                     | A-30                                                                                             |
+| `checkout_switch_changed` | Any change of `checkout_enabled`                                                                                                                         | Audit event from `updatePlatformSetting`, reported by the app                         | Page (the person who made an expected change acknowledges it)            | [07 §6.4](07-security-threat-model-and-permissions.md#64-the-kill-switch-and-directive-2082-s82) |
+| `staff_privilege_change`  | `platform_staff` change (role granted or revoked), staff MFA reset, `single_operator_mode` change, or payout account verified                            | Audit events, reported by the app (proposed)                                          | Page outside business hours (suspected breach); business hours otherwise | A-30; 07 TM-05 detective control; 07 §6.1 SEV-1 examples                                         |
+| `worker_down`             | Heartbeat missing for 10 min; or (R1.1) any stalled reservation (§8.6)                                                                                   | Better Stack heartbeat; `ops_metrics`                                                 | Business hours in R1; Page from R1.1 (proposed)                          | 03 §9, §10.6                                                                                     |
+| `http_5xx_rate`           | 5xx above 1% of requests for 5 min, with at least 20 requests                                                                                            | Log tool monitor [Assumption: available on the plan]; else Sentry count ≥ 10 in 5 min | Business hours                                                           | NFR-OBS-003                                                                                      |
+| `latency_p95`             | Read routes p95 > 300 ms, or `placeOrder` p95 > 800 ms, for 15 min                                                                                       | Log tool                                                                              | Business hours                                                           | NFR-PERF-003, NFR-PERF-004                                                                       |
+| `dlq_not_empty`           | Any `dlq.*` due count > 0                                                                                                                                | `ops_metrics`                                                                         | Business hours                                                           | NFR-OBS-003, §8.1                                                                                |
+| `job_pickup_slow`         | Pickup p95 > 5 s over 15 min, or any queue's oldest due job older than 2 min                                                                             | Log tool; `ops_metrics`                                                               | Business hours                                                           | NFR-PERF-005, NFR-OBS-003                                                                        |
+| `email_failures`          | More than 5% of email attempts failed in 1 hour, with at least 20 attempts                                                                               | `ops_metrics`                                                                         | Business hours                                                           | NFR-OBS-003                                                                                      |
+| `stock_drift`             | Any drift row                                                                                                                                            | `inventory.drift_check`: error-tracker event plus email to the platform admin         | Business hours                                                           | 05 §5.10, FR-INV-005                                                                             |
+| `ledger_integrity`        | Any violated ledger identity                                                                                                                             | `ledger.integrity_check`                                                              | Business hours; SEV-2 if money moved without authorisation (07 §6.1)     | 05 §7.12                                                                                         |
+| `payments_needs_review`   | A payment or refund enters `needs_review`; still open after 24 h                                                                                         | App notification                                                                      | Business: finance on entry, platform admin after 24 h                    | 05 §9.5 (R1.1)                                                                                   |
+| `refund_sla`              | `refunds.due_at` or `return_requests.refund_due_at` − 2 days; the deadline itself                                                                        | `refunds.sla_monitor`                                                                 | Business: finance, then platform admin                                   | FR-RET-007, 03 §9                                                                                |
+| `support_case_sla`        | `due_at` − 3 days; breach at `due_at`                                                                                                                    | `platform.support_case_sla`                                                           | Business: support, then platform admin                                   | FR-ADM-009, 03 §9                                                                                |
+| `acceptance_timeouts`     | Daily count of shop orders cancelled with `acceptance_timeout`                                                                                           | `ops_metrics` daily digest                                                            | Business: platform admin                                                 | NFR-OBS-003, SM-08                                                                               |
+| `db_connections_high`     | 20 or more of 22 connections for 10 min                                                                                                                  | `ops_metrics`                                                                         | Business hours                                                           | 03 §3.4; 07 capacity detective                                                                   |
+| `host_resources`          | Droplet disk > 80% or memory > 90% for 10 min; database CPU > 80% for 15 min or storage > 80%                                                            | Provider monitoring [Assumption]                                                      | Business hours                                                           | §13                                                                                              |
+| `backup_missing`          | Nightly dump heartbeat not received by 07:00                                                                                                             | Better Stack heartbeat (§11)                                                          | Business hours                                                           | NFR-DATA-004                                                                                     |
+| `login_failure_spike`     | More than 100 failed logins in 5 min platform-wide, or more than 10 for one account                                                                      | `ops_metrics` over `auth.login_failed` audit rows                                     | Business hours (SEV-3, 07 §6.1)                                          | 07 TM-08 detective control                                                                       |
+| `seller_route_probe`      | More than 20 `NOT_FOUND` on seller routes for one `user_id` in 5 min (07 says per session; the access line carries `user_id`, not a session ID, 09 §7.4) | Log tool                                                                              | Business hours                                                           | 07 TM-01 detective control                                                                       |
+| `kyc_view_spike`          | More than 20 `shop.kyc_view` audit rows by one staff member in a day                                                                                     | `ops_metrics` over `audit_logs`                                                       | Business hours                                                           | 07 TM-16 detective control                                                                       |
+| `sql_syntax_error`        | Any SQLSTATE `42601` in production                                                                                                                       | Error tracker (error class tag); log tool                                             | Business hours (SEV-3 until triaged)                                     | 07 TM-12 detective control                                                                       |
+| `provider_event_anomaly`  | (R1.1) Any `provider_events` row with `signature_valid = false` or `processing_status = 'failed'`                                                        | `ops_metrics`                                                                         | Business hours                                                           | 07 TM-18 detective control                                                                       |
+
+The `checkout_errors` rule counts 503 `PROVIDER_UNAVAILABLE` only when it cannot be the kill switch (`checkout_enabled` true) and cannot be a gateway outage (R1 is COD only); from R1.1, gateway unavailability is a separate business-hours condition, because COD keeps working (NFR-AVAIL-003). App-raised alerts (`checkout_switch_changed`, `staff_privilege_change`, the `ops_metrics` alerts) go through one helper in the platform module (proposed for 09) that writes an `ops.alert` log line and sends an error-tracker event tagged with the alert name and class; the tracker's alert rules route by that tag. Business alerts to finance and admins use `notifications.dispatch`, so they depend on the email provider; the `email_failures` alert does not, because it goes through the tracker.
+
+### 9.8 Who gets paged, and how
+
+- **Recipients.** Page and business-hours alerts: the tech lead, and the second developer when there is one. Business alerts: the finance officer and the platform admin roles by email (05 §9.5). The product owner gets a daily digest (the business dashboard link plus the `acceptance_timeouts` and `payments_needs_review` counts) [Assumption].
+- **Channel.** A Slack workspace (free plan [Assumption; Slack's plans are not in the research digests]) with `#alerts-page` and `#alerts`, fed by Better Stack (Slack and e-mail are on its free tier, as published) and by Sentry's alert rules [Assumption: Sentry's Slack integration on the Developer plan]. Each person's phone allows notifications from `#alerts-page` through do-not-disturb and focus modes; `#alerts` stays silent at night. If a free-tier channel cannot reach a phone at night, the fallback is e-mail to an alerts address with a phone rule that lets that sender through [Assumption; tested in the alert drill below].
+- **Acknowledgement.** Whoever acts on a page writes one line in `#alerts-page` ("taking it"), so two people do not run the same runbook. §14 owns on-call expectations; §10 holds the runbooks each alert links to.
+- **Noise budget.** More than 2 out-of-hours pages in a week that needed no action is itself a finding for the weekly review: the rule is tuned or reclassified, never ignored.
+
+### 9.9 Dashboards
+
+| Dashboard | Tool                                                                                     | Panels                                                                                                                                                | Who looks                                                                                                                                      |
+| --------- | ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Service   | Log tool                                                                                 | RED per route group; 5xx list by route; p95 by route; 4xx rate; requests by Cloudflare colo (from the logged `cf_ray`); deploy markers from `release` | Developers after each deploy (§5.6) and on alerts                                                                                              |
+| Jobs      | Log tool (`ops.metrics` lines)                                                           | Due count and oldest age per queue; pickup p95; failures per queue; dead-letter size; last run time of each cron; heartbeat                           | Developers daily in business hours                                                                                                             |
+| Business  | Log tool (`ops.metrics` lines); admin overview (FR-ADM-001) for the authoritative counts | Orders per hour; COD refusal gauge; `needs_review` count and age; refunds pending > 5 days; support cases near SLA; drift rows; email hand-off        | Product owner (daily digest), finance, admin                                                                                                   |
+| Status    | Better Stack status page                                                                 | Storefront, checkout, media; incident notes                                                                                                           | Public. It is also one channel for the Directive 2082 s8(2) public notice (template in §10) [Assumption; counsel decides the channel, 07 §6.6] |
+
+### 9.10 How the alerting is verified
+
+Before the R1 launch gate, and after any change to a rule or channel, an alert drill on staging (proposed; T-OPS area, ID from 10) makes each rule fire once and records when it reached which phone: stop `web` (`site_down`); force a 5xx on `placeOrder` with a fault flag (`checkout_errors`); toggle `checkout_enabled` (`checkout_switch_changed`); stop the worker (`worker_down`); make `notifications.send_email` fail against a closed SMTP port until a job dead-letters (`dlq_not_empty`, `email_failures`); inject drift as T-INV-005 (proposed in 05) does (`stock_drift`). NFR-OBS-003 names this as "each alert fires in staging", so every other rule of §9.7 is also fired once by its cheapest trigger (a crafted audit row, a forced SQL syntax error in a staging-only fault route, a staging threshold lowered for the drill); R1.1 rules are drilled before the R1.1 gate. The staging tools use their own projects and channels (§9.1), so the drill never pages for production and a production alert is never mistaken for a drill.
+
+---
+
 ## Consistency notes for editor
 
-Notes 1–13 cover §1–§2; notes 14–31 cover §3–§5. Later parts append their own.
+Notes 1–13 cover §1–§2; notes 14–31 cover §3–§5; notes 32–55 cover §6–§9 (53–55 from the critic pass). Later parts append their own.
 
 1. **Portability check adopted.** The [Assumption] in [03 §5.3](03-system-architecture.md#53-portability-requirement-nfr-data-005-vx-09) (staging rebuild on a second provider before the R1 gate) is adopted in §1.9 and combined with NFR-DATA-005's quarterly from-scratch staging deploy. 03 §5.3 can drop "[Assumption]" and link §1.9.
 2. **Restore-drill cadence.** ADR-0016 Verification, NFR-AVAIL-002 and R-29 say T-OPS-001 runs before launch and **quarterly**; the specification for this document (item 11, canon-derived brief) says **monthly**. §11 (a later part) must pick one and the others must follow; §1–§2 only reference T-OPS-001 without a cadence.
@@ -920,3 +1423,28 @@ Notes 1–13 cover §1–§2; notes 14–31 cover §3–§5. Later parts append 
 29. **`release.env` carries the key ring.** The 09 §6.2 schema declares `DATA_ENCRYPTION_KEYS`, `DATA_ENCRYPTION_ACTIVE_KEY_ID`, `BLIND_INDEX_KEY`, `HMAC_KEY_LIMITER` and `HMAC_KEY_AUDIT_IP` as required, so every `node ace` command in the release step needs them even though migrations do not read them (§5.7). Keeping them out of the release container would need a schema that makes them optional for a release mode; 09 owns that choice. Until then the key material is present in three env files on the host, not two.
 30. **Staging basic-authentication exceptions.** §2.4 (part 1) exempts `/health/*`; §3.2 exempts only `/health/live`, and §4.5 answers `/health/ready` with 404 from outside anyway. The effect is the same; §2.4 should say `/health/live` when the document is finalised.
 31. **One-off admin commands and the connection budget.** §5.9 runs `platform:create-admin` in a one-off `web` container with `DB_POOL_MAX=1`, so it counts against the "migrations and admin sessions" line of [03 §3.4](03-system-architecture.md#34-postgresql-layout-and-connection-budget), like an incident `psql` session. 09 §9.3 step 7 only says "over an SSH session to the host"; the pool override is an addition here.
+
+32. **`pgboss` schema upgrades need the migrator.** [07 §4.10](07-security-threat-model-and-permissions.md#410-database-roles-and-grants) makes `dripnepal_migrator` the owner of `pgboss` and gives `dripnepal_app` DML only, while 04a §15.5 and ADR-0010 say pg-boss creates and migrates its schema itself at start. §6.1 moves that step into the release container and starts the worker with pg-boss migration disabled (pseudocode until the M0 spike T-ARCH-004). ADR-0010, 03 §10 and 09 §2.3 should record it.
+33. **Two release checks added** to the [09 §9.2](09-code-structure-and-engineering-standards.md#92-no-default-credentials-anywhere) list run by §5.4: `node ace migration:status` shows nothing pending, and `pg_index` has no invalid index (§6.1). Proposed; IDs from 10.
+34. **Backfill queues.** 09 §8.3 says backfills run as jobs "owned by the table's module; 11 runs it". §6.4 proposes the naming pattern `<module>.backfill_<subject>`, a self-chaining batch job whose start command refuses to run while the queue is busy (a `singletonKey` is not relied on, because its behaviour while the sender is active is unverified), and a guard at the start of the contract migration. Each backfill queue joins the 03 §9 catalogue when it is created.
+35. **External availability check.** [01 NFR-AVAIL-001 and SM-16](01-product-requirements.md#83-availability-and-recovery-nfr-avail) measure availability with an external check of `/health/ready` and one listing page. §4.5 makes `/health/ready` answer 404 from outside, and §7.1 uses `/health/live` plus `/men` (the listing page exercises the database and SSR). 01 should say `/health/live`; the measured availability is unchanged. This extends note 16.
+36. **Version check resolved.** §5.5 left the version source to §7: `/health/live` returns `{"status":"ok","release":"<APP_RELEASE>"}` (§7.1).
+37. **`DbConnectionCountCheck` excluded from readiness.** Its installed defaults (warn above 10, fail above 15 connections) are below normal load on the 22-connection budget [Verified-repo Lucid 22.4.2]. Connection use is the `db_connections_high` alert instead (§9.7). 03 §12.8 names only `DbCheck`, so no document conflicts.
+38. **Deploy gap and the 03 §3.4 headroom.** §7.4 chooses a stop-and-start `web` replacement with Caddy holding requests for up to 20 s (option A) and adds `lb_try_duration` and `lb_try_interval` to the §4.5 Caddyfile sketch, and §7.3 sets `stop_grace_period` (30 s `web`, 60 s `worker`), which the §4.5 Compose sketch does not yet show; both sketches should be updated when this document is finalised. It confirms note 6: the 03 §3.4 headroom row ("a second web container during a rolling restart") is not achievable at pool 8 and should read "monitoring and one-off admin commands". Moving to two permanent `web` containers (option B) requires revising 03 §3.4 to `web` 4 + 4.
+39. **Heartbeat target and `HEARTBEAT_URL`.** 03 §9 left the heartbeat target to 11: it is the Better Stack free tier (§9.1), because Sentry's Developer plan has only one cron monitor. The URL is a secret and needs a variable, `HEARTBEAT_URL` (proposed), which [09 §6.1](09-code-structure-and-engineering-standards.md#61-variable-catalogue) should add to `worker.env`'s schema; the §5.7 production table gains the row.
+40. **New queue `platform.ops_metrics` (proposed).** §8.6 adds a 30th queue, cron every 5 min, owner `platform`, for queue depth and age, dead-letter size, business gauges and state-change alerts. It also proposes `pickup_ms` and, for `inventory.expire_reservations`, `released` fields on the `job.attempt` line ([09 §7.4](09-code-structure-and-engineering-standards.md#74-request-id-propagation)) and one alert helper in the platform module that logs `ops.alert` and sends a tagged error-tracker event (§9.7). 03 §9 and 09 would add them.
+41. **`platform.retention_purge` scope.** 03 §9 lists expired `user_tokens`, archived addresses and old invitations. §8.7 adopts the wider 04 §19.3 and 04a scope, as 09 §2.3 item 6 does: also `converted`, `merged` and `abandoned` carts 30 days after leaving `active`, and `notification_deliveries` after 12 months. It adds expired `sessions` as a proposed backstop: 04 §19.3 assigns sessions to the session store's garbage collection, which 04a §5.3 describes as running only after a write, with 2% probability, so quiet periods leave expired rows behind. 03 §9's row should be widened.
+42. **Token queue retention.** §8.1 adopts [07 §3.8](07-security-threat-model-and-permissions.md#38-email-verification-reset-and-invitation-tokens): `retentionSeconds` of 7 days on `notifications.dispatch`, `notifications.send_email` and their dead-letter queues. 03 §9 and 04a §15.5 still give only the one-day deletion of completed jobs (confirmed in the current files), and should add it. The consequence for operators, a 7-day redrive window on those queues, is stated in §8.1.
+43. **Schedule minutes proposed here.** 05 §9.4 says `refunds.sla_monitor` runs hourly without a minute; §8.4 uses `35 * * * *`. `platform.ops_metrics` uses `*/5 * * * *`. All other cron values are copied from 03 §9 and 05.
+44. **SM-03/SM-05 store decided.** §9.4 chooses a daily aggregate table, `page_view_daily_totals` (proposed for 04/04a; answers 01 consistency note 8 and the open item in note 12), filled by in-memory counters in `web` flushed every 60 s. This changes the mechanism in [01 §10](01-product-requirements.md#10-success-metrics) ("a daily job counts … in the redacted request logs") while keeping its rule that only daily totals are stored. 01 should describe the counters, or the product owner may prefer the log-based count, which would need an API credential for the log tool and history beyond its 30 days.
+45. **Log retention and tool.** 04 §19.3 left the log retention to 11 as "30 days [Assumption]". §9.2 keeps 30 days with Axiom's Personal plan, the only free option researched with 30-day retention. Whether a company may use a "Personal" plan is not researched; if not, the fallback is Axiom Cloud ($25/mo plus usage) or Grafana Cloud Free, whose 14-day retention would change the 04 §19.3 row and shorten the 07 §6.5 export window. This answers the 07 §6.5 "provider and export step" item except the export file format, which is checked when the account exists.
+46. **Error-tracker items from 07 and 09.** §9.6 fixes the project split, server-side scrubbing, IP storage off, releases and quota handling. Data region, the setting names and the CSP report endpoint are [Assumption] until the organisation exists. If Sentry's CSP endpoint is confirmed, the 07 §7.3 fallback `POST /csp-reports` (proposed; not yet in canon §6.4) is not built. Sentry's Developer plan allows one user, so a second developer means the Team plan (§13 costs it).
+47. **Out-of-hours paging scope.** A-30 and NFR-OBS-003 allow out-of-hours pages only for site down, checkout errors and suspected breach. §9.7 classifies `checkout_switch_changed` and `staff_privilege_change` (outside business hours) as suspected breach, and, from R1.1, `worker_down` and stalled reservations as checkout errors, because held stock then stays locked. The product owner confirms these readings with A-29 and A-30.
+48. **Thresholds from 07 adopted.** The 07 detective thresholds (more than 20 `NOT_FOUND` on seller routes per session in 5 min; more than 100 failed logins in 5 min or 10 per account) are used unchanged, as business-hours alerts, because 07 §6.1 classes a login-failure spike as SEV-3. The weekly log grep for phone and email patterns (07 TM-27) is scheduled for Mondays (§9.2). The seller-route rule counts per `user_id`, not per session as 07 TM-01 says, because the 09 §7.4 access line carries no session ID; 07 TM-01 could say "per user".
+49. **Routing handed over by 05.** 05 §5.10 (drift: error-tracker event plus email to the platform admin) and 05 §9.5 (`needs_review`: finance on entry, platform admin after 24 h) are adopted as `stock_drift` and `payments_needs_review`. The review actions use `platform.ledger.adjust`; `platform.payments.review` and `resolveRefundReview` are proposed; not yet in canon §7 and §6.5.
+50. **Kill switch in the alert rules.** `checkout_errors` treats a 503 `PROVIDER_UNAVAILABLE` from checkout as an error only while `checkout_enabled` is `true` in R1. The kill-switch response stays 503 `PROVIDER_UNAVAILABLE` (`CHECKOUT_DISABLED` is proposed; not yet in canon §6.6). If canon adopts the new code, the rule gets simpler.
+51. **Proposed checks without IDs (§6–§9)** for [10](10-testing-and-quality-gates.md) to number (T-OPS area unless 10 decides otherwise): the two release checks of note 33; the `web` SIGTERM test and the graceful worker test (the latter is T-OPS-002 in 03 §10.7, which collides with 05, note 3); the deploy-gap measurement (§7.4); the error-tracker scrubbing check (§9.6); the alert drill (§9.10). Numbered IDs cited are canon (T-OPS-001, T-PERF-001) or already proposed elsewhere (T-ARCH-004, T-ARCH-010, T-ARCH-012, T-SEC-029, T-INV-005).
+52. **Status of the items in notes 12 and 27.** Now addressed: `platform.retention_purge` scope (§8.7, note 41), the SM-03/SM-05 store (§9.4, note 44), error-tracker scrubbing and log retention and export (§9.2, §9.6). Still open for later parts: the runbooks (REG-18 inspection-records folder, `TRUNCATE sessions`, stock drift, `needs_review`, breach notice template) in §10; backups, the restore-drill cadence (note 2) and the dump schedule, which must avoid the 01:30–04:00 job window (§8.4), in §11; provider at-rest encryption, the MFA reset and the vendor mailbox-loss procedures in §10 and §14.
+53. **Other 07 detective alerts added in the critic pass.** §9.7 now also carries 07 TM-05 (`platform_staff` and `single_operator_mode` changes, folded into `staff_privilege_change`, which pages only outside business hours), TM-12 (`sql_syntax_error`, any SQLSTATE `42601`), TM-16 (`kyc_view_spike`, more than 20 KYC views per staff member per day) and TM-18 (`provider_event_anomaly`, R1.1). Thresholds are the 07 [Assumption] values. TM-15 worker memory is covered by `host_resources`.
+54. **Lock exception for a migration that failed in production.** [09 §8.4](09-code-structure-and-engineering-standards.md#84-applied-migrations-are-never-edited-rf-41) says a locked file is never edited and "the fix is a new migration". That cannot work for a file that failed in production: it stays pending and runs, and fails, before any newer file. §6.5 allows editing that one never-applied file, with production `migration:status` evidence and the tech lead's review. The 09 §8.4 lock script needs a matching override (proposed). 09 owns the script.
+55. **Metric definitions tightened.** "Refunds pending" counts `failed` refunds as pending, because 05 lets `retryRefund` move `failed` back to `processing`. The connection metric counts only client backends. A listing-freshness metric covers the NFR-PERF-005 read-model target (60 s p95), which §9.3 did not list before.
