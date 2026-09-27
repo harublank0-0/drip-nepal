@@ -8,6 +8,8 @@ Reviewed: critic pass B5 part 2 (2026-09-26)
 
 Reviewed: critic pass B5 part 3 (2026-09-26)
 
+Reviewed: critic pass B5 part 4 (2026-09-26)
+
 This document is the standard the DripNepal codebase must meet: where code lives, which module may depend on which, what each layer of a request may and may not do, and (in later sections) how errors, configuration, logging, migrations, dependencies, reviews and the frontend are handled. It describes the **target state**. Files in the repository today are evidence of what exists and are cited as [Verified-repo]; a file is kept only where it already meets the standard, and each "Current code → target" table says whether it is kept, fixed, rewritten or deleted (product owner, 2026-09-26: "rewrite is fine where needed").
 
 **What this document does not own.** Module map, dependency diagram and job catalogue: [03](03-system-architecture.md#4-modules-and-dependency-rules). Tables, columns, constraints and settings: [04](04-domain-model-and-data-dictionary.md) and [04a](04a-data-dictionary-tables.md). State machines, lock order and transaction rules for money and stock: [05](05-order-payment-and-inventory-lifecycles.md). Endpoints, status codes, error codes and idempotency: [06](06-api-design.md) and [openapi.yaml](openapi.yaml). Permissions, threats and privacy: [07](07-security-threat-model-and-permissions.md). UI behaviour: [08](08-ui-ux-and-design-system.md). Test ID registry and CI gates: [10](10-testing-and-quality-gates.md). Runbooks and job operations: [11](11-deployment-and-operations.md). Milestones: [12](12-roadmap-and-backlog.md).
@@ -16,22 +18,22 @@ This document is the standard the DripNepal codebase must meet: where code lives
 
 ## Reading guide
 
-| §   | Title                                                     | Status in this draft                        |
-| --- | --------------------------------------------------------- | ------------------------------------------- |
-| 1   | Repository structure                                      | Written                                     |
-| 2   | Module ownership and dependency rules                     | Written                                     |
-| 3   | Layer responsibilities                                    | Written                                     |
-| 4   | API serialization and shared contracts                    | Written                                     |
-| 5   | Error handling                                            | Written                                     |
-| 6   | Configuration validation and secrets                      | Written                                     |
-| 7   | Structured logging and request IDs                        | Written                                     |
-| 8   | Migrations and seeders                                    | Written                                     |
-| 9   | Safe production initialization                            | Written                                     |
-| 10  | Dependency policy                                         | Written                                     |
-| 11  | Lint, format, typecheck and review                        | Written                                     |
-| 12  | Vertical slice: vendor product creation (`createProduct`) | Planned                                     |
-| 13  | Frontend code standards                                   | Planned                                     |
-| —   | Consistency notes for editor                              | Written (for §1–§11; later parts add to it) |
+| §   | Title                                                     | Status in this draft |
+| --- | --------------------------------------------------------- | -------------------- |
+| 1   | Repository structure                                      | Written              |
+| 2   | Module ownership and dependency rules                     | Written              |
+| 3   | Layer responsibilities                                    | Written              |
+| 4   | API serialization and shared contracts                    | Written              |
+| 5   | Error handling                                            | Written              |
+| 6   | Configuration validation and secrets                      | Written              |
+| 7   | Structured logging and request IDs                        | Written              |
+| 8   | Migrations and seeders                                    | Written              |
+| 9   | Safe production initialization                            | Written              |
+| 10  | Dependency policy                                         | Written              |
+| 11  | Lint, format, typecheck and review                        | Written              |
+| 12  | Vertical slice: vendor product creation (`createProduct`) | Written              |
+| 13  | Frontend code standards                                   | Written              |
+| —   | Consistency notes for editor                              | Written (for §1–§13) |
 
 A developer adding a feature reads §1.3 (names), §2.2 (what the module may import) and §3.2 (what each layer does). A reviewer uses §3.13 as the list of things to reject.
 
@@ -2230,6 +2232,1197 @@ The ADR line is the checkbox [ADR-0001](adr/0001-record-architecture-decisions.m
 
 ---
 
+## 12. Vertical slice: vendor product creation (`createProduct`)
+
+This section follows one operation through every layer, so that a new endpoint can be built by copying its shape. The operation is `createProduct` (canon §6.5, R1·M3, ⚷ with 24-hour key retention). Its contract is [06 §13.5](06-api-design.md#135-seller), [06 §14.2](06-api-design.md#142-vendor-product-creation-createproduct-then-replaceproductvariants) and `openapi.yaml` (`CreateProductRequest`, `SellerProductResponse`). The tables are [04a §7.6](04a-data-dictionary-tables.md#76-products), [§7.7](04a-data-dictionary-tables.md#77-product_attribute_values), [§7.9](04a-data-dictionary-tables.md#79-product_variants), [§8.1](04a-data-dictionary-tables.md#81-inventory_items) and [§15.3](04a-data-dictionary-tables.md#153-audit_logs).
+
+Labels on code follow the rule of this document. A **design sketch** uses only APIs verified for the installed versions, and each block cites what it relies on. **Pseudocode** marks code that depends on a package that is not installed (`pg-boss`, `@japa/api-client`, `@adonisjs/limiter`) or on a runtime shape confirmed only in M0.
+
+### 12.1 The path of one request
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant B as Seller browser
+  participant W as web process
+  participant DB as PostgreSQL
+  B->>W: POST createProduct with Idempotency-Key
+  W->>W: request context, body parser, session, CSRF, account status, auth
+  W->>DB: seller_context resolves the slug, owner or membership, permission and status gate
+  W->>W: strict validator, then the controller maps the body to a command
+  W->>DB: BEGIN, SET LOCAL timeouts, insert the idempotency key row
+  W->>DB: insert products, product_attribute_values and the default product_variants row
+  W->>DB: insert inventory_items, audit_logs and the catalog.refresh_listing job
+  W->>DB: store the transformed response on the key row, COMMIT
+  W-->>B: 201 with Location and ETag
+```
+
+| #   | Layer        | File                                                                                                           | Label                                                   |
+| --- | ------------ | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| 1   | Route        | `start/routes/api_v1/seller.ts`                                                                                | design sketch (§12.3)                                   |
+| 2   | Middleware   | `app/middleware/seller_context_middleware.ts`, `app/modules/shops/queries.ts` (`resolveSellerContext`)         | design sketch; query result shape checked in M0 (§12.4) |
+| 3   | Validator    | `app/validators/catalog/create_product.ts`                                                                     | design sketch; `strict()` pseudocode (§12.5)            |
+| 4   | Policy       | none for this operation                                                                                        | §12.6                                                   |
+| 5   | Controller   | `app/controllers/api/v1/seller/catalog/products_controller.ts`, `app/controllers/support/idempotency_scope.ts` | design sketch (§12.7)                                   |
+| 6   | Idempotency  | `app/modules/platform/idempotency.ts` (`idempotentTx`, `withIdempotency`)                                      | design sketch; `rawQuery` result shape pseudocode       |
+| 7   | Entry action | `app/modules/inventory/actions/create_product.ts`                                                              | design sketch; `sendJob` pseudocode (§12.8)             |
+| 8   | Step actions | `app/modules/catalog/actions/insert_product_draft.ts`, `app/modules/inventory/actions/open_inventory_items.ts` | design sketch (§12.8)                                   |
+| 9   | Transformer  | `app/transformers/catalog/product_seller_transformer.ts`, `app/modules/catalog/domain/submit_readiness.ts`     | design sketch (§12.9)                                   |
+| 10  | Tests        | `tests/functional/catalog/create_product.spec.ts`                                                              | pseudocode until `@japa/api-client` is added (§12.10)   |
+
+### 12.2 Decisions this slice makes
+
+1. **A default variant and its stock row are created with the product.** [04 §3.4](04-domain-model-and-data-dictionary.md#34-every-product-has-at-least-one-variant-an-option-less-product-has-one-default-variant) decides that every product has at least one variant and that `createProduct` inserts the product and its default variant in one transaction. [04a §8.1](04a-data-dictionary-tables.md#81-inventory_items) and [05 §5.1](05-order-payment-and-inventory-lifecycles.md#51-model-and-invariants) require the `inventory_items` row in the transaction that creates the variant. The default variant has `is_default = true`, `option_signature = ''` (`product_variants_default_signature_check`), `price_minor = 0` (allowed on drafts by `product_variants_price_check`; submit requires a positive price) and the SKU `DN-<public_id>` [Assumption]. That SKU is unique per shop because `public_id` is globally unique, and it matches `product_variants_sku_check`. The vendor replaces it through `replaceProductVariants`. The response therefore lists one variant, while the 06 §14.2 example and `openapi.yaml` show `variants: []` (Consistency note 56).
+2. **The entry action is hosted in `inventory`.** The transaction writes `catalog` tables and an `inventory` table, and `catalog` may not import `inventory` ([§2.2](#22-allowed-dependencies), canon chain). §2.3 item 2 says the higher module orchestrates, and §2.3 item 3 already hosts job handlers "in the module whose imports stay downward". The same rule applies to operations. `app/modules/inventory/actions/create_product.ts` calls the `catalog` step `insertProductDraft` and its own step `openInventoryItems`. The operation name, the route, the controller folder (`seller/catalog/`) and the validator folder keep the subject module. `replaceProductVariants` follows the same rule, because it also inserts and deletes `inventory_items` rows. 03 §4.4 lists both operations under `catalog` (Consistency note 57).
+3. **Every write to a product row sends `catalog.refresh_listing`, drafts included.** 06 §13.5 lists only "Product row, audit" as side effects. The job is cheap: the queue coalesces by `singletonKey` product ID, and the handler recomputes the listing row from source tables, finds a draft and writes nothing ([04a §7.12](04a-data-dictionary-tables.md#712-product_listings-read-model)). In return, no action has to decide whether a given change is visible to the storefront, and T-CAT-108 (proposed in 04a) holds by construction. The cost is one no-op job per draft creation.
+4. **No policy.** Permission (`shop.products.edit`), tenancy and the shop status gate are all decided by `seller_context` before the controller runs, and there is no existing resource whose attributes could change the answer. [§3.7](#37-policies) allows a policy only for a rule about a specific resource. §12.6 shows where one would go.
+5. **Mass assignment is rejected, not ignored.** Canon T-SEC-003 accepts either. [06 §3.5](06-api-design.md#35-input-validators-are-allowlists) chose 422 `VALIDATION_FAILED` with one `unknown_field` item per extra key, and the test in §12.10 asserts that.
+6. **`missing_for_submit` is computed by the same pure function that `submitProductForReview` uses** (`app/modules/catalog/domain/submit_readiness.ts`). It therefore lists `null` disclosures as well. The 06 §14.2 example sends `warranty_text: null` but returns only `["variants", "media"]` (Consistency note 58).
+
+### 12.3 Route
+
+```ts
+// start/routes/api_v1/seller.ts — design sketch. router.group/prefix/use, route.as and named
+// middleware arguments are verified for @adonisjs/core 7.3.4 (§3.3). The throttle (06 §9.1,
+// limiter `api_user`) and the 512 KB catalog body limit (06 §9.2) are pseudocode until
+// @adonisjs/limiter is installed and the body-limit middleware exists.
+import router from '@adonisjs/core/services/router'
+import { middleware } from '#start/kernel'
+import { controllers } from '#generated/controllers'
+
+router
+  .group(() => {
+    router
+      .post('/products', [controllers.api.v1.seller.catalog.Products, 'store'])
+      .as('createProduct') // route name = operationId (§4.3)
+      .use(middleware.sellerContext({ permission: 'shop.products.edit' }))
+    // pseudocode: .use(middleware.throttle('api_user')) and .use(middleware.bodyLimit({ kb: 512 }))
+  })
+  .prefix('/api/v1/seller/shops/:shopSlug') // /seller prefix of pages is still OD-12
+  .use(middleware.auth())
+```
+
+Group middleware is placed before the route's own middleware, so `auth` has set `ctx.auth.user` when `seller_context` runs (the M0 route test asserts the order from `router.toJSON()`; T-SEC-005, proposed in 07, fails CI for any `/api/v1/seller` route registered without `seller_context`). The server stack (request context, §7.4) and the router stack (`bodyparser`, `session`, `shield`, `initialize_auth`, `silent_auth`, account status, §3.4) run before both. `verified_email` is not on the seller group: an owner passed it when applying for the shop (FR-IAM-002), and a member accepted an invitation sent to the same address [Assumption; 07 §4.8 lists it in the group order without saying which groups use it].
+
+### 12.4 `seller_context` middleware
+
+The algorithm is [06 §4.4](06-api-design.md#44-seller-authorization-algorithm), and the pseudocode shape is in [07 §4.8](07-security-threat-model-and-permissions.md#48-how-policies-are-implemented). The target code:
+
+```ts
+// app/middleware/seller_context_middleware.ts — design sketch. HttpContext module augmentation
+// (as providers/api_provider.ts does), NextFn, ctx.params and ctx.auth.getUserOrFail() are verified
+// for core 7.3.4 and auth 10.1.0. can(), permissionsOf() and assertShopGate() are pure functions in
+// app/modules/shops/domain/ (07 §4.3 and §4.4 tables, T-SEC-031 and T-SEC-032 proposed in 07).
+import type { HttpContext } from '@adonisjs/core/http'
+import type { NextFn } from '@adonisjs/core/types/http'
+import { DomainError } from '#exceptions/domain_error'
+import { resolveSellerContext, type SellerContext } from '#modules/shops/queries'
+import { can, permissionsOf, type ShopPermission } from '#modules/shops/domain/permissions'
+import { assertShopGate } from '#modules/shops/domain/status_gate'
+
+declare module '@adonisjs/core/http' {
+  interface HttpContext {
+    shop: SellerContext // set only on routes that declare sellerContext (T-SEC-030, proposed in 07)
+  }
+}
+
+export default class SellerContextMiddleware {
+  async handle(ctx: HttpContext, next: NextFn, options: { permission: ShopPermission }) {
+    const user = ctx.auth.getUserOrFail()
+    const found = await resolveSellerContext(ctx.params.shopSlug, user.id)
+    // Unknown slug and "not a member" are the same 404 body (06 §4.4 step 2, T-SEC-001)
+    if (!found) throw new DomainError('NOT_FOUND')
+    if (!can(found.actor, options.permission)) throw new DomainError('FORBIDDEN')
+    assertShopGate(found.status, found.suspensionMode, options.permission) // 403 SHOP_NOT_ACTIVE
+    ctx.shop = { ...found, permissions: permissionsOf(found.actor) }
+    return next()
+  }
+}
+```
+
+```ts
+// app/modules/shops/queries.ts (excerpt) — design sketch: db.rawQuery(sql, bindings) is verified
+// for Lucid 22.4.2; the `rows` result shape is pseudocode until the M0 check named in 06 §7.9.
+import db from '@adonisjs/lucid/services/db'
+
+export type SellerContext = {
+  id: string
+  slug: string
+  name: string
+  status: string
+  suspensionMode: string | null
+  actor: 'owner' | 'manager' | 'catalog_editor' | 'order_fulfiller' | 'viewer'
+  viaRedirect: boolean
+  permissions: readonly string[]
+}
+
+// One round trip on shops_slug_key, slug_redirects_pkey and shop_memberships_shop_user_key
+export async function resolveSellerContext(slug: string, userId: string) {
+  const result = await db.rawQuery(
+    `SELECT s.id, s.slug, s.name, s.status, s.suspension_mode,
+            CASE WHEN s.owner_user_id = :user THEN 'owner' ELSE m.role END AS actor,
+            (s.slug <> :slug) AS via_redirect
+       FROM shops s
+       LEFT JOIN shop_memberships m
+              ON m.shop_id = s.id AND m.user_id = :user AND m.status = 'active'
+      WHERE s.id = COALESCE(
+              (SELECT id FROM shops WHERE slug = :slug),
+              (SELECT entity_id FROM slug_redirects WHERE entity_type = 'shop' AND old_slug = :slug))
+        AND (s.owner_user_id = :user OR m.id IS NOT NULL)`,
+    { slug, user: userId }
+  )
+  const row = result.rows[0]
+  if (!row) return null
+  return {
+    id: row.id,
+    slug: row.slug,
+    name: row.name,
+    status: row.status,
+    suspensionMode: row.suspension_mode,
+    actor: row.actor,
+    viaRedirect: row.via_redirect,
+  }
+}
+```
+
+- `shops.slug` and `slug_redirects.old_slug` are `citext`, so `slug = :slug` is case-insensitive ([04a §6.10](04a-data-dictionary-tables.md#610-slug_redirects)), and `via_redirect` is true only for a retired slug, not for a case variant.
+- An old slug is resolved to its shop. Page routes answer 301 to the current slug ([03 §6.1](03-system-architecture.md#61-surfaces-and-rendering-modes)). API routes continue with the resolved shop, which keeps the idempotency fingerprint stable, because the fingerprint contains the shop UUID and not the slug ([06 §7.2](06-api-design.md#72-scope-and-fingerprint)).
+- The middleware reads through the `shops` public query and writes nothing, as §3.4 requires. Named bindings (`:slug`) are Knex raw syntax; that `rawQuery` passes them through unchanged is an [Assumption] checked by the M0 test that runs this query against the baseline schema (fallback: positional `?` bindings).
+
+### 12.5 Validator
+
+```ts
+// app/validators/catalog/create_product.ts — design sketch. vine.create, string()/uuid()/regex()/
+// trim()/minLength()/maxLength(), parse(), nullable(), optional(), boolean({ strict }), array()
+// with minLength/maxLength/distinct are verified in @vinejs/vine 4.4.0. strict() is pseudocode
+// until its M0 test (T-API-002, proposed in 06; §3.6).
+import vine from '@vinejs/vine'
+import { strict } from '#validators/support/strict'
+import { PRODUCT_LIMITS } from '#shared/constants/limits'
+
+// Free text is stored in NFC (04 §2.8); parse() runs before the other rules
+const nfc = (value: unknown) => (typeof value === 'string' ? value.normalize('NFC') : value)
+const disclosure = () => vine.string().parse(nfc).trim().minLength(1).nullable()
+
+export const createProductValidator = vine.create(
+  strict({
+    title: vine
+      .string()
+      .parse(nfc)
+      .trim()
+      .minLength(PRODUCT_LIMITS.title.min) // products_title_check: 3–120
+      .maxLength(PRODUCT_LIMITS.title.max),
+    description: vine
+      .string()
+      .parse(nfc)
+      .trim()
+      .maxLength(PRODUCT_LIMITS.description.max) // products_description_check: at most 5,000
+      .nullable(),
+    category_id: vine.string().uuid(),
+    brand_id: vine.string().uuid().nullable().optional(), // the only optional key (06 §13.5)
+    attributes: vine
+      .array(
+        strict({
+          attribute_code: vine.string().regex(/^[a-z][a-z0-9_]{1,39}$/), // attributes_code_check
+          value_codes: vine
+            .array(vine.string().regex(/^[a-z0-9][a-z0-9_-]{0,39}$/))
+            .minLength(1)
+            .maxLength(20)
+            .distinct(),
+        })
+      )
+      .distinct('attribute_code'),
+    manufacturer_name: disclosure(),
+    is_imported: vine.boolean({ strict: true }),
+    country_of_origin: vine
+      .string()
+      .regex(/^[A-Z]{2}$/)
+      .nullable(), // products_country_check (format)
+    warranty_text: disclosure(),
+    care_and_precautions: disclosure(),
+  })
+)
+```
+
+- The key list equals `CreateProductRequest` in `openapi.yaml`. `shop_id`, `status`, `version`, `public_id` and `created_by` are absent, so `strict()` reports each of them as `unknown_field` (T-SEC-003).
+- `PRODUCT_LIMITS` lives in `shared/constants/limits.ts`, which the TanStack form of §13.5 imports too ([08 §11.6](08-ui-ux-and-design-system.md#116-server-authoritative-permissions-and-validation) "one shared constants module").
+- Rules that need other rows stay in the action: active leaf category (T-CAT-101, proposed in 04a), selectable brand, the attribute rules of 04 §3.7, and the cross-field origin rule of `products_country_check`. The action reports them as 422 items on the same field paths, so the client handles one error shape. `app/exceptions/constraint_map.ts` also maps `products_title_check` → `title` and `products_country_check` → `country_of_origin` as the backstop (§5.4).
+- Length units differ at one edge. Vine's string `minLength`/`maxLength` compare `value.length`, which counts UTF-16 code units [Verified-repo `@vinejs/vine` 4.4.0 `build/index.js:3656-3672`], while `products_title_check` counts code points with `char_length`. Devanagari and Latin text are one unit per code point, so the two agree for real titles. A title made of characters outside the Basic Multilingual Plane (emoji) can pass Vine's minimum and still fail the CHECK; the constraint map above turns that into 422 on `title`, never a 500. The form counts code points (§13.5), so it matches the database, not Vine.
+
+### 12.6 Policy: none for `createProduct`
+
+The order in a controller is validate → authorize the resource → act (§3.5). For `createProduct` the second step is empty, for the reasons in §12.2 item 4. The first policy in this area appears with `updateProduct` and `getShopProduct`: `ProductPolicy.editDraft(user, shop, product)` in `app/policies/catalog/product_policy.ts` ([§3.7](#37-policies), pseudocode until `@adonisjs/bouncer` 4.0.1 is added in M0). There the product is loaded with `shop_id = ctx.shop.id` in the query, so a foreign ID is already a 404 before the policy runs, and the policy only decides rules about the loaded row. A reviewer rejects a policy that re-checks the route permission, because two places would then have to change together when 07 §4.3 changes.
+
+### 12.7 Controller and the idempotency scope
+
+```ts
+// app/controllers/api/v1/seller/catalog/products_controller.ts — design sketch. inject,
+// request.validateUsing, response.header, response.created (typed by @tuyau/core 1.2.2),
+// ctx.serialize (providers/api_provider.ts) and Transformer.transform are verified (§3.5, §4.2).
+import { inject } from '@adonisjs/core'
+import type { HttpContext } from '@adonisjs/core/http'
+import CreateProduct from '#modules/inventory/actions/create_product'
+import { actionContext } from '#controllers/support/action_context'
+import { idempotencyScope } from '#controllers/support/idempotency_scope'
+import { createProductValidator } from '#validators/catalog/create_product'
+import ProductSellerTransformer from '#transformers/catalog/product_seller_transformer'
+
+export default class ProductsController {
+  @inject()
+  async store(ctx: HttpContext, action: CreateProduct) {
+    const input = await ctx.request.validateUsing(createProductValidator)
+    const result = await action.execute(
+      {
+        // explicit mapping: the command can only contain what is written here (RF-36)
+        title: input.title,
+        description: input.description,
+        categoryId: input.category_id,
+        brandId: input.brand_id ?? null,
+        attributes: input.attributes.map((a) => ({
+          code: a.attribute_code,
+          valueCodes: a.value_codes,
+        })),
+        manufacturerName: input.manufacturer_name,
+        isImported: input.is_imported,
+        countryOfOrigin: input.country_of_origin,
+        warrantyText: input.warranty_text,
+        careAndPrecautions: input.care_and_precautions,
+      },
+      {
+        ...actionContext(ctx), // actor user, shop id and role from ctx.shop, request_id, ip hash
+        idempotency: idempotencyScope(ctx, 'createProduct', {
+          body: input,
+          params: { shop_id: ctx.shop.id }, // resolved UUID, not the slug (06 §7.2)
+          ttlHours: 24,
+        }),
+      },
+      // presenter: runs inside the transaction so the stored response equals the sent one (06 §7.3)
+      async (created) => ({
+        status: 201,
+        body: await ctx.serialize(ProductSellerTransformer.transform(created)),
+        resource: { type: 'product', id: created.product.id },
+        etag: `W/"${created.product.version}"`,
+      })
+    )
+    ctx.response.header(
+      'Location',
+      `/api/v1/seller/shops/${ctx.shop.slug}/products/${result.resource.id}`
+    )
+    if (result.replayed) ctx.response.header('Idempotency-Replayed', 'true')
+    else ctx.response.header('ETag', result.etag) // ETag is not replayed (06 §7.5)
+    return ctx.response.created(result.body)
+  }
+}
+```
+
+- **One action, one presenter.** The presenter is the controller's transformer call, passed in so the idempotency row can store the transformed response before `COMMIT`, as 06 §7.3 step 3 requires. It is pure: transformers do no I/O (§4.1 rule 5), and `ctx.serialize` only walks the transformer output. The action never sees `ctx`.
+- **`Location`** is rebuilt from `resource` on a replay too, as 06 §7.5 requires. It names the `getShopProduct` URL.
+- **`actionContext(ctx)`** (`app/controllers/support/action_context.ts`) is the one place that turns HTTP state into the `ActionContext` of §3.5: `actorUserId`, `shopId`, `actor`, `requestId` and `ipHash` (the keyed HMAC of `request.ip()` with `HMAC_KEY_AUDIT_IP`, §6.1).
+
+```ts
+// app/controllers/support/idempotency_scope.ts — design sketch. request.header(), request.method(),
+// ctx.route.pattern (RouteJSON) and node:crypto createHash are verified (http-server 9.1.0, Node 24).
+// canonicalJson() is the key-sorting serializer of 06 §7.2 (unit-tested, plain TypeScript).
+import { createHash } from 'node:crypto'
+import type { HttpContext } from '@adonisjs/core/http'
+import { DomainError } from '#exceptions/domain_error'
+import { canonicalJson, type IdempotencyScope } from '#modules/platform/idempotency'
+
+const KEY = /^[A-Za-z0-9_-]{16,64}$/ // idempotency_keys_key_check
+
+export function idempotencyScope(
+  ctx: HttpContext,
+  operation: string,
+  input: { body: unknown; params: Record<string, string>; ttlHours: 24 | 72 }
+): IdempotencyScope {
+  const key = ctx.request.header('idempotency-key')
+  if (!key || !KEY.test(key)) throw new DomainError('IDEMPOTENCY_KEY_REQUIRED') // 400, before any transaction
+  const fingerprint = createHash('sha256')
+    .update(
+      [
+        ctx.request.method(),
+        ctx.route!.pattern,
+        canonicalJson(input.params),
+        canonicalJson(input.body), // the validated body (06 §7.2)
+        ctx.request.header('if-match') ?? '',
+      ].join('\n')
+    )
+    .digest()
+  return {
+    actorScope: ctx.auth.getUserOrFail().id,
+    operation,
+    key,
+    fingerprint,
+    ttlHours: input.ttlHours,
+  }
+}
+```
+
+The scope builder reads HTTP state, so it lives with the controllers, not in `platform` as §1.2 and §3.5 placed `idempotencyScope`: a module file may not take `ctx` (§3.2, entry-action row). `platform/idempotency.ts` keeps the types, `canonicalJson`, `withIdempotency` and `idempotentTx`:
+
+```ts
+// app/modules/platform/idempotency.ts (excerpt) — design sketch. withTx is §3.8, withIdempotency is
+// the 06 §7.9 sketch; db.from().where().first() is verified for Lucid 22.4.2. ReplayRequested is a
+// plain class; 55P03 is lock_not_available.
+import db from '@adonisjs/lucid/services/db'
+import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
+import { DomainError } from '#exceptions/domain_error'
+import { withTx } from './tx.js'
+
+export type Presented<B> = {
+  status: number
+  body: B
+  resource: { type: string; id: string }
+  etag: string
+}
+export type IdempotentResult<B> =
+  | (Presented<B> & { replayed: false })
+  | (Omit<Presented<B>, 'etag'> & { replayed: true })
+
+export async function idempotentTx<B>(
+  scope: IdempotencyScope,
+  run: (trx: TransactionClientContract) => Promise<Presented<B>>
+): Promise<IdempotentResult<B>> {
+  try {
+    const presented = await withTx((trx) => withIdempotency(trx, scope, () => run(trx)))
+    return { ...presented, replayed: false }
+  } catch (error) {
+    if (!(error instanceof ReplayRequested)) throw error
+    // The transaction has rolled back; read the committed row outside it
+    const row = await db
+      .from('idempotency_keys')
+      .where({ actor_scope: scope.actorScope, operation: scope.operation, key: scope.key })
+      .first()
+    // Purged between the conflict and this read (hourly purge): let the client retry as new
+    if (!row) throw new DomainError('IDEMPOTENCY_IN_PROGRESS', { retryAfterSeconds: 2 })
+    if (!Buffer.from(row.fingerprint).equals(scope.fingerprint)) {
+      throw new DomainError('IDEMPOTENCY_KEY_REUSED') // 422, same key with another body (06 §7.4)
+    }
+    return {
+      replayed: true,
+      status: row.response_status,
+      body: row.response_body as B, // produced by the same presenter for the same actor
+      resource: { type: row.resource_type, id: row.resource_id },
+    }
+  }
+}
+```
+
+Two additions to the 06 §7.9 sketch of `withIdempotency`: the key `INSERT` is wrapped so that SQLSTATE `55P03` from that statement (the first request still holds the key past `lock_timeout`) becomes 409 `IDEMPOTENCY_IN_PROGRESS` with `retry_after_seconds: 2`, and `ReplayRequested` is exported from this file. A `55P03` anywhere else keeps the 06 §5.3 mapping.
+
+### 12.8 Entry action and step actions
+
+```ts
+// app/modules/inventory/actions/create_product.ts — design sketch; hosting rule in §12.2 item 2.
+// sendJob is pseudocode until the pg-boss spike (T-ARCH-004, proposed in 03) passes.
+import { idempotentTx, type IdempotencyScope, type Presented } from '#modules/platform/idempotency'
+import { sendJob } from '#modules/platform/jobs'
+import { recordAudit } from '#modules/audit/actions/record_audit'
+import {
+  insertProductDraft,
+  type ProductDraftCommand,
+} from '#modules/catalog/actions/insert_product_draft'
+import type { ProductEditorData } from '#modules/catalog/queries'
+import { openInventoryItems } from './open_inventory_items.js'
+import type { SellerActionContext } from '#modules/platform/action_context'
+
+export default class CreateProduct {
+  execute<B>(
+    cmd: ProductDraftCommand,
+    context: SellerActionContext & { idempotency: IdempotencyScope },
+    present: (created: ProductEditorData) => Promise<Presented<B>>
+  ) {
+    return idempotentTx(context.idempotency, async (trx) => {
+      const draft = await insertProductDraft(trx, cmd, {
+        shopId: context.shopId,
+        actorUserId: context.actorUserId,
+      })
+      await openInventoryItems(trx, context.shopId, [draft.defaultVariant.id])
+      await recordAudit(trx, {
+        actorType: 'shop_member',
+        actorUserId: context.actorUserId,
+        actorRole: `shop:${context.shopId}:${context.actor}`, // 04a §15.3 format
+        action: 'product.create',
+        subjectType: 'product',
+        subjectId: draft.product.id,
+        shopId: context.shopId,
+        requestId: context.requestId,
+        ipHash: context.ipHash,
+        changes: {
+          after: { status: 'draft', title: draft.product.title, category_id: draft.category.id },
+        },
+      })
+      // pseudocode: boss.send(..., { db: fromKnex(trx.knexClient) }) inside sendJob (§2.3)
+      await sendJob(
+        trx,
+        'catalog.refresh_listing',
+        { product_id: draft.product.id, request_id: context.requestId, causation_id: null },
+        { singletonKey: draft.product.id }
+      )
+      return present({
+        product: draft.product,
+        category: draft.category,
+        variants: [{ variant: draft.defaultVariant, label: 'Default', onHand: 0 }],
+        readyMediaCount: 0,
+        media: [],
+      })
+    })
+  }
+}
+```
+
+The action has no constructor dependencies, because it calls no port; the controller's `@inject()` still resolves it from the container, so a later port (for example a moderation notifier) is added without touching the controller. The lock order of [05 §4.4](05-order-payment-and-inventory-lifecycles.md#44-global-lock-ordering) is not involved: the transaction only inserts new rows and locks nothing that exists.
+
+```ts
+// app/modules/catalog/actions/insert_product_draft.ts — design sketch. new Model(), useTransaction(),
+// save() (which reads back the database-generated id through RETURNING, Lucid 22.4.2
+// build/src/orm/base_model/index.js:1796), trx.transaction() (savepoint) and trx.table().multiInsert()
+// are verified. activeLeafCategory, assertSelectableBrand, resolveAttributeValues and
+// assertOriginConsistent are catalog code that throws DomainError('VALIDATION_FAILED', { errors }).
+import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
+import Product from '#models/product'
+import ProductVariant from '#models/product_variant'
+import { newPublicId, productSlug } from '../domain/identifiers.js'
+import { isUniqueViolation } from '#modules/platform/db_errors'
+import { activeLeafCategory, assertSelectableBrand, resolveAttributeValues } from '../queries.js'
+import { assertOriginConsistent } from '../domain/disclosures.js'
+
+export type ProductDraftCommand = {
+  title: string
+  description: string | null
+  categoryId: string
+  brandId: string | null
+  attributes: { code: string; valueCodes: string[] }[]
+  manufacturerName: string | null
+  isImported: boolean
+  countryOfOrigin: string | null
+  warrantyText: string | null
+  careAndPrecautions: string | null
+}
+
+export async function insertProductDraft(
+  trx: TransactionClientContract,
+  cmd: ProductDraftCommand,
+  owner: { shopId: string; actorUserId: string }
+) {
+  const category = await activeLeafCategory(cmd.categoryId, { client: trx }) // 422 on category_id
+  if (cmd.brandId) await assertSelectableBrand(cmd.brandId, { client: trx }) // brands.status = 'active'
+  assertOriginConsistent(cmd) // mirrors products_country_check, 422 on country_of_origin
+  const values = await resolveAttributeValues(category, cmd.attributes, { client: trx }) // 04 §3.7 rules
+
+  // public_id is random (04 §2.1): a collision is retried inside a savepoint, so the outer transaction survives
+  const product = await withFreshPublicId(trx, (publicId, sp) => {
+    const p = new Product()
+    p.shopId = owner.shopId // from seller_context, never from the body (T-SEC-003)
+    p.publicId = publicId // 8 Crockford base32 characters, products_public_id_check
+    p.slug = productSlug(cmd.title) // slugify, or 'product' (04a §7.6)
+    p.title = cmd.title
+    p.description = cmd.description
+    p.categoryId = category.id
+    p.brandId = cmd.brandId
+    p.manufacturerName = cmd.manufacturerName
+    p.isImported = cmd.isImported
+    p.countryOfOrigin = cmd.countryOfOrigin
+    p.warrantyText = cmd.warrantyText
+    p.careAndPrecautions = cmd.careAndPrecautions
+    p.status = 'draft' // set explicitly: save() reads back only the primary key
+    p.version = 1
+    p.createdBy = owner.actorUserId
+    p.useTransaction(sp)
+    return p.save()
+  })
+
+  // product_attribute_values has a composite key: query builder, not a model (04 §2.15)
+  if (values.length > 0) {
+    await trx.table('product_attribute_values').multiInsert(
+      values.map((v) => ({
+        product_id: product.id,
+        shop_id: owner.shopId, // product_attribute_values_product_fkey (product_id, shop_id)
+        attribute_id: v.attributeId,
+        attribute_value_id: v.id, // product_attribute_values_value_fkey (value, attribute)
+      }))
+    )
+  }
+
+  const variant = new ProductVariant()
+  variant.shopId = owner.shopId // product_variants_product_fkey (product_id, shop_id)
+  variant.productId = product.id
+  variant.sku = `DN-${product.publicId}` // product_variants_sku_check [Assumption: default SKU form]
+  variant.priceMinor = 0 // product_variants_price_check allows 0 on a draft
+  variant.currency = 'NPR'
+  variant.isDefault = true
+  variant.optionSignature = '' // product_variants_default_signature_check
+  variant.status = 'active'
+  variant.version = 1
+  variant.useTransaction(trx)
+  await variant.save()
+
+  return { product, category, defaultVariant: variant }
+}
+
+async function withFreshPublicId<T>(
+  trx: TransactionClientContract,
+  insert: (publicId: string, sp: TransactionClientContract) => Promise<T>
+): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await trx.transaction((sp) => insert(newPublicId(), sp))
+    } catch (error) {
+      if (attempt >= 3 || !isUniqueViolation(error, 'products_public_id_key')) throw error
+    }
+  }
+}
+```
+
+```ts
+// app/modules/inventory/actions/open_inventory_items.ts — design sketch (insert query builder verified)
+import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
+
+export async function openInventoryItems(
+  trx: TransactionClientContract,
+  shopId: string,
+  variantIds: string[]
+) {
+  if (variantIds.length === 0) return
+  // on_hand, reserved and version take their defaults (0, 0, 1). No movement row: initial stock is a
+  // received_stock adjustment later (04a §8.1, 05 §5.1). inventory_items_variant_fkey (variant_id, shop_id)
+  // rejects a shop that does not own the variant.
+  await trx
+    .table('inventory_items')
+    .multiInsert(variantIds.map((variantId) => ({ variant_id: variantId, shop_id: shopId })))
+}
+```
+
+`replaceProductVariants` reuses `openInventoryItems` for new variants and gets a sibling step for the never-stocked deletes of 04a §7.9, so every write to `inventory_items` stays in `inventory` (T-ARCH-001 owner-writes check, §2.4).
+
+### 12.9 Transformer
+
+```ts
+// app/transformers/catalog/product_seller_transformer.ts — design sketch. BaseTransformer,
+// this.resource and static transform() are verified in @adonisjs/http-transformers 2.3.1.
+// Keys equal SellerProduct and SellerVariant in openapi.yaml (additionalProperties: false).
+import { BaseTransformer } from '@adonisjs/core/transformers'
+import type { ProductEditorData } from '#modules/catalog/queries'
+import { missingForSubmit } from '#modules/catalog/domain/submit_readiness'
+import { moneyJson } from '#transformers/shared/wire'
+
+export default class ProductSellerTransformer extends BaseTransformer<ProductEditorData> {
+  toObject() {
+    const { product: p, category, variants, media, readyMediaCount } = this.resource
+    return {
+      id: p.id,
+      public_id: p.publicId,
+      status: p.status,
+      version: p.version,
+      title: p.title,
+      category: { id: category.id, path: category.path },
+      variants: variants.map(({ variant: v, label, onHand }) => ({
+        id: v.id,
+        sku: v.sku,
+        label,
+        price: moneyJson(v.priceMinor),
+        is_default: v.isDefault,
+        on_hand: onHand,
+      })),
+      media: media.map((m) => ({
+        media_asset_id: m.mediaAssetId,
+        position: m.position,
+        alt_text: m.altText,
+        color_value_id: m.colorValueId,
+      })),
+      missing_for_submit: missingForSubmit(
+        p,
+        variants.map((x) => x.variant),
+        readyMediaCount
+      ),
+    }
+  }
+}
+```
+
+- `ProductEditorData` is exported by `app/modules/catalog/queries.ts`, the public surface both the entry action and the transformer may import. `getShopProduct` builds the same shape in its controller from `catalog` queries plus `inventory.availabilityFor` (controller composition, §2.2), so the editor page, the API read and the create response share one transformer.
+- `on_hand` is shop-confidential and appears only in this seller transformer ([04a §8.1](04a-data-dictionary-tables.md#81-inventory_items) sensitivity).
+- `missingForSubmit(product, variants, readyMediaCount)` in `app/modules/catalog/domain/submit_readiness.ts` is pure and is also the first check of `submitProductForReview` (AC-FR-CAT-005-2). It returns, in this order: `variants` (no active variant, or an active variant with `price_minor = 0`), `media` (no `ready` image), then each `null` disclosure by column name (`description`, `manufacturer_name`, `warranty_text`, `care_and_precautions`, and `country_of_origin` when `is_imported`). One function means the editor badge and the submit refusal cannot disagree; the unit test runs the `products_disclosures_check` cases. The shop-level conditions of the publication gate in 04a §7.6 (an active shop with an accepted agreement, shipping configured) are not product fields; the shop status gate of `seller_context` and `submitProductForReview` itself check them after `missingForSubmit` (preconditions in [06 §13.5](06-api-design.md#135-seller)), so they never appear in `missing_for_submit`.
+
+### 12.10 Tests
+
+The functional suite runs the real HTTP stack against PostgreSQL (`tests/functional/`, [10](10-testing-and-quality-gates.md) owns the layout and gates). Each test runs inside a global transaction that is rolled back afterwards; the `withTx` transactions of the action become savepoints of it, which is enough for sequential replay. Concurrent duplicates need real commits and belong to `tests/concurrency/`.
+
+```ts
+// tests/functional/catalog/create_product.spec.ts — pseudocode until @japa/api-client and the auth,
+// session and shield api-client plugins are added in M0 (client.post().json().header().loginAs()
+// .withCsrfToken(), response.assertStatus/assertHeader/body). test.group, group.each.setup,
+// testUtils.db().wrapInGlobalTransaction() and db.from() are verified in the installed packages.
+import { test } from '@japa/runner'
+import db from '@adonisjs/lucid/services/db'
+import testUtils from '@adonisjs/core/services/test_utils'
+import { activeShopWithOwner, catalogFixtures, queuedJobs } from '#tests/support/fixtures'
+
+const url = (slug: string) => `/api/v1/seller/shops/${slug}/products`
+const key = () => crypto.randomUUID()
+
+test.group('createProduct', (group) => {
+  group.each.setup(() => testUtils.db().wrapInGlobalTransaction())
+
+  test('creates a draft with default variant, stock row, audit row and listing job', async ({
+    client,
+    assert,
+  }) => {
+    const { shop, owner } = await activeShopWithOwner()
+    const body = catalogFixtures.teeBody() // the 06 §14.2 request body
+    const res = await client
+      .post(url(shop.slug))
+      .json(body)
+      .header('Idempotency-Key', key())
+      .loginAs(owner)
+      .withCsrfToken()
+
+    res.assertStatus(201)
+    res.assertHeader('etag', 'W/"1"')
+    const data = res.body().data
+    res.assertHeader('location', `${url(shop.slug)}/${data.id}`)
+    assert.include(data, { status: 'draft', version: 1, title: body.title })
+    assert.deepEqual(data.missing_for_submit, ['variants', 'media', 'warranty_text'])
+
+    const variant = await db.from('product_variants').where('product_id', data.id).firstOrFail()
+    assert.include(variant, {
+      shop_id: shop.id,
+      is_default: true,
+      option_signature: '',
+      price_minor: 0,
+    })
+    assert.include(await db.from('inventory_items').where('variant_id', variant.id).firstOrFail(), {
+      shop_id: shop.id,
+      on_hand: 0,
+      reserved: 0,
+    })
+    assert.lengthOf(
+      await db.from('audit_logs').where({ action: 'product.create', subject_id: data.id }),
+      1
+    )
+    // pseudocode: the pgboss.job query is fixed by the M0 spike (T-ARCH-004, proposed in 03)
+    assert.equal(await queuedJobs('catalog.refresh_listing', { product_id: data.id }), 1)
+  })
+
+  test('422 VALIDATION_FAILED names each invalid field and writes nothing', async ({
+    client,
+    assert,
+  }) => {
+    const { shop, owner } = await activeShopWithOwner()
+    const body = { ...catalogFixtures.teeBody(), title: 'ab', category_id: 'not-a-uuid' }
+    const res = await client
+      .post(url(shop.slug))
+      .json(body)
+      .header('Idempotency-Key', key())
+      .loginAs(owner)
+      .withCsrfToken()
+
+    res.assertStatus(422)
+    res.assertHeader('content-type', 'application/problem+json; charset=utf-8')
+    assert.equal(res.body().code, 'VALIDATION_FAILED')
+    assert.includeDeepMembers(
+      res
+        .body()
+        .errors.map((e: { field: string; code: string }) => ({ field: e.field, code: e.code })),
+      [
+        { field: 'title', code: 'minLength' },
+        { field: 'category_id', code: 'uuid' },
+      ]
+    )
+    assert.lengthOf(await db.from('products').where('shop_id', shop.id), 0)
+    assert.lengthOf(await db.from('idempotency_keys').where('operation', 'createProduct'), 0)
+  })
+
+  test('T-SEC-001: another shop answers 404, identical to an unknown slug', async ({
+    client,
+    assert,
+  }) => {
+    const { owner } = await activeShopWithOwner()
+    const { shop: other } = await activeShopWithOwner()
+    const send = (slug: string) =>
+      client
+        .post(url(slug))
+        .json(catalogFixtures.teeBody())
+        .header('Idempotency-Key', key())
+        .loginAs(owner)
+        .withCsrfToken()
+
+    const foreign = await send(other.slug)
+    const missing = await send('no-such-shop')
+    foreign.assertStatus(404)
+    missing.assertStatus(404)
+    const strip = ({ request_id: _ignored, ...rest }: Record<string, unknown>) => rest
+    assert.deepEqual(strip(foreign.body()), strip(missing.body())) // no existence oracle
+    assert.lengthOf(await db.from('products').where('shop_id', other.id), 0)
+  })
+
+  test('T-SEC-003: server-owned fields are rejected as unknown_field', async ({
+    client,
+    assert,
+  }) => {
+    const { shop, owner } = await activeShopWithOwner()
+    const { shop: other } = await activeShopWithOwner()
+    const body = {
+      ...catalogFixtures.teeBody(),
+      shop_id: other.id,
+      status: 'published',
+      version: 9,
+      public_id: 'AAAAAAAA',
+      created_by: owner.id,
+    }
+    const res = await client
+      .post(url(shop.slug))
+      .json(body)
+      .header('Idempotency-Key', key())
+      .loginAs(owner)
+      .withCsrfToken()
+
+    res.assertStatus(422)
+    const unknown = res.body().errors.filter((e: { code: string }) => e.code === 'unknown_field')
+    assert.sameMembers(
+      unknown.map((e: { field: string }) => e.field),
+      ['shop_id', 'status', 'version', 'public_id', 'created_by']
+    )
+    assert.lengthOf(await db.from('products'), 0)
+  })
+
+  test('idempotent replay: same key returns the stored 201 once; key reuse and a missing key fail', async ({
+    client,
+    assert,
+  }) => {
+    const { shop, owner } = await activeShopWithOwner()
+    const body = catalogFixtures.teeBody()
+    const k = key()
+    const send = (b: object, headers: Record<string, string>) =>
+      client.post(url(shop.slug)).json(b).headers(headers).loginAs(owner).withCsrfToken()
+
+    const first = await send(body, { 'Idempotency-Key': k })
+    const second = await send(body, { 'Idempotency-Key': k })
+    first.assertStatus(201)
+    second.assertStatus(201)
+    second.assertHeader('idempotency-replayed', 'true')
+    assert.deepEqual(second.body(), first.body())
+    assert.lengthOf(await db.from('products').where('shop_id', shop.id), 1)
+    assert.lengthOf(await db.from('audit_logs').where('action', 'product.create'), 1)
+
+    const reused = await send({ ...body, title: 'Another title' }, { 'Idempotency-Key': k })
+    reused.assertStatus(422)
+    assert.equal(reused.body().code, 'IDEMPOTENCY_KEY_REUSED')
+
+    const noKey = await send(body, {})
+    noKey.assertStatus(400)
+    assert.equal(noKey.body().code, 'IDEMPOTENCY_KEY_REQUIRED')
+    assert.lengthOf(await db.from('products').where('shop_id', shop.id), 1)
+  })
+})
+```
+
+Coverage that this file does not repeat, because a generated suite owns it: every role × permission (T-SEC-030, proposed in 07), every shop status × permission group (T-SEC-031, proposed in 07), and the response schema check that runs on every response above (T-API-001). Two more checks are listed for [10](10-testing-and-quality-gates.md) to number: a concurrency test in which two parallel requests with one key create one product (the `createProduct` analogue of T-CHK-004), and a rollback test in which a forced failure after the product insert leaves no product, no key row and no queued job (it also proves the transactional send once the pg-boss spike passes).
+
+### 12.11 Current code → target (catalog slice)
+
+| Area / file(s)                          | Today [Verified-repo]                                                                                                                              | Decision                                                                                                               | Reason       | Milestone    |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------ | ------------ |
+| Product write path                      | None: no product route, controller, validator or action exists; the only product route renders a mock page (`start/routes.ts:44-47`)               | **Create** the files of §12.1                                                                                          | RF-27        | M3           |
+| `app/models/product.ts`                 | `extends ProductSchema` (meets the standard); relations `shop`, `category`, `variants`, `media` and an upward `orderItems` relation to `OrderItem` | **Fix** after the baseline: drop `orderItems` (catalog may not reach `orders`, §3.10); regenerate the schema class     | RF-17, RF-20 | M0           |
+| `app/models/product_variant.ts`         | Model over a table with an unconstrained `quantity` column and a global SKU                                                                        | **Rewrite** on the baseline `product_variants`; stock moves to `inventory_items`                                       | RF-14        | M0           |
+| `database/factories/product_factory.ts` | Sets `name`, `brand`, `isFeatured` and draws `status` from the shop status list (`ShopStatusValues`) via `#utils/random`                           | **Rewrite**: 04a columns, product statuses from `catalog/domain`, default variant and `inventory_items` row (04 §20.3) | RF-23, A5-14 | M0           |
+| `app/middleware/*`                      | No shop context; `/shop/:shopSlug/*` checks authentication only                                                                                    | **Create** `seller_context_middleware.ts` (§12.4)                                                                      | RF-01        | M0 guard, M2 |
+
+---
+
+## 13. Frontend code standards
+
+[08](08-ui-ux-and-design-system.md) owns what the user sees and how the UI behaves; this section fixes how the `inertia/` code is written so that behaviour holds. The versions are those installed: React 19.2, `@inertiajs/react` 2.3.27, `@adonisjs/inertia` 4.2.0, `@tuyau/core` 1.2.2 and `@tanstack/react-form` 1.33.0 [Verified-repo `package.json`, `node_modules`]. If the OD-25 spike moves the app to adapter 5 and Inertia 3 ([§10.5](#105-the-inertia-v5-upgrade-od-25)), the event and helper names cited below are re-checked in the same PR.
+
+### 13.1 Folder and file rules
+
+| Folder                                  | Holds                                                                                           | May import                                                             | Must not                                                               |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `inertia/pages/<surface>/`              | Page entry files only, one default-exported component per file (§1.2 note on `indexPages`)      | layouts, components, `lib`, `hooks`, `@generated/*` types, `@shared/*` | Import another page; contain helpers, mocks or sub-components          |
+| `inertia/layouts/`                      | One layout per surface (`storefront`, `auth`, `account`, `seller`, `admin`) and `layout_for.ts` | components, `lib`, `hooks`                                             | Fetch data; read storage during render                                 |
+| `inertia/components/{ui,kit,<domain>}/` | §1.2 and [08 §12.1](08-ui-ux-and-design-system.md#121-ownership-and-folders)                    | per the §11.2 import-direction rules                                   | Call the API directly; `ui/` and `kit/` never import domain components |
+| `inertia/lib/`                          | Framework-free client helpers (§13.10 lists each file)                                          | `~/client`, `@shared/*`, browser APIs inside functions                 | Touch browser globals at module scope (§13.8)                          |
+| `inertia/hooks/`                        | React hooks (`use_api_mutation.ts`, `use_intent_key.ts`)                                        | `lib`, React                                                           | Hold server state that belongs in props                                |
+| `inertia/dev/`                          | DEV-only modules such as `devtools.tsx` ([08 §10.1](08-ui-ux-and-design-system.md#101-budgets)) | anything                                                               | Be imported except through `import.meta.env.DEV` dynamic imports       |
+| `shared/{format,constants,api}/`        | Isomorphic code used by server, SSR and client (§1.2)                                           | nothing from `app/` or `inertia/`                                      | Use Node-only or browser-only APIs                                     |
+
+The client never imports server code: only `import type` from `@generated/*` (the `.adonisjs/client` files) and value imports from `@shared/*` are allowed across the boundary, which keeps the Vite bundle free of server modules.
+
+### 13.2 Page anatomy
+
+```tsx
+// inertia/pages/seller/products/new.tsx — design sketch. Head from @inertiajs/react 2.3.27 and the
+// generated Data namespace are verified; InertiaProps is inertia/types.ts [Verified-repo]. The props
+// type is what the server's inertia.render('seller/products/new', …) is checked against, because
+// .adonisjs/server/pages.d.ts extracts each page component's props [Verified-repo].
+import { Head } from '@inertiajs/react'
+import type { Data } from '@generated/data'
+import type { InertiaProps } from '~/types'
+import { t } from '~/lib/i18n'
+import ProductDraftForm from '~/components/seller/product_draft_form'
+
+type Props = InertiaProps<{
+  categories: Data.CategoryOption[]
+  attributes: Data.AttributeOption[]
+}>
+
+export default function ProductNew({ categories, attributes, current_shop }: Props) {
+  return (
+    <>
+      <Head title={t('seller.products.new.title')} />
+      <ProductDraftForm
+        shopSlug={current_shop!.slug}
+        categories={categories}
+        attributes={attributes}
+      />
+    </>
+  )
+}
+```
+
+- **Props are typed from `Data.*`**, the types generated from the transformers (§4). A hand-written prop interface is rejected in review, because it drifts from the transformer.
+- **The layout is chosen by page name**, not imported by the page: `layoutFor(name)` in `inertia/layouts/layout_for.ts` returns the surface layout for the `storefront/`, `auth/`, `payments/`, `account/`, `seller/`, `admin/` and `errors/` prefixes, and `resolvePageComponent(path, pages, layout)` assigns it [Verified-repo `@adonisjs/inertia` 4.2.0 `build/src/client/helpers.d.ts`]. This keeps the layout mounted across visits within a surface.
+- **A page renders; a component does the work.** Forms, tables and panels live in `components/<domain>/`, so the page file stays a list of sections that a reviewer can compare with the 08 screen inventory.
+
+### 13.3 Reads: Inertia props only
+
+1. **Page data arrives as props** from the page controller's module queries (§3.5). A page never loads its own data with `fetch`, `useEffect` or a Tuyau GET. The exceptions are named: the seller new-order indicator polls with `usePoll` and a partial reload (FR-NOT-003), and R2 autocomplete calls its endpoint.
+2. **Prop names are `snake_case`** (transformer output, OD-13). A list is `{ items, meta }` (§4.2). The storefront listing prop is `listing` (`{ items, meta, facets }`), which the partial reloads of [08 §11.1](08-ui-ux-and-design-system.md#111-search-and-filter-url-state-and-back-navigation) request with `only: ['listing']`. Dashboard tables pass one prop per table, named after the resource (`shop_orders`, `products`), each `{ items, meta }`; 08 §7.2's sketch calls the array `rows` (Consistency note 64).
+3. **After a write, reload props instead of patching local state:** `router.reload({ only: ['product'] })` or a visit to the resource page (`router.reload` and `router.visit` exist in `@inertiajs/core` 2.3.27 [Verified-repo `types/router.d.ts`]). The server stays the source of truth for status, totals and stock.
+4. **Heavy panels are deferred** on the server (`inertia.defer`, §3.5) and wrapped in `<Deferred data="…" fallback={…}>` on the client [Verified-doc <https://inertiajs.com/docs/v2/data-props/deferred-props.md>, accessed 2026-09-25, via gt/adonis_stack.md]. SEO-critical data is never deferred ([03 §6.2](03-system-architecture.md#62-storefront-assessment)).
+
+### 13.4 Writes: the typed Tuyau client through `apiCall`
+
+Every `/api/v1` write goes through the Tuyau client and one wrapper, so errors have one path ([06 §5.4](06-api-design.md#54-how-inertia-pages-consume-errors), ADR-0004). Inertia's `useForm`, `<Form>` and `router.post/put/patch/delete` are not used for writes ([08 §7.1](08-ui-ux-and-design-system.md#71-forms)).
+
+```ts
+// inertia/lib/api.ts — design sketch. TuyauHTTPError and TuyauNetworkError are exported by
+// @tuyau/core/client 1.2.2; TuyauHTTPError.response is typed any [Verified-repo
+// index-BPATPJFD.d.ts:395-406]. isProblem() and Problem come from shared/api/problem.ts (§4.3).
+import { TuyauHTTPError } from '@tuyau/core/client'
+import { isProblem, type Problem } from '@shared/api/problem'
+
+export type ApiOutcome<T> =
+  | { ok: true; data: T }
+  | { ok: false; problem: Problem }
+  | { ok: false; offline: true }
+
+const MAX_IN_PROGRESS_RETRIES = 3 // 08 §8.3 [Assumption]
+const wait = (seconds: number) => new Promise((r) => setTimeout(r, seconds * 1000))
+
+export async function apiCall<T>(send: () => Promise<T>): Promise<ApiOutcome<T>> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return { ok: true, data: await send() }
+    } catch (error) {
+      if (!(error instanceof TuyauHTTPError)) return { ok: false, offline: true } // network or timeout
+      const problem: Problem = isProblem(error.response)
+        ? error.response
+        : {
+            type: 'about:blank',
+            title: 'Error',
+            status: error.status ?? 500,
+            code: 'INTERNAL',
+            request_id: 'unavailable',
+          }
+      // The same send() reuses the same Idempotency-Key, so a retry replays instead of repeating (06 §7.4)
+      if (problem.code === 'IDEMPOTENCY_IN_PROGRESS' && attempt < MAX_IN_PROGRESS_RETRIES) {
+        await wait(problem.retry_after_seconds ?? 2)
+        continue
+      }
+      return { ok: false, problem }
+    }
+  }
+}
+```
+
+```ts
+// Call site: client.request(name, args) with params, body and ky options (headers, timeout) is
+// verified for @tuyau/core 1.2.2 (RequestArgs = route args & ky Options).
+import { client } from '~/client'
+
+const outcome = await apiCall(() =>
+  client.request('createProduct', {
+    params: { shopSlug },
+    body,
+    headers: { 'Idempotency-Key': key }, // from useIntentKey, reused on every retry of this intent
+    timeout: 30_000, // write timeout of 08 §8.4 [Assumption]
+  })
+)
+```
+
+- **Import the typed `client` from `~/client`, not `useTuyau()`.** `useTuyau()` is typed `Tuyau<any, any>` [Verified-repo `@adonisjs/inertia` 4.2.0 `build/src/client/react/context.d.ts`], so a call through it loses the route, body and response types. `TuyauProvider` stays in `app.tsx` for the typed `<Link route>` and `<Form>` components. `inertia/client.ts` (`createTuyau({ baseUrl: '/', registry })`) already meets the standard and is kept.
+- **`useApiMutation()`** (`inertia/hooks/use_api_mutation.ts`) returns `{ run(send), pending }`: `run` wraps `apiCall` with a pending flag and one request in flight, and applies the page-level codes of [08 §8.3](08-ui-ux-and-design-system.md#83-errors): `UNAUTHENTICATED` saves the form draft and visits `/login?return_to=…`, `MFA_REQUIRED` visits `/mfa`, `RATE_LIMITED` disables the action until `Retry-After`. Form-level codes are returned to the caller.
+- **One key per intent.** `useIntentKey<Body>()` (`inertia/hooks/use_intent_key.ts`) returns `{ for(body), reset() }`: `for` returns a UUID from `crypto.randomUUID()` that stays the same while the canonical body is unchanged and is replaced when the body changes, and `reset()` is called after a success ([06 §7.1](06-api-design.md#71-the-key)). `for` runs in the submit handler, never during render (§13.8). Checkout uses the persistent intent of §13.10 instead.
+- **Offline.** A `{ offline: true }` outcome shows `OfflineBanner` and keeps the form ([08 §8.4](08-ui-ux-and-design-system.md#84-offline-and-slow-network)). Whether ky's timeout error reaches `apiCall` as `TuyauNetworkError` or as another class is an M0 check; the wrapper treats every non-HTTP error as offline either way.
+
+### 13.5 Forms with TanStack Form
+
+TanStack Form is the only form library (§11.2 bans `zod`, `react-hook-form` and `formik` in `inertia/**`). A form component owns its field state; the server owns validity.
+
+```tsx
+// inertia/components/seller/product_draft_form.tsx (excerpt) — design sketch. useForm({ defaultValues,
+// onSubmit }), form.Field with validators.onBlur, field.state.value/meta.errors, field.handleChange,
+// field.handleBlur, form.handleSubmit and form.Subscribe are verified in @tanstack/react-form 1.33.0;
+// Route.Body<'createProduct'> is the @tuyau/core/types helper over the generated registry.
+import { useState } from 'react'
+import { useForm } from '@tanstack/react-form'
+import { router } from '@inertiajs/react'
+import type { Route } from '@tuyau/core/types'
+import type { Data } from '@generated/data'
+import { client } from '~/client'
+import { PRODUCT_LIMITS } from '@shared/constants/limits'
+import { applyServerErrors } from '~/lib/forms'
+import { useApiMutation } from '~/hooks/use_api_mutation'
+import { useIntentKey } from '~/hooks/use_intent_key'
+import { TextField } from '~/components/forms/text_field'
+import { t } from '~/lib/i18n'
+// ErrorSummary and SubmitButton come from ~/components/forms (imports omitted)
+
+type Body = Route.Body<'createProduct'>
+
+// Every key of the request body, typed by the route: a new validator key breaks this at compile time
+const EMPTY_DRAFT: Body = {
+  title: '',
+  description: null,
+  category_id: '',
+  brand_id: null,
+  attributes: [],
+  manufacturer_name: null,
+  is_imported: false,
+  country_of_origin: null,
+  warranty_text: null,
+  care_and_precautions: null,
+}
+// Server errors on these fields go under the field; anything else goes to the summary
+const KNOWN_FIELDS = new Set(Object.keys(EMPTY_DRAFT))
+
+export default function ProductDraftForm({
+  shopSlug,
+  categories,
+  attributes,
+}: {
+  shopSlug: string
+  categories: Data.CategoryOption[] // for the category field (omitted below)
+  attributes: Data.AttributeOption[] // for the attribute fields (omitted below)
+}) {
+  const mutation = useApiMutation()
+  const intentKey = useIntentKey<Body>()
+  const [summary, setSummary] = useState<string[]>([])
+  const form = useForm({
+    defaultValues: EMPTY_DRAFT,
+    onSubmit: async ({ value, formApi }) => {
+      const key = intentKey.for(value)
+      const outcome = await mutation.run(() =>
+        client.request('createProduct', {
+          params: { shopSlug },
+          body: value,
+          headers: { 'Idempotency-Key': key },
+        })
+      )
+      if (outcome.ok) {
+        intentKey.reset() // a new intent after a success (06 §7.1)
+        // canon §6.4 editor page; the /seller prefix is still OD-12
+        return router.visit(`/seller/${shopSlug}/products/${outcome.data.data.id}`)
+      }
+      if ('problem' in outcome)
+        setSummary(applyServerErrors(formApi, outcome.problem, KNOWN_FIELDS))
+    },
+  })
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault()
+        void form.handleSubmit()
+      }}
+    >
+      <ErrorSummary messages={summary} />
+      <form.Field
+        name="title"
+        validators={{
+          onBlur: ({ value }) =>
+            [...value.trim()].length < PRODUCT_LIMITS.title.min
+              ? t('validation.title_too_short')
+              : undefined,
+        }}
+      >
+        {(field) => (
+          <TextField
+            label={t('seller.products.fields.title')}
+            value={field.state.value}
+            errors={field.state.meta.errors}
+            onChange={(v) => field.handleChange(v)}
+            onBlur={field.handleBlur}
+          />
+        )}
+      </form.Field>
+      {/* … other fields … */}
+      <form.Subscribe selector={(s) => s.isSubmitting}>
+        {(submitting) => <SubmitButton pending={submitting} label={t('seller.products.create')} />}
+      </form.Subscribe>
+    </form>
+  )
+}
+```
+
+Rules, each with the check that enforces it:
+
+| Rule                                                                                                                                                                                                                                  | Check                                                                                   |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Form values are typed as the route's request body (`Route.Body<'<operationId>'>`), so a validator change breaks the form at compile time                                                                                              | `pnpm typecheck` (§11.3)                                                                |
+| Client rules only mirror server limits from `shared/constants/limits.ts`; a client rule never blocks a submit the server would accept ([08 §11.6](08-ui-ux-and-design-system.md#116-server-authoritative-permissions-and-validation)) | Review; limits imported by both the Vine validator (§12.5) and the form                 |
+| Validate on blur and submit, never while the user types the first time (08 §7.1)                                                                                                                                                      | Component test (T-UI area, proposed in 08)                                              |
+| Server errors go into `errorMap.onServer` through `applyServerErrors` (the 08 §7.1 sketch), which lives in `inertia/lib/forms.ts` with `toFormPath` and `messageFor`                                                                  | Component test that submits a 422 with a nested path and a `field: null` item (08 §7.1) |
+| Fields are built from `components/forms/*` wrappers over the `field` primitive, so every input has a label, an `id` and `aria-describedby` for its errors                                                                             | `eslint-plugin-jsx-a11y` (§13.9, proposal) and axe (T-A11Y-001)                         |
+| Counters count code points (`[...value].length`), matching `char_length` in the CHECKs ([08 §11.8](08-ui-ux-and-design-system.md#118-localization-ready-text-and-formatting))                                                         | Formatter and counter unit tests with the Devanagari fixture (NFR-I18N-004)             |
+| Draft preservation before a 401 redirect uses `inertia/lib/form_drafts.ts` with keys `dn.draft.<form>.<user id>` (proposed) and an explicit per-form list of excluded fields (passwords, TOTP codes, payout numbers)                  | Unit test of the exclusion list                                                         |
+
+### 13.6 Money and date formatting
+
+One module formats money for SSR, the client and e-mail templates ([08 §5.11](08-ui-ux-and-design-system.md#511-money-and-numeral-display-vx-12)); the lint rules of §11.2 ban `toFixed`, `parseFloat` and `toLocaleString` elsewhere.
+
+```ts
+// shared/format/money.ts — design sketch. Intl.NumberFormat('en-IN') output was run locally on
+// Node 24.21.0 / ICU 78.3 (2026-09-27): 725000 → "Rs 7,250", 123456750 → "Rs 12,34,567.50",
+// 50 → "Rs 0.50", -100000 → "-Rs 1,000". Browser output is checked by the SSR-versus-client
+// snapshot test (NFR-I18N-002).
+export const NPR_DISPLAY_PREFIX = 'Rs' // [Verify-external VX-12]
+const NBSP = '\u00A0' // no-break space, so "Rs" never wraps away from the amount (08 §5.11)
+const grouping = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 })
+
+export function formatNPR(minor: number): string {
+  if (!Number.isSafeInteger(minor)) throw new RangeError('formatNPR expects integer paisa')
+  const abs = Math.abs(minor)
+  const paisa = abs % 100
+  const rupees = (abs - paisa) / 100 // integer arithmetic only (04 §18.1)
+  const cents = paisa === 0 ? '' : `.${String(paisa).padStart(2, '0')}` // paisa only when non-zero (A-11)
+  const text = `${NPR_DISPLAY_PREFIX}${NBSP}${grouping.format(rupees)}${cents}`
+  return minor < 0 ? `-${text}` : text
+}
+```
+
+- Components receive `MoneyJson` (`{ amount_minor, currency }`) and call `formatNPR(price.amount_minor)`. They never add, subtract or multiply money; totals, discounts and savings come from the server (RF-16). A display-only percentage for a compare-at price is `discountPercent(priceMinor, compareAtMinor)` in the same file, computed with integer arithmetic and rounded half up.
+- `shared/format/date.ts` exports `formatDateTime(iso)`, which always passes `timeZone: 'Asia/Kathmandu'` to `Intl.DateTimeFormat('en-IN', …)`, so SSR on a UTC server and the browser print the same string ([08 §11.8](08-ui-ux-and-design-system.md#118-localization-ready-text-and-formatting)); the exact pattern is fixed by a snapshot test.
+- **Verified by** the formatter unit tests listed in 08 §5.11 and the SSR-versus-client snapshot (NFR-I18N-002); 10 numbers them.
+
+### 13.7 No client-side authority
+
+The rules are [08 §11.6](08-ui-ux-and-design-system.md#116-server-authoritative-permissions-and-validation) and [07 §1.5](07-security-threat-model-and-permissions.md#15-design-rules-that-every-section-relies-on); the code consequences:
+
+1. **Request bodies carry IDs, quantities and user text only.** No price, total, `shop_id`, status or commission is ever sent, and the typed body (`Route.Body<…>`) has no such keys, because the validators do not declare them. T-SEC-003 calls the API without the UI.
+2. **The UI hides; the server decides.** Seller pages read the shared prop `current_shop` (named here; 08 §8.5 asked for it): `{ slug, name, status, suspension_mode, role, permissions }`, where `permissions` is the resolved list for the current actor from the [07 §4.3](07-security-threat-model-and-permissions.md#43-shop-roles-and-permissions) maps. `InertiaMiddleware.share()` builds it from `ctx.shop` through a `SellerContextTransformer`, and it is `null` outside seller routes. The adapter evaluates `share()` when the page renders, after the route middleware [Verified-repo `@adonisjs/inertia` 4.2.0 `build/src/inertia_middleware.js:24`, `build/inertia_manager-BGHA4cDP.js:254`], so `seller_context` has already set `ctx.shop`. `can(permission)` in `inertia/lib/permissions.ts` reads only this prop.
+3. **No authority is cached.** Roles, statuses and permissions are never written to `localStorage` or `sessionStorage`; the next visit brings a fresh prop, and a 403 renders `PermissionDenied` ([08 §8.5](08-ui-ux-and-design-system.md#85-permission-denied-404-versus-403)).
+4. **State transitions offered by the UI are a convenience.** Buttons follow the current status from props; a 409 `INVALID_STATE_TRANSITION` shows the new state and reloads the prop (§13.3 rule 3).
+
+### 13.8 SSR safety rules
+
+Storefront, auth and payment-return pages render on the server and hydrate ([03 §6.1](03-system-architecture.md#61-surfaces-and-rendering-modes)). The rules below keep server HTML and the first client render identical.
+
+| #   | Rule                                                                                                                                                                                                               | Why                                                                                                                                                                                      | Enforced by                                                                                                                                                                               |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | No `window`, `document`, `navigator`, `matchMedia`, `localStorage` or `sessionStorage` at module scope or during render. Use them in `useEffect`, event handlers, or `useSyncExternalStore` with a server snapshot | The SSR bundle runs in Node, where they do not exist; a module-scope access crashes every SSR page                                                                                       | SSR smoke test that renders every SSR page in Node (T-ARCH-002, proposed in 03); `no-restricted-globals` for the two storage objects outside `inertia/lib/storage.ts` (addition to §11.2) |
+| 2   | Render output may not depend on the environment: no `Date.now()`, `Math.random()`, `crypto.randomUUID()`, `typeof window` checks or locale-default formatting in render; IDs come from `useId()`                   | A different first render is a hydration mismatch; today's `ThemeProvider` reads `localStorage` in its initial state [Verified-repo `inertia/components/providers/theme_provider.tsx:31`] | T-ARCH-002 fails on a React hydration warning; formatters take explicit locale and time zone (§13.6)                                                                                      |
+| 3   | `app.tsx` hydrates when the server sent markup and renders otherwise (sketch below)                                                                                                                                | `createRoot` discards SSR markup (RF-08)                                                                                                                                                 | T-ARCH-002 on one SSR and one CSR page                                                                                                                                                    |
+| 4   | `ssr.tsx` eagerly bundles only the SSR surfaces, matching the `ssr.pages` filter of 03 §6.1                                                                                                                        | Today's eager glob bundles every page, dashboards included, into the SSR build                                                                                                           | Build-output check (bundle report, 08 §10.1)                                                                                                                                              |
+| 5   | DEV-only code loads through `import.meta.env.DEV ? lazy(() => import('./dev/devtools')) : null`                                                                                                                    | Vite replaces `import.meta.env.DEV` with `false` in production builds, so the import is never emitted (RF-30)                                                                            | CI string check for `TanStackDevtools` in the production output (08 §10.1)                                                                                                                |
+| 6   | The theme class comes from the `dn_theme` cookie on the server (§13.10), not from `localStorage` in an effect                                                                                                      | Removes the light-to-dark flash (RF-08, [08 §1.2](08-ui-ux-and-design-system.md#12-theme-policy-light-by-default-dark-supported))                                                        | Browser test with JavaScript disabled per cookie value (T-UI area, proposed in 08)                                                                                                        |
+| 7   | No `console.*` in `inertia/**` (§7.5), and no props written anywhere                                                                                                                                               | Props contain personal data and SSR logs are retained (RF-26)                                                                                                                            | `no-console` (§11.2)                                                                                                                                                                      |
+
+```tsx
+// inertia/app.tsx — design sketch. createInertiaApp setup({ el, App, props }), resolvePageComponent
+// (path, pages, layout), TuyauProvider, the progress option includeCSS (@inertiajs/core 2.3.27
+// types/types.d.ts:343) and react-dom/client hydrateRoot/createRoot are the installed APIs; the hasChildNodes switch is 03 §6.1's [Assumption], checked by T-ARCH-002 (proposed in 03).
+import './css/app.css'
+import { StrictMode, Suspense, lazy } from 'react'
+import { createRoot, hydrateRoot } from 'react-dom/client'
+import { createInertiaApp } from '@inertiajs/react'
+import { TuyauProvider } from '@adonisjs/inertia/react'
+import { resolvePageComponent } from '@adonisjs/inertia/helpers'
+import { client } from '~/client'
+import { layoutFor } from '~/layouts/layout_for'
+
+const Devtools = import.meta.env.DEV ? lazy(() => import('./dev/devtools')) : null
+
+createInertiaApp({
+  title: (title) => (title ? `${title} - DripNepal` : 'DripNepal'),
+  // includeCSS: false, because the injected <style> has no CSP nonce; the bar's CSS is in app.css (08 §8.1)
+  progress: { includeCSS: false },
+  resolve: (name) =>
+    resolvePageComponent(
+      `./pages/${name}.tsx`,
+      import.meta.glob('./pages/**/*.tsx'),
+      layoutFor(name)
+    ),
+  setup({ el, App, props }) {
+    const tree = (
+      <StrictMode>
+        <TuyauProvider client={client}>
+          <App {...props} />
+          {Devtools && (
+            <Suspense fallback={null}>
+              <Devtools />
+            </Suspense>
+          )}
+        </TuyauProvider>
+      </StrictMode>
+    )
+    if (el.hasChildNodes()) hydrateRoot(el, tree)
+    else createRoot(el).render(tree)
+  },
+})
+```
+
+`inertia/ssr.tsx` keeps its shape but passes `import.meta.glob(['./pages/storefront/**/*.tsx', './pages/auth/**/*.tsx', './pages/payments/**/*.tsx'], { eager: true })` and the same `layoutFor`. The DEV devtools render inside a `Suspense` with a `null` fallback, so the first client render of an SSR page still matches the server markup.
+
+### 13.9 Accessibility lint (proposal)
+
+`eslint-plugin-jsx-a11y` is not installed, so this is a proposal for the M0 lint PR, sketched as the last block of [§11.2](#112-eslintconfigjs):
+
+- **Scope.** The recommended flat config (`jsxA11y.flatConfigs.recommended` [Assumption: export name and licence confirmed when the package is added, §10.1]) for `inertia/**/*.tsx`, except `inertia/components/ui/**`, whose upstream Radix wrappers manage roles themselves and are covered by axe instead.
+- **Custom components.** The plugin's component-mapping setting maps `Button` → `button`, `Input` → `input`, `Link` → `a` and the `components/forms/*` wrappers to their elements, so the label and `alt` rules apply to DripNepal components, not only to raw HTML [Assumption: setting name confirmed when added].
+- **Rules raised to `error`**: `alt-text`, `anchor-is-valid`, `label-has-associated-control`, `no-autofocus` (autofocus breaks the focus rules of [08 §9.1](08-ui-ux-and-design-system.md#91-focus-management)) and `click-events-have-key-events`.
+- **What it does not replace.** Static lint catches missing `alt`, unlabeled controls and mouse-only handlers. It cannot see contrast, focus order or live-region behaviour, which axe (T-A11Y-001) and the manual checks of [08 §9.4](08-ui-ux-and-design-system.md#94-how-it-is-verified) cover.
+- **Trade-off.** Some false positives on composed Radix triggers; each is an inline disable with the rule name and a reason (§11.2). Verified by a fixture file per raised rule, like the other selectors of §11.2.
+
+Three non-accessibility frontend rules are added to the same block by this section: `no-restricted-imports` of `useForm` and `Form` from `@inertiajs/react` (§13.4), of `useTuyau` from `@adonisjs/inertia/react` (untyped, §13.4), and `no-restricted-globals` for `localStorage` and `sessionStorage` outside `inertia/lib/storage.ts` (§13.8 rule 1).
+
+### 13.10 Named helpers and conventions
+
+These names close the items that [08](08-ui-ux-and-design-system.md) handed to this document.
+
+| Item (asked by)                     | Decision                                                                                                                                                                                                                                                                                                                                                                                                                | File                                                                                                                         |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Theme cookie (08 §1.2)              | `dn_theme`, values `light`, `dark`, `system`; `Path=/`, `SameSite=Lax`, `Max-Age=31536000`, `Secure` on HTTPS; not `HttpOnly` (client writes it); plain, not signed, because it carries no authority. The server reads it with `request.plainCookie('dn_theme', { encoded: false })` [Verified-repo http-server 9.1.0 `request.d.ts:660`], falls back to `light` for any other value, and shares it as the `theme` prop | `app/middleware/inertia_middleware.ts`, `inertia/lib/theme.ts`                                                               |
+| Theme class in the root view        | `resources/views/inertia_layout.edge` writes `lang="en"` and `class="dark"` when `page.props.theme` is `dark` (the adapter passes `page` to the root view [Verified-repo `@adonisjs/inertia` 4.2.0 `inertia_manager` lines 290-304]); for `system` a nonce-carrying inline script (`cspNonce`, 07 §7.3) sets the class from `matchMedia`                                                                                | `resources/views/inertia_layout.edge`                                                                                        |
+| Resolved shop permissions (08 §8.5) | Shared prop `current_shop.permissions` (§13.7)                                                                                                                                                                                                                                                                                                                                                                          | `app/middleware/inertia_middleware.ts`, `app/transformers/shops/seller_context_transformer.ts`, `inertia/lib/permissions.ts` |
+| Checkout intent (08 §11.4)          | Storage key `dn.checkout.intent.<user id>` confirmed; `Intent`, `intentFor`, `markSent`, `read`, `write` and `sameBody` (canonical-JSON equality); `PlaceOrderBody = Route.Body<'placeOrder'>`; `read` and `write` swallow storage errors through `inertia/lib/storage.ts`                                                                                                                                              | `inertia/lib/checkout_intent.ts`                                                                                             |
+| Notices file (08 §12.4)             | `THIRD_PARTY_NOTICES.md` at the repository root confirmed, with the `// dripnepal-change:` marker and `kit/<item>.tsx` naming of 08 §12                                                                                                                                                                                                                                                                                 | repository root                                                                                                              |
+| Catalog loader (08 §11.8)           | Static JSON imports per surface (`common.json` and `errors.json` in every bundle, plus the surface file chosen by `layoutFor`), compiled with `intl-messageformat` and cached per message; `t(key, values)`; a missing key renders the key and is reported in DEV only. Pseudocode until `intl-messageformat` (through `@adonisjs/i18n`) is added in M0                                                                 | `inertia/lib/i18n.ts`, `resources/lang/en/*.json`                                                                            |
+| URL builder (08 §11.1, §7.2)        | `queryUrl(path, params)` builds sorted, repeated-key query strings with `URLSearchParams`; `listingUrl` and `applyFilters` (the 08 §11.1 sketch) and the dashboard `tableUrl` wrap it, and visits pass empty `data`                                                                                                                                                                                                     | `inertia/lib/query_url.ts`                                                                                                   |
+| Problem handling (08 §7.1, §8.3)    | `Problem`, `ProblemErrorItem`, `isProblem` in `shared/api/problem.ts` (§4.3); `apiCall` (§13.4); `applyServerErrors`, `toFormPath`, `messageFor` in `inertia/lib/forms.ts`                                                                                                                                                                                                                                              | `shared/api/problem.ts`, `inertia/lib/api.ts`, `inertia/lib/forms.ts`                                                        |
+| Live announcements (08 §7.4)        | `announce(message, politeness)` and the two regions mounted by each layout                                                                                                                                                                                                                                                                                                                                              | `inertia/lib/announce.ts`                                                                                                    |
+| Shared limits (08 §11.6)            | `PRODUCT_LIMITS`, `SHOP_SLUG`, `CART_LINE_MAX_QUANTITY` and the other mirrored limits, imported by validators and forms                                                                                                                                                                                                                                                                                                 | `shared/constants/limits.ts`                                                                                                 |
+| Formatters (08 §5.11, §11.8)        | `formatNPR`, `NPR_DISPLAY_PREFIX`, `discountPercent`; `formatDateTime`                                                                                                                                                                                                                                                                                                                                                  | `shared/format/money.ts`, `shared/format/date.ts`                                                                            |
+
+### 13.11 Current code → target (frontend)
+
+| Area / file(s)                                                    | Today [Verified-repo]                                                                                                   | Decision                                                                                                                       | Reason              | Milestone                  |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------- | -------------------------- |
+| `inertia/app.tsx`                                                 | `createRoot`; devtools imported statically behind `<Show when={isDevMode && isBrowser}>`; `RootLayout` wraps every page | **Rewrite** as §13.8 (hydrate switch, DEV dynamic import, `layoutFor`, progress bar without injected CSS)                      | RF-08, RF-30        | M0 (after the OD-25 spike) |
+| `inertia/ssr.tsx`                                                 | Eager glob of every page, `RootLayout` for all                                                                          | **Fix**: SSR-surface glob and `layoutFor`                                                                                      | RF-08               | M0                         |
+| `inertia/client.ts`, `inertia/types.ts`                           | `createTuyau({ baseUrl: '/', registry })`; `InertiaProps<T>` over `Data.SharedProps` (both meet the standard)           | **Keep**                                                                                                                       | —                   | —                          |
+| `inertia/layouts/root_layout.tsx`                                 | `console.info({ pageProps: rest })` (line 28); `ThemeProvider defaultTheme="dark"`                                      | **Fix** in M0: remove the log; **rewrite** into the surface layouts with the cookie theme                                      | RF-26, RF-08        | M0, M4                     |
+| `inertia/components/providers/theme_provider.tsx`                 | `localStorage` key `drip-ui-theme` read in initial state and applied in `useEffect`                                     | **Rewrite**: initial value from the `theme` prop, writes `dn_theme`                                                            | RF-08               | M0                         |
+| `inertia/hooks/use_cart.tsx`                                      | Client-side cart reducer with prices and a shipping threshold from `lib/mock-data`                                      | **Delete**; the cart comes from `getCart` props and cart writes go through `apiCall`                                           | RF-10, RF-16, RF-27 | M4                         |
+| `inertia/lib/utils.ts`                                            | `cn` (meets the standard); `isBrowser`; `getDiscountPercentage`/`getDiscountedPrice` with float arithmetic on prices    | **Keep** `cn`; **delete** the price helpers (replaced by `discountPercent` and server totals); `isBrowser` only inside effects | RF-16, RF-25        | M4                         |
+| `toLocaleString` call sites                                       | 31 lines under `inertia/` (grep, 2026-09-27)                                                                            | **Rewrite** to `formatNPR` and `formatDateTime`                                                                                | RF-25               | M4                         |
+| `inertia/pages/shops/register/index.tsx` and the `zod` prototypes | Posts to a stale route name; `zod` schemas                                                                              | **Rewrite** as TanStack forms calling `applyForShop` through `apiCall`                                                         | RF-03               | M2                         |
+| `inertia/lib/mock-data/**`, page-local `mock.ts`                  | Mock catalog, cart and checkout data                                                                                    | **Delete** as each page gets its props (08 §13)                                                                                | RF-27               | M4, M5                     |
+
+---
+
 ## Consistency notes for editor
 
 1. **Route file names (ADR-0004 decision 6, canon §6.3).** ADR-0004 and canon §6.3 (`start/routes/{storefront,account,seller,admin,api_v1,webhooks,health}.ts`) name a single `start/routes/api_v1.ts`, and canon has no `auth.ts` or `dev.ts`; §3.3 splits it into `start/routes/api_v1/{auth,public,customer,seller,admin}.ts`. The rule (unsafe methods only under `/api/v1/` and `webhooks.ts`) is unchanged; ADR-0004 can say "`start/routes/api_v1/`".
@@ -2293,3 +3486,22 @@ The ADR line is the checkbox [ADR-0001](adr/0001-record-architecture-decisions.m
 53. **Review items for this part.** The 14-file baseline order of 04 §20.2.2 is adopted unchanged (§8.1), with `allow_only_columns()` guards written as SQL (§8.6) and `schemaGeneration.rulesPaths` wiring (§8.7). `withTx` is used by the bootstrap command (§9.1). Job-name, `seller_context`, capture-orchestration and vertical-slice items do not arise in §8–§11; the slice is §12.
 54. **T-SEC-026 and the weekly update PR.** [07 TM-26](07-security-threat-model-and-permissions.md#71-dependency-policy) defines T-SEC-026 (proposed) to fail "on a lockfile change without a `package.json` change". §10.3's weekly PR delivers patch and minor updates mostly through the lockfile, so it would fail that rule. §10.2 allows lockfile-only changes only on the weekly update branch. 07 and 10 should add that exemption; 10 picks the mechanism (branch name or label). 07's T-SEC-026 also allows only `registry.npmjs.org` in `components.json`, while §10.4 also allows "the shadcn default". The two agree in effect, because the default registry is not written in `components.json`.
 55. **Part 3 critic fixes (2026-09-27).** The lint count in §11 now names the `@adonisjs/prefer-adonisjs-inertia-link` hit (56 = 50 + 2 + 4 single hits). The lock script in §8.4 no longer fails before the lock file exists. §9.1 adds the advisory lock and `subject_id` to the bootstrap audit row. The PR template's idempotency item follows the ⚷ list of [06 §7.7](06-api-design.md#77-operations-that-require-a-key-) instead of "every unsafe endpoint". The §10.7 row now lists the `0.x` packages.
+
+**From part 4 (§12–§13):**
+
+56. **`createProduct` creates the default variant.** [04 §3.4](04-domain-model-and-data-dictionary.md#34-every-product-has-at-least-one-variant-an-option-less-product-has-one-default-variant) (decision and enforcement) and [04a §7.6](04a-data-dictionary-tables.md#76-products) say the product is created with its default variant, and 04a §8.1 and 05 §5.1 require its `inventory_items` row in the same transaction. [06 §14.2](06-api-design.md#142-vendor-product-creation-createproduct-then-replaceproductvariants) and the `openapi.yaml` example return `variants: []` (`openapi.yaml` note 15 records the same difference). §12 follows 04, the owner of the domain rule, so the 201 body lists one variant (`is_default: true`, price 0, `on_hand` 0), which the `SellerProduct` schema already allows. 06 §14.2 and the `openapi.yaml` example should show that variant. The default SKU `DN-<public_id>` and the label `Default` are [Assumption] conventions proposed here; 04a §7.9 does not name them.
+57. **Hosting of `createProduct` and `replaceProductVariants`.** Both write `catalog` tables and `inventory_items`, and `catalog` may not import `inventory` (canon chain, 03 §4.1). §12.2 hosts both entry actions in `app/modules/inventory/actions/`, applying the hosting rule of §2.3 item 3 to operations, with `catalog` step actions. [03 §4.4](03-system-architecture.md#44-module-responsibilities) lists both under `catalog`; its cell can read "hosted in `inventory` (see 09 §12.2)". The alternative is to rank `inventory` below `catalog` in 03 §4.1, which would also let `catalog.refresh_listing` read availability through `inventory` queries. That changes canon's chain, so it is left to the editor and the product owner.
+58. **`missing_for_submit` in 06 §14.2.** The example request sends `warranty_text: null`, but the response lists only `["variants", "media"]`. `products_disclosures_check` requires `warranty_text` at submit, and §12.9 computes the list with the same function as `submitProductForReview`, so the example should read `["variants", "media", "warranty_text"]`.
+59. **Listing refresh on draft creation (proposed).** [06 §13.5](06-api-design.md#135-seller) lists "Product row, audit" as `createProduct` side effects, and [03 §9](03-system-architecture.md#9-asynchronous-work) triggers `catalog.refresh_listing` on `product.*` events without a `product.created`. §12.2 item 3 sends the job on every product write, drafts included. 06 §13.5 and 03 §9 can add it, or the editor can drop it; the handler writes nothing for a draft either way.
+60. **`idempotencyScope` location and new files.** §1.2 and the §3.5 sketch place `idempotencyScope` in `app/modules/platform/idempotency.ts`, and §3.5 calls it as `idempotencyScope(ctx.request, …)`. It reads HTTP state, which a module may not take (§3.2), so §12.7 moves it to `app/controllers/support/idempotency_scope.ts` with the signature `(ctx, operation, { body, params, ttlHours })`. `platform/idempotency.ts` keeps `canonicalJson`, `withIdempotency`, `idempotentTx` and `ReplayRequested`. Files that are not in the §1.2 tree: `app/controllers/support/{action_context.ts, idempotency_scope.ts}`, `app/modules/platform/{action_context.ts, db_errors.ts}`, `app/modules/catalog/domain/{identifiers.ts, disclosures.ts, submit_readiness.ts}`, `app/modules/shops/domain/{permissions.ts, status_gate.ts}`, `app/transformers/shops/seller_context_transformer.ts`, `tests/support/fixtures.ts`, `shared/constants/limits.ts`, `shared/format/{money.ts, date.ts}`, `inertia/layouts/layout_for.ts`, `inertia/dev/devtools.tsx`, `inertia/hooks/{use_api_mutation.ts, use_intent_key.ts}`, and `inertia/lib/{api, forms, form_drafts, i18n, query_url, checkout_intent, theme, permissions, storage, announce}.ts`.
+61. **Idempotency helper details.** 06 §7.3 writes the helper as `withIdempotency(ctx, operation, retention, fn)`, while the 06 §7.9 sketch uses `(trx, scope, run)`. 09 follows §7.9 and adds `idempotentTx(scope, run)`, which reads and compares the stored row after the rollback. Three behaviours are made explicit here: a `55P03` on the key `INSERT` becomes 409 `IDEMPOTENCY_IN_PROGRESS`; a key row purged between the conflict and the read also becomes `IDEMPOTENCY_IN_PROGRESS`, so the client's retry runs as new; and the stored body is produced inside the transaction by a presenter that the controller passes to the action (06 §7.3 step 3). 06 §7.3 can cite §12.7. The replay test in §12.10 relies on the global test transaction turning `withTx` into a savepoint.
+62. **Validation item codes.** §12.10 asserts `errors[].code` values `minLength` and `uuid`, which are the Vine rule names that §5.4 copies into `errors[].code`. [06 §5.1](06-api-design.md#51-shape) gives `snake_case` examples (`unknown_field`, `insufficient_stock`) but does not say whether Vine rule names are passed through or mapped. 06 should state which one; if they are mapped to `snake_case`, the §5.4 handler adds the map and the test changes. Passing through is not uniformly camelCase either: the installed Vine reports string rules as `minLength` and `uuid`, but the array length rules as `array.minLength` and `array.maxLength` (and `distinct` without a prefix) [Verified-repo `@vinejs/vine` 4.4.0 `build/index.js:2646-2670, 2724-2728, 3656-3672, 3875-3878`], so a `value_codes` length error would carry a dotted code.
+63. **Seller routes and old slugs.** [06 §4.4](06-api-design.md#44-seller-authorization-algorithm) step 1 resolves `{shopSlug}` "against `shops.slug`, then `slug_redirects`" without saying what an API request with an old slug gets. §12.4 continues with the resolved shop on `/api/v1` (page routes answer 301), which keeps the fingerprint of 06 §7.2 stable. §12.3 leaves `verified_email` off the seller group [Assumption]; 07 §4.8 lists the middleware in the group order without naming the groups that use it.
+64. **Table prop names.** [08 §7.2](08-ui-ux-and-design-system.md#72-tables-and-lists) calls a table's array `rows` and leaves the name to 09. §13.3 uses one prop per table named after the resource, each `{ items, meta }`, which matches §4.2. 08's sketch can rename `rows` to `items`.
+65. **Names settled for 08 (proposed where new).** Theme cookie `dn_theme` with its attributes and the `theme` shared prop (08 §1.2, note 8); shared prop `current_shop` with `permissions` (08 §8.5, note 17; 03 §6 defines only `seller_shops`, so the prop is proposed); intent key `dn.checkout.intent.<user id>` (confirmed from 08 §11.4); `THIRD_PARTY_NOTICES.md`, the `// dripnepal-change:` marker and `kit/<item>.tsx` naming (confirmed from 08 §12); the catalog loader in `inertia/lib/i18n.ts`; the URL builder `inertia/lib/query_url.ts`; form drafts under `dn.draft.<form>.<user id>` (proposed). [07 §5.3](07-security-threat-model-and-permissions.md#53-consent-and-purpose) still lists the theme preference as `localStorage` and should list the `dn_theme` cookie, and [07 §7.3](07-security-threat-model-and-permissions.md#73-csp-and-security-headers) should list the `system` theme script as a nonce user (08 notes 7, 8 and 15). The CSP `style-src` questions of 08 note 7 stay with 07 and 10; §13 adds no inline styles.
+66. **Lint rules added by §13.** `no-restricted-imports` of `useForm` and `Form` from `@inertiajs/react` and of `useTuyau` from `@adonisjs/inertia/react`, and `no-restricted-globals` for `localStorage` and `sessionStorage` outside `inertia/lib/storage.ts`. The §11.2 sketch does not show them; the M0 lint PR adds them to the frontend block. The `eslint-plugin-jsx-a11y` rules raised to `error` and the component-mapping setting (§13.9) remain a proposal until the package is installed.
+67. **Test IDs in part 4.** Canon §12 IDs cited without a mark: T-SEC-001, T-SEC-003, T-API-001, T-A11Y-001, T-ARCH-001 and T-CHK-004 (named only as the model for a `createProduct` concurrency test). Cited from their proposing documents: T-API-002 (06); T-SEC-005, T-SEC-030, T-SEC-031 and T-SEC-032 (07); T-ARCH-002 and T-ARCH-004 (03); T-CAT-101 and T-CAT-108 (04a). New checks named without IDs, for 10 to number: the `createProduct` concurrent-duplicate test, the rollback test (no product, key row or job after a forced failure), the `resolveSellerContext` query test, the route middleware-order test, the `missingForSubmit` unit test, the hydration-warning check inside T-ARCH-002, and the jsx-a11y rule fixtures.
+68. **Proposed canon additions used in part 4:** none. `CHECKOUT_DISABLED`, `MALFORMED_REQUEST`, the proposed operations, `platform.payments.review` and the proposed routes do not appear in §12–§13. The `/seller/{shopSlug}/…` page prefix is still [Open OD-12]; the API prefix `/api/v1/seller/shops/{shopSlug}` is canon §6.5.
+69. **Review items for this part.** The slice uses the 04a column and constraint names as written (`products_public_id_key`, `products_title_check`, `products_country_check`, `products_disclosures_check`, `product_variants_default_signature_check`, `product_variants_price_check`, `product_variants_sku_check`, `product_attribute_values_product_fkey`, `inventory_items_variant_fkey`, `idempotency_keys_key_check`); the queue name `catalog.refresh_listing` with `singletonKey` from 03 §9; `withTx` with its 5 s/10 s timeouts (§3.8) under `idempotentTx`; `moneyJson` and `formatNPR` for money; and the middleware name `seller_context`. The pg-boss/Lucid transaction handoff stays pseudocode pending T-ARCH-004. Migrations, the capture orchestration and `sumMinor` do not arise in §12–§13.
+70. **Open for 03 (not resolved here).** `catalog.refresh_listing` recomputes `in_stock` from `inventory_items` (04a §7.12), but `catalog` may not import `inventory` queries (§2.2). The handler either reads `inventory_items` in its own SQL, a cross-module read that §2.4's owner-writes check does not forbid but that no rule in 03 or §2 explicitly allows, or it moves to `inventory` under the hosting rule. Note 57's re-rank would also remove the question.
+71. **Part 4 critic fixes (2026-09-27).** §13.2 names the page `seller/products/new` (file `inertia/pages/seller/products/new.tsx`), following the page-name rule of §1.3 (`seller/orders/show`), instead of `seller/product_new`. §13.2 and §13.5 now agree on the form's props (`shopSlug`, `categories`, `attributes`); the form builds its typed empty body and derives its known-field list from it. The `formatNPR` sketch writes the no-break space as the escape `'\u00A0'` instead of an invisible literal (outputs re-run on Node 24.21.0 / ICU 78.3). The `app.tsx` sketch keeps a `title` callback and sets `progress: { includeCSS: false }`, as [08 §8.1](08-ui-ux-and-design-system.md#81-loading) requires for the CSP. §12.3 cites T-SEC-005 (proposed in 07) for the route check; §12.5 records that Vine counts UTF-16 code units while `products_title_check` counts code points, with the constraint map as the backstop; §12.9 says that shop-level publication conditions are outside `missing_for_submit`. Note 62 now records the verified Vine rule names.
