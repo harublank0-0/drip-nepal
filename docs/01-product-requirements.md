@@ -254,7 +254,7 @@ No customer wallet, store credit or refund-to-balance is offered in any release 
 ### 4.5 Fulfilment: vendors self-ship
 
 - Each shop sets the districts it delivers to and a fee and delivery estimate for two zones, Kathmandu Valley and outside the valley (FR-SHOP-004). Checkout blocks addresses outside a shop's coverage (FR-CHK-001).
-- The shop records the shipment states `packed`, `shipped` (courier name, tracking number, optional HTTPS tracking URL), `delivered`, `delivery_failed`, `returning` and `returned_to_origin` itself, and a reattempt moves `delivery_failed` back to `shipped` (FR-FUL-001…003; state machine in [05 §6.3](05-order-payment-and-inventory-lifecycles.md#63-shipment-fulfillment)). There is one shipment per shop order in R1. Partial shipments come in R2 (FR-FUL-005).
+- The shop records the shipment states `packed`, `shipped` (courier name, optional tracking number, optional HTTPS tracking URL), `delivered`, `delivery_failed`, `returning` and `returned_to_origin` itself, and a reattempt moves `delivery_failed` back to `shipped` (FR-FUL-001…003; state machine in [05 §6.3](05-order-payment-and-inventory-lifecycles.md#63-shipment-fulfillment)). There is one shipment per shop order in R1. Partial shipments come in R2 (FR-FUL-005).
 - The platform does not contract couriers, does not see courier APIs and does not guarantee delivery dates. It shows the shop's estimate and records when the shop says it shipped.
 - The E-Commerce Act makes late delivery a ground for cancellation or return with refund (s16(d), s16(g)) [Verify-external VX-02]. The delivery promise shown at checkout is kept on the shop order (`est_min_days_snapshot`, `est_max_days_snapshot`). Support handles a late delivery through the complaint, cancellation and return flows (AC-FR-ORD-005-4, FR-ADM-009, FR-RET-006). There is no separate self-service "late delivery" button in R1.
 
@@ -518,8 +518,8 @@ R1 · **Must** · J-04 · `updateMe` · T-IAM area
 R1 · **Must** · J-08 · `applyForShop`, `listMyShopApplications` · T-SHOP area · Fixes RF-03, RF-21
 
 - AC-FR-SHOP-001-1: Only a signed-in, email-verified, active user can apply, from `/sell`. No new user account is created.
-- AC-FR-SHOP-001-2: A user can own at most `max_shops_per_owner` (3 [A-21]) shops in states `pending_review`, `active` or `suspended`. A further application returns 409 `CONFLICT` with an explanation.
-- AC-FR-SHOP-001-3: Required fields: shop name (2–60 chars, not unique), slug (3–40 chars, `[a-z0-9-]`, unique case-insensitively, not on the reserved list such as `admin`, `seller`, `api`, `p`, `c`), shop contact email, shop contact phone (mobile or landline, normalised to E.164), pickup address from the location hierarchy, business type, and the FR-SHOP-013 fields.
+- AC-FR-SHOP-001-2: A user can own at most `max_shops_per_owner` (3 [A-21]) shops in states `pending_review`, `active` or `suspended`. A further application, or the resubmission of a `rejected` application, returns 409 `CONFLICT` with an explanation.
+- AC-FR-SHOP-001-3: Required fields: shop name (2–60 chars, not unique), slug (3–40 chars, `[a-z0-9-]`, unique case-insensitively, not on the reserved list such as `admin`, `seller`, `api`, `p`, `c`), shop contact email, shop contact phone (mobile or landline, normalised to E.164), pickup address from the location hierarchy, 1–3 shop categories from the active list [Assumption], business type, and the FR-SHOP-013 fields.
 - AC-FR-SHOP-001-4: Shop contact details are entered separately and are not copied from the owner's personal email and phone.
 - AC-FR-SHOP-001-5: A successful application creates the shop with `status = pending_review` and `product_review_mode = pre` [A-19], shows it on `/account/shops`, emails the applicant, and appears in the admin application queue.
 
@@ -686,7 +686,7 @@ R1 · **Must** · J-16 · `listModerationQueue`, `approveProduct`, `rejectProduc
 
 - AC-FR-CAT-006-1: Staff with `platform.products.moderate` see the queue oldest first, with the age of each item.
 - AC-FR-CAT-006-2: Rejecting needs a reason code (for example `counterfeit_suspected`, `misleading_claim`, `prohibited_item`, `missing_disclosure`, `poor_images`) and a note. The shop sees both, and can edit (back to `draft`) and resubmit.
-- AC-FR-CAT-006-3: Blocking removes the product from the storefront within 60 seconds and flags cart lines. The shop cannot unpublish, restore or edit a blocked product. Only a moderator can unblock it, and it then becomes `unpublished`.
+- AC-FR-CAT-006-3: Blocking removes the product from the storefront within 60 seconds and flags cart lines. The shop cannot unpublish, restore or edit a blocked product. Only a moderator can unblock it, and it then returns to `draft`, so it passes the shop's review mode again before it can be live.
 - AC-FR-CAT-006-4: The target is a moderation decision within 2 business days, and a block within 24 hours of a credible notice of illegal or counterfeit content [Assumption; ETA s47, CPA s16(2), Verify-external VX-02, VX-04].
 - AC-FR-CAT-006-5: Every decision writes a `product_review_decisions` row and an audit row.
 
@@ -888,7 +888,7 @@ R2 · **Could** · J-01
 R1 · **Must** · J-03, J-04 · `getCart`, `addCartItem`, `updateCartItem`, `removeCartItem` · T-CART area · Fixes RF-02, RF-10, RF-19
 
 - AC-FR-CART-001-1: A guest cart is identified by a random token cookie, stored only as a hash, and expires after 30 days without activity [Assumption].
-- AC-FR-CART-001-2: Quantity per line is 1–10 and a cart has at most 50 lines. Going over either limit returns 422.
+- AC-FR-CART-001-2: Quantity per line is 1–10 and a cart has at most 50 lines. A request quantity outside 1–10 or a 51st line returns 422; adding to an existing line caps it at 10 and the response says so.
 - AC-FR-CART-001-3: On login, guest lines merge into the user's active cart: quantities of the same variant are added up to 10, and the guest cart is marked `merged`. Logging in twice does not merge twice.
 - AC-FR-CART-001-4: The cart works on every storefront route whether signed in or not. Adding items is limited to 60 per minute.
 
@@ -986,7 +986,7 @@ R1 · **Must** · J-07 · `listMyOrders`, `getMyOrder` · T-SEC-002, T-ORD area
 R1 · **Must** · J-07 · `cancelMyShopOrder` · T-ORD area
 
 - AC-FR-ORD-002-1: A customer can cancel a shop order only while it is `awaiting_acceptance`, or, from R1.1, while it is `awaiting_payment` (which cancels every shop order of that order, because they share one payment). Otherwise the response is 409 `INVALID_STATE_TRANSITION` and the UI offers "Get help".
-- AC-FR-ORD-002-2: Cancelling needs a reason (changed mind, ordered by mistake, found cheaper, delivery too slow, other). It releases stock, cancels the COD payment record and emails the shop.
+- AC-FR-ORD-002-2: Cancelling needs a reason (`changed_mind`, `ordered_by_mistake`, `found_cheaper`, `delivery_too_slow`, `other`). It releases stock, cancels the COD payment record and emails the shop.
 - AC-FR-ORD-002-3: If the customer cancels at the same moment the shop accepts, exactly one of the two succeeds.
 
 #### FR-ORD-003 Vendor accepts or rejects, including item-level rejection
@@ -1034,7 +1034,7 @@ R2 · **Should** · J-07 · T-ORD area
 
 R1 · **Must** · J-12 · `recordFulfillmentEvent` · T-FUL area
 
-- AC-FR-FUL-001-1: `packed` is optional. `shipped` requires a courier name (from a list, or "own delivery", or "other" with text). A tracking number is required unless the courier is "own delivery" [Assumption].
+- AC-FR-FUL-001-1: `packed` is optional. `shipped` requires a courier name (free text in R1); a tracking number and tracking URL are optional ([05 §6.3](05-order-payment-and-inventory-lifecycles.md#63-shipment-fulfillment)).
 - AC-FR-FUL-001-2: A tracking URL, if given, must be HTTPS. Otherwise the response is 422.
 - AC-FR-FUL-001-3: `shipped` consumes the reservation (FR-INV-002) and emails the customer the tracking details.
 - AC-FR-FUL-001-4: An event that the shipment state machine does not allow returns 409 `INVALID_STATE_TRANSITION`.
@@ -1351,7 +1351,7 @@ R1 · **Must** · J-19 · `openSupportCase`, `listMySupportCases`, `getMySupport
 
 E-Commerce Act s33 requires complaints to be registered, acknowledged immediately, decided within 15 days and answered in writing, through an online mechanism [Verify-external VX-02].
 
-- AC-FR-ADM-009-1: A signed-in customer opens a case from the order page or `/account` with a category and description. The case number is shown at once, and an acknowledgement email is sent (95% within 2 minutes). Staff can open a case for someone who contacted them by phone or email.
+- AC-FR-ADM-009-1: A signed-in customer opens a case from the order page or `/account` with a category and description. The case number is shown at once, and an acknowledgement email is sent (95% within 2 minutes). Staff can open a case for an account holder who contacted them by phone or email. In R1, complaints from people without an account (for example a brand owner, or a visitor who writes to the grievance officer) are handled by the grievance officer by email outside the system [Assumption: needs a legal check].
 - AC-FR-ADM-009-2: `due_at` = creation time + 15 days. The queue sorts by due date, warns at 3 days left, and alerts on overdue cases.
 - AC-FR-ADM-009-3: Resolving requires a written `resolution_summary` that the customer sees. If the complaint cannot be resolved, the summary gives the reasons and names the escalation route (DoCSCP).
 - AC-FR-ADM-009-4: Messages have a visibility of customer, shop or internal. Shop members see only shop-visible messages for their own shop's cases.

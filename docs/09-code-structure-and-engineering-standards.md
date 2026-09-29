@@ -948,7 +948,7 @@ Detection mechanism per source (the resulting code and status are the [06 §5.3]
 | Provider errors              | `instanceof ProviderUnavailableError` / `ProviderTimeoutError`                                                                                                          | 503 with `Retry-After: 30`                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | Anything else                | Fallthrough                                                                                                                                                             | 500 `INTERNAL`, generic `detail` "Something went wrong. Quote the request ID to support."                                                                                                                                                                                                                                                                                                                                                         |
 
-The constraint allowlist maps a constraint name from [04a](04a-data-dictionary-tables.md) to a field and item code, for example `shops_slug_key` → field `slug`, item code `unique`; `product_variants_shop_sku_key` → field `sku` (the row index is not in the PostgreSQL error, so actions pre-check duplicates inside one request), item code `unique`, `payments_refunded_le_captured_check` → 422 `REFUND_EXCEEDS_REFUNDABLE`. `users_email_key` is **not** on it: `signUp` catches that violation itself and answers the neutral 202, so the handler can never become an account-existence oracle (RF-38).
+The constraint allowlist maps a constraint name from [04a](04a-data-dictionary-tables.md) to a field and item code, for example `shops_slug_key` → field `slug`, item code `unique`; `product_variants_shop_sku_key` → field `sku` (the row index is not in the PostgreSQL error, so actions pre-check duplicates inside one request), item code `unique`; `vendor_remittances_reference_key` → field `reference`, item code `unique`; `payments_refunded_le_captured_check` → 422 `REFUND_EXCEEDS_REFUNDABLE`. `users_email_key` is **not** on it: `signUp` catches that violation itself and answers the neutral 202, so the handler can never become an account-existence oracle (RF-38).
 
 ```ts
 // app/exceptions/handler.ts
@@ -1440,13 +1440,13 @@ The schema itself is owned by [04](04-domain-model-and-data-dictionary.md) and [
 
 ### 8.2 File naming and the file template
 
-| Rule      | Standard                                                                                                                                                                                             | Check                                                                                                                  |
-| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| File name | `<13-digit generated timestamp>_<verb>_<subject>.ts`, `snake_case`. Verbs: `baseline`, `create`, `add`, `alter`, `drop`, `validate`, `index`, `grant`                                                | Regex `^\d{13}_(baseline\|create\|add\|alter\|drop\|validate\|index\|grant)_[a-z0-9_]+\.ts$` in the lock script (§8.4) |
-| Timestamp | Produced by `make:migration`, never typed. After the first deploy a new file's timestamp must be later than the newest locked file, so that a rebased branch cannot insert a migration "in the past" | Lock script                                                                                                            |
-| Imports   | `@adonisjs/lucid/schema` only. Never `#constants`, `#models`, `#modules`, `app/`, `shared/` or `start/` (ADR-0011 decision 3)                                                                        | dependency-cruiser rule 7 `migrations-self-contained` (§2.4)                                                           |
-| Timeouts  | The first statement is `SET LOCAL lock_timeout = '5s'` (transactional files) or `SET lock_timeout = '5s'` followed by a final `RESET lock_timeout` (files with `disableTransactions`)                | Lock script greps the first statement                                                                                  |
-| `down()`  | Written for development and CI rollback tests. `migrations.disableRollbacksInProduction: true` in `config/database.ts`, so production never runs it (ADR-0011 decision 5)                            | Config review                                                                                                          |
+| Rule      | Standard                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Check                                                                                                                                                |
+| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| File name | `<13-digit generated timestamp>_<verb>_<subject>.ts`, `snake_case`. Verbs: `baseline`, `create`, `add`, `alter`, `drop`, `validate`, `index`, `grant`                                                                                                                                                                                                                                                                                                                                                                                              | Regex `^\d{13}_(baseline\|create\|add\|alter\|drop\|validate\|index\|grant)_[a-z0-9_]+\.ts$` in the lock script (§8.4)                               |
+| Timestamp | Produced by `make:migration`, never typed. After the first deploy a new file's timestamp must be later than the newest locked file, so that a rebased branch cannot insert a migration "in the past"                                                                                                                                                                                                                                                                                                                                               | Lock script                                                                                                                                          |
+| Imports   | `@adonisjs/lucid/schema` only. Never `#constants`, `#models`, `#modules`, `app/`, `shared/` or `start/` (ADR-0011 decision 3)                                                                                                                                                                                                                                                                                                                                                                                                                      | dependency-cruiser rule 7 `migrations-self-contained` (§2.4)                                                                                         |
+| Timeouts  | The first statement is `SET LOCAL lock_timeout = '5s'` (transactional files). A `CREATE INDEX CONCURRENTLY` file, the only kind with `disableTransactions`, sets no `lock_timeout`: its first statement is `DROP INDEX CONCURRENTLY IF EXISTS <name>` (§8.3), because the build holds only a `SHARE UPDATE EXCLUSIVE` lock and a timeout would cancel its waits for older transactions and leave an `INVALID` index ([04 §20.2.4](04-domain-model-and-data-dictionary.md#2024-after-the-first-production-deploy-forward-only-expand-and-contract)) | Lock script checks the first statement: `SET LOCAL lock_timeout = '5s'`, or `DROP INDEX CONCURRENTLY IF EXISTS` in a file with `disableTransactions` |
+| `down()`  | Written for development and CI rollback tests. `migrations.disableRollbacksInProduction: true` in `config/database.ts`, so production never runs it (ADR-0011 decision 5)                                                                                                                                                                                                                                                                                                                                                                          | Config review                                                                                                                                        |
 
 ```ts
 // database/migrations/1790000123456_add_products_scheduled_status.ts — design sketch.
@@ -1457,18 +1457,21 @@ import { BaseSchema } from '@adonisjs/lucid/schema'
 export default class extends BaseSchema {
   async up() {
     // each file runs in its own transaction, so SET LOCAL ends with it
-    this.schema.raw(`SET LOCAL lock_timeout = '5s'`)
-    this.schema.raw(`
+    this.schema.raw(String.raw`SET LOCAL lock_timeout = '5s'`)
+    this.schema.raw(String.raw`
       ALTER TABLE products ADD CONSTRAINT products_status_check_v2
         CHECK (status IN ('draft','pending_review','published','unpublished',
                           'rejected','archived','blocked','scheduled'))
         NOT VALID
     `)
-    // VALIDATE, DROP and RENAME follow in this file or the next release, as 04 §20.2.4 shows
+    // DROP and RENAME follow in this file; VALIDATE runs alone in a separate, later migration
+    // file (04 §20.2.4), because a NOT VALID constraint and its VALIDATE are never in the same file
   }
 
   async down() {
-    this.schema.raw(`ALTER TABLE products DROP CONSTRAINT IF EXISTS products_status_check_v2`)
+    this.schema.raw(
+      String.raw`ALTER TABLE products DROP CONSTRAINT IF EXISTS products_status_check_v2`
+    )
   }
 }
 ```
@@ -1478,10 +1481,10 @@ Value lists are written as literals. The same PR changes the TypeScript array in
 ### 8.3 One concern per migration
 
 - **One file changes one table for one reason.** The baseline is the only exception: one file per module group (04 §20.2.2).
-- **`CREATE INDEX CONCURRENTLY` goes in its own file** with `static disableTransactions = true` and nothing else, because the statement cannot run inside a transaction ([04 §20.2.4](04-domain-model-and-data-dictionary.md#2024-after-the-first-production-deploy-forward-only-expand-and-contract)). If it fails it leaves an `INVALID` index behind. The file therefore starts with `DROP INDEX CONCURRENTLY IF EXISTS <name>`, so re-running it is safe.
+- **`CREATE INDEX CONCURRENTLY` goes in its own file** with `static disableTransactions = true` and exactly two statements, each in its own `this.schema.raw()` call: `DROP INDEX CONCURRENTLY IF EXISTS <name>`, then `CREATE INDEX CONCURRENTLY <name> …`; no `lock_timeout`; never `CREATE INDEX CONCURRENTLY IF NOT EXISTS`, which keeps an `INVALID` index. The statement cannot run inside a transaction ([04 §20.2.4](04-domain-model-and-data-dictionary.md#2024-after-the-first-production-deploy-forward-only-expand-and-contract)), and one string with both statements would run as one implicit transaction and fail. If the build fails it leaves an `INVALID` index behind; the leading `DROP INDEX CONCURRENTLY IF EXISTS <name>` makes re-running the file safe.
 - **No data backfill inside a migration.** A migration may run one bounded `UPDATE` on a small configuration table (under 1,000 rows, for example `platform_settings`). A backfill of a Record or Entity table runs as a batched, idempotent maintenance job (pg-boss queue owned by the table's module, [03 §9](03-system-architecture.md#9-asynchronous-work); 11 runs it). Long `UPDATE`s inside the release step hold locks while the old code is still serving traffic.
 - **No application behaviour in migrations.** Seeding reference rows is the job of seeders (§8.8). Migrations create structure, constraints, triggers and grants.
-- **Grants and runtime roles** go in `grant_*` files guarded like baseline file 14: `DO $$ BEGIN IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'dripnepal_app') THEN … END IF; END $$`. A developer database without the role still migrates ([04 §20.2.2](04-domain-model-and-data-dictionary.md#2022-baseline-files-and-their-order), [07 §4.10](07-security-threat-model-and-permissions.md#410-database-roles-and-grants)).
+- **Grants and runtime roles** go in `grant_*` files guarded like baseline file 14, one guard per role: `DO $$ BEGIN IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'dripnepal_app') THEN … END IF; IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'dripnepal_readonly') THEN … END IF; END $$`. A database without one of the roles, such as a developer database, still migrates ([04 §20.2.2](04-domain-model-and-data-dictionary.md#2022-baseline-files-and-their-order), [07 §4.10](07-security-threat-model-and-permissions.md#410-database-roles-and-grants)).
 
 ### 8.4 Applied migrations are never edited (RF-41)
 
@@ -1538,17 +1541,17 @@ A `--write` mode (left out of the sketch) appends lines for new files. Until the
 
 The release step runs `node ace migration:run --force` **before** the new code starts ([03 §5.4](03-system-architecture.md#54-release-sequence); procedure in [11](11-deployment-and-operations.md)). For a short time the old code runs against the new schema. Every migration must therefore keep the **previous release** working. A change that the previous release cannot tolerate is split across releases:
 
-| Change                             | Release N (expand)                                                                                                                                    | Release N+1 (contract)                                                                                                                                                                                               |
-| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Add a column                       | Add it nullable or with a constant default. Code writes it                                                                                            | Backfill by job; then `CHECK (col IS NOT NULL) NOT VALID`, `VALIDATE`, `SET NOT NULL` ([04 §20.2.4](04-domain-model-and-data-dictionary.md#2024-after-the-first-production-deploy-forward-only-expand-and-contract)) |
-| Rename a column                    | Add the new column; code writes both and reads the new one, falling back to the old one; backfill by job                                              | Code stops touching the old column; drop it in N+2 at the earliest                                                                                                                                                   |
-| Drop a column                      | Code stops reading and writing it, and the model no longer declares it (regenerated `schema.ts`)                                                      | `ALTER TABLE … DROP COLUMN`                                                                                                                                                                                          |
-| Add a value to a CHECK list        | New constraint `NOT VALID`, `VALIDATE`, swap (04 §20.2.4). The TypeScript array gains the value, but no code writes it yet                            | Code starts writing the value                                                                                                                                                                                        |
-| Remove a value from a CHECK list   | Code stops writing it; rows migrated by job                                                                                                           | Replace the CHECK                                                                                                                                                                                                    |
-| Add a foreign key or CHECK         | `ADD CONSTRAINT … NOT VALID` (new rows checked, no table scan)                                                                                        | `VALIDATE CONSTRAINT` (scans without blocking writes)                                                                                                                                                                |
-| Add an index                       | `CREATE INDEX CONCURRENTLY` in its own file (§8.3)                                                                                                    | —                                                                                                                                                                                                                    |
-| Change a column type               | Treated as add, backfill and drop. An in-place `ALTER TYPE` that rewrites the table is not allowed on a table with more than 10,000 rows [Assumption] | —                                                                                                                                                                                                                    |
-| Change a trigger or guard function | `CREATE OR REPLACE FUNCTION` that accepts both the old and the new column set                                                                         | Tighten the function                                                                                                                                                                                                 |
+| Change                             | Release N (expand)                                                                                                                                                                 | Release N+1 (contract)                                                                                                                                                                                               |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Add a column                       | Add it nullable or with a constant default. Code writes it                                                                                                                         | Backfill by job; then `CHECK (col IS NOT NULL) NOT VALID`, `VALIDATE`, `SET NOT NULL` ([04 §20.2.4](04-domain-model-and-data-dictionary.md#2024-after-the-first-production-deploy-forward-only-expand-and-contract)) |
+| Rename a column                    | Add the new column; code writes both and reads the new one, falling back to the old one; backfill by job                                                                           | Code stops touching the old column; drop it in N+2 at the earliest                                                                                                                                                   |
+| Drop a column                      | Code stops reading and writing it, and the model no longer declares it (regenerated `schema.ts`)                                                                                   | `ALTER TABLE … DROP COLUMN`                                                                                                                                                                                          |
+| Add a value to a CHECK list        | New constraint `NOT VALID` and the swap in one file, then `VALIDATE` alone in a separate, later file (04 §20.2.4). The TypeScript array gains the value, but no code writes it yet | Code starts writing the value                                                                                                                                                                                        |
+| Remove a value from a CHECK list   | Code stops writing it; rows migrated by job                                                                                                                                        | Replace the CHECK                                                                                                                                                                                                    |
+| Add a foreign key or CHECK         | `ADD CONSTRAINT … NOT VALID` (new rows checked, no table scan)                                                                                                                     | `VALIDATE CONSTRAINT` (scans without blocking writes)                                                                                                                                                                |
+| Add an index                       | `CREATE INDEX CONCURRENTLY` in its own file (§8.3)                                                                                                                                 | —                                                                                                                                                                                                                    |
+| Change a column type               | Treated as add, backfill and drop. An in-place `ALTER TYPE` that rewrites the table is not allowed on a table with more than 10,000 rows [Assumption]                              | —                                                                                                                                                                                                                    |
+| Change a trigger or guard function | `CREATE OR REPLACE FUNCTION` that accepts both the old and the new column set                                                                                                      | Tighten the function                                                                                                                                                                                                 |
 
 A PR that contains a contract step names the expand PR it completes and the release in which that PR shipped. The PR template asks for this (§11.5).
 
@@ -1556,9 +1559,9 @@ A PR that contains a contract step names the expand PR it completes and the rele
 
 Migrations write DDL as SQL through `this.schema.raw(…)` ([04 §20.2.2](04-domain-model-and-data-dictionary.md#2022-baseline-files-and-their-order)). SQL is required for named CHECKs (`users_status_check`; the name is the key of `app/exceptions/constraint_map.ts`, §5), partial unique indexes (`user_tokens_live_key … WHERE consumed_at IS NULL`), composite tenant foreign keys (`product_variants_product_fkey`, [04 §2.5](04-domain-model-and-data-dictionary.md#25-tenant-isolation-with-composite-foreign-keys)), the guard and append-only triggers (`order_items_guard … EXECUTE FUNCTION allow_only_columns(…)`, `forbid_mutation()` on the nine tables of [04 §2.12](04-domain-model-and-data-dictionary.md#212-append-only-tables); SQL in [04 §16.3](04-domain-model-and-data-dictionary.md#163-constraint-sql)), storage parameters (`inventory_items … WITH (fillfactor = 80)`), BRIN indexes and guarded grants. The Knex builder can express none of these with an exact name. Rules:
 
-1. **Copy, do not retype.** SQL comes from 04a; a difference is fixed in 04a first ([04 §20.2.1](04-domain-model-and-data-dictionary.md#2021-preconditions) item 2).
+1. **Copy, do not retype.** SQL comes from 04a; a difference is fixed in 04a first ([04 §20.2.1](04-domain-model-and-data-dictionary.md#2021-preconditions) item 2). Copy it into ``this.schema.raw(String.raw`…`)`` and write each literal `?` as `\?` (including `\?&`, and `[\?]` for a literal question mark in a regex), because Knex rewrites every unescaped `?` to `$n` even inside string literals, and a plain JavaScript literal drops the backslash of `\.`, `\+` and `\|` ([04 §20.2.2](04-domain-model-and-data-dictionary.md#2022-baseline-files-and-their-order)). The SQL in 04 and 04a stays plain; the escaping happens only in the migration file.
 2. **Every constraint and index carries its [04 §2.14](04-domain-model-and-data-dictionary.md#214-naming) name.** A generated name is unknown to the constraint map and to T-ARCH-011.
-3. **Literals only.** No `${…}` in `this.schema.raw` (the migration form of 07 §7.4's raw-SQL rule; lint in §11.2). Template strings without expressions are fine for multi-line SQL.
+3. **Literals only.** No `${…}` in `this.schema.raw` (the migration form of 07 §7.4's raw-SQL rule; lint in §11.2). Use the `String.raw` tagged template with no `${…}`, for single-line and multi-line SQL alike.
 4. **After the baseline, functions change by `CREATE OR REPLACE` in a new file** (§8.4).
 5. **Triggers are tested by behaviour:** T-ARCH-012, T-ORD-101 and T-ARCH-015 (proposed in 04/04a).
 
@@ -1566,7 +1569,7 @@ Migrations write DDL as SQL through `this.schema.raw(…)` ([04 §20.2.2](04-dom
 
 The configuration block and the rule contents are owned by [04 §20.3](04-domain-model-and-data-dictionary.md#203-seeders-factories-and-schema-generation) and [04 §18.4](04-domain-model-and-data-dictionary.md#184-lucid-and-node-postgres-bigint-handling). The code standard is:
 
-- `config/database.ts` sets `schemaGeneration: { enabled: true, outputPath: 'database/schema.ts', rulesPaths: ['database/schema_rules.ts'], excludeTables: ['sessions', 'rate_limits'] }` on the `pg` connection. All four keys are accepted by the installed connection type (`build/src/types/database.d.ts:285` [Verified-repo]). Today there is no block, so `database/schema_rules.ts` (an empty object) has no effect [Verified-repo `config/database.ts`].
+- `config/database.ts` sets `schemaGeneration: { enabled: true, outputPath: 'database/schema.ts', rulesPaths: ['#database/schema_rules'], excludeTables: ['sessions', 'rate_limits'] }` on the `pg` connection. All four keys are accepted by the installed connection type (`build/src/types/database.d.ts:285` [Verified-repo]). The rules entry uses the `#database/*` import alias of `package.json`, because the application importer resolves only `./` and `../` paths and hands anything else to `import()` ([04 §20.3](04-domain-model-and-data-dictionary.md#203-seeders-factories-and-schema-generation)); a bare `database/schema_rules.ts` would not load. Today there is no block, so `database/schema_rules.ts` (an empty object) has no effect [Verified-repo `config/database.ts`].
 - Development `migration:run`/`rollback` regenerate the file; `--no-schema-generate` is never used on a PR branch, and a migration PR commits the regenerated `database/schema.ts` with the model changes. The file is never hand-edited: type fixes go into `database/schema_rules.ts`, then `node ace schema:generate`.
 - Production never regenerates the file (`app.inProduction`, §1.4). CI proves the committed file is current: T-ARCH-010 (proposed in 04) runs `migration:fresh` on `postgres:18.4` and then `git diff --exit-code database/schema.ts`, and fails on any `any` in the file.
 - Models extend the generated classes (§3.10), so a dropped column is a compile error in every model and query that uses it. This is why the contract step of §8.5 can rely on `pnpm typecheck`.
@@ -1795,7 +1798,7 @@ Owner: the tech lead; commands and evidence in [11](11-deployment-and-operations
 5. The release checks of §9.2 return no rows.
 6. `web` and `worker` start; `/health/ready` is green.
 7. `node ace platform:create-admin --email <operator>` is run over an SSH session to the host (11). The invitation must be used within 60 minutes, the `password_reset` expiry of [04a §5.2](04a-data-dictionary-tables.md) [Assumption there].
-8. The admin enrols TOTP, fills `platform_legal_disclosures`, and reviews `checkout_enabled`, `single_operator_mode` and the placeholders in 04a §15.1 that [Open OD-04] and [Open OD-18] still own.
+8. The admin enrols TOTP, fills `platform_legal_disclosures` and checks that every string in it is non-empty (`branches` and `special_licences` may be empty lists, [04a §15.1](04a-data-dictionary-tables.md#151-platform_settings)), and reviews `checkout_enabled`, `single_operator_mode` and the placeholders in 04a §15.1 that [Open OD-04] and [Open OD-18] still own.
 
 ### 9.4 Current code → target (initialization)
 
@@ -2024,6 +2027,17 @@ export default configApp(
           selector:
             "CallExpression[callee.property.name='raw'] > TemplateLiteral[expressions.length>0]",
           message: 'Migrations contain literals only (09 §8.6)',
+        },
+        {
+          // String.raw`…` is the allowed form; ${} inside it is still refused
+          selector:
+            "CallExpression[callee.property.name='raw'] > TaggedTemplateExpression > TemplateLiteral[expressions.length>0]",
+          message: 'Migrations contain literals only (09 §8.6)',
+        },
+        {
+          selector:
+            "CallExpression[callee.object.property.name='schema'][callee.property.name='raw'] > :matches(TemplateLiteral, Literal)",
+          message: 'Pass migration SQL as String.raw`…` and escape each ? as \\? (09 §8.6)',
         },
       ],
       'no-console': 'error',
@@ -2402,7 +2416,9 @@ import { PRODUCT_LIMITS } from '#shared/constants/limits'
 
 // Free text is stored in NFC (04 §2.8); parse() runs before the other rules
 const nfc = (value: unknown) => (typeof value === 'string' ? value.normalize('NFC') : value)
-const disclosure = () => vine.string().parse(nfc).trim().minLength(1).nullable()
+// A disclosure is null or not blank after trim, within its 04a §7.6 maximum
+const disclosure = (max: number) =>
+  vine.string().parse(nfc).trim().minLength(1).maxLength(max).nullable()
 
 export const createProductValidator = vine.create(
   strict({
@@ -2416,7 +2432,8 @@ export const createProductValidator = vine.create(
       .string()
       .parse(nfc)
       .trim()
-      .maxLength(PRODUCT_LIMITS.description.max) // products_description_check: at most 5,000
+      .minLength(1) // products_description_check: not blank after trim
+      .maxLength(PRODUCT_LIMITS.description.max) // and at most 5,000
       .nullable(),
     category_id: vine.string().uuid(),
     brand_id: vine.string().uuid().nullable().optional(), // the only optional key (06 §13.5)
@@ -2432,21 +2449,21 @@ export const createProductValidator = vine.create(
         })
       )
       .distinct('attribute_code'),
-    manufacturer_name: disclosure(),
+    manufacturer_name: disclosure(PRODUCT_LIMITS.manufacturer_name.max), // at most 200
     is_imported: vine.boolean({ strict: true }),
     country_of_origin: vine
       .string()
       .regex(/^[A-Z]{2}$/)
       .nullable(), // products_country_check (format)
-    warranty_text: disclosure(),
-    care_and_precautions: disclosure(),
+    warranty_text: disclosure(PRODUCT_LIMITS.warranty_text.max), // at most 1,000
+    care_and_precautions: disclosure(PRODUCT_LIMITS.care_and_precautions.max), // at most 2,000
   })
 )
 ```
 
 - The key list equals `CreateProductRequest` in `openapi.yaml`. `shop_id`, `status`, `version`, `public_id` and `created_by` are absent, so `strict()` reports each of them as `unknown_field` (T-SEC-003).
-- `PRODUCT_LIMITS` lives in `shared/constants/limits.ts`, which the TanStack form of §13.5 imports too ([08 §11.6](08-ui-ux-and-design-system.md#116-server-authoritative-permissions-and-validation) "one shared constants module").
-- Rules that need other rows stay in the action: active leaf category (T-CAT-101, proposed in 04a), selectable brand, the attribute rules of 04 §3.7, and the cross-field origin rule of `products_country_check`. The action reports them as 422 items on the same field paths, so the client handles one error shape. `app/exceptions/constraint_map.ts` also maps `products_title_check` → `title` and `products_country_check` → `country_of_origin` as the backstop (§5.4).
+- `PRODUCT_LIMITS` lives in `shared/constants/limits.ts`, which the TanStack form of §13.5 imports too ([08 §11.6](08-ui-ux-and-design-system.md#116-server-authoritative-permissions-and-validation) "one shared constants module"). It holds the limits of the `products` text CHECKs ([04a §7.6](04a-data-dictionary-tables.md#76-products)): `title` 3–120 characters, and at most 5,000 for `description`, 200 for `manufacturer_name`, 1,000 for `warranty_text` and 2,000 for `care_and_precautions`.
+- Rules that need other rows stay in the action: active leaf category (T-CAT-101, proposed in 04a), selectable brand, the attribute rules of 04 §3.7, and the cross-field origin rule of `products_country_check`. The action reports them as 422 items on the same field paths, so the client handles one error shape. `app/exceptions/constraint_map.ts` also maps `products_title_check` → `title`, `products_country_check` → `country_of_origin` and the four text CHECKs `products_description_check`, `products_manufacturer_name_check`, `products_warranty_text_check` and `products_care_and_precautions_check` → their columns as the backstop (§5.4, [04a §7.6](04a-data-dictionary-tables.md#76-products)).
 - Length units differ at one edge. Vine's string `minLength`/`maxLength` compare `value.length`, which counts UTF-16 code units [Verified-repo `@vinejs/vine` 4.4.0 `build/index.js:3656-3672`], while `products_title_check` counts code points with `char_length`. Devanagari and Latin text are one unit per code point, so the two agree for real titles. A title made of characters outside the Basic Multilingual Plane (emoji) can pass Vine's minimum and still fail the CHECK; the constraint map above turns that into 422 on `title`, never a 500. The form counts code points (§13.5), so it matches the database, not Vine.
 
 ### 12.6 Policy: none for `createProduct`
@@ -3469,7 +3486,7 @@ These names close the items that [08](08-ui-ux-and-design-system.md) handed to t
 
 **From part 3 (§8–§11):**
 
-39. **Migration file names and `lock_timeout`.** [04 §20.2.2](04-domain-model-and-data-dictionary.md#2022-baseline-files-and-their-order) says the baseline files are "generated with `node ace make:migration`" and names them by suffix (`baseline_identity`). The installed generator always writes `<timestamp>_<create|alter>_<table>_table.ts` [Verified-repo Lucid 22.4.2 `build/commands/make_migration.js:85-89`]. §8.1/§8.2 keep the generated timestamp and rename the suffix. 04 §20.2.4 and ADR-0011 decision 5 write `SET lock_timeout = '5s'`. §8.2 uses `SET LOCAL` in transactional files, because Lucid runs each file in its own transaction [Verified-repo `runner.js:117-128`] and a plain `SET` would outlive it on the pooled connection. Files with `disableTransactions` use `SET` and `RESET`.
+39. **Migration file names and `lock_timeout`.** [04 §20.2.2](04-domain-model-and-data-dictionary.md#2022-baseline-files-and-their-order) says the baseline files are "generated with `node ace make:migration`" and names them by suffix (`baseline_identity`). The installed generator always writes `<timestamp>_<create|alter>_<table>_table.ts` [Verified-repo Lucid 22.4.2 `build/commands/make_migration.js:85-89`]. §8.1/§8.2 keep the generated timestamp and rename the suffix. 04 §20.2.4 and ADR-0011 decision 5 write `SET lock_timeout = '5s'`. §8.2 uses `SET LOCAL` in transactional files, because Lucid runs each file in its own transaction [Verified-repo `runner.js:117-128`] and a plain `SET` would outlive it on the pooled connection. A file with `disableTransactions`, which is only a `CREATE INDEX CONCURRENTLY` file, sets no `lock_timeout` (§8.2, 04 §20.2.4).
 40. **Seeder layout.** 04 §20.3 and the §1.2 tree have one `database/seeders/reference/index_seeder.ts`. `db:seed` loads every script file under the seeder path recursively and sorts by path [Verified-repo], so `dev/` would run before `reference/`, and helpers would be loaded as seeders. §8.8 uses `seeders.paths: [reference, dev]`, numbered files (`01_locations` … `08_platform_settings`) and a new `database/support/` folder. The §1.2 tree should read `seeders/reference/NN_*_seeder.ts` and add `database/support/`. Order and content are 04's.
 41. **Development-seeder guards.** 04 §20.3 says the `app.inProduction` check stops a misconfigured `NODE_ENV`. But `app.inProduction` is derived from `NODE_ENV`, so it adds nothing there. §8.8 adds an `APP_ENV` check and a database-name check (`current_database()` must end in `_dev` or `_test`, proposed). This needs `docker-compose.yml` to create `dripnepal_dev` (today `dripnepal`), and [11](11-deployment-and-operations.md) must name the staging and production databases without those suffixes. 04 §20.3 also says the random development password is "printed to the console". §8.8 writes it to the git-ignored `tmp/dev_credentials.json` instead, because of `no-console` (§7.5). There is no seeded development admin; developers use `platform:create-admin`.
 42. **`platform:create-admin` design.** The two modes are canon §11 ("prompts password interactively or sends invitation"): invitation, which is the default and matches 04a §5.1's "hash of a random secret, then a password-reset token", and `--interactive` (masked prompt). Proposed here: the `--interactive` flag name and the e-mail prompt in that mode (canon shows `--email` always), the transaction-scoped advisory lock that serialises concurrent bootstrap runs on an empty database (added by the part 3 critic), and a bootstrap-only refusal, `--recover` for AC-FR-IAM-007-5 (procedure owned by 11), the identity entry action `BootstrapPlatformAdmin` (a CLI action, not an `operationId`) and the audit action `platform_staff.bootstrap`. The interactive mode creates an `active`, e-mail-verified account without an e-mail round trip. The product owner should confirm that this is acceptable for the operator's own bootstrap. The invitation mode relies on 02 J-18's [Assumption] that redeeming a reset link verifies a `pending_verification` account.
