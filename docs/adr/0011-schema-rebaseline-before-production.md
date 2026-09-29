@@ -69,7 +69,7 @@ Fixing these incrementally would take dozens of ALTER migrations that convert or
 4. **Reference data and dev data are separate** ([04 §20.3](../04-domain-model-and-data-dictionary.md#203-seeders-factories-and-schema-generation)). Reference seeders (locations per VX-10, categories, attributes, zones, settings) are idempotent upserts that run in production. Dev seeders refuse to run when `NODE_ENV=production` (RF-05). The first platform admin comes from `node ace platform:create-admin` (FR-ADM-005).
 5. **After the first production deploy: forward-only, expand/contract** ([04 §20.2.4](../04-domain-model-and-data-dictionary.md#2024-after-the-first-production-deploy-forward-only-expand-and-contract)).
    - An applied migration is never edited, and `down` is never run in production.
-   - Each migration sets `lock_timeout = '5s'`.
+   - Each migration except a `CREATE INDEX CONCURRENTLY` file sets `lock_timeout = '5s'` first; a concurrent-index file sets none and starts with `DROP INDEX CONCURRENTLY IF EXISTS` ([04 §20.2.4](../04-domain-model-and-data-dictionary.md#2024-after-the-first-production-deploy-forward-only-expand-and-contract)).
    - CHECK-list and `NOT NULL` changes go through `NOT VALID` then `VALIDATE CONSTRAINT`.
 6. **Cut-over.** Developers run `node ace migration:fresh --seed`, commit the regenerated `database/schema.ts` unedited, and rebase open branches.
 

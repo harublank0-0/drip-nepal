@@ -248,6 +248,7 @@ x-pending-operations:
   - adminRecordFulfillmentEvent
   - startRefundTransfer
   - markReturnInTransit
+  - adminMarkReturnInTransit
   - closeReturnRequest
   - rejectReturnAfterInspection
   - cancelRefund
@@ -504,7 +505,8 @@ paths:
         a product in `pending_review`, `published` or `unpublished` keeps at least one active
         variant and every active variant priced above zero (AC-FR-CAT-004-3). An `id` naming an
         archived variant of this product re-activates it; at most two option axes, which may be
-        reordered in place (04a §7.8).
+        reordered in place (04a §7.8). Removing or replacing an axis once a variant of the product
+        has an inventory movement or an order line answers 409 `CONFLICT` (axis set frozen, 04a §7.8).
         Concurrency: ⟳ `If-Match` on `products.version`; bumps it and each changed variant's
         `version`. Missing → 428; stale → 412 with `current`. Not ⚷ (the version check stops a
         second apply, 06 §7.7). Body limit 512 KB. Release R1·M3.
@@ -1126,8 +1128,9 @@ paths:
         `delivered` (sets `delivered_at` and the stored `return_window_ends_at`; ledger
         delivery posting only if the payment is already collected or captured),
         `delivery_failed` (needs `failure_reason`), `reattempt` (at most 3 attempts; a 4th is
-        409 `INVALID_STATE_TRANSITION`), `returning`, `returned_to_origin` (`rto_restock`
-        movements, shop order `cancelled` with `undeliverable`).
+        409 `INVALID_STATE_TRANSITION`), `returning`, `returned_to_origin` (needs `items[]` with
+        `restock_quantity` per line and a `note` when any unit is not restocked, 05 §5.8;
+        `rto_restock` movements, shop order `cancelled` with `undeliverable`).
         Tracking correction (proposed; not yet in canon §6.5): `shipped` sent again while the
         shipment is `shipped` with a changed courier or tracking field updates only those
         fields, writes an event row and audit `shipment.update_tracking`, and emails the
@@ -2982,7 +2985,11 @@ components:
         `tracking_url` must be https. `delivery_failed` requires `failure_reason` (stored as
         `shipment_events.reason_code`, `shipment_events_reason_check`, 04a §11.6). Tracking fields
         or `failure_reason` sent with another event are 422 `VALIDATION_FAILED` [Assumption; 05
-        §6.3 and 06 §13.5 do not say].
+        §6.3 and 06 §13.5 do not say]. `returned_to_origin` requires `items[]` with
+        `order_item_id` and `restock_quantity` (0 to the units consumed at shipment) for every
+        line consumed at shipment, and a `note` with the reason when any unit is not restocked
+        (05 §5.8, §6.3). `note` is stored in `shipment_events.note` (`shipment_events_note_check`,
+        04a §11.6) and kept for the record's life, so it must never hold contact data (04 §19.1).
       additionalProperties: false
       required: [event]
       properties:
@@ -2994,6 +3001,17 @@ components:
           oneOf:
             - $ref: '#/components/schemas/DeliveryFailureReason'
             - type: 'null'
+        note: { type: [string, 'null'], maxLength: 500 }
+        items:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            additionalProperties: false
+            required: [order_item_id, restock_quantity]
+            properties:
+              order_item_id: { $ref: '#/components/schemas/Uuid' }
+              restock_quantity: { type: integer, minimum: 0 }
       allOf:
         - if:
             properties: { event: { const: shipped } }
@@ -3003,6 +3021,10 @@ components:
             properties: { event: { const: delivery_failed } }
           then:
             required: [failure_reason]
+        - if:
+            properties: { event: { const: returned_to_origin } }
+          then:
+            required: [items]
     FulfillmentResult:
       type: object
       additionalProperties: false
@@ -3197,7 +3219,7 @@ components:
 #
 # Proposed additions used here (pending the product owner's approval; none silently renamed):
 #  9. Operation `resolveRefundReview` (x-proposed; 06 §13.8/§14.8) and the `shipped → shipped`
-#     tracking-correction variant of `recordFulfillmentEvent` (05 §6.3, 06 §13.8). The twelve other
+#     tracking-correction variant of `recordFulfillmentEvent` (05 §6.3, 06 §13.8). The thirteen other
 #     proposed operations of 06 §13.8 are in `x-pending-operations`.
 # 10. Permission `platform.payments.review` (not yet in canon §7); `resolveRefundReview` declares
 #     `platform.ledger.adjust` until 07 decides.

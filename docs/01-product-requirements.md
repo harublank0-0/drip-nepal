@@ -475,7 +475,7 @@ R1 · **Must** · J-17 · `requestAccountDeletion`, `anonymizeUser` · T-IAM are
 Customers can ask for their account to be closed (E-Commerce Act s12(3) [Verify-external VX-02]). Staff execute the anonymization after checking what must be retained.
 
 - AC-FR-IAM-009-1: A request sets `status = deactivated` and `deletion_requested_at`, revokes all sessions, sends a confirmation email, and appears in the admin users queue.
-- AC-FR-IAM-009-2: The admin screen shows blockers: shops owned in `pending_review`, `active` or `suspended` (a `rejected` shop does not block; staff reject a pending application first), non-terminal shop orders, open return requests, open refunds, open support cases whose `customer_user_id` or `opened_by_user_id` is the user, and a non-zero ledger balance on an owned shop. `anonymizeUser` returns 409 `CONFLICT` while any blocker remains.
+- AC-FR-IAM-009-2: The admin screen shows blockers: shops owned in `pending_review`, `active` or `suspended` (a `rejected` shop does not block; staff reject a pending application first), non-terminal shop orders and shop orders whose return window has not ended, open return requests, open refunds, open support cases whose `customer_user_id` or `opened_by_user_id` is the user, a non-zero ledger balance on an owned shop, and an active `platform_staff` row (revoke it first). `anonymizeUser` returns 409 `CONFLICT` while any blocker remains.
 - AC-FR-IAM-009-3: Anonymization clears name, phone, TOTP secret, marketing consents and saved addresses, replaces the email with a non-routable placeholder, and sets `status = anonymized` and `anonymized_at`. Order snapshots are kept for the record-retention period ([04](04-domain-model-and-data-dictionary.md), VX-08).
 - AC-FR-IAM-009-4: Staff complete or reject a request within 30 days of it being made [Assumption; no statutory period found].
 
@@ -518,7 +518,7 @@ R1 · **Must** · J-04 · `updateMe` · T-IAM area
 R1 · **Must** · J-08 · `applyForShop`, `listMyShopApplications` · T-SHOP area · Fixes RF-03, RF-21
 
 - AC-FR-SHOP-001-1: Only a signed-in, email-verified, active user can apply, from `/sell`. No new user account is created.
-- AC-FR-SHOP-001-2: A user can own at most `max_shops_per_owner` (3 [A-21]) shops in states `pending_review`, `active` or `suspended`. A further application, or the resubmission of a `rejected` application, returns 409 `CONFLICT` with an explanation.
+- AC-FR-SHOP-001-2: A user can own at most `max_shops_per_owner` (3 [A-21]) shops in states `pending_review`, `active` or `suspended`. At that limit, a further application, or the resubmission of a `rejected` application, returns 409 `CONFLICT` with an explanation.
 - AC-FR-SHOP-001-3: Required fields: shop name (2–60 chars, not unique), slug (3–40 chars, `[a-z0-9-]`, unique case-insensitively, not on the reserved list such as `admin`, `seller`, `api`, `p`, `c`), shop contact email, shop contact phone (mobile or landline, normalised to E.164), pickup address from the location hierarchy, 1–3 shop categories from the active list [Assumption], business type, and the FR-SHOP-013 fields.
 - AC-FR-SHOP-001-4: Shop contact details are entered separately and are not copied from the owner's personal email and phone.
 - AC-FR-SHOP-001-5: A successful application creates the shop with `status = pending_review` and `product_review_mode = pre` [A-19], shows it on `/account/shops`, emails the applicant, and appears in the admin application queue.
