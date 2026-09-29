@@ -475,7 +475,7 @@ R1 · **Must** · J-17 · `requestAccountDeletion`, `anonymizeUser` · T-IAM are
 Customers can ask for their account to be closed (E-Commerce Act s12(3) [Verify-external VX-02]). Staff execute the anonymization after checking what must be retained.
 
 - AC-FR-IAM-009-1: A request sets `status = deactivated` and `deletion_requested_at`, revokes all sessions, sends a confirmation email, and appears in the admin users queue.
-- AC-FR-IAM-009-2: The admin screen shows blockers: shops owned that are not `closed`, non-terminal shop orders, open refunds, open support cases, and a non-zero ledger balance on an owned shop. `anonymizeUser` returns 409 `CONFLICT` while any blocker remains.
+- AC-FR-IAM-009-2: The admin screen shows blockers: shops owned in `pending_review`, `active` or `suspended` (a `rejected` shop does not block; staff reject a pending application first), non-terminal shop orders, open return requests, open refunds, open support cases whose `customer_user_id` or `opened_by_user_id` is the user, and a non-zero ledger balance on an owned shop. `anonymizeUser` returns 409 `CONFLICT` while any blocker remains.
 - AC-FR-IAM-009-3: Anonymization clears name, phone, TOTP secret, marketing consents and saved addresses, replaces the email with a non-routable placeholder, and sets `status = anonymized` and `anonymized_at`. Order snapshots are kept for the record-retention period ([04](04-domain-model-and-data-dictionary.md), VX-08).
 - AC-FR-IAM-009-4: Staff complete or reject a request within 30 days of it being made [Assumption; no statutory period found].
 
@@ -529,7 +529,7 @@ R1 · **Must** · J-08, J-16 · `approveShopApplication`, `rejectShopApplication
 
 - AC-FR-SHOP-002-1: Only staff with `platform.shops.review` and an MFA-verified session can decide.
 - AC-FR-SHOP-002-2: Approval is refused (422) unless the shop has an agreement row for the current version, the KYC documents required by OD-16, a pickup address, and delivery coverage with rates (FR-SHOP-004).
-- AC-FR-SHOP-002-3: Rejection needs a reason of at least 20 characters, which the applicant sees. The applicant can edit and resubmit, which returns the shop to `pending_review`.
+- AC-FR-SHOP-002-3: Rejection needs a reason of at least 20 characters, which the applicant sees. The applicant can edit and resubmit, which returns the shop to `pending_review`. One year after its last rejection a never-approved application's personal data is purged ([04 §19.3](04-domain-model-and-data-dictionary.md#193-retention-schedule)); resubmitting it then returns 409 `INVALID_STATE_TRANSITION`, and the owner applies again with a new shop.
 - AC-FR-SHOP-002-4: Each decision creates a `shop_review_decisions` row and an audit row, and emails the applicant.
 - AC-FR-SHOP-002-5: If two reviewers decide at the same time, one succeeds and the other gets 409 `INVALID_STATE_TRANSITION`.
 - AC-FR-SHOP-002-6: The applicant sees an expected decision time of 3 business days [Assumption]. The admin queue highlights applications older than that.

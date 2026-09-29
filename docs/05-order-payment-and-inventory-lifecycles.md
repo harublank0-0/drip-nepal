@@ -1354,7 +1354,7 @@ stateDiagram-v2
   [*] --> pending_review
   pending_review --> active: admin approves
   pending_review --> rejected: admin rejects
-  rejected --> pending_review: owner resubmits
+  rejected --> pending_review: owner resubmits (refused after the 1-year purge)
   active --> suspended: admin suspends
   suspended --> active: admin reinstates
   active --> closed: admin closes
@@ -1370,6 +1370,8 @@ stateDiagram-v2
 | `pending_review`, `rejected` moves        | No products are visible   | None exist                                                  | None                                               |
 
 Suspension hides the storefront and makes cart lines unavailable in both modes; its effect on open shop orders depends on `suspension_mode` and is described in §8.10. Closing a shop (admin only in R1, with `closeShop`, proposed; [04a §6.1](04a-data-dictionary-tables.md#61-shops)) should be allowed only when it has no non-terminal shop orders and a zero balance, or finance has recorded how the balance is settled [Assumption].
+
+An application rejected more than a year ago has had its personal data purged (`shops.personal_data_redacted_at` set, [04 §19.3](04-domain-model-and-data-dictionary.md#193-retention-schedule), [04a §6.1](04a-data-dictionary-tables.md#61-shops)): `resubmitShopApplication` then answers 409 `INVALID_STATE_TRANSITION`, and the owner applies again with a new shop.
 
 ## 7. Vendor ledger and settlement
 

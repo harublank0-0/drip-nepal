@@ -643,7 +643,7 @@ E-Commerce Act 2081 s16 requires each seller to sign a written or electronic con
 8. A reviewer opens `/admin/shop-applications` (`listShopApplications`, oldest first, flagged "documents missing" where relevant) and checks the s16 fields, documents (short-lived signed URLs) and slug. Then either:
    - `approveShopApplication` → `active`, `approved_at` and `approved_by` set, a `shop_review_decisions` row (`approved`), audit, and an email; or
    - `rejectShopApplication` with a reason → `rejected`, a decision row, and an email that includes the reason.
-9. If rejected: the owner edits the application on `/account/shops` and calls `resubmitShopApplication` (`rejected → pending_review`).
+9. If rejected: the owner edits the application on `/account/shops` and calls `resubmitShopApplication` (`rejected → pending_review`). An application rejected more than a year ago has been purged ([04 §19.3](04-domain-model-and-data-dictionary.md#193-retention-schedule), product owner decision of 2026-09-29): resubmitting it returns `INVALID_STATE_TRANSITION (409)`, and the owner applies again with a new shop.
 10. If approved: `/seller/{shopSlug}/overview` shows a setup checklist: shipping coverage and zone rates (`replaceShopShipping` ⟳), payout account (`replacePayoutAccount`, owner only, stored masked, verified later by finance), and logo and banner (FR-MED-003). Products cannot be submitted or published until shipping is configured (J-10).
 
 #### State coverage
