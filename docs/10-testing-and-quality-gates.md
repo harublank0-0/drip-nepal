@@ -1,0 +1,617 @@
+# Testing and Quality Gates
+
+Status: Draft v1 (lite, 2026-09-30)
+
+Reviewed: critic pass B7-lite (2026-09-30)
+
+This document says how DripNepal is tested and which checks stop a change from merging or a release from shipping. It owns the test strategy, the test layers and tooling, the mandatory test sets, the CI quality gates and the test ID registry. It is sized for a team of one or two developers [Confirmed, Q1]: every check either protects money, stock, tenancy or personal data, or is cheap enough to run on every pull request. It points to the documents that own the behaviour under test instead of restating it.
+
+Related documents: [00 Context](00-context-assumptions-and-questions.md) · [01 Requirements](01-product-requirements.md) · [02 Journeys](02-user-journeys-and-acceptance-criteria.md) · [03 Architecture](03-system-architecture.md) · [04 Domain model](04-domain-model-and-data-dictionary.md) · [04a Tables](04a-data-dictionary-tables.md) · [05 Lifecycles](05-order-payment-and-inventory-lifecycles.md) · [06 API](06-api-design.md) · [07 Security](07-security-threat-model-and-permissions.md) · [08 UI](08-ui-ux-and-design-system.md) · [09 Code standards](09-code-structure-and-engineering-standards.md) · [11 Operations](11-deployment-and-operations.md) · [12 Roadmap](12-roadmap-and-backlog.md) · [Risks and open decisions](risks-and-open-decisions.md) · [ADRs](adr/README.md)
+
+Labels follow [00 §1.2](00-context-assumptions-and-questions.md#12-evidence-labels). A package that is not in `package.json` today is marked proposed. Code blocks are pseudocode.
+
+## 1. Scope and how to read this document
+
+This lite version is enough to build the harness in M0 and give every test a stable ID; [§8](#8-expanding-this-document) lists what the full version adds.
+
+The behaviour a test asserts belongs to the document named in its registry row: lifecycles to [05](05-order-payment-and-inventory-lifecycles.md), the API to [06](06-api-design.md), permissions to [07](07-security-threat-model-and-permissions.md), UI to [08](08-ui-ux-and-design-system.md). Folder layout, lint and hooks belong to [09](09-code-structure-and-engineering-standards.md); the pipeline, staging and drills to [11](11-deployment-and-operations.md); milestones and requirement-to-test traceability to [12](12-roadmap-and-backlog.md).
+
+- **The registry (§6) is the single source of test IDs.** Other documents cite IDs; this one defines them. If a document and a row disagree, the owning document wins on behaviour and §6 wins on the number.
+- **Base IDs.** Fourteen IDs were fixed before the documents were written and keep their numbers and meaning: `T-SEC-001` to `T-SEC-004`, `T-SEC-010`, `T-INV-003`, `T-PAY-005`, `T-PAY-008`, `T-CHK-004`, `T-ARCH-001`, `T-API-001`, `T-A11Y-001`, `T-PERF-001`, `T-OPS-001`.
+- **Everything else is registered here**, including IDs other documents marked "(proposed)". Registered does not mean written (§6.1).
+- **Area references** such as "T-CAT area" in [01](01-product-requirements.md) and [02](02-user-journeys-and-acceptance-criteria.md) stay valid; the test gets its number under §6.1 when it is written.
+
+## 2. Test strategy
+
+Risk-first: name how the marketplace can fail its users, and give each failure a layer that can see it.
+
+### 2.1 Top risks and where they are caught
+
+| Risk                                                      | Layer that catches it                                                     | Test IDs                                                                                   |
+| --------------------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Cross-shop data leakage (INV-02)                          | Functional tests generated from the route list; composite-FK insert tests | `T-SEC-001`, `T-SEC-005`, `T-SEC-030`, `T-SEC-036`, `T-ORD-104`, `T-MED-101`               |
+| Money errors (INV-06, INV-10, INV-11)                     | Unit property tests; a golden functional test; CHECK tests                | `T-LED-001`, `T-ORD-008`, `T-ORD-106`, `T-ARCH-013`, `T-SEC-004`, `T-ORD-102`, `T-LED-104` |
+| Oversell (INV-04, INV-05)                                 | Concurrency suite on real PostgreSQL                                      | `T-INV-003`, `T-INV-001`, `T-CHK-009`, `T-INV-004`                                         |
+| Duplicate orders (INV-22)                                 | Concurrency suite; one browser test of a dropped response                 | `T-CHK-004`, `T-CHK-005`, `T-API-007`, `T-UI-017`                                          |
+| Payment spoofing or a missed capture (R1.1)               | Functional tests with the scripted fake provider; concurrency suite       | `T-PAY-001` to `T-PAY-005`, `T-PAY-010`, `T-SEC-021`, `T-PAY-008`                          |
+| Suspended or stolen sessions keep working                 | Functional tests that drive the session store and the revocation job      | `T-SEC-010`, `T-SEC-009`, `T-SEC-011`, `T-IAM-109`                                         |
+| Retention or anonymisation removes too much or too little | Functional tests through the real actions; two-role tests                 | `T-IAM-106`, `T-IAM-111`, `T-IAM-112`, `T-SEC-102`, `T-ARCH-012`, `T-SHOP-004`             |
+| Data loss (bad migration, lost backup)                    | CI schema checks; release checks; restore drills                          | `T-ARCH-010`, `T-ARCH-017`, `T-OPS-013`, `T-OPS-014`, `T-OPS-001`                          |
+
+Every invariant of [04 §16.2](04-domain-model-and-data-dictionary.md#162-invariant-register) names at least one ID in §6.
+
+### 2.2 No coverage percentage; mandatory sets instead
+
+There is no line-coverage target. Coverage shows which lines ran, not whether two checkouts raced or shop B's ID was tried on shop A's route: a sequential `placeOrder` test reaches full coverage with the lock removed. Coverage may be printed but never gates. Instead:
+
+1. The **mandatory sets** of §4 are green on every pull request; most are generated from the route list, the permission maps or the schema catalogue.
+2. **A rule changes with its test.** A pull request that changes a rule in [04a](04a-data-dictionary-tables.md), [05](05-order-payment-and-inventory-lifecycles.md), [06](06-api-design.md) or [07](07-security-threat-model-and-permissions.md) changes or adds the test that rule cites, and names it in the "Tests added or changed" line of the [09 §11.5](09-code-structure-and-engineering-standards.md#115-pull-request-template-and-review-checklist) template.
+3. **Each acceptance criterion is automated at the lowest reliable layer** ([02 §7](02-user-journeys-and-acceptance-criteria.md#7-journey-completion-checklist)), and the test title cites its AC ID (§6.1).
+
+### 2.3 What not to test heavily
+
+- **Framework internals** (Lucid, VineJS, Inertia, Radix, pg-boss): test DripNepal's configuration, queries and constraints.
+- **Copied shadcn components**: covered on the composed page by `T-A11Y-001` and the keyboard pass of [08 §9.4](08-ui-ux-and-design-system.md#94-how-it-is-verified).
+- **Visual snapshots**: none in R1.
+- **Serializers one by one**: `T-API-001` validates every response shape.
+- **A mocked database**: anything that runs SQL runs on PostgreSQL 18.4, never SQLite (RF-32).
+- **Real providers in CI**: never ([11 §2.3](11-deployment-and-operations.md#23-ci)); sandboxes are the manual M8 acceptance (VX-06, VX-07).
+- **Business rules through the browser**: asserted through the API; the browser suite covers UI behaviour, accessibility and a few journeys.
+
+## 3. Test layers and tooling
+
+Five suites, one real PostgreSQL, and fakes only at the provider ports.
+
+### 3.1 Suites and packages
+
+| Suite         | State today [Verified-repo `adonisrc.ts:87-104`, `tests/bootstrap.ts`]            | Database and isolation                                          | Runs                             |
+| ------------- | --------------------------------------------------------------------------------- | --------------------------------------------------------------- | -------------------------------- |
+| `unit`        | Configured, no spec files (RF-09); 2 s timeout                                    | None                                                            | Pre-push, CI                     |
+| `functional`  | Configured, no spec files; 30 s; HTTP server started by `configureSuite`          | `dripnepal_test`, runtime role; one global transaction per test | CI                               |
+| `concurrency` | To add ([09 §1.2](09-code-structure-and-engineering-standards.md#12-target-tree)) | Real commits on separate connections; fresh data per test       | CI                               |
+| `browser`     | Configured, no spec files; 300 s; `browserClient` runs only here                  | As functional                                                   | CI (smoke from M0, full from M4) |
+| `load`        | To add; k6 scripts, not a Japa suite                                              | Staging                                                         | Before the R1 gate, on demand    |
+
+Script checks (dependency-cruiser, schema diff, spec lint, docs checks) are CI steps with IDs too.
+
+Installed [Verified-repo `package.json`, `tests/bootstrap.ts:19-26`]: `@japa/runner` 5.3.0, `@japa/assert` 4.2.0, `@japa/plugin-adonisjs` 5.2.0 and `@japa/browser-client` 2.3.0, with the `assert`, `pluginAdonisJS`, `dbAssertions`, `browserClient`, `sessionBrowserClient` and `authBrowserClient` plugins. Japa tests have `.tags()`, `.retry()` and `.skip()` [Verified-repo `@japa/core` 10.4.0 `build/src/test/main.d.ts:73-100`].
+
+Proposed, pinned when added:
+
+- **M0**: `@japa/api-client` (the auth, session and shield packages ship Japa `api_client` plugins and declare it as an optional peer [Verified-repo their `package.json`]); `ajv` and `ajv-formats` for `T-API-001`, transitive only today [Verified-repo `pnpm-lock.yaml`; Assumption: tool choice]; Redocly CLI for `T-API-009` [Assumption, as [09 §4.5](09-code-structure-and-engineering-standards.md#45-ci-checks-that-keep-the-contracts-in-sync)]; `dependency-cruiser` for `T-ARCH-001`; `playwright` 1.61.1 as a direct dependency with browser binaries in CI (today only a peer of `@japa/browser-client` [Verified-repo `pnpm-lock.yaml`]).
+- **M4**: `@axe-core/playwright` for `T-A11Y-001` [Assumption: package choice].
+- **M7**: k6 (a binary) for `T-PERF-001`.
+
+The component tests of [08](08-ui-ux-and-design-system.md) run in the browser suite against fixture pages under `inertia/pages/dev/`, never routed in production (`T-UI-026`); pure frontend functions are unit tests. R1 adds no second runner [Assumption: Japa resolves the `#shared/*` and `inertia/` imports; checked in M0].
+
+### 3.2 The test database
+
+- **Separate database** `dripnepal_test`; boot refuses a `DB_DATABASE` without the `_test` suffix under `NODE_ENV=test` ([09 §6.1](09-code-structure-and-engineering-standards.md#61-variable-catalogue), RF-32). Today `.env.test` holds only `SESSION_DRIVER=memory` [Verified-repo `.env.test:1`], so a test would reach the developer's database; M0 fixes this first. CI uses the `postgres:18.4` and MinIO service containers of [11 §2.3](11-deployment-and-operations.md#23-ci).
+- **Two roles, as in production.** Migrations run as `dripnepal_migrator`, tests as `dripnepal_app` ([07 §4.10](07-security-threat-model-and-permissions.md#410-database-roles-and-grants)), so the revoked privileges behind `T-ARCH-012` and `T-SEC-029` are real [Assumption: a second, migrator connection in the test configuration].
+- **Migrations once per run.** The runner setup hook runs `migration:fresh` and the reference seeders on the migrator connection; Lucid's test utilities pass a connection name to Ace as `--connection` [Verified-repo `@adonisjs/lucid` 22.4.2 `build/src/test_utils/database.js:23-26`].
+
+```ts
+// tests/bootstrap.ts, runner setup (pseudocode; flags checked in M0)
+setup: [
+  async () => {
+    const ace = await app.container.make('ace')
+    await ace.exec('migration:fresh', ['--connection=pg_migrator'])
+    // the reference seeder files of 09 §8.8, passed with --files as the release step does
+    await ace.exec('db:seed', ['--connection=pg_migrator', ...referenceSeederFileFlags])
+  },
+]
+```
+
+### 3.3 Isolation, and why concurrency tests are different
+
+**No truncation.** `testUtils.db().truncate()` returns a teardown that runs `db:truncate`, one `TRUNCATE` over every table of the `public` schema [Verified-repo `@adonisjs/lucid` 22.4.2 `build/src/test_utils/database.js:43-46`, `build/commands/db_truncate.js:44`, `build/src/dialects/pg.js:125-144`], which the `BEFORE TRUNCATE` triggers of the append-only tables abort ([04 §2.12](04-domain-model-and-data-dictionary.md#212-append-only-tables)). The harness must not need a hole in those triggers.
+
+**Functional and browser suites** wrap each test in `testUtils.db().wrapInGlobalTransaction()`, rolled back afterwards [Verified-repo `build/src/test_utils/database.js:67-71`]; the action's `withTx` transactions become savepoints ([09 §12.10](09-code-structure-and-engineering-standards.md#1210-tests)). A test expecting a constraint error runs that statement in a nested transaction so it can continue.
+
+**The concurrency suite commits for real, on separate connections.** A global transaction pins the process to one transaction on one PostgreSQL backend: twenty "parallel" checkouts would run one after another, the row lock of [05 §4.5](05-order-payment-and-inventory-lifecycles.md#45-the-conditional-stock-update) would never make a second backend wait, and the test would pass with the lock removed. So the suite:
+
+- sends parallel requests over separate pool connections, with `DB_POOL_MAX=20` (the maximum of [09 §6.1](09-code-structure-and-engineering-standards.md#61-variable-catalogue)) in the test environment and never more parallel requests than connections, so no request queues for one [Assumption: `placeOrder` holds one connection at a time];
+- isolates tests by data, not rollback: each test creates its own shop, users, variants and keys with unique slugs and emails and asserts only on those rows; the next run starts from `migration:fresh`;
+- hosts tests that need commits or the second role: triggers and grants (`T-ARCH-012`, `T-SEC-029`), handlers run twice (`T-INV-004`), races (`T-ORD-002`, `T-IAM-107`);
+- starts with `T-ARCH-032`: two connections take `FOR UPDATE` on one row and the second must wait, so a harness that stops contending fails first.
+
+`configureSuite` must start the HTTP server for `concurrency` too [Verified-repo `tests/bootstrap.ts:45` lists `browser`, `functional` and `e2e`].
+
+### 3.4 Factories and reference data
+
+Factories follow [04 §20.3](04-domain-model-and-data-dictionary.md#203-seeders-factories-and-schema-generation): they import the vocabularies the CHECK lists mirror, encrypt through the real field-crypto service with a test key and create whole aggregates. `T-ARCH-031` inserts every factory and state into the migrated schema, so a CHECK change the factories miss fails once, in one place. Reference data comes from the reference seeders (§3.2); tests never change it.
+
+### 3.5 Time
+
+Japa's `timeTravel` and `freezeTime` fake the JavaScript `Date` through `timekeeper` [Verified-repo `@japa/runner` 5.3.0 `build/index.js:238-249`], which Luxon reads too. They do not move PostgreSQL's `now()`, which fills `created_at` and `updated_at` ([04 §2.2](04-domain-model-and-data-dictionary.md#22-time)) and drives job predicates. So **move data, not clocks** where the database compares with `now()` (an expiry test inserts holds already past `expires_at`); freeze the JavaScript clock only for due times computed in TypeScript; test Kathmandu boundaries at fixed instants such as 18:14:59 and 18:15:00 UTC (`T-UI-020`); never sleep; run jobs by calling their handlers.
+
+### 3.6 Provider fakes, email, storage and jobs
+
+The ports of [03 §11.1](03-system-architecture.md#111-ports) have test doubles chosen by configuration (`PAYMENT_PROVIDER=fake`).
+
+- **Scripted `PaymentProvider` fake.** Each test scripts the answers per payment: an `initiate` timeout then a paid `lookup` (timeout-then-success); a failed return while the lookup says `COMPLETE`; a callback after the lookup captured (out of order); an unknown status; a different amount; a refund that times out after the provider processed it (`T-PAY-008`). The fake records calls, so a test can assert "no second refund before a lookup". M8 sandbox payloads become `T-PAY-010` fixtures.
+
+```ts
+// pseudocode; the script API is designed with the adapter in M8
+fakeProvider.script(payment.id, [
+  { call: 'initiate', result: timeout() },
+  { call: 'lookup', result: status('COMPLETE', { amount: payment.amount_minor }) },
+])
+```
+
+- **Email**: a capturing `EmailSender` fake; tests assert recipient, template and variables, never HTML. `T-NOT-001` points real SMTP at a closed port instead.
+- **Object storage**: MinIO in CI, an in-memory fake in unit tests.
+- **Jobs**: functional tests assert that the job row was written in the business transaction ([ADR-0010](adr/0010-postgres-jobs-pg-boss-transactional-send.md)); no worker runs during tests.
+
+### 3.7 Contract, accessibility and performance
+
+- **`T-API-001`**: a functional-suite hook validates every `/api/v1` response (status, `Content-Type`, body) against its operation in `docs/openapi.yaml`, OpenAPI 3.1.0 [Verified-repo `docs/openapi.yaml:1`], with schemas compiled once per run in Ajv's JSON Schema 2020-12 mode [Assumption]. `T-API-009` lints the spec and `T-API-010` checks route parity.
+- **`T-A11Y-001`**: axe in the browser suite on the core pages of [08 §9.4](08-ui-ux-and-design-system.md#94-how-it-is-verified), both themes, 360 × 640 and 1280 × 800, each dialog opened once; zero serious or critical violations. Rule tags are WCAG 2.0, 2.1 and 2.2 A and AA [Assumption: tag names and a target-size rule are checked against the axe-core version pinned in M4]. SC 2.5.8 asks for 24 × 24 CSS px targets [Verified-doc [research: ui-frontend](research/ui-frontend.md), <https://www.w3.org/TR/WCAG22/>, accessed 2026-09-25]; the 44 px check of 08 is `T-UI-004`.
+- **`T-PERF-001`**: k6 against staging at 10× launch load, that is 100 orders in the peak hour, bursts of 10 `placeOrder` a minute and about 20 storefront requests per second ([01 §8](01-product-requirements.md#8-non-functional-requirements), A-02). Pull requests block on budgets that do not depend on runner speed: `T-PERF-002` (query plans), `T-UI-012` (JavaScript) and `T-UI-031` (page props). `T-PERF-003` (Lighthouse, [08 §10.1](08-ui-ux-and-design-system.md#101-budgets)) only reports, because shared CI runners make timings noisy.
+
+## 4. Mandatory test sets
+
+A mandatory set exists before the feature it protects merges; none of its tests is skipped or quarantined (§5.3), and new code joins it automatically.
+
+| Set                                            | IDs                                                                                                                     | Suite                   | How it stays complete                                                                                                                                                                                                                                          |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Cross-shop isolation harness                   | `T-SEC-001`, `T-SEC-005`, `T-SEC-036`, `T-ORD-104`, `T-MED-101`, `T-CAT-109`                                            | Functional              | Generated from `node ace list:routes --json`: every seller route and page, each role of shop A, shop B's slug, path and body IDs ([07 §4.9](07-security-threat-model-and-permissions.md#49-how-authorization-is-tested) (a) to (d)); an unfillable route fails |
+| Permission matrix                              | `T-SEC-030`, `T-SEC-031`, `T-SEC-032`, `T-SEC-008`, `T-SEC-002`, `T-SEC-006`                                            | Functional, unit        | Route list × the role maps of 07 §4.2–§4.3 × shop status and suspension mode (07 §4.4); a route without a declared requirement fails                                                                                                                           |
+| Inventory concurrency                          | `T-INV-003`, `T-CHK-009`, `T-INV-004`, `T-ARCH-032`                                                                     | Concurrency             | `T-INV-003` per [05 §4.9](05-order-payment-and-inventory-lifecycles.md#49-concurrency-walk-through-two-customers-the-last-unit): 20 parallel `placeOrder` for `on_hand = 1` on separate connections, 100 runs, one order each, `reserved ≤ on_hand`            |
+| Idempotent writes                              | `T-CHK-004`, `T-CHK-005`, `T-API-007`, `T-CHK-008`                                                                      | Concurrency, functional | `T-API-007` iterates the idempotent operations of 06 §7.7                                                                                                                                                                                                      |
+| Payment idempotency and provider events (R1.1) | `T-PAY-001` to `T-PAY-005`, `T-PAY-010`, `T-SEC-021`, `T-PAY-008`, `T-RET-004`                                          | Functional, concurrency | One case per mapping row of 03 §11.3; `T-PAY-005` as restated below                                                                                                                                                                                            |
+| Money and ledger arithmetic                    | `T-LED-001`, `T-LED-003`, `T-LED-005`, `T-ORD-008`, `T-ORD-106`, `T-ORD-102`, `T-ARCH-013`, `T-ARCH-014`, `T-SEC-004`   | Unit, functional        | `T-LED-001` runs the 05 §7.11 example through real actions; property tests use random carts                                                                                                                                                                    |
+| Schema and migration checks                    | `T-ARCH-010`, `T-ARCH-011`, `T-ARCH-012`, `T-ARCH-015`, `T-ARCH-017`, `T-ARCH-022`, `T-ARCH-031`, all `1xx` table tests | CI step, concurrency    | Driven by `pg_constraint` and the trigger catalogue, so a new CHECK or append-only table needs no new test                                                                                                                                                     |
+| Retention and anonymisation                    | `T-IAM-106`, `T-IAM-111`, `T-IAM-112`, `T-SEC-102`, `T-ARCH-012`, `T-SHOP-003`, `T-SHOP-004`, `T-SEC-029`               | Functional, concurrency | `T-SEC-102` runs every audited operation of 06 §13 with fixture personal values and searches the audit rows                                                                                                                                                    |
+| Suspension and session revocation              | `T-SEC-010`, `T-SEC-009`, `T-IAM-109`, `T-SEC-011`, `T-ORD-007`                                                         | Functional              | `T-SEC-010` as below                                                                                                                                                                                                                                           |
+
+**`T-PAY-005`, restated.** The base wording was "the same webhook delivered N times (and concurrently) gives one state change and one ledger posting". eSewa ePay and Khalti KPG-2 send no webhooks ([06 §12.1](06-api-design.md#121-what-the-providers-offer), [05 §8.6](05-order-payment-and-inventory-lifecycles.md#86-duplicate-and-out-of-order-provider-events-returns-webhooks-lookups)). The test is: **the same provider event (a return, a lookup result or a callback) delivered N times, sequentially and concurrently, gives one state change, one ledger-relevant event and one email.** The reserved webhook route is one of the delivery paths.
+
+**`T-SEC-010`, expected result**, as [07 §3.3](07-security-threat-model-and-permissions.md#33-the-per-request-account-check-and-the-suspension-decision) decides: with the worker stopped, the suspended user's next API request gets 403 `ACCOUNT_SUSPENDED` and the next page request redirects to `/login`; after `identity.revoke_sessions` runs, the same cookie gets 401 `UNAUTHENTICATED` on a protected `GET` and on a `POST` with the old `X-XSRF-TOKEN`, never a 2xx; a stamp-only mismatch gets 401.
+
+## 5. CI quality gates
+
+[11 §5](11-deployment-and-operations.md#5-cicd-and-release-promotion) owns the pipeline shape (`ci.yml` on pull requests, `release.yml` after merge, staging, a manual production approval) and [09](09-code-structure-and-engineering-standards.md) the tool configuration. This section decides which checks run and which block. There is no CI today (RF-09 [Verified-repo: no `.github` directory]), so every check below is proposed until M0 builds `ci.yml`.
+
+### 5.1 Every pull request (`ci.yml`)
+
+"Merge" means a required status check on `main`; "warn" means reported only.
+
+| Stage        | Checks                                                                                                  | IDs                                                                                                           | From   | Level |
+| ------------ | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ------ | ----- |
+| Static       | Frozen install, `pnpm format:check`, ESLint with zero warnings, both typechecks, unit suite             | `T-ARCH-021`, `T-UI-029`, unit tests                                                                          | M0     | Merge |
+| Repository   | Module rules, generated files, env keys, kit policy, registry consistency, docs links and ADR structure | `T-ARCH-001`, `T-ARCH-016`, `T-ARCH-023`, `T-ARCH-027`, `T-ARCH-029`, `T-ARCH-033`, `T-UI-024`                | M0     | Merge |
+| Supply chain | Secret scan, `pnpm audit --prod` with expiring exceptions, licence report                               | `T-SEC-025`, `T-SEC-026`, `T-SEC-038`, `T-ARCH-028`                                                           | M0     | Merge |
+| Contract     | Spec lint, route parity, problem-code registry                                                          | `T-API-009`, `T-API-010`, `T-API-011`                                                                         | M0     | Merge |
+| Database     | `migration:fresh` on `postgres:18.4`, schema diff, extension allow-list, catalogue-driven checks        | `T-ARCH-010`, `T-ARCH-011`, `T-ARCH-012`, `T-ARCH-015`, `T-ARCH-022`, `T-ARCH-031`, `T-ARCH-034`, `1xx` tests | M0     | Merge |
+| Functional   | Functional suite with the `T-API-001` hook                                                              | All functional IDs, including the §4 sets                                                                     | M0     | Merge |
+| Concurrency  | Concurrency suite                                                                                       | `T-ARCH-032` from M0; the rest as features land                                                               | M0     | Merge |
+| Image        | Docker build without push, production-build smoke, image checks, `caddy validate` (11 §5.2)             | `T-ARCH-002`, `T-OPS-010`, `T-ARCH-025`, `T-UI-012`, `T-UI-013`                                               | M0     | Merge |
+| Browser      | Smoke journey home → product → cart → checkout; T-UI browser tests; axe                                 | `T-UI-*`; `T-A11Y-001` from M4                                                                                | M0     | Merge |
+| Query plans  | `EXPLAIN` on seeded data when a `queries.ts` changes                                                    | `T-PERF-002`                                                                                                  | M4     | Merge |
+| Reports      | Lighthouse; docs portability                                                                            | `T-PERF-003`; `T-ARCH-030`                                                                                    | M4; M0 | Warn  |
+
+Decisions in this table:
+
+- **The concurrency and browser suites run in `ci.yml`**, beside those of [11 §5.2](11-deployment-and-operations.md#52-workflows): G1 of [01 §5.3](01-product-requirements.md#53-r1-launch-gates) needs `T-INV-003` and `T-CHK-004` green in CI.
+- **The image smoke also runs on pull requests**, not only in `release.yml`, so an SSR break (RF-08) never reaches `main`.
+- **`T-ARCH-030` blocks** once the consistency review has removed the existing references. It fails on absolute home-directory paths and on the names of local-only planning sources, kept in a denylist next to the script so that `docs/` never spells them.
+- **The weekly dependency update** may change `pnpm-lock.yaml` without `package.json`: `T-SEC-026` exempts pull requests labelled `dependencies` [Assumption: the update bot applies it] ([09 §10.2](09-code-structure-and-engineering-standards.md#102-lockfile-version-ranges-and-install-behaviour)).
+- **Hooks are convenience**; pre-push runs typecheck and the unit suite ([09 §11.4](09-code-structure-and-engineering-standards.md#114-git-hooks-husky-9)).
+
+### 5.2 Release gates
+
+| Gate                            | Checks                                                                                                                                                                                                                                                                   | Blocks                    |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------- |
+| Every production promotion      | `T-OPS-011` on staging ([11 §5.5](11-deployment-and-operations.md#55-what-staging-must-prove-before-promotion)): the release step with `T-OPS-013` and `T-OPS-014`, the `T-ARCH-002` smoke, and `T-UI-030` (sign-up, browse, cart, COD checkout, vendor accept and ship) | Production approval       |
+| R1 launch G1                    | Every R1 "Must" acceptance criterion automated and green; `T-SEC-001` to `T-SEC-004`, `T-SEC-010`, `T-INV-003`, `T-CHK-004` green in CI                                                                                                                                  | Launch                    |
+| R1 launch G2                    | `T-PERF-001` at 10× load, `T-A11Y-001` clean, `T-OPS-001` both depths within the RTO                                                                                                                                                                                     | Launch                    |
+| R1 launch, operations readiness | `T-OPS-003`, `T-OPS-004`, `T-OPS-012` with `T-OPS-016`, `T-OPS-018`, `T-OPS-007` to `T-OPS-009`, `T-OPS-020`, `T-OPS-017`, `T-SEC-019`, `T-SEC-035`                                                                                                                      | Launch                    |
+| M8 (R1.1)                       | Every T-PAY and T-RET test green, including `T-PAY-005` and `T-PAY-008` ([01 §5.1](01-product-requirements.md#51-release-phases))                                                                                                                                        | Enabling gateway checkout |
+
+### 5.3 Flaky and quarantined tests
+
+- `.retry()` is not used; a CI step fails on it. A retried race test hides the bug it exists to find.
+- A flaky test is fixed within two working days or quarantined with `.skip(true, 'quarantine: <issue link>')` and the `@quarantine` tag. CI lists quarantined tests in the job summary and fails when one is older than 14 days.
+- Base IDs and §4 sets are never quarantined; the merge waits for the fix.
+- Browser tests wait for conditions, never for fixed times.
+
+### 5.4 The smallest gate before the first feature code (M0)
+
+Before the first M1 feature pull request, `main` is protected and `ci.yml` blocks on:
+
+1. The Static, Repository, Supply chain and Contract stages of §5.1 (without the kit and licence checks until those files exist).
+2. The test database guard and two-role setup (§3.2); `T-ARCH-010`, `T-ARCH-011`, `T-ARCH-012`, `T-ARCH-015` and `T-ARCH-022` as the baseline lands ([09 §8.1](09-code-structure-and-engineering-standards.md#81-the-m0-re-baseline-adr-0011-od-01)); `T-ARCH-031` for the first factories.
+3. The functional suite with the `T-API-001` hook and the M0 behaviours: request IDs (`T-API-005`), the error contract (`T-API-012`, `T-SEC-027`), the stamp-mismatch case of `T-SEC-010` and the auth rate limits (`T-SEC-011`).
+4. The concurrency suite with `T-ARCH-032`, so M5 adds tests, not infrastructure.
+5. The image build with `T-ARCH-002` (RF-08) and `T-OPS-010`, and the browser smoke.
+6. `T-ARCH-030` in warn mode.
+
+## 6. Test ID registry
+
+Every test ID used in the documentation set, grouped by area and sorted by ID.
+
+### 6.1 Naming and numbering rules
+
+- **Format** `T-<AREA>-<NNN>`, three digits. The areas are the 21 of [00 §1.3](00-context-assumptions-and-questions.md#13-id-schemes): `ARCH`, `API`, `SEC`, `IAM`, `SHOP`, `CAT`, `MED`, `INV`, `CART`, `CHK`, `ORD`, `FUL`, `PAY`, `RET`, `LED`, `NOT`, `ADM`, `OPS`, `UI`, `A11Y`, `PERF`.
+- **Two blocks.** In the business areas, `001`–`099` hold behaviour, contract and operations tests and `101`–`199` hold tests of one table's rule in [04](04-domain-model-and-data-dictionary.md) or [04a](04a-data-dictionary-tables.md) (constraints, triggers, indexes and the races around them), as the documents already numbered them. `T-ARCH` checks that span the whole schema stay in `001`–`099`.
+- **A new ID** takes the next number after the highest in its block and is added here in the pull request that first cites it.
+- **Never reuse a number.** A retired ID keeps its row, marked retired, with its successor.
+- **A widened scope keeps the ID** (the owning document states the new case); a different behaviour gets a new ID.
+- **Test titles start with the ID** and end with the acceptance criteria they prove, so a search finds both:
+
+```ts
+// pseudocode
+test('T-INV-003 last unit: one order per run, reserved ≤ on_hand [AC-J05-05]', async () => { … })
+```
+
+One ID may have several Japa tests; they share the prefix. `T-ARCH-033` fails on a test ID missing from this section and lists registered IDs no test cites yet.
+
+**Notes column:** "base" is one of the 14 base IDs; "new" means first numbered here; "widened (§7)" means an audit added cases; "was …" records an earlier number; "R1.1" or "R2" names the release of the behaviour when it is not R1.
+
+### 6.2 Architecture, schema and repository (T-ARCH)
+
+| ID           | What it checks                                                                  | Defined or first proposed in                                                                                            | Notes                                  |
+| ------------ | ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| `T-ARCH-001` | Module dependency rules (dependency-cruiser plus two checks)                    | [09 §2.4](09-code-structure-and-engineering-standards.md)                                                               | base                                   |
+| `T-ARCH-002` | Production image serves SSR pages without `X-Inertia`; no hydration warning     | [03 §3.3](03-system-architecture.md)                                                                                    | includes 09 §13.8 hydration check      |
+| `T-ARCH-003` | Email, storage and SMS adapters throw inside a transaction                      | [03 §8.3](03-system-architecture.md)                                                                                    | —                                      |
+| `T-ARCH-004` | M0 spike: pg-boss transactional send on PostgreSQL 18.4                         | [03 §10.1](03-system-architecture.md)                                                                                   | M0 only                                |
+| `T-ARCH-010` | `migration:fresh` leaves `database/schema.ts` unchanged; no `any`               | [04 §2.15](04-domain-model-and-data-dictionary.md)                                                                      | —                                      |
+| `T-ARCH-011` | CHECK value lists equal the TypeScript vocabularies; cascade set equals 04 §2.6 | [04 §2.4](04-domain-model-and-data-dictionary.md)                                                                       | —                                      |
+| `T-ARCH-012` | Append-only tables refuse `UPDATE` and `DELETE` for both roles                  | [04 §2.12](04-domain-model-and-data-dictionary.md)                                                                      | widened (§7)                           |
+| `T-ARCH-013` | int8 parser guard; `sumMinor` returns a safe number                             | [04 §18.4](04-domain-model-and-data-dictionary.md)                                                                      | —                                      |
+| `T-ARCH-014` | Money-column lint; `parseFloat` and `toFixed` banned in money code              | [04 §16.2](04-domain-model-and-data-dictionary.md), [ADR-0007](adr/0007-money-integer-minor-units.md)                   | —                                      |
+| `T-ARCH-015` | State-dependent CHECKs reject a missing required value                          | [04a §5](04a-data-dictionary-tables.md)                                                                                 | was 04a T-ARCH-013                     |
+| `T-ARCH-016` | `.adonisjs/` generated files are fresh after `node ace test`                    | [09 §1.4](09-code-structure-and-engineering-standards.md)                                                               | —                                      |
+| `T-ARCH-017` | Migrations lock: an applied migration file never changes                        | [09 §8.4](09-code-structure-and-engineering-standards.md), [ADR-0011](adr/0011-schema-rebaseline-before-production.md)  | new                                    |
+| `T-ARCH-018` | `db:seed` twice gives identical row counts                                      | [09 §8.8](09-code-structure-and-engineering-standards.md)                                                               | new                                    |
+| `T-ARCH-019` | Development seeders refuse production or a database without `_dev`/`_test`      | [09 §8.8](09-code-structure-and-engineering-standards.md), [ADR-0011](adr/0011-schema-rebaseline-before-production.md)  | new                                    |
+| `T-ARCH-020` | Every development seeder extends `DevSeeder` and keeps its `run()`              | [09 §8.8](09-code-structure-and-engineering-standards.md)                                                               | new                                    |
+| `T-ARCH-021` | Each custom lint rule has failing and passing fixtures                          | [09 §11.2](09-code-structure-and-engineering-standards.md), [ADR-0011](adr/0011-schema-rebaseline-before-production.md) | new; includes the migration import ban |
+| `T-ARCH-022` | One documented valid example per regular-expression CHECK inserts               | [04 §20.2.2](04-domain-model-and-data-dictionary.md)                                                                    | new (A2-077)                           |
+| `T-ARCH-023` | `.env.example` keys equal the env schema keys                                   | [09 §6.4](09-code-structure-and-engineering-standards.md)                                                               | new                                    |
+| `T-ARCH-024` | Env cross-field policy: one broken rule per case fails boot                     | [09 §6.5](09-code-structure-and-engineering-standards.md)                                                               | new                                    |
+| `T-ARCH-025` | SSR render of one page per surface writes nothing to `console`                  | [09 §7.5](09-code-structure-and-engineering-standards.md)                                                               | new                                    |
+| `T-ARCH-026` | `reportToTracker`: 422 sends nothing; 500 sends one scrubbed event              | [09 §5.6](09-code-structure-and-engineering-standards.md)                                                               | new                                    |
+| `T-ARCH-027` | UI kit policy checks (registries, provenance headers, no `next/*`)              | [ADR-0015](adr/0015-ui-foundation-shadcn-and-kit-policy.md)                                                             | new                                    |
+| `T-ARCH-028` | Dependency licence report: no non-permissive licence                            | [ADR-0015](adr/0015-ui-foundation-shadcn-and-kit-policy.md)                                                             | new                                    |
+| `T-ARCH-029` | Docs check: links resolve, ADR headings, numbering and index                    | [ADR-0001](adr/0001-record-architecture-decisions.md)                                                                   | new                                    |
+| `T-ARCH-030` | Docs portability: no local paths or local-only source names in `docs/`          | [10 §5.1](#51-every-pull-request-ciyml)                                                                                 | new; warning first                     |
+| `T-ARCH-031` | Every factory and factory state inserts without a constraint error              | [10 §3.4](#34-factories-and-reference-data)                                                                             | new                                    |
+| `T-ARCH-032` | Concurrency harness self-test: two connections really contend                   | [10 §3.3](#33-isolation-and-why-concurrency-tests-are-different)                                                        | new                                    |
+| `T-ARCH-033` | Every test ID in `tests/` is registered here                                    | [10 §6.1](#61-naming-and-numbering-rules)                                                                               | new                                    |
+| `T-ARCH-034` | Migration lint: no PostgreSQL extension outside the allow-list                  | [ADR-0016](adr/0016-hosting-single-region-portable.md), [11 §1.9](11-deployment-and-operations.md)                      | new                                    |
+
+### 6.3 API contract (T-API)
+
+| ID          | What it checks                                                                      | Defined or first proposed in                                                                                      | Notes                                           |
+| ----------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| `T-API-001` | Every functional response validates against `openapi.yaml`; errors are problem+json | [06 §15](06-api-design.md)                                                                                        | base; spec lint split to T-API-009              |
+| `T-API-002` | An extra top-level or nested key gives 422 on every mutation                        | [06 §3.5](06-api-design.md)                                                                                       | —                                               |
+| `T-API-003` | Tampered or foreign cursors give 400 or own-scope rows                              | [06 §6.2](06-api-design.md)                                                                                       | —                                               |
+| `T-API-004` | Optimistic concurrency: 428 without `If-Match`, 412 when stale                      | [06 §15](06-api-design.md)                                                                                        | —                                               |
+| `T-API-005` | `X-Request-Id` echo equals body `request_id`; `Retry-After` present                 | [06 §15](06-api-design.md)                                                                                        | also ADR-0018 header checks                     |
+| `T-API-006` | No unsafe route outside `/api/v1`; CSRF exemption is the webhook route only         | [06 §15](06-api-design.md)                                                                                        | is the ADR-0004 route rule check                |
+| `T-API-007` | Generic idempotency suite over the 06 §7.7 operations                               | [06 §15](06-api-design.md)                                                                                        | includes `createProduct` duplicates (09 §12.10) |
+| `T-API-008` | List responses carry `meta`, never `metadata`                                       | [06 §3.4](06-api-design.md)                                                                                       | —                                               |
+| `T-API-009` | OpenAPI 3.1 lint of `docs/openapi.yaml`                                             | [09 §4.5](09-code-structure-and-engineering-standards.md)                                                         | new                                             |
+| `T-API-010` | Route parity: `/api/v1` routes equal spec paths and pending IDs                     | [09 §4.5](09-code-structure-and-engineering-standards.md)                                                         | new                                             |
+| `T-API-011` | Problem-code registry equals the spec enum and the 06 §5.2 snapshot                 | [09 §4.5](09-code-structure-and-engineering-standards.md), [ADR-0018](adr/0018-error-contract-problem-details.md) | new                                             |
+| `T-API-012` | `toProblem()` maps every error source to its exact body                             | [09 §5.4](09-code-structure-and-engineering-standards.md)                                                         | new                                             |
+
+### 6.4 Security and identity (T-SEC, T-IAM)
+
+| ID          | What it checks                                                                             | Defined or first proposed in                                            | Notes                           |
+| ----------- | ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------- | ------------------------------- |
+| `T-SEC-001` | Shop A never reads or changes shop B data; every seller route 404                          | [07 §4.9](07-security-threat-model-and-permissions.md)                  | base; cases (a) to (d)          |
+| `T-SEC-002` | A customer never reads or cancels another customer's order (404)                           | [07 §4.9](07-security-threat-model-and-permissions.md)                  | base; page routes included      |
+| `T-SEC-003` | Client-supplied prices, totals, `shop_id` and commission rejected or ignored               | [07 TM-06](07-security-threat-model-and-permissions.md)                 | base                            |
+| `T-SEC-004` | Refund above refundable gives 422 `REFUND_EXCEEDS_REFUNDABLE`; CHECK backstop              | [05 §6.7](05-order-payment-and-inventory-lifecycles.md)                 | base; widened (§7)              |
+| `T-SEC-005` | Every `{shopSlug}` seller route sits in the `seller_context` group                         | [07 TM-01](07-security-threat-model-and-permissions.md)                 | —                               |
+| `T-SEC-006` | Customer ownership beyond orders: addresses, checkout `address_id`, cases, cart lines      | [07 §4.9](07-security-threat-model-and-permissions.md)                  | also covers INV-03 address case |
+| `T-SEC-007` | Invitation acceptance rules; no tokens in job payloads or sessions                         | [07 TM-03](07-security-threat-model-and-permissions.md)                 | —                               |
+| `T-SEC-008` | Admin gates, TOTP step-up and self-approval refusal                                        | [07 §4.9](07-security-threat-model-and-permissions.md)                  | —                               |
+| `T-SEC-009` | Session hygiene: ID rotation, timeouts, cookie flags                                       | [07 TM-07](07-security-threat-model-and-permissions.md)                 | —                               |
+| `T-SEC-010` | Suspended user: 403 while the session exists, 401 after revocation                         | [07 §3.3](07-security-threat-model-and-permissions.md)                  | base; restated in §4            |
+| `T-SEC-011` | Login, MFA and password re-entry throttling gives 429                                      | [07 TM-08](07-security-threat-model-and-permissions.md)                 | —                               |
+| `T-SEC-012` | No account enumeration; reset token purpose and expiry                                     | [07 TM-09](07-security-threat-model-and-permissions.md)                 | —                               |
+| `T-SEC-013` | Unsafe `/api/v1` call without `X-XSRF-TOKEN` gives 403                                     | [07 TM-10](07-security-threat-model-and-permissions.md)                 | —                               |
+| `T-SEC-014` | Stored XSS payloads through every text field render inert                                  | [07 TM-11](07-security-threat-model-and-permissions.md)                 | —                               |
+| `T-SEC-015` | Injection payloads in search, sort and filters                                             | [07 TM-12](07-security-threat-model-and-permissions.md)                 | —                               |
+| `T-SEC-016` | No server-side HTTP client outside provider adapters                                       | [07 TM-13](07-security-threat-model-and-permissions.md)                 | —                               |
+| `T-SEC-017` | `return_to` accepts only same-site relative paths                                          | [07 TM-14](07-security-threat-model-and-permissions.md)                 | —                               |
+| `T-SEC-018` | Upload polyglots, overwrite after completion, loader allowlist, EXIF, sharp version        | [07 TM-15](07-security-threat-model-and-permissions.md)                 | —                               |
+| `T-SEC-019` | Private media denied without a signed URL and to wrong roles                               | [07 TM-16](07-security-threat-model-and-permissions.md)                 | also 11 §3.8 bucket check       |
+| `T-SEC-020` | Retired: replaced by the payment tests of 05                                               | [07 §9](07-security-threat-model-and-permissions.md)                    | retired                         |
+| `T-SEC-021` | Provider callbacks: signature, size, unmatched messages not stored                         | [07 TM-17](07-security-threat-model-and-permissions.md)                 | R1.1                            |
+| `T-SEC-022` | Single-use coupon redeemed once under concurrency                                          | [07 TM-20](07-security-threat-model-and-permissions.md)                 | R2 (M9)                         |
+| `T-SEC-023` | Review abuse rules                                                                         | [07 TM-21](07-security-threat-model-and-permissions.md)                 | R2 (M9)                         |
+| `T-SEC-024` | Worst-case listing and search queries within limits on 50,000 listings                     | [07 TM-24](07-security-threat-model-and-permissions.md)                 | —                               |
+| `T-SEC-025` | Secret scan over history; boot refuses missing or default secrets                          | [07 TM-25](07-security-threat-model-and-permissions.md)                 | —                               |
+| `T-SEC-026` | Dependency gates: advisories, lockfile rules, registries                                   | [07 TM-26](07-security-threat-model-and-permissions.md)                 | exemption label in §5.1         |
+| `T-SEC-027` | Log and error redaction; no SQL or stack in production errors                              | [07 TM-27](07-security-threat-model-and-permissions.md)                 | is the ADR-0018 RF-36 test      |
+| `T-SEC-028` | Payout rules: verifier is not the approver; replaced account refused                       | [07 TM-28](07-security-threat-model-and-permissions.md)                 | —                               |
+| `T-SEC-029` | Database role grants, restore targets, anonymisation replay                                | [07 TM-30](07-security-threat-model-and-permissions.md)                 | —                               |
+| `T-SEC-030` | Permission matrix: every seller and admin route × every role                               | [07 §4.9](07-security-threat-model-and-permissions.md)                  | generated; §4                   |
+| `T-SEC-031` | Status gates: shop status × suspension mode × operation                                    | [07 §4.9](07-security-threat-model-and-permissions.md)                  | generated; §4                   |
+| `T-SEC-032` | Code permission maps equal the 07 §4.2 and §4.3 tables                                     | [07 §4.9](07-security-threat-model-and-permissions.md)                  | is the ADR-0006 map test        |
+| `T-SEC-033` | Vendor view of customer contact: window, role, masking                                     | [07 §5.2](07-security-threat-model-and-permissions.md)                  | —                               |
+| `T-SEC-034` | Field decryption only from the allowlisted code paths                                      | [07 §5.5](07-security-threat-model-and-permissions.md)                  | —                               |
+| `T-SEC-035` | Security headers, CSP nonce and reporting, inline styles                                   | [07 §7.3](07-security-threat-model-and-permissions.md)                  | also 11 §3.8 HSTS check         |
+| `T-SEC-036` | Inertia page prop key sets per audience                                                    | [07 TM-06](07-security-threat-model-and-permissions.md)                 | —                               |
+| `T-SEC-037` | Seller routes run `auth` before `seller_context` (router order)                            | [09 §12.3](09-code-structure-and-engineering-standards.md)              | new                             |
+| `T-SEC-038` | Advisory exceptions: both lists agree and none has expired                                 | [09 §10.3](09-code-structure-and-engineering-standards.md)              | new                             |
+| `T-SEC-101` | 254-char email and IPv6: keys stay 64-hex; forged `X-Forwarded-For` ignored; one audit row | [04a §15.3](04a-data-dictionary-tables.md), [06 §9.1](06-api-design.md) | widened (§7)                    |
+| `T-SEC-102` | No fixture personal value in audit `changes` or `reason`                                   | [04a §15.3](04a-data-dictionary-tables.md)                              | registered (§7)                 |
+| `T-IAM-103` | No plaintext phone in raw rows; blind-index lookup; key rotation                           | [04 §2.9](04-domain-model-and-data-dictionary.md)                       | every phone column (01 REG-14)  |
+| `T-IAM-104` | Duplicate signup by case variant: same 202, one row, notice email                          | [04a §5.1](04a-data-dictionary-tables.md)                               | widened (§7)                    |
+| `T-IAM-105` | Concurrent token redemption or reset: one live token                                       | [04a §5.2](04a-data-dictionary-tables.md)                               | widened (§7)                    |
+| `T-IAM-106` | `anonymizeUser` through the real action; history stays readable                            | [04 §19.2](04-domain-model-and-data-dictionary.md)                      | widened (§7)                    |
+| `T-IAM-107` | Exactly one default address under concurrency; at most 10 active                           | [04a §5.5](04a-data-dictionary-tables.md)                               | widened (§7)                    |
+| `T-IAM-108` | District and local level from different provinces gives 23503, then 422                    | [04a §5.5](04a-data-dictionary-tables.md)                               | —                               |
+| `T-IAM-109` | "Log out everywhere" removes every other tagged session                                    | [04a §5.3](04a-data-dictionary-tables.md)                               | widened (§7)                    |
+| `T-IAM-110` | At least one active admin under concurrent demotion or deletion                            | [04a §5.4](04a-data-dictionary-tables.md)                               | widened (§7)                    |
+| `T-IAM-111` | Each anonymisation blocker gives 409; a rejected shop does not block                       | [04 §19.2](04-domain-model-and-data-dictionary.md)                      | widened (§7)                    |
+| `T-IAM-112` | `anonymized.invalid` email refused by `signUp` and `platform:create-admin` (422)           | [04a §5.1](04a-data-dictionary-tables.md)                               | new (FU-094)                    |
+
+### 6.5 Shops, catalog and media (T-SHOP, T-CAT, T-MED)
+
+| ID           | What it checks                                                                   | Defined or first proposed in                                                                  | Notes                              |
+| ------------ | -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | ---------------------------------- |
+| `T-SHOP-001` | `resolveSellerContext` query: slug, old slug, case variant, membership           | [09 §12.4](09-code-structure-and-engineering-standards.md)                                    | new                                |
+| `T-SHOP-002` | `closeShop` refused while a return request or refund is open                     | [05 §6.10](05-order-payment-and-inventory-lifecycles.md)                                      | new; owner answer pending (A2-101) |
+| `T-SHOP-003` | Resubmission after the 1-year purge gives 409                                    | [05 §6.10](05-order-payment-and-inventory-lifecycles.md)                                      | new (FU-094)                       |
+| `T-SHOP-004` | Never-approved application purge, including a racing resubmission                | [04a §6.1](04a-data-dictionary-tables.md)                                                     | new (FU-094, review)               |
+| `T-SHOP-005` | `revealPayoutAccount` refused on a retired or replaced account                   | [07 §5.5](07-security-threat-model-and-permissions.md)                                        | new (FU-094)                       |
+| `T-SHOP-101` | Shop-count limit holds under concurrent applications                             | [04 §3.1](04-domain-model-and-data-dictionary.md)                                             | widened (§7)                       |
+| `T-SHOP-102` | A shop is `active` only with approval and an accepted agreement                  | [04 §16.2](04-domain-model-and-data-dictionary.md), [04a §6.1](04a-data-dictionary-tables.md) | —                                  |
+| `T-SHOP-103` | The owner is never a member of their own shop                                    | [04a §6.2](04a-data-dictionary-tables.md)                                                     | —                                  |
+| `T-SHOP-104` | Every slug redirect resolves with 301                                            | [04a §6.10](04a-data-dictionary-tables.md), [ADR-0017](adr/0017-product-urls-public-id.md)    | —                                  |
+| `T-SHOP-105` | Payout account verification rules                                                | [04a §6.7](04a-data-dictionary-tables.md)                                                     | —                                  |
+| `T-SHOP-106` | A slug cannot take another shop's redirected old slug                            | [04a §6.1](04a-data-dictionary-tables.md)                                                     | note 4                             |
+| `T-SHOP-107` | Member limit per shop                                                            | [04a §6.2](04a-data-dictionary-tables.md)                                                     | was 04a T-SHOP-102                 |
+| `T-SHOP-108` | Every active district has exactly one delivery zone after seeding                | [04a §9.5](04a-data-dictionary-tables.md)                                                     | was 04a T-SHOP-102                 |
+| `T-SHOP-109` | Coverage needs a rate; a missing rate gives `DELIVERY_NOT_AVAILABLE`             | [04a §9.6](04a-data-dictionary-tables.md)                                                     | was 04a T-SHOP-103                 |
+| `T-SHOP-110` | Approval checks, including the repeat-seller match and note                      | [04a §6.1](04a-data-dictionary-tables.md)                                                     | was 04a T-SHOP-103                 |
+| `T-CAT-001`  | `createProduct` rollback leaves no product, key row or job                       | [09 §12.10](09-code-structure-and-engineering-standards.md)                                   | new                                |
+| `T-CAT-002`  | `missingForSubmit` lists missing items in the documented order                   | [09 §12.9](09-code-structure-and-engineering-standards.md)                                    | new                                |
+| `T-CAT-003`  | Search: typo tolerance, Devanagari word, stable paging, 400 on unknown parameter | [ADR-0014](adr/0014-postgres-search-and-listing-read-model.md)                                | new                                |
+| `T-CAT-004`  | Product URL: wrong slug, old slug or alias 301; unknown or hidden 404            | [ADR-0017](adr/0017-product-urls-public-id.md)                                                | new                                |
+| `T-CAT-005`  | Redirects keep only allow-listed query parameters and set `Cache-Control`        | [ADR-0017](adr/0017-product-urls-public-id.md)                                                | new                                |
+| `T-CAT-006`  | SEO: SSR HTML names the preferred URL; every sitemap URL answers 200             | [ADR-0017](adr/0017-product-urls-public-id.md), [03 §6.2](03-system-architecture.md)          | new                                |
+| `T-CAT-007`  | `public_id` generation matches the pattern; a collision is retried               | [ADR-0017](adr/0017-product-urls-public-id.md)                                                | new                                |
+| `T-CAT-101`  | Non-leaf or inactive category gives 422                                          | [04 §3.6](04-domain-model-and-data-dictionary.md)                                             | —                                  |
+| `T-CAT-102`  | Duplicate variant combination gives 422 on `variants[n].options`                 | [04 §3.5](04-domain-model-and-data-dictionary.md)                                             | —                                  |
+| `T-CAT-103`  | Option value of an attribute the product does not vary by is refused             | [04 §3.5](04-domain-model-and-data-dictionary.md)                                             | —                                  |
+| `T-CAT-104`  | Category attribute rules inherit down the tree                                   | [04 §3.7](04-domain-model-and-data-dictionary.md)                                             | —                                  |
+| `T-CAT-105`  | Disclosures required on live products; unblocking returns to draft               | [04a §7.6](04a-data-dictionary-tables.md)                                                     | widened (§7)                       |
+| `T-CAT-106`  | One active default variant, priced above zero; axis swap                         | [04 §3.4](04-domain-model-and-data-dictionary.md)                                             | widened (§7)                       |
+| `T-CAT-107`  | Navigation entries resolve against seeded reference data                         | [04 §3.12](04-domain-model-and-data-dictionary.md)                                            | —                                  |
+| `T-CAT-108`  | Listing row exists exactly when the product is visible                           | [04a §7.12](04a-data-dictionary-tables.md)                                                    | —                                  |
+| `T-CAT-109`  | A variant row pointing at another shop's product gives 23503                     | [ADR-0006](adr/0006-authorization-platform-roles-shop-memberships.md)                         | new                                |
+| `T-MED-001`  | Upload validation: size, type, decompression bomb, no EXIF or GPS                | [03 §7.5](03-system-architecture.md)                                                          | —                                  |
+| `T-MED-002`  | `multipart/form-data` refused on every route                                     | [ADR-0013](adr/0013-media-direct-upload-async-processing.md)                                  | new                                |
+| `T-MED-003`  | `pending_upload` assets older than 24 h purged                                   | [ADR-0013](adr/0013-media-direct-upload-async-processing.md)                                  | new                                |
+| `T-MED-101`  | Cross-shop media rows inserted directly give 23503                               | [04a §7.14](04a-data-dictionary-tables.md)                                                    | —                                  |
+| `T-MED-102`  | A `kyc_document` can never be product media                                      | [04a §7.14](04a-data-dictionary-tables.md)                                                    | —                                  |
+| `T-MED-103`  | No public key for KYC files; signed URLs expire and are audited                  | [04a §7.13](04a-data-dictionary-tables.md)                                                    | —                                  |
+
+### 6.6 Stock, cart, checkout, orders and fulfilment (T-INV, T-CART, T-CHK, T-ORD, T-FUL)
+
+| ID           | What it checks                                                          | Defined or first proposed in                                                                                      | Notes                  |
+| ------------ | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ---------------------- |
+| `T-INV-001`  | Missing stock guard gives 23514, never oversell                         | [05 §4.5](05-order-payment-and-inventory-lifecycles.md)                                                           | —                      |
+| `T-INV-002`  | Adjustment and stocktake below reserved                                 | [05 §8.13](05-order-payment-and-inventory-lifecycles.md)                                                          | —                      |
+| `T-INV-003`  | Concurrent checkouts for the last unit: one order, `reserved ≤ on_hand` | [05 §4.9](05-order-payment-and-inventory-lifecycles.md)                                                           | base                   |
+| `T-INV-004`  | Two expiry-job instances release each hold once                         | [05 §5.4](05-order-payment-and-inventory-lifecycles.md)                                                           | —                      |
+| `T-INV-005`  | Injected drift raises the alert and is corrected                        | [05 §5.10](05-order-payment-and-inventory-lifecycles.md)                                                          | —                      |
+| `T-INV-006`  | `inventory_movements` is append-only                                    | [05 §5.11](05-order-payment-and-inventory-lifecycles.md)                                                          | —                      |
+| `T-INV-007`  | Restock paths (return, RTO, rejection)                                  | [ADR-0008](adr/0008-inventory-reservations-and-ledger.md), [05 §10](05-order-payment-and-inventory-lifecycles.md) | —                      |
+| `T-INV-101`  | Movement delta and reason CHECKs per kind; restock once                 | [04a §8.3](04a-data-dictionary-tables.md)                                                                         | —                      |
+| `T-INV-102`  | One open reservation per order item (23505)                             | [04a §8.2](04a-data-dictionary-tables.md)                                                                         | —                      |
+| `T-CART-002` | Cart notices for price and stock changes                                | [05 §8.2](05-order-payment-and-inventory-lifecycles.md)                                                           | —                      |
+| `T-CART-101` | One active cart per user under a creation race                          | [04a §10.1](04a-data-dictionary-tables.md)                                                                        | —                      |
+| `T-CART-102` | More than 50 lines gives 422                                            | [04a §10.2](04a-data-dictionary-tables.md)                                                                        | —                      |
+| `T-CHK-001`  | Quote pricing equals placement pricing                                  | [05 §10](05-order-payment-and-inventory-lifecycles.md)                                                            | —                      |
+| `T-CHK-002`  | Price up or down gives 409 `PRICE_CHANGED` with a new quote             | [05 §8.2](05-order-payment-and-inventory-lifecycles.md)                                                           | —                      |
+| `T-CHK-003`  | Stale `cart_version` or unavailable shop gives `CART_CHANGED`           | [05 §8.2](05-order-payment-and-inventory-lifecycles.md)                                                           | —                      |
+| `T-CHK-004`  | Same key returns the same order; concurrent duplicates create one       | [05 §4.6](05-order-payment-and-inventory-lifecycles.md)                                                           | base                   |
+| `T-CHK-005`  | Key reuse with a different body is refused                              | [05 §4.6](05-order-payment-and-inventory-lifecycles.md)                                                           | —                      |
+| `T-CHK-006`  | Delivery coverage checked at checkout                                   | [05 §10](05-order-payment-and-inventory-lifecycles.md)                                                            | 05 §10 range           |
+| `T-CHK-007`  | COD limits and the refusal-based COD block                              | [05 §8.9](05-order-payment-and-inventory-lifecycles.md)                                                           | block depends on OD-18 |
+| `T-CHK-008`  | Rolled-back checkout sends no job                                       | [05 §4.7](05-order-payment-and-inventory-lifecycles.md)                                                           | —                      |
+| `T-CHK-009`  | Opposite-order carts never deadlock                                     | [05 §4.4](05-order-payment-and-inventory-lifecycles.md)                                                           | —                      |
+| `T-CHK-010`  | One shop and three shops keep the same invariants                       | [05 §2.4](05-order-payment-and-inventory-lifecycles.md)                                                           | —                      |
+| `T-CHK-011`  | Discount allocation sums, cap and tie rule                              | [05 §3.4](05-order-payment-and-inventory-lifecycles.md)                                                           | R2                     |
+| `T-ORD-001`  | Parent status derivation over all 1–3 shop-order sequences              | [05 §3.8](05-order-payment-and-inventory-lifecycles.md)                                                           | —                      |
+| `T-ORD-002`  | Cancel and accept race: exactly one winner, 1,000 runs                  | [05 §8.12](05-order-payment-and-inventory-lifecycles.md)                                                          | —                      |
+| `T-ORD-003`  | Partial vendor rejection: amounts, reservations, refund                 | [05 §8.7](05-order-payment-and-inventory-lifecycles.md)                                                           | —                      |
+| `T-ORD-004`  | Full rejection and the system refund                                    | [05 §8.7](05-order-payment-and-inventory-lifecycles.md)                                                           | —                      |
+| `T-ORD-005`  | Vendor acceptance timeout                                               | [05 §8.11](05-order-payment-and-inventory-lifecycles.md)                                                          | widened (§7)           |
+| `T-ORD-006`  | Auto-complete after the return window                                   | [05 §10](05-order-payment-and-inventory-lifecycles.md)                                                            | 05 §10 range           |
+| `T-ORD-007`  | Shop suspension in both modes with open orders                          | [05 §8.10](05-order-payment-and-inventory-lifecycles.md)                                                          | —                      |
+| `T-ORD-008`  | Cumulative allocation of line amounts (property test)                   | [05 §3.2](05-order-payment-and-inventory-lifecycles.md)                                                           | —                      |
+| `T-ORD-009`  | Every shop-order change leaves the parent status derived                | [05 §3.8](05-order-payment-and-inventory-lifecycles.md)                                                           | —                      |
+| `T-ORD-010`  | Late-delivery flag, including a same-day promise                        | [05 §6.1](05-order-payment-and-inventory-lifecycles.md)                                                           | —                      |
+| `T-ORD-101`  | Snapshot and guarded order columns cannot change                        | [04a §11](04a-data-dictionary-tables.md)                                                                          | —                      |
+| `T-ORD-102`  | Cross-row sums of order totals                                          | [04 §16.4](04-domain-model-and-data-dictionary.md)                                                                | —                      |
+| `T-ORD-103`  | Retired: split into T-ORD-107 and T-SEC-006                             | [04 §16.2](04-domain-model-and-data-dictionary.md)                                                                | retired                |
+| `T-ORD-104`  | Cross-shop reservation rows give 23503                                  | [04 §2.5](04-domain-model-and-data-dictionary.md), [04a §8.2](04a-data-dictionary-tables.md)                      | —                      |
+| `T-ORD-105`  | Order history readable after catalog or shop changes                    | [04 §16.2](04-domain-model-and-data-dictionary.md)                                                                | —                      |
+| `T-ORD-106`  | `allocate` property test: shares sum to the total                       | [ADR-0007](adr/0007-money-integer-minor-units.md), [04 §16.2](04-domain-model-and-data-dictionary.md)             | —                      |
+| `T-ORD-107`  | One shop order per shop per order (23505)                               | [04a §11.2](04a-data-dictionary-tables.md)                                                                        | was 04a T-ORD-103      |
+| `T-ORD-108`  | Every CHECK of orders, shop orders and order items fires                | [04a §11.1](04a-data-dictionary-tables.md)                                                                        | registered (§7)        |
+| `T-FUL-001`  | Shipment state table                                                    | [05 §6.3](05-order-payment-and-inventory-lifecycles.md)                                                           | widened (§7)           |
+| `T-FUL-002`  | Only committed reservations are consumed                                | [05 §5.6](05-order-payment-and-inventory-lifecycles.md)                                                           | —                      |
+| `T-FUL-003`  | COD refusal to RTO restocks resaleable units only                       | [05 §8.9](05-order-payment-and-inventory-lifecycles.md)                                                           | —                      |
+| `T-FUL-004`  | Delivered and collected in either order post once                       | [05 §8.9](05-order-payment-and-inventory-lifecycles.md)                                                           | —                      |
+| `T-FUL-005`  | Tracking update while `shipped`; frozen after `delivered`               | [05 §6.3](05-order-payment-and-inventory-lifecycles.md)                                                           | 05 §10 range; note 5   |
+| `T-FUL-101`  | Shipped statuses without their required fields give 23514               | [04a §11.5](04a-data-dictionary-tables.md)                                                                        | —                      |
+
+### 6.7 Payments, refunds and ledger (T-PAY, T-RET, T-LED)
+
+| ID          | What it checks                                                            | Defined or first proposed in                                                                                            | Notes                           |
+| ----------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| `T-PAY-001` | Forged or tampered return parameters never capture                        | [05 §8.6](05-order-payment-and-inventory-lifecycles.md)                                                                 | R1.1                            |
+| `T-PAY-002` | eSewa signature; failure redirect with a `COMPLETE` lookup captures       | [05 §8.6](05-order-payment-and-inventory-lifecycles.md)                                                                 | R1.1                            |
+| `T-PAY-003` | Unknown provider outcomes keep state, then `needs_review`                 | [05 §8.5](05-order-payment-and-inventory-lifecycles.md)                                                                 | R1.1                            |
+| `T-PAY-004` | Late capture after reservation expiry                                     | [05 §8.4](05-order-payment-and-inventory-lifecycles.md)                                                                 | R1.1                            |
+| `T-PAY-005` | The same provider event delivered N times, also concurrently: one effect  | [05 §8.6](05-order-payment-and-inventory-lifecycles.md)                                                                 | base; restated in §4            |
+| `T-PAY-006` | Payment adapters throw when called inside a transaction                   | [05 §9.1](05-order-payment-and-inventory-lifecycles.md)                                                                 | —                               |
+| `T-PAY-007` | One provider key per payment attempt                                      | [ADR-0012](adr/0012-payment-provider-isolation-verify-by-lookup.md), [04 §16.2](04-domain-model-and-data-dictionary.md) | R1.1                            |
+| `T-PAY-008` | Refund timeout after the provider processed it: lookup, no double refund  | [05 §8.8](05-order-payment-and-inventory-lifecycles.md)                                                                 | base; R1.1                      |
+| `T-PAY-009` | COD dispute correction posts once and audits the reason                   | [05 §8.9](05-order-payment-and-inventory-lifecycles.md)                                                                 | —                               |
+| `T-PAY-010` | Provider status mapping by source state; amount mismatch                  | [03 §11.3](03-system-architecture.md)                                                                                   | R1.1                            |
+| `T-PAY-101` | One live gateway attempt per order (23505 backstop)                       | [04a §12.1](04a-data-dictionary-tables.md)                                                                              | R1.1                            |
+| `T-PAY-102` | The COD amount can go down but never up                                   | [04a §12.1](04a-data-dictionary-tables.md)                                                                              | —                               |
+| `T-RET-001` | Return request state table                                                | [05 §10](05-order-payment-and-inventory-lifecycles.md)                                                                  | —                               |
+| `T-RET-002` | Refund SLA alerts; a replacement keeps the deadline                       | [05 §8.8](05-order-payment-and-inventory-lifecycles.md)                                                                 | —                               |
+| `T-RET-003` | eSewa manual refund and status confirmation                               | [05 §8.8](05-order-payment-and-inventory-lifecycles.md)                                                                 | R1.1                            |
+| `T-RET-004` | Retry reuses the provider key and looks up first                          | [05 §8.8](05-order-payment-and-inventory-lifecycles.md)                                                                 | R1.1                            |
+| `T-RET-005` | Manual transfer refund                                                    | [05 §8.8](05-order-payment-and-inventory-lifecycles.md)                                                                 | —                               |
+| `T-RET-101` | A return links only to a case of the same customer                        | [04a §11.7](04a-data-dictionary-tables.md)                                                                              | —                               |
+| `T-RET-102` | A refund leaving `processing` with `next_verification_at` set gives 23514 | [04a §12.4](04a-data-dictionary-tables.md)                                                                              | new (review)                    |
+| `T-LED-001` | Golden two-shop COD example of 05 §7.11                                   | [05 §7.11](05-order-payment-and-inventory-lifecycles.md)                                                                | —                               |
+| `T-LED-002` | `ledger_entries` is append-only                                           | [05 §7.1](05-order-payment-and-inventory-lifecycles.md)                                                                 | —                               |
+| `T-LED-003` | Availability group rule: debits now, credits after the hold               | [05 §7.2](05-order-payment-and-inventory-lifecycles.md)                                                                 | —                               |
+| `T-LED-004` | Payout failure carries the balance forward                                | [ADR-0009](adr/0009-multi-shop-orders-and-vendor-ledger.md), [05 §10](05-order-payment-and-inventory-lifecycles.md)     | —                               |
+| `T-LED-005` | Dedupe key: a repeated event posts once                                   | [05 §7.1](05-order-payment-and-inventory-lifecycles.md)                                                                 | —                               |
+| `T-LED-006` | Payout eligibility with open issues; `payout_stale` refusal               | [05 §10](05-order-payment-and-inventory-lifecycles.md)                                                                  | 05 §10 range; R1.1              |
+| `T-LED-007` | Tax withholding policy gates payout approval                              | [05 §10](05-order-payment-and-inventory-lifecycles.md)                                                                  | 05 §10 range; OD-27             |
+| `T-LED-101` | Maker-checker on refunds, payouts and adjustment requests                 | [04a §12.4](04a-data-dictionary-tables.md)                                                                              | widened (§7); was 04a T-ADM-101 |
+| `T-LED-102` | Payout links are permanent; one payout per entry                          | [04a §13.3](04a-data-dictionary-tables.md)                                                                              | —                               |
+| `T-LED-103` | An approved adjustment request posts exactly one entry                    | [04a §13.5](04a-data-dictionary-tables.md)                                                                              | widened (§7)                    |
+| `T-LED-104` | Ledger sign and reference CHECKs                                          | [04a §13.1](04a-data-dictionary-tables.md)                                                                              | was 04a T-LED-101               |
+
+### 6.8 Notifications, administration and operations (T-NOT, T-ADM, T-OPS)
+
+| ID          | What it checks                                                        | Defined or first proposed in                                                                                  | Notes                  |
+| ----------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ---------------------- |
+| `T-NOT-001` | Email outage: jobs reach the dead-letter queue and are redriven       | [05 §8.14](05-order-payment-and-inventory-lifecycles.md)                                                      | —                      |
+| `T-NOT-101` | A replayed event gives one delivery row and one send                  | [04a §14.3](04a-data-dictionary-tables.md)                                                                    | —                      |
+| `T-ADM-010` | `needs_review` queue: evidence, audit, state machine                  | [05 §9.5](05-order-payment-and-inventory-lifecycles.md)                                                       | R1.1                   |
+| `T-ADM-101` | Retired: became T-LED-101                                             | [04 §16.2](04-domain-model-and-data-dictionary.md)                                                            | retired                |
+| `T-ADM-102` | Setting ranges: CHECK equals the TypeScript registry                  | [04a §15.1](04a-data-dictionary-tables.md)                                                                    | widened (§7)           |
+| `T-ADM-103` | Support case deadline never beyond 15 days; written resolution        | [04a §14.1](04a-data-dictionary-tables.md)                                                                    | widened (§7)           |
+| `T-OPS-001` | Restore drill at both depths (monthly dump, quarterly full recovery)  | [11 §11.6](11-deployment-and-operations.md)                                                                   | base                   |
+| `T-OPS-002` | Worker SIGTERM mid-job: one completion, no duplicate effect           | [03 §10.7](03-system-architecture.md)                                                                         | kept; collision note 1 |
+| `T-OPS-003` | Stock-drift operations drill on staging                               | [05 §5.10](05-order-payment-and-inventory-lifecycles.md), [11 §10.14](11-deployment-and-operations.md)        | new; was 05 T-OPS-002  |
+| `T-OPS-004` | Second-provider rebuild from the documents only                       | [11 §1.9](11-deployment-and-operations.md)                                                                    | new                    |
+| `T-OPS-005` | Quarterly from-scratch staging rebuild                                | [11 §1.9](11-deployment-and-operations.md)                                                                    | new                    |
+| `T-OPS-006` | A forged `X-Forwarded-For` does not change the logged client IP       | [11 §3.4](11-deployment-and-operations.md)                                                                    | new                    |
+| `T-OPS-007` | Origin IP unreachable and no open port from outside                   | [11 §3.8](11-deployment-and-operations.md), [ADR-0016](adr/0016-hosting-single-region-portable.md)            | new                    |
+| `T-OPS-008` | Public bucket served only through the media domain                    | [11 §3.8](11-deployment-and-operations.md)                                                                    | new                    |
+| `T-OPS-009` | Database not reachable from outside its network                       | [11 §3.8](11-deployment-and-operations.md)                                                                    | new                    |
+| `T-OPS-010` | Image checks: non-root, no `.env*`, SSR bundle present, boots         | [11 §4.2](11-deployment-and-operations.md)                                                                    | new                    |
+| `T-OPS-011` | Staging promotion checks of `verify-staging`                          | [11 §5.5](11-deployment-and-operations.md)                                                                    | new                    |
+| `T-OPS-012` | Rollback rehearsal: deploy N−1 by digest                              | [11 §5.8](11-deployment-and-operations.md)                                                                    | new                    |
+| `T-OPS-013` | Release check: no pending migration                                   | [11 §6.1](11-deployment-and-operations.md)                                                                    | new                    |
+| `T-OPS-014` | Release check: no invalid index                                       | [11 §6.1](11-deployment-and-operations.md)                                                                    | new                    |
+| `T-OPS-015` | `web` SIGTERM: in-flight request completes, new connection refused    | [11 §7.3](11-deployment-and-operations.md)                                                                    | new                    |
+| `T-OPS-016` | Deploy-gap measurement during the rollback rehearsal                  | [11 §7.4](11-deployment-and-operations.md)                                                                    | new                    |
+| `T-OPS-017` | Error-tracker scrubbing of a test event                               | [11 §9.6](11-deployment-and-operations.md)                                                                    | new                    |
+| `T-OPS-018` | Alert drill: each rule fires once                                     | [11 §9.10](11-deployment-and-operations.md), [ADR-0010](adr/0010-postgres-jobs-pg-boss-transactional-send.md) | new                    |
+| `T-OPS-019` | `platform:create-admin` behaviour                                     | [09 §9.1](09-code-structure-and-engineering-standards.md)                                                     | new                    |
+| `T-OPS-020` | Health endpoints never cached at the edge (`cf-cache-status` not HIT) | [11 §3.8](11-deployment-and-operations.md)                                                                    | new                    |
+
+### 6.9 UI, accessibility and performance (T-UI, T-A11Y, T-PERF)
+
+| ID           | What it checks                                                                                           | Defined or first proposed in                                                                                       | Notes             |
+| ------------ | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ----------------- |
+| `T-UI-001`   | Correct theme class with JavaScript disabled, per cookie value                                           | [08 §1.2](08-ui-ux-and-design-system.md)                                                                           | new               |
+| `T-UI-002`   | Reduced motion: no transform animation                                                                   | [08 §5.7](08-ui-ux-and-design-system.md)                                                                           | new               |
+| `T-UI-003`   | Token contrast pairs meet the minimums in both themes                                                    | [08 §5.10](08-ui-ux-and-design-system.md)                                                                          | new               |
+| `T-UI-004`   | Primary actions at least 44 px at 360 × 640; targets at least 24 px                                      | [08 §6.4](08-ui-ux-and-design-system.md), [ADR-0015](adr/0015-ui-foundation-shadcn-and-kit-policy.md)              | new               |
+| `T-UI-005`   | Server errors map to fields and summary; unknown code fallback                                           | [08 §7.1](08-ui-ux-and-design-system.md), [ADR-0018](adr/0018-error-contract-problem-details.md)                   | new               |
+| `T-UI-006`   | Table filters, paging and Back restore URL, rows and focus                                               | [08 §7.2](08-ui-ux-and-design-system.md)                                                                           | new               |
+| `T-UI-007`   | Dialog tiers: focus, confirm gating, typed reason kept                                                   | [08 §7.3](08-ui-ux-and-design-system.md)                                                                           | new               |
+| `T-UI-008`   | Every status value of 04a has a label                                                                    | [08 §7.5](08-ui-ux-and-design-system.md)                                                                           | new               |
+| `T-UI-009`   | Offline retry keeps values and the key; one order                                                        | [08 §8.4](08-ui-ux-and-design-system.md)                                                                           | new               |
+| `T-UI-010`   | Focus moves to the new page heading after navigation                                                     | [08 §9.4](08-ui-ux-and-design-system.md)                                                                           | new               |
+| `T-UI-011`   | Help keeps a consistent position (WCAG 3.2.6)                                                            | [08 §9.3](08-ui-ux-and-design-system.md)                                                                           | new               |
+| `T-UI-012`   | Initial JavaScript per route: storefront 250 KB, dashboard 500 KB gzip                                   | [08 §10.1](08-ui-ux-and-design-system.md)                                                                          | new               |
+| `T-UI-013`   | No devtools strings in the production bundle                                                             | [08 §10.1](08-ui-ux-and-design-system.md)                                                                          | new               |
+| `T-UI-014`   | One listing URL per filter set; Back restores page and scroll                                            | [08 §11.1](08-ui-ux-and-design-system.md)                                                                          | new               |
+| `T-UI-015`   | Variant availability matrix and `?variant=` URL                                                          | [08 §11.2](08-ui-ux-and-design-system.md)                                                                          | new               |
+| `T-UI-016`   | Cart notice actions and announcements                                                                    | [08 §11.3](08-ui-ux-and-design-system.md)                                                                          | new               |
+| `T-UI-017`   | Checkout recovery after a dropped response: one order                                                    | [08 §11.4](08-ui-ux-and-design-system.md)                                                                          | new               |
+| `T-UI-018`   | Seller navigation per shop role matches 07 §4.3                                                          | [08 §11.6](08-ui-ux-and-design-system.md)                                                                          | new               |
+| `T-UI-019`   | Live-region text and focus per announcement                                                              | [08 §11.7](08-ui-ux-and-design-system.md)                                                                          | new               |
+| `T-UI-020`   | Money formatter and Kathmandu day-boundary dates                                                         | [08 §11.8](08-ui-ux-and-design-system.md)                                                                          | new               |
+| `T-UI-021`   | SSR and client render the same text                                                                      | [08 §11.8](08-ui-ux-and-design-system.md)                                                                          | new               |
+| `T-UI-022`   | Pseudo-locale run and raw-text lint                                                                      | [08 §11.8](08-ui-ux-and-design-system.md)                                                                          | new               |
+| `T-UI-023`   | Devanagari fixture: input, search, `lang`, rendering                                                     | [08 §11.8](08-ui-ux-and-design-system.md)                                                                          | new               |
+| `T-UI-024`   | Licence tracking file matches `ui/` and `kit/`                                                           | [08 §12.4](08-ui-ux-and-design-system.md)                                                                          | new               |
+| `T-UI-025`   | No storefront route uses `guest()`                                                                       | [08 §13](08-ui-ux-and-design-system.md)                                                                            | new               |
+| `T-UI-026`   | Production route list has no development routes                                                          | [08 §13](08-ui-ux-and-design-system.md)                                                                            | new               |
+| `T-UI-027`   | No unreferenced files under `inertia/pages`                                                              | [08 §13](08-ui-ux-and-design-system.md)                                                                            | new               |
+| `T-UI-028`   | Icon-only buttons have accessible names                                                                  | [ADR-0015](adr/0015-ui-foundation-shadcn-and-kit-policy.md)                                                        | new               |
+| `T-UI-029`   | Accessibility lint rule fixtures                                                                         | [09 §13.9](09-code-structure-and-engineering-standards.md)                                                         | new               |
+| `T-UI-030`   | Release-blocking browser journeys on staging                                                             | [11 §5.5](11-deployment-and-operations.md)                                                                         | new; list in §5.2 |
+| `T-UI-031`   | Storefront page props at most 100 KB uncompressed                                                        | [08 §10.1](08-ui-ux-and-design-system.md)                                                                          | new               |
+| `T-UI-032`   | WCAG checklist rows marked "Browser" (input purpose, reflow, focus not obscured, redundant entry, paste) | [08 §9.3](08-ui-ux-and-design-system.md)                                                                           | new               |
+| `T-A11Y-001` | axe on core pages, both themes, two viewports: no serious or critical                                    | [08 §9.4](08-ui-ux-and-design-system.md)                                                                           | base              |
+| `T-PERF-001` | k6 listing, search, cart and `placeOrder` at 10× launch load                                             | [01 §8](01-product-requirements.md), [09 §1.2](09-code-structure-and-engineering-standards.md)                     | base              |
+| `T-PERF-002` | EXPLAIN on seeded data shows index scans for category, shop and search queries                           | [ADR-0014](adr/0014-postgres-search-and-listing-read-model.md), [04 §17.1](04-domain-model-and-data-dictionary.md) | new               |
+| `T-PERF-003` | Lighthouse run on storefront pages (report only)                                                         | [11 §12.3](11-deployment-and-operations.md), [ADR-0003](adr/0003-inertia-ssr-storefront-csr-dashboards.md)         | new               |
+
+## 7. Held work from the audits
+
+The audits of 04, 04a, 05 and 07 held these test items for this document. Each is registered, or the row says why not.
+
+| Source                         | Item (the owning document states the full case)                                                                                                                                                               | Registered as                                                     |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| A2-077                         | Regular-expression CHECK schema test ([04 §20.2.2](04-domain-model-and-data-dictionary.md#2022-baseline-files-and-their-order)); same 202 for a known email; case `due_at` exactly 15 days after `created_at` | `T-ARCH-022` (new); `T-IAM-104`, `T-ADM-103`                      |
+| A2-037                         | Concurrent reset requests leave one live token; default-address races, 10-address cap, promotion on archive; MFA-verified staff sessions revoked                                                              | `T-IAM-105`, `T-IAM-107`, `T-IAM-109`                             |
+| A2-037, review                 | Concurrent admin deletion requests and revokes, `platform_staff` rows locked first; 04 stops using `T-ORD-103`                                                                                                | `T-IAM-110`; `T-ORD-103` retired                                  |
+| A2-008                         | Rejected shop resubmitted at `max_shops_per_owner` gives 409                                                                                                                                                  | `T-SHOP-101`                                                      |
+| A2-038, A2-096, A2-139, A2-140 | Unblocking returns to `draft`; zero price, empty active set, archived-variant re-activation and axis swap on live products                                                                                    | `T-CAT-105`, `T-CAT-106`                                          |
+| A2-040, F8                     | Null `approved_by` on person-created and `late_capture` refunds gives 23514; adjustment-request maker-checker                                                                                                 | `T-LED-101`                                                       |
+| IN-02                          | Cumulative shipping cap per shop order and allocation                                                                                                                                                         | `T-SEC-004`                                                       |
+| F8                             | Settings pair rule under concurrency; 254-character email on login; one entry per approved adjustment request                                                                                                 | `T-ADM-102`, `T-SEC-101`, `T-LED-103`                             |
+| F9                             | No personal values in audit rows; retention exemption of the append-only trigger; blockers of anonymisation; invitation placeholder                                                                           | `T-SEC-102`; `T-ARCH-012`, `T-IAM-111`, `T-IAM-106`               |
+| A2-070                         | Backlog items for the application purge and `node ace data:retention`                                                                                                                                         | Not a test: [12](12-roadmap-and-backlog.md)                       |
+| FU-086                         | Checkout `address_id` of another customer or archived gives 404; admin-cancelled shop order leaves "ready to ship"                                                                                            | `T-SEC-006`, `T-FUL-001`                                          |
+| FU-094                         | `anonymized.invalid` email refused; resubmission after the purge gives 409; the purge itself; `revealPayoutAccount` on a retired account                                                                      | `T-IAM-112`, `T-SHOP-003`, `T-SHOP-004`, `T-SHOP-005` (all new)   |
+| Review of audit 2              | Order CHECK test; `closeShop` sweeper case; `next_verification_at` left set gives 23514; purge racing resubmission; `closeShop` refused with open returns or refunds                                          | `T-ORD-108`, `T-ORD-005`, `T-RET-102`, `T-SHOP-004`, `T-SHOP-002` |
+| 05 §10 (audit 1)               | Widened scopes as [05 §10](05-order-payment-and-inventory-lifecycles.md#10-traceability-and-test-index) lists them; `T-ORD-102` settled as the cross-row-sum test                                             | Rows cite 05                                                      |
+| 07 §9 (audit 4)                | `T-SEC-005` to `T-SEC-036` with the scopes of [07 §9](07-security-threat-model-and-permissions.md#9-test-ids-used-in-this-document)                                                                           | As listed                                                         |
+
+`T-SHOP-002` and the `closeShop` case of `T-ORD-005` follow the [Assumption] of 05 §6.10 until the product owner confirms the preconditions (A2-101); if `closeShop` is narrowed to `suspended → closed`, `T-SHOP-002` is retired.
+
+## 8. Expanding this document
+
+The full version adds, each when its milestone needs it:
+
+- **Generated permission-matrix tables**: the expected status of every route × role × shop status, printed by the `T-SEC-030` and `T-SEC-031` generators and reviewed against [07 §4](07-security-threat-model-and-permissions.md#4-authorization-model-and-permission-matrix) (M2).
+- **Load scenarios and budgets**: k6 arrival rates, catalogue size (A-03), thresholds per NFR-PERF target, and how staging results are read (M7).
+- **Browser journeys per J-xx**: which journeys beyond `T-UI-030` block a release, with their fixtures (M4 to M7).
+- **Traceability**: FR and AC to test IDs lives in [12](12-roadmap-and-backlog.md); this document adds a generated ID-to-file index from `T-ARCH-033`.
+- **Named fixtures and seed volumes**: shops in each status, edge-case carts, the 50,000-listing database of `T-SEC-024` and `T-PERF-002`.
+- **M8 provider acceptance**: sandbox scripts per VX-06 or VX-07 and their recorded fixtures.
+- **CI time budget**: per-job targets, caching, parallel jobs.
+- **Release records**: the format of the manual accessibility pass ([08 §9.4](08-ui-ux-and-design-system.md#94-how-it-is-verified)) and of launch-gate evidence.
+
+## Consistency notes for editor
+
+1. **`T-OPS-002` collision.** [03 §10.7](03-system-architecture.md#107-graceful-shutdown), [ADR-0010](adr/0010-postgres-jobs-pg-boss-transactional-send.md) and 11 §7.3 use it for the graceful worker shutdown, 05 §5.10 and §10 for the stock-drift drill. The shutdown test keeps it (03 owns jobs; more documents cite it); the drill becomes `T-OPS-003`. Follow-ups: 05 §5.10 last sentence and 05 §10 (FR-INV row, Inventory bullet) `T-OPS-002` → `T-OPS-003`; 11 §1.9, §7.3, §10.14 and notes 3, 51 and 64 cite `T-OPS-003` and drop the collision remarks.
+2. **`T-ORD-103` retired.** 04 moved 04a's "one shop order per shop" to `T-ORD-107` and INV-03's address case to `T-SEC-006`. Follow-up: 05's Consistency notes (INV-03 item, A1-015) say "T-ORD-103 must match"; cite `T-SEC-006`.
+3. **Other retired IDs.** `T-ADM-101` became `T-LED-101` (04 note 30); 07 dropped `T-SEC-020`. 04's renumberings are in the Notes column ("was …").
+4. **`T-SHOP-106` has no stated meaning.** [04a §6.1](04a-data-dictionary-tables.md#61-shops) cites it after a list of rules; it is registered as the one rule there no other ID covers (a slug may not equal another shop's `old_slug`, as ADR-0017 and AC-FR-SHOP-012-3 also say). Follow-up: 04a §6.1 states it or corrects the row.
+5. **`T-FUL-005` is only in a range.** 05 §10 lists `T-FUL-001…005` but defines 001 to 004; it is registered as the §6.3 tracking update, the one fulfilment rule no other ID covers. Follow-up: 05 §10 adds it or corrects the range.
+6. **`T-PAY-005` restated** (§4); 06 note 24 can close.
+7. **`T-SEC-010`** has both paths of 07 §3.3. Follow-ups: 01 AC-FR-IAM-006-2, 02 AC-J00-03 and AC-J17-01 still state 403 only; the 06 §15 row can drop "once the open question is settled".
+8. **`T-SEC-101`** merges 04a's meaning (audit subject, login 401) and 06 §9.1's (limiter keys, spoofed `X-Forwarded-For` ignored); they agree. `T-OPS-006` is 11 §3.4's end-to-end check through the real proxy.
+9. **`T-API-001` split.** Follow-up for the 09 §4.5 table: spec lint `T-API-009`, route parity `T-API-010`, problem-code registry `T-API-011`; the "typecheck gate" is the Static stage of §5.1, with no ID.
+10. **09's unnumbered checks** have IDs, each row naming its 09 section: `T-API-012`, `T-ARCH-017` to `T-ARCH-026`, `T-OPS-019`, `T-SEC-037`, `T-SEC-038`, `T-SHOP-001`, `T-CAT-001`, `T-CAT-002`, `T-UI-029`. Follow-up: 09 replaces "ID from 10" and closes notes 10, 29, 50 and 67.
+11. **08's "T-UI area" checks** are `T-UI-001` to `T-UI-027`, `T-UI-031` (08 §10.1 page props) and `T-UI-032` (the "Browser" rows of 08 §9.3). Follow-up: 08 cites them in its "Verified by" lines and closes notes 10, 26 and 46; 01 §8.4 cites `T-UI-004` and `T-UI-032` for NFR-A11Y-002 and `T-UI-005` and `T-UI-032` for NFR-A11Y-003.
+12. **11's checks** are `T-OPS-003` to `T-OPS-018` and `T-OPS-020` (the eighth 11 §3.8 check). Follow-up: 11 cites them and closes notes 23, 51 and 92.
+13. **ADR checks** (ADR-0001, 0006, 0011, 0013 to 0017) have IDs; each §6 row cites its ADR, which may cite the ID at its next status change. ADR-0001's PR checkbox (09) and milestone-exit review (12) are not tests.
+14. **Mapped, not numbered.** 09 §12.10's `createProduct` duplicate test is a case of `T-API-007`; the hydration check (09 §13.8) is inside `T-ARCH-002`; ADR-0004 route rule → `T-API-006`; ADR-0005 "T-IAM suite" → `T-SEC-008`, `T-SEC-009`, `T-SEC-011`, `T-IAM-109`, its CSRF test → `T-SEC-013`; ADR-0006 map tests → `T-SEC-032`, "T-SHOP tests" → `T-SEC-031`; ADR-0018 code registry → `T-API-011`, RF-36 test → `T-SEC-027`, header checks → `T-API-005`, component tests → `T-UI-005`; 01 REG-14 → `T-IAM-103`; 11 §3.8 HSTS and private bucket → `T-SEC-035`, `T-SEC-019`. 08 note 7 (inline styles) is settled by 07 §7.3 and checked by `T-SEC-035`; 08 can close it.
+15. **Requests not honoured.** `T-OPS-001` is not split (11 note 72); the media-copy spot check and rotation proof (11 note 92) are steps of its two depths. The access review (11 §14.5) and ADR-0016's latency benchmark and cost review are procedures, not tests.
+16. **`ci.yml` and test configuration.** §5.1 adds the concurrency and browser suites and runs `T-ARCH-002`, `T-OPS-010` and `caddy validate` on pull requests (follow-up: 11 §5.1 diagram and §5.2 row). §3.2 needs a test migrator connection (follow-up: 09 §6.1); §3.3 needs `concurrency` in `configureSuite` and `adonisrc.ts`.
+17. **No truncation** (§3.3), as 09 §12.10 and the repository audit ([research: repository-audit](research/repository-audit.md), A5-05) recommend; §3.2 uses `migration:fresh` on the migrator connection instead of the audit's `migrate()`.
+18. **`T-SEC-026` exemption label** `dependencies` is chosen here (09 note 54); 07 TM-26 and 09 §10.2 can name it.
+19. **Portability.** Other documents label base IDs with the name of an internal brief, and 08 §9.3 cites a local research path. The consistency review writes "base (10 §6)" and [research: ui-frontend](research/ui-frontend.md), then `T-ARCH-030` blocks.
+20. **Open questions.** (a) axe package and rule tags, pinned in M4 [Assumption]. (b) Ajv and Redocly CLI, pinned in M0 [Assumption]. (c) Whether browser-suite component tests stay fast, or R2 adds a DOM runner. (d) A2-101 decides `T-SHOP-002` (§7); [Open OD-18] decides the `T-CHK-007` block and [Open OD-27] `T-LED-007`. (e) `T-SHOP-005` waits for approval of `revealPayoutAccount` (07 §5.5).
