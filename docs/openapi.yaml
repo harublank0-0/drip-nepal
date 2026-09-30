@@ -38,8 +38,10 @@ info:
     **Authentication (06 §4).** Session cookie `dripnepal_session` (ADR-0005). Unsafe methods
     also need the `X-XSRF-TOKEN` header, which Tuyau and Inertia's axios copy from the
     `XSRF-TOKEN` cookie. Public operations declare `security: []`. Admin operations also need
-    a `platform_staff` row and MFA verified within 12 hours; non-staff callers get 404
-    [Assumption; 07 confirms].
+    an active `platform_staff` row and MFA verified within 12 hours (06 §4.3); a guest gets 401
+    `UNAUTHENTICATED` and a signed-in caller without an active `platform_staff` row gets 404
+    (07 §4.8). Operations of the 07 §3.10 step-up table also need MFA within the last 15
+    minutes, else 401 `MFA_REQUIRED` with `verification_required` (proposed).
     Seller operations resolve `{shopSlug}` server-side (06 §4.4): unknown shop or non-member
     → 404, missing permission → 403 `FORBIDDEN`, shop status gate → 403 `SHOP_NOT_ACTIVE`.
 
@@ -55,21 +57,21 @@ info:
     missing → 428 `PRECONDITION_REQUIRED`; stale → 412 `VERSION_CONFLICT` with `current`.
 
     **Extensions used on operations.** `x-release` (release and milestone from 06 §13),
-    `x-permission` (canon §7 slug; seller slugs `shop.*`, admin slugs `platform.*`),
-    `x-idempotency` (`required`, `retention_hours`), `x-if-match`, `x-proposed` (true for an
-    operation that is "proposed; not yet in canon §6.5" and waits for the product owner's approval).
+    `x-permission` (permission slug of 07 §4.2 and §4.3; seller slugs `shop.*`, admin slugs
+    `platform.*`), `x-idempotency` (`required`, `retention_hours`), `x-if-match`, `x-proposed`
+    (true for a proposed operation of 06 §13.8, which waits for the product owner's approval).
     `x-page-route: true` marks a documented Inertia page route (no operationId, not JSON, outside
     T-API-001); such routes are listed in the top-level `x-foundation-page-routes`.
   contact:
     name: DripNepal engineering (docs/06-api-design.md owners)
   license:
-    name: Proprietary (internal draft)
-    identifier: LicenseRef-DripNepal-Internal
+    name: MIT
+    identifier: MIT
 servers:
   - url: http://localhost:3333
     description: Local development (`HOST`/`PORT` defaults of `.env.example`) [Verified-repo]
   - url: https://{stagingHost}
-    description: Staging (placeholder; host decided by docs/11) [Assumption]
+    description: Staging, `staging.<domain>` (11 §2.1); the domain is a placeholder [Assumption]
     variables:
       stagingHost:
         default: staging.dripnepal.com
@@ -111,7 +113,7 @@ x-foundation-scope:
   - receivePaymentWebhook
   - createRefund
   - approveRefund
-  - resolveRefundReview # proposed; not yet in canon §6.5 (06 §13.8, shown in 06 §14.8)
+  - resolveRefundReview # proposed (06 §13.8, shown in 06 §14.8)
 x-foundation-page-routes:
   - GET /payments/{provider}/return # Inertia SSR page, no operationId (06 §12.2, §13.7)
 x-pending-operations:
@@ -119,7 +121,7 @@ x-pending-operations:
   - getProduct
   - listCategories
   - listAttributes
-  - getPublicShop
+  - getPublicShop # closed response schema when specified (06 §13.2, 07 TM-29)
   - listProvinces
   - listDistricts
   - listLocalLevels
@@ -242,8 +244,8 @@ x-pending-operations:
   - listPlatformStaff
   - setPlatformStaffRole
   - revokePlatformStaff
-  - adminListCategories # R2; canon §6.5 and 06 §13.6 name only this one ("adminListCategories …")
-  # Proposed operations (06 §13.8); each is proposed; not yet in canon §6.5
+  - adminListCategories # R2; 06 §13.6 names only this one ("adminListCategories …")
+  # Proposed operations (06 §13.8); each waits for the product owner's approval
   - adminRecordCodCollection
   - adminRecordFulfillmentEvent
   - startRefundTransfer
@@ -257,6 +259,14 @@ x-pending-operations:
   - verifyPayoutAccount
   - unblockProduct
   - closeShop
+  - acceptSellerAgreement
+  - viewKycDocument
+  - revealPayoutAccountForVerification
+  - revealRefundRecipient
+  - approveLedgerAdjustment
+  - cancelLedgerAdjustment
+  - cancelPayout
+  - revealPayoutAccount
 
 paths:
   /api/v1/catalog/products:
@@ -274,7 +284,10 @@ paths:
         Filters and sorts are a closed allowlist (06 §6.3); anything else, or a repeated
         parameter with more than 20 values, is 400 `INVALID_QUERY_PARAMETER`. Attribute filters
         are named by the filterable attribute's code with value codes.
-        Side effects: none. Rate limit `catalog_ip` 120/min per IP [Assumption].
+        Side effects: none. Rate limit `catalog_ip` 120/min per IP [Assumption]. The read is
+        cancelled after 2 s and at most 4 of the web process's 8 connections run it at once; a
+        read that waits more than 1 s for a slot gets 503 `SERVICE_BUSY` with `Retry-After` (all
+        proposed, 07 TM-24; 06 §5.2, §9.1) [Assumption].
         `Cache-Control: private, no-store` in R1 (06 §3.8). Release R1·M4.
       x-release: R1·M4
       security: []
@@ -401,6 +414,7 @@ paths:
                       - { field: sort, code: enum, message: Unsupported sort. }
         '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/Internal' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
   /api/v1/seller/shops/{shopSlug}/products:
     parameters:
@@ -494,7 +508,9 @@ paths:
       summary: Set option axes and the whole variant set
       description: |
         Actor: `shop.products.edit`; shop status gate of 06 §4.4. Scope: `{productId}` is
-        looked up inside the shop; another shop's product is 404 (T-SEC-001).
+        looked up inside the shop; another shop's product is 404 (T-SEC-001). A `variants[].id`
+        that names no variant of this product, such as another shop's variant, is 404
+        `NOT_FOUND` (T-SEC-001 case (c), as `replaceProductMedia` answers).
         Whole-set replacement (PUT): variants carrying an `id` are updated, variants without
         one are created with an `inventory_items` row at 0, and variants left out are archived
         (or deleted if never stocked, 04a §7.9). Validation: no duplicate combination, SKU
@@ -759,7 +775,8 @@ paths:
       description: |
         Actor: customer with a verified email (`pending_verification` → 403
         `EMAIL_NOT_VERIFIED`). Scope: the caller's own active cart and own, non-archived
-        address; another customer's address is 404 (T-SEC-006, proposed; 06 §4.5).
+        address; another customer's or an archived `address_id` is 404 (T-SEC-006; 06 §4.5,
+        07 §4.6).
         Read-only: takes no locks and writes nothing (05 §4.1). Returns per-shop lines,
         shipping fee, shop totals, `grand_total`, `cart_version` and any line or shop
         problems; the review screen shows it and `placeOrder` echoes `cart_version` and the
@@ -767,7 +784,7 @@ paths:
         `DELIVERY_NOT_AVAILABLE`.
         Kill switch: with `checkout_enabled = false` the answer is 503 `PROVIDER_UNAVAILABLE`
         whose `detail` is the `maintenance_banner` text and no `Retry-After` (06 §5.2; the
-        dedicated `CHECKOUT_DISABLED` is proposed; not yet in canon §6.6).
+        dedicated `CHECKOUT_DISABLED` is proposed).
         POST because it carries an address and a method, but not ⚷ (no effect to protect).
         Release R1·M5.
       x-release: R1·M5
@@ -843,7 +860,8 @@ paths:
       summary: Place the order for the whole cart
       description: |
         Actor: customer, `active`, verified email, Nepal mobile number on the account (else
-        422 on `phone`, 05 §4.1). Scope: own active cart and own address. The body carries no
+        422 on `phone`, 05 §4.1). Scope: own active cart and own, non-archived address; another
+        customer's or an archived `address_id` is 404 (T-SEC-006; 05 §4.1). The body carries no
         prices, totals, quantities, shop IDs or commission; the server reads them from the cart
         and catalog, and any extra field is 422 `unknown_field` (T-SEC-003).
         Algorithm: 05 §4.3 steps 2–10 in one transaction with the idempotency key row as its
@@ -1128,13 +1146,18 @@ paths:
         `delivered` (sets `delivered_at` and the stored `return_window_ends_at`; ledger
         delivery posting only if the payment is already collected or captured),
         `delivery_failed` (needs `failure_reason`), `reattempt` (at most 3 attempts; a 4th is
-        409 `INVALID_STATE_TRANSITION`), `returning`, `returned_to_origin` (needs `items[]` with
-        `restock_quantity` per line and a `note` when any unit is not restocked, 05 §5.8;
-        `rto_restock` movements, shop order `cancelled` with `undeliverable`).
-        Tracking correction (proposed; not yet in canon §6.5): `shipped` sent again while the
+        409 `INVALID_STATE_TRANSITION`), `returning`, `returned_to_origin` (needs `items[]`
+        covering every line consumed at shipment, each `restock_quantity` from 0 to the units of
+        that line consumed, and a `note` of at most 500 characters when any unit is not
+        restocked, else 422 `VALIDATION_FAILED`, 05 §5.8; `rto_restock` movements of the units
+        marked resaleable, shop order `cancelled` with `undeliverable`).
+        While the COD payment is `collected`, `delivery_failed`, `returning` and
+        `returned_to_origin` are 409 `INVALID_STATE_TRANSITION` and change nothing: cash recorded
+        at the door means the parcel was handed over (05 §6.3, 06 §14.6, T-FUL-004).
+        Tracking correction (proposed, 06 §13.8): `shipped` sent again while the
         shipment is `shipped` with a changed courier or tracking field updates only those
         fields, writes an event row and audit `shipment.update_tracking`, and emails the
-        customer; identical values are a 200 no-op with no event row (05 §6.3, 06 §13.8).
+        customer; identical values are a 200 no-op with no event row (05 §6.3).
         A disallowed event is 409 `INVALID_STATE_TRANSITION` with `current_status` and
         `allowed_events`. Idempotency: ⚷, 24 h. Release R1·M6.
       x-release: R1·M6
@@ -1159,6 +1182,9 @@ paths:
               delivered:
                 summary: 06 §14.6, two days later
                 value: { event: delivered }
+              deliveryFailedAfterCodCollected:
+                summary: 06 §14.6, `delivery_failed` after the cash was recorded as collected (refused)
+                value: { event: delivery_failed, failure_reason: customer_unreachable }
       responses:
         '200':
           description: The shop order and its shipment after the event.
@@ -1205,7 +1231,9 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409':
-          description: '`INVALID_STATE_TRANSITION` (including a 4th reattempt) or an idempotency conflict.'
+          description: |
+            `INVALID_STATE_TRANSITION` (including a 4th reattempt, and `delivery_failed`, `returning`
+            or `returned_to_origin` while the COD payment is `collected`) or an idempotency conflict.
           headers:
             X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
             Cache-Control: { $ref: '#/components/headers/Cache-Control' }
@@ -1225,6 +1253,17 @@ paths:
                     request_id: 01929a90-0003-7000-8000-000000000003
                     current_status: delivered
                     allowed_events: []
+                codCollected:
+                  summary: 06 §14.6, `delivery_failed` while the COD payment is `collected` (T-FUL-004); `shipped` in `allowed_events` is the tracking correction
+                  value:
+                    type: https://dripnepal.com/problems/invalid-state-transition
+                    title: Invalid state transition
+                    status: 409
+                    code: INVALID_STATE_TRANSITION
+                    detail: Cash is recorded as collected for this parcel. Record it as delivered, or contact support if the collection was recorded by mistake.
+                    request_id: 01929a90-0004-7000-8000-000000000004
+                    current_status: shipped
+                    allowed_events: [delivered, shipped]
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '422': { $ref: '#/components/responses/UnprocessableContent' }
         '429': { $ref: '#/components/responses/RateLimited' }
@@ -1246,7 +1285,7 @@ paths:
         accessed 2026-09-25]) is adopted. Provider facts stay [Verify-external VX-06, VX-07]
         until the M8 sandbox confirms them.
         Contract (06 §12.4): no session, CSRF-exempt by exact route only (T-API-006), limiter
-        `webhook_ip` 600/min (proposed; not yet in canon §6.6), body at most 64 KB (proposed),
+        `webhook_ip` 600/min (proposed), body at most 64 KB (proposed),
         JSON only. The raw body is hashed into `provider_events.raw_body_sha256`. Where the
         provider signs, a missing or invalid signature is answered 401 `UNAUTHENTICATED` and not
         stored (only a `provider.message_rejected` log line, 07 TM-18); an unsigned provider's
@@ -1307,21 +1346,25 @@ paths:
       tags: [Provider returns]
       summary: Payment return page (Inertia SSR, not JSON)
       description: |
-        Page route, not a `/api/v1` operation, so it has no operationId (canon §6.5 and 06 §13.7
-        call it a page route) and T-API-001 does not apply; it is documented here because 06 §12.2
+        Page route, not a `/api/v1` operation, so it has no operationId (06 §13.7 calls it a
+        page route) and T-API-001 does not apply; it is documented here because 06 §12.2
         defines its contract. Release R1.1·M8.
         No session needed (the customer may return on another device). `attempt` selects **our**
         payment and is never evidence of payment. Steps (06 §12.2): load the payment by
-        `attempt` and match the provider reference; insert `provider_events` (`kind = 'return'`)
-        `ON CONFLICT DO NOTHING`; for eSewa, verify the HMAC-SHA256 signature of the Base64
-        payload in constant time (invalid → stop, page says "We could not confirm this payment
-        yet"); look up the payment server-to-server with the **stored** reference and a 10 s
-        timeout [Assumption]; apply the outcome with the forward-only CAS
-        `orders.applyPaymentOutcome` (05 §6.4); render from the payment's current state. Redirect
-        parameters such as `status`, `amount` and `total_amount` are logged as evidence and never
-        used for state (T-PAY-001, proposed in 05). Duplicates and reloads give one state change
-        (T-PAY-005); a new lookup happens at most once per 10 s per payment (`payment_return`
-        limiter, proposed; not yet in canon §6.6). `Cache-Control: no-store`.
+        `attempt` and match the provider reference; only when `attempt` resolves to a gateway
+        payment of that provider, insert `provider_events` (`kind = 'return'`) `ON CONFLICT DO
+        NOTHING` (an unmatched return is not stored and leaves only a `provider.message_rejected`
+        log line, T-SEC-021); for eSewa, verify the HMAC-SHA256 signature of the Base64 payload
+        in constant time (a missing or invalid signature is stored with `signature_valid = false`
+        and stops there; the page says "We could not confirm this payment yet"); look up the
+        payment server-to-server with the **stored** reference and a 10 s timeout [Assumption];
+        apply the outcome with the forward-only CAS `orders.applyPaymentOutcome` (05 §6.4);
+        render from the payment's current state. Redirect parameters such as `status`, `amount`
+        and `total_amount` are logged as evidence and never used for state (T-PAY-001).
+        Duplicates and reloads give one state change (T-PAY-005); a new lookup happens at most
+        once per 10 s per payment (`payment_return` limiter, proposed), and page requests per IP,
+        the poll included, are capped by the `payment_return_ip` limiter (proposed, 06 §9.1).
+        `Cache-Control: no-store`.
       x-release: R1.1·M8
       x-page-route: true
       security: []
@@ -1354,7 +1397,10 @@ paths:
           description: |
             SSR page: confirmation when `captured`; "Confirming your payment" with a 5 s poll of
             `payment_status` for up to 2 minutes while pending [Assumption]; "Nothing was charged"
-            with a retry button (`startOrderPayment`) when failed or expired.
+            for a `failed`, `cancelled` or `expired` attempt, with a "Pay again" button
+            (`startOrderPayment`) only while the order is still `awaiting_payment` with its holds
+            before `expires_at`; after that the page shows the order cancelled with
+            `payment_expired` (06 §12.2 step 6).
           headers:
             X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
             Cache-Control: { $ref: '#/components/headers/Cache-Control' }
@@ -1381,17 +1427,20 @@ paths:
         Rules (05 §6.7): the refundable amount is checked with the allocation and payment rows
         locked; above it → 422 `REFUND_EXCEEDS_REFUNDABLE` with `refundable_minor`, and the
         `payments_refunded_le_captured_check` CHECK is the backstop (T-SEC-004).
-        `amount_minor` = Σ `items[].amount_minor` + a shipping part of at most the shop order's
-        shipping fee. `reason_code = return_accepted` requires `return_number` (and only then).
-        `recipient_details` is required for `manual_transfer` and stored encrypted.
+        `amount_minor` = Σ `items[].amount_minor` + a shipping part of at most the shipping not
+        yet refunded on the shop order (05 §3.3); a larger shipping part is also 422
+        `REFUND_EXCEEDS_REFUNDABLE`. `reason_code = return_accepted` requires `return_number`
+        (and only then). `recipient_details` is required for `manual_transfer` and stored
+        encrypted; where they come from is [Open OD-38].
         Methods: `manual_transfer` in R1; `gateway_api` (Khalti) and `gateway_manual` (eSewa)
         from R1.1. `due_at` is the return's `refund_due_at` or `created_at` + 7 days
         (AC-FR-RET-007-1) [Assumption pending Verify-external VX-02]; a refund that names a
         `cancelled` one in `replaces_refund_id` (proposed, 05 §8.8) copies its `due_at`,
-        `refund_items` and `affects_vendor_ledger`.
+        `refund_items` and `affects_vendor_ledger`. `affects_vendor_ledger` (proposed) is fixed
+        in this transaction and never changes (05 §7.4, 04a §12.4).
         A shop order or return whose state allows no refund is 409 `INVALID_STATE_TRANSITION`
-        (06 §13.6). Side effects: refund `requested`, refund items, audit. Idempotency: ⚷, 24 h.
-        Release R1·M7.
+        (06 §13.6). Side effects: refund `requested`, refund items with their vendor and
+        commission amounts, audit. Idempotency: ⚷, 24 h. Release R1·M7.
       x-release: R1·M7
       x-permission: platform.refunds.create
       x-idempotency: { required: true, retention_hours: 24 }
@@ -1439,6 +1488,7 @@ paths:
                       amount: { amount_minor: 139900, currency: NPR }
                       method: gateway_api
                       due_at: '2026-10-16T08:00:00.000Z'
+                      affects_vendor_ledger: true
                       created_by: 01929000-0000-7000-8000-00000000f001
                       succeeded_at: null
                       version: 1
@@ -1478,11 +1528,16 @@ paths:
       tags: [Admin]
       summary: Approve a requested refund (maker-checker)
       description: |
-        Actor: platform staff with `platform.refunds.approve` and fresh MFA. The approver must
-        differ from the creator (`refunds_maker_checker_check`); the same person gets 403
-        `FORBIDDEN`, unless `single_operator_mode = true` [Assumption; Open OD-14], which requires
-        a fresh `totp_code` in the body (wrong code → 422 on `totp_code`, rate limited by the
-        `mfa` limiter, proposed; not yet in canon §6.6) and flags the refund and audit row.
+        Actor: platform staff with `platform.refunds.approve` and fresh MFA. Step-up (07 §3.10):
+        MFA verified within the last 15 minutes, else 401 `MFA_REQUIRED` with
+        `verification_required`; the client runs `verifyMfaChallenge` and retries with the same
+        key (06 §4.3). The approver must differ from the creator (`refunds_maker_checker_check`);
+        the same person gets 403 `FORBIDDEN`, unless `single_operator_mode = true` [Assumption;
+        Open OD-14], which requires a TOTP code in the body (`totp_code`; wrong code → 422 on
+        `totp_code`, counted by the `mfa_user` and `mfa` limiters, proposed, 06 §9.1) and flags
+        the refund and audit row. A valid code also satisfies the step-up. `totp_code` is not
+        part of the idempotency fingerprint, so a retry with the same key and a fresh code gets
+        the stored response (06 §7.2, §7.3).
         Transition `requested → approved` by status CAS (05 §6.7); any other state is 409
         `INVALID_STATE_TRANSITION`. Side effects: for `gateway_api`, job `refunds.execute` is
         sent in the same transaction; manual methods go to the operator queue. Audit
@@ -1522,6 +1577,7 @@ paths:
                       amount: { amount_minor: 139900, currency: NPR }
                       method: gateway_api
                       due_at: '2026-10-16T08:00:00.000Z'
+                      affects_vendor_ledger: true
                       created_by: 01929000-0000-7000-8000-00000000f001
                       succeeded_at: null
                       version: 2
@@ -1543,13 +1599,16 @@ paths:
       tags: [Admin]
       summary: Resolve a refund in needs_review with evidence (proposed)
       description: |
-        Proposed; not yet in canon §6.5 (06 §13.8, shown in 06 §14.8); waits for the product
-        owner's approval. Actor: platform staff with fresh MFA and `platform.ledger.adjust`
-        today; `platform.payments.review` is proposed; not yet in canon §7 (07 decides).
+        Proposed (06 §13.8, shown in 06 §14.8); waits for the product owner's approval.
+        Actor: platform staff with fresh MFA and `platform.ledger.adjust` today;
+        `platform.payments.review` is proposed (07 §4.2, §4.5). Step-up (07 §3.10): MFA
+        verified within the last 15 minutes, else 401 `MFA_REQUIRED` with
+        `verification_required` (06 §4.3).
         Transition `needs_review → succeeded` or `needs_review → failed` by status CAS (05 §6.7);
         an `evidence_reference` is mandatory. On `succeeded` the transaction increases
         `refunded_minor` on the payment and allocation, posts `refund` and `commission_reversal`
-        ledger entries if the delivery was posted (05 §7.4), and emails the customer. Audit
+        ledger entries only if the refund has `affects_vendor_ledger` (fixed at creation, 05
+        §7.4), using the amounts stored on `refund_items`, and emails the customer. Audit
         `refund.resolve_review`. Other states → 409 `INVALID_STATE_TRANSITION`.
         Idempotency: ⚷, 24 h. Release R1.1·M8.
       x-release: R1.1·M8
@@ -1590,6 +1649,7 @@ paths:
                       amount: { amount_minor: 139900, currency: NPR }
                       method: gateway_api
                       due_at: '2026-10-16T08:00:00.000Z'
+                      affects_vendor_ledger: true
                       created_by: 01929000-0000-7000-8000-00000000f001
                       succeeded_at: '2026-10-09T11:02:00.000Z'
                       version: 5
@@ -1621,8 +1681,10 @@ components:
       description: |
         Shield CSRF token for `POST`, `PUT`, `PATCH` and `DELETE`, copied from the encrypted
         `XSRF-TOKEN` cookie (`enableXsrfCookie: true`) by Tuyau and Inertia's axios (06 §4.1).
-        A failure is 403 `FORBIDDEN` problem+json [Assumption from ADR-0018; 07 confirms].
-        Only `receivePaymentWebhook` is exempt, by exact route (T-API-006).
+        A failure is problem+json (07 §3.3): 401 `UNAUTHENTICATED` when the session holds no
+        `auth_web` and the route runs the `auth` middleware (an expired or revoked session);
+        otherwise 403 `FORBIDDEN` ("reload once"), on a route a guest may call or with a
+        signed-in session. Only `receivePaymentWebhook` is exempt, by exact route (T-API-006).
 
   parameters:
     IdempotencyKey:
@@ -1764,8 +1826,8 @@ components:
     Retry-After:
       description: |
         Seconds before retrying: 429 `RATE_LIMITED`, 409 `IDEMPOTENCY_IN_PROGRESS` (2), transient
-        409 `CONFLICT` (2), 503 `PROVIDER_UNAVAILABLE` for a provider outage (30). The checkout
-        kill switch sends no `Retry-After` (06 §5.2).
+        409 `CONFLICT` (2), 503 `PROVIDER_UNAVAILABLE` for a provider outage (30), 503
+        `SERVICE_BUSY` (proposed). The checkout kill switch sends no `Retry-After` (06 §5.2).
       schema: { type: integer, minimum: 0 }
     Location:
       description: Path of the created resource (06 §3.7); rebuilt from the stored resource on an idempotent replay.
@@ -1780,7 +1842,7 @@ components:
 
   responses:
     BadRequest:
-      description: '400: `INVALID_QUERY_PARAMETER`, `IDEMPOTENCY_KEY_REQUIRED` or `MALFORMED_REQUEST` (proposed; not yet in canon §6.6).'
+      description: '400: `INVALID_QUERY_PARAMETER`, `IDEMPOTENCY_KEY_REQUIRED` or `MALFORMED_REQUEST` (proposed).'
       headers:
         X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
         Cache-Control: { $ref: '#/components/headers/Cache-Control' }
@@ -1798,7 +1860,11 @@ components:
                 code: IDEMPOTENCY_KEY_REQUIRED
                 request_id: 01929a80-0000-7000-8000-000000000400
     Unauthenticated:
-      description: '401: `UNAUTHENTICATED` (no, destroyed or stale session, 06 §4.2) or `MFA_REQUIRED` (admin, 06 §4.3).'
+      description: |
+        401: `UNAUTHENTICATED` (no, destroyed or stale session, 06 §4.2; also a CSRF failure on a
+        protected route when the session holds no `auth_web`, 06 §4.1) or `MFA_REQUIRED` (admin:
+        TOTP not enrolled, idle beyond 2 h or MFA older than 12 h; or a step-up operation without
+        MFA in the last 15 minutes; 06 §4.3).
       headers:
         X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
         Cache-Control: { $ref: '#/components/headers/Cache-Control' }
@@ -1806,7 +1872,9 @@ components:
         application/problem+json:
           schema: { $ref: '#/components/schemas/Problem401' }
     Forbidden:
-      description: '403: `FORBIDDEN` (permission or CSRF), `ACCOUNT_SUSPENDED`, `SHOP_NOT_ACTIVE` or `EMAIL_NOT_VERIFIED`.'
+      description: |
+        403: `FORBIDDEN` (permission, or CSRF on a route a guest may call or with a signed-in
+        session, 06 §4.1), `ACCOUNT_SUSPENDED`, `SHOP_NOT_ACTIVE` or `EMAIL_NOT_VERIFIED`.
       headers:
         X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
         Cache-Control: { $ref: '#/components/headers/Cache-Control' }
@@ -1816,7 +1884,8 @@ components:
     NotFound:
       description: |
         404 `NOT_FOUND`: missing, in another shop's or customer's scope, unknown route, or a
-        non-staff caller of `/api/v1/admin` [Assumption; 07]. The body never distinguishes these (T-SEC-001, T-SEC-002).
+        signed-in caller of `/api/v1/admin` without an active `platform_staff` row or with an
+        account that is not `active` (06 §4.3, 07 §4.8). The body never distinguishes these (T-SEC-001, T-SEC-002).
       headers:
         X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
         Cache-Control: { $ref: '#/components/headers/Cache-Control' }
@@ -1936,8 +2005,10 @@ components:
       description: |
         503 `PROVIDER_UNAVAILABLE`: gateway breaker open or provider down (`Retry-After: 30`), and
         today also the checkout kill switch (`checkout_enabled = false`; `detail` is the
-        `maintenance_banner` text, no `Retry-After`). `CHECKOUT_DISABLED` (proposed; not yet in
-        canon §6.6) would replace it for the kill switch only.
+        `maintenance_banner` text, no `Retry-After`). `CHECKOUT_DISABLED` (proposed) would
+        replace it for the kill switch only. 503 `SERVICE_BUSY` (proposed, with the catalog-read
+        cap of 07 TM-24): `listProducts` waited more than 1 s for a slot; `Retry-After` is sent
+        (06 §5.2, §5.3).
       headers:
         X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
         Cache-Control: { $ref: '#/components/headers/Cache-Control' }
@@ -2040,7 +2111,7 @@ components:
       type: string
       description: |
         Stable machine key (06 §5.2). Status per code:
-        400 `INVALID_QUERY_PARAMETER`, `IDEMPOTENCY_KEY_REQUIRED`, `MALFORMED_REQUEST` (proposed; not yet in canon §6.6);
+        400 `INVALID_QUERY_PARAMETER`, `IDEMPOTENCY_KEY_REQUIRED`, `MALFORMED_REQUEST` (proposed);
         401 `UNAUTHENTICATED`, `MFA_REQUIRED`;
         403 `FORBIDDEN`, `ACCOUNT_SUSPENDED`, `SHOP_NOT_ACTIVE`, `EMAIL_NOT_VERIFIED`;
         404 `NOT_FOUND`;
@@ -2048,9 +2119,10 @@ components:
         412 `VERSION_CONFLICT`; 413 `PAYLOAD_TOO_LARGE`;
         422 `VALIDATION_FAILED`, `IDEMPOTENCY_KEY_REUSED`, `DELIVERY_NOT_AVAILABLE`, `COD_LIMIT_EXCEEDED`, `REFUND_EXCEEDS_REFUNDABLE`;
         428 `PRECONDITION_REQUIRED`; 429 `RATE_LIMITED`; 500 `INTERNAL`;
-        503 `PROVIDER_UNAVAILABLE`, `CHECKOUT_DISABLED` (proposed; not yet in canon §6.6).
-        Until adopted, the two proposed codes are never sent: malformed bodies give 422
-        `VALIDATION_FAILED` and the kill switch gives 503 `PROVIDER_UNAVAILABLE`. Clients fall
+        503 `PROVIDER_UNAVAILABLE`, `CHECKOUT_DISABLED` (proposed), `SERVICE_BUSY` (proposed).
+        Until adopted, the three proposed codes are never sent: malformed bodies give 422
+        `VALIDATION_FAILED`, the kill switch gives 503 `PROVIDER_UNAVAILABLE`, and
+        `SERVICE_BUSY` exists only with the proposed catalog-read cap (07 TM-24). Clients fall
         back by status class for unknown codes (06 §5.4, §10).
       enum:
         - INVALID_QUERY_PARAMETER
@@ -2081,12 +2153,14 @@ components:
         - INTERNAL
         - PROVIDER_UNAVAILABLE
         - CHECKOUT_DISABLED
+        - SERVICE_BUSY
     ProblemErrorItem:
       type: object
       description: |
         One reason (06 §5.1). `field` is a dotted path (`variants.2.sku`, `lines.0`) or `null`.
         `code` is a rule name (`required`, `regex`, `enum`, `unique`, `unknown_field`) or a
-        business reason (`insufficient_stock`, `below_reserved`, `stock_changed`). Allowed on
+        business reason (`insufficient_stock`, `below_reserved`, `stock_changed`, and
+        `payout_stale` on the `approvePayout` 409, proposed in 06 §13.6). Allowed on
         `VALIDATION_FAILED`, `INVALID_QUERY_PARAMETER`, `OUT_OF_STOCK`, `CART_CHANGED`,
         `DELIVERY_NOT_AVAILABLE` and `CONFLICT` (06 widens ADR-0018 decision 1; see the notes at the end).
       additionalProperties: false
@@ -2166,6 +2240,12 @@ components:
           type: array
           items: { type: string }
           description: '`INVALID_STATE_TRANSITION` only: the events or actions the state still accepts.'
+        next_action:
+          $ref: '#/components/schemas/NextAction'
+          description: |
+            `CONFLICT` from `startOrderPayment` only (R1.1): the stored redirect of a `pending` or
+            `needs_review` attempt that Khalti still reports `Initiated` before its `expires_at`,
+            so the customer resumes the same attempt (06 §7.8, §13.4; 02 AC-J06-08).
     Problem400:
       allOf:
         - $ref: '#/components/schemas/Problem'
@@ -2268,7 +2348,7 @@ components:
         - type: object
           properties:
             status: { const: 503 }
-            code: { enum: [PROVIDER_UNAVAILABLE, CHECKOUT_DISABLED] }
+            code: { enum: [PROVIDER_UNAVAILABLE, CHECKOUT_DISABLED, SERVICE_BUSY] }
 
     # ---------- State and value enums (04a CHECK lists, 05 state machines) ----------
     ProductStatus:
@@ -2297,7 +2377,7 @@ components:
       enum: [pending, packed, shipped, delivered, delivery_failed, returning, returned_to_origin]
     FulfillmentEvent:
       type: string
-      description: '`shipment_events_event_check` (04a §11.6) and canon §6.5 `recordFulfillmentEvent`.'
+      description: '`shipment_events_event_check` (04a §11.6); the events of `recordFulfillmentEvent` (06 §13.5).'
       enum: [packed, shipped, delivered, delivery_failed, reattempt, returning, returned_to_origin]
     DeliveryFailureReason:
       type: string
@@ -2336,7 +2416,7 @@ components:
       enum: [requested, approved, processing, succeeded, failed, cancelled, needs_review]
     RefundMethod:
       type: string
-      description: '`refunds_method_check`: `manual_transfer` in R1; `gateway_api` (Khalti) and `gateway_manual` (eSewa) from R1.1 (canon §17.1).'
+      description: '`refunds_method_check` (04a §12.4): `manual_transfer` in R1; `gateway_api` (Khalti) and `gateway_manual` (eSewa) from R1.1 (05 §6.7).'
       enum: [gateway_api, gateway_manual, manual_transfer]
     RefundReasonCode:
       type: string
@@ -2532,6 +2612,7 @@ components:
           description: |
             Existing variant to update; an archived variant of this product is re-activated
             (its SKU and combination must still be free among active variants, else 422; 04a §7.9).
+            An `id` that names no variant of this product is 404 `NOT_FOUND` (06 §13.5).
             Omit to create one.
         option_value_codes:
           type: object
@@ -3107,7 +3188,7 @@ components:
         amount_minor: { type: integer, format: int64, minimum: 1 }
     RefundRecipientDetails:
       type: object
-      description: '`manual_transfer` recipient; stored encrypted in `refunds.recipient_details_enc` and never returned in full.'
+      description: '`manual_transfer` recipient; stored encrypted in `refunds.recipient_details_enc` and never returned in full. Where the details come from is [Open OD-38]; a staff reveal is proposed (OD-49).'
       additionalProperties: false
       required: [account_name, bank_or_wallet, account_number]
       properties:
@@ -3124,7 +3205,7 @@ components:
           type: integer
           format: int64
           minimum: 1
-          description: Σ `items[].amount_minor` plus a shipping part of at most the shop order's shipping fee.
+          description: Σ `items[].amount_minor` plus a shipping part of at most the shipping not yet refunded on the shop order (05 §3.3).
         reason_code: { $ref: '#/components/schemas/RefundReasonCode' }
         items:
           type: array
@@ -3156,9 +3237,9 @@ components:
           type: string
           pattern: '^[0-9]{6}$'
           description: |
-            Fresh TOTP code. Required when the approver is the creator, which only
-            `single_operator_mode = true` allows (06 §13.6; Open OD-14). 06 §4.3 words it as
-            "money approvals in `single_operator_mode` require a fresh TOTP code"; see the notes.
+            TOTP code. Required when the approver is the creator, which only
+            `single_operator_mode = true` allows (06 §4.3, §13.6; Open OD-14). A valid code also
+            satisfies the step-up; it is left out of the idempotency fingerprint (06 §7.2).
     ResolveRefundReviewRequest:
       type: object
       additionalProperties: false
@@ -3169,13 +3250,27 @@ components:
     Refund:
       type: object
       additionalProperties: false
-      required: [id, status, amount, method, due_at, created_by, succeeded_at, version]
+      required:
+        [
+          id,
+          status,
+          amount,
+          method,
+          due_at,
+          affects_vendor_ledger,
+          created_by,
+          succeeded_at,
+          version,
+        ]
       properties:
         id: { $ref: '#/components/schemas/Uuid' }
         status: { $ref: '#/components/schemas/RefundStatus' }
         amount: { $ref: '#/components/schemas/Money' }
         method: { $ref: '#/components/schemas/RefundMethod' }
         due_at: { $ref: '#/components/schemas/Timestamp' }
+        affects_vendor_ledger:
+          type: boolean
+          description: 'Proposed (04a §12.4, 05 §7.4): fixed in the create transaction; only a refund with this flag posts `refund` and `commission_reversal` entries when it succeeds.'
         created_by:
           description: Staff user who created it; `null` for system refunds.
           oneOf:
@@ -3196,35 +3291,40 @@ components:
 # ---------------------------------------------------------------------------------------------
 # Consistency notes for editor
 # ---------------------------------------------------------------------------------------------
-# Decisions that differ from canon (planning brief) and follow the reviewed 06-api-design.md:
-#  1. `IDEMPOTENCY_KEY_REQUIRED` is 400 (canon §6.6 says "428? use 400"; 06 §5.2, 02 AC-J05-04,
-#     ADR-0004). ADR-0018 still quotes the canon wording.
+# Decisions taken in 06-api-design.md where the early sources were ambiguous (this file follows 06):
+#  1. `IDEMPOTENCY_KEY_REQUIRED` is 400, not 428 (06 §5.2 and note 1, 02 AC-J05-04, ADR-0004).
+#     ADR-0018 decision 2 still quotes the early "428?" wording.
 #  2. Checkout kill switch: 503 `PROVIDER_UNAVAILABLE` today. `CHECKOUT_DISABLED` (503) and
-#     `MALFORMED_REQUEST` (400) are in the `ProblemCode` enum as (proposed; not yet in canon §6.6)
-#     and are never sent until adopted.
-#  3. `PageMeta` adds `total_is_capped` and `has_more`, `CursorMeta` adds `limit` to canon §6.6's
-#     `{ next_cursor }` / `{ page, per_page, total? }` (06 §3.4, note 23). The installed
+#     `MALFORMED_REQUEST` (400) are in the `ProblemCode` enum as (proposed) and are never sent
+#     until adopted. `SERVICE_BUSY` (503, proposed) is added in the consistency review (note 33).
+#  3. `PageMeta` adds `total_is_capped` and `has_more`, `CursorMeta` adds `limit` to the early
+#     shapes `{ next_cursor }` / `{ page, per_page, total? }` (06 §3.4, note 23). The installed
 #     `@adonisjs/http-transformers` 2.3.1 emits `metadata`; the M1 `ApiSerializer` renames it.
 #  4. `errors[]` is allowed on `INVALID_QUERY_PARAMETER`, `OUT_OF_STOCK`, `CART_CHANGED`,
 #     `DELIVERY_NOT_AVAILABLE` and `CONFLICT`, beyond ADR-0018 decision 1 (06 note 10).
 #  5. Every request body has `additionalProperties: false` (unknown fields rejected with 422
 #     `unknown_field`, 06 §3.5), except `receivePaymentWebhook`, whose body is the provider's own
-#     payload. Canon T-SEC-003 allows "ignored or rejected"; 01 AC-FR-IAM-001-4 still says "ignored".
-#  6. The computed task asked for a 415 response. 06 §5 uses no 415 (non-JSON bodies are 400
-#     `MALFORMED_REQUEST`, proposed, else 422 `VALIDATION_FAILED`), so no 415 is specified.
-#  7. `GET /payments/{provider}/return` is a page route with no operationId (canon §6.5, 06 §13.7);
+#     payload. T-SEC-003, a base ID (10 §6), allows "rejected or ignored"; 01 AC-FR-IAM-001-4 still
+#     says "ignored" (06 note 6).
+#  6. No 415 response is specified: 06 §5 uses no 415 (non-JSON bodies are 400
+#     `MALFORMED_REQUEST`, proposed, else 422 `VALIDATION_FAILED`).
+#  7. `GET /payments/{provider}/return` is a page route with no operationId (06 §13.7);
 #     it is listed under `x-foundation-page-routes`, not `x-foundation-scope`.
-#  8. `adminListCategories`: canon §6.5 and 06 §13.6 name only this one of the R2 catalog admin
+#  8. `adminListCategories`: 06 §13.6 names only this one of the R2 catalog admin
 #     operations ("adminListCategories …"); the other names are chosen by the R2 PR.
 #
 # Proposed additions used here (pending the product owner's approval; none silently renamed):
 #  9. Operation `resolveRefundReview` (x-proposed; 06 §13.8/§14.8) and the `shipped → shipped`
-#     tracking-correction variant of `recordFulfillmentEvent` (05 §6.3, 06 §13.8). The thirteen other
-#     proposed operations of 06 §13.8 are in `x-pending-operations`.
-# 10. Permission `platform.payments.review` (not yet in canon §7); `resolveRefundReview` declares
-#     `platform.ledger.adjust` until 07 decides.
-# 11. Limiters `mfa`, `payment_return`, `webhook_ip` and the 64 KB webhook body limit (not yet in
-#     canon §6.6); test IDs T-API-002..T-API-008, T-PAY-001 and T-SEC-101 are proposed (docs/10).
+#     tracking-correction variant of `recordFulfillmentEvent` (05 §6.3, 06 §13.8). The other
+#     proposed operations of 06 §13.8 are in `x-pending-operations` (twenty-one since the
+#     consistency review added eight, note 38).
+# 10. Permission `platform.payments.review` (proposed, 07 §4.2 and §4.5); `resolveRefundReview`
+#     declares `platform.ledger.adjust` until the product owner approves the new slug.
+# 11. Limiters `mfa`, `payment_return`, `webhook_ip` and the 64 KB webhook body limit (proposed,
+#     06 §9.1, §9.2); test IDs T-API-002..T-API-008, T-PAY-001 and T-SEC-101 are proposed (docs/10).
+#     Done in the consistency review, 2026-09-30: 10 §6 registers these test IDs (and T-SEC-006,
+#     T-SEC-021, T-FUL-004), so this file cites them plainly; the limiters `mfa_user` (OD-50) and
+#     `payment_return_ip` (06 §9.1, note 29) are proposed too.
 # 12. `NextAction` variants `redirect` and `form_post` for R1.1 gateways are a proposed shape; 06
 #     §13.4 only says "Khalti `payment_url` or eSewa form fields". `startOrderPayment`'s PR fixes it.
 #
@@ -3255,18 +3355,27 @@ components:
 # Carried from 06 and still open (not changed here):
 # 21. Suspension response: 403 `ACCOUNT_SUSPENDED` while the session exists vs 401
 #     `UNAUTHENTICATED` after `identity.revoke_sessions` (01 AC-FR-IAM-006, 03 §7.7, ADR-0005,
-#     canon T-SEC-010); both statuses are declared on authenticated operations.
+#     T-SEC-010, a base ID of 10 §6); both statuses are declared on authenticated operations.
+#     Done in the consistency review, 2026-09-30: 07 §3.3 decides both paths (06 §4.2) and 10 §6.4
+#     registers T-SEC-010 as "403 while the session exists, 401 after revocation".
 # 22. Weak `ETag` with `If-Match` (RFC 9110 strong comparison; 06 note 11); `IfMatch` accepts
 #     `W/"n"` and `"n"`.
 # 23. CSRF failure as 403 `FORBIDDEN` is ADR-0018's [Assumption]; 07 must confirm.
+#     Done in the consistency review, 2026-09-30: 07 §3.3 decides the split (06 §4.1): 401
+#     `UNAUTHENTICATED` when the session holds no `auth_web` on a route that runs `auth`, else 403
+#     `FORBIDDEN`. The `xsrfHeader`, `Unauthenticated` and `Forbidden` descriptions follow it.
 # 24. Cookie name `dripnepal_session` is the target; the repository still uses `adonis-session`
-#     (`config/session.ts:14`) until M0. Staging host is a placeholder for docs/11.
+#     (`config/session.ts:14`) until M0. Staging host is a placeholder for docs/11. Done in the
+#     consistency review, 2026-09-30, for the staging host: 11 §2.1 names it `staging.<domain>`;
+#     the domain itself stays a placeholder.
 # 25. Open decisions that can change this contract: OD-14 (single operator mode), OD-18 (COD
-#     limits), OD-03 (first gateway); Verify-external VX-06/VX-07 (eSewa and Khalti return,
+#     limits), OD-03 (first gateway), OD-38 (where `manual_transfer` recipient details come
+#     from); Verify-external VX-06/VX-07 (eSewa and Khalti return,
 #     lookup and refund details), VX-02 (7-day refund start), VX-12 (money display). OD-49 (the
 #     audited staff reveals of 07 §5.5) changes the "never returned in full" wording of
 #     `RefundRecipientDetails` if approved. OD-13 (JSON casing) was decided on 2026-09-30:
-#     `snake_case`, as this file uses.
+#     `snake_case`, as this file uses. OD-23 was decided on 2026-09-30 (keep MIT), so
+#     `info.license` is MIT, as `LICENSE` says.
 #
 # Added by critic pass B2 (2026-09-26):
 # 26. `createProduct`: 06 §13.5 marks only `brand_id?` optional, so every other input key is now
@@ -3278,7 +3387,9 @@ components:
 #     should show it.
 # 28. `approveRefund` `totp_code`: 06 §4.3 says every money approval in `single_operator_mode` needs a
 #     fresh TOTP code; 06 §13.6 ties it to approving one's own refund. This file follows §13.6 in the
-#     field description; 06 should use one wording (Open OD-14).
+#     field description; 06 should use one wording (Open OD-14). Done in the consistency review,
+#     2026-09-30: 06 §4.3 now ties `totp_code` to a self-approval under `single_operator_mode` too,
+#     and the field description cites both.
 # 29. `recordFulfillmentEvent`: rejecting tracking fields or `failure_reason` on other events is an
 #     [Assumption]; neither 05 §6.3 nor 06 §13.5 says whether they are rejected or ignored.
 # 30. Lengths aligned to 04a: `ShopSummary` (`shops_slug_check`, `shops_name_check` 2–60), brand
@@ -3290,4 +3401,43 @@ components:
 # 32. Redocly 2.x (`recommended`) reports 0 errors; its 9 warnings are the localhost server, the page
 #     route without operationId, 4 `no-required-schema-properties-undefined` false positives on the
 #     `if`/`then` blocks, and the unused `Cursor`, `Limit` and `CursorMeta` components kept for the
-#     pending cursor lists.
+#     pending cursor lists. Re-run in the consistency review, 2026-09-30 (Redocly CLI 2.54.3,
+#     built-in `recommended`): 0 errors and 10 warnings, the same list with 5 false positives,
+#     because `FulfillmentEventRequest` now has a third `if`/`then` block (`returned_to_origin`
+#     requires `items`).
+#
+# Added in the consistency review (2026-09-30):
+# 33. `SERVICE_BUSY` (503, proposed with the catalog-read cap of 07 TM-24; 06 §5.2, §5.3, note 29)
+#     is in `ProblemCode` and `Problem503`, `ServiceUnavailable` describes it, and `listProducts`
+#     declares 503. `Retry-After` lists it.
+# 34. `Refund.affects_vendor_ledger` (proposed; 04a §12.4, 05 §7.4) is a required property, set in
+#     every refund example (true: `return_accepted` after the delivery posting, 06 §14.8), and the
+#     `createRefund` and `resolveRefundReview` descriptions say when it posts ledger entries.
+# 35. `Problem.next_action` is added for the `startOrderPayment` 409 of a resumable attempt, which
+#     06 §7.8 and §13.4 put in the problem body (02 AC-J06-08). 06 §5.1 does not list `next_action`
+#     among the extension members yet and should add it.
+# 36. `recordFulfillmentEvent` adds the 06 §14.6 refusal of `delivery_failed` after COD
+#     `collected` (request and 409 examples; T-FUL-004) and the `returned_to_origin` rules of 06
+#     §13.5. Open: 06 §13.5 names no error for a `returned_to_origin` `items[].order_item_id` that
+#     is not a line of this shop order (T-SEC-001 case (c); 06 note 32).
+# 37. Pending operations keep their 06 §13 rows as the source; the PR that specifies one takes
+#     from its row what the consistency review changed there, for example: `logIn` and
+#     `verifyMfaChallenge` `return_to`/`redirect_to` and the `logIn` 409; the `token` and
+#     `password` of the TOTP enrolment; the `reauth` 429s; the step-up 401 `MFA_REQUIRED` of 07
+#     §3.10; the 409s of `requestAccountDeletion`, `suspendUser` and `reinstateUser`; the 404s for
+#     foreign IDs (T-SEC-006 customer rows, T-SEC-001 case (c) seller body fields, 06 note 32);
+#     the `updatePlatformSetting` `totp_code` rule; the `acceptShopInvitation` 403 and 404 cases; the
+#     three `startOrderPayment` 409 cases; `getShopBalance` `balance`, `available`, `payable` and
+#     `pending`; the `createLedgerAdjustment` body (`reverses_entry_id?`, `shop_order_id?`, no
+#     `reference`) and its 201 `kind`; the `createPayout` and `approvePayout` 409s
+#     (`payout_stale`) and the `approvePayout` 422; `markPayoutPaid` `bank_reference` and 503;
+#     the `listShopApplications` KYC metadata; `listShopOrders` rows that carry only
+#     `recipient_masked` (name initial, district and phone last four digits; 06 §3.6, 07 §5.2
+#     rules 1 and 2), never `recipient`; the closed `getPublicShop` schema (07 TM-29); the
+#     100-character `q` maximum of 06 §6.3; and the milestones of the support-case, return,
+#     settings and media operations.
+# 38. `x-pending-operations` adds the eight 06 §13.8 operations proposed in the consistency review:
+#     `acceptSellerAgreement`, `viewKycDocument`, `revealPayoutAccountForVerification`,
+#     `revealRefundRecipient`, `approveLedgerAdjustment`, `cancelLedgerAdjustment`, `cancelPayout`
+#     and `revealPayoutAccount`. The user contact reveal of 07 §5.5 (06 note 35) joins the list
+#     once 06 §13.8 names it.
