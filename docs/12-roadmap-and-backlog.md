@@ -1,0 +1,454 @@
+# Roadmap and Backlog
+
+Status: Draft v1 (lite, 2026-09-30)
+
+Reviewed: critic pass B8-lite (2026-09-30)
+
+This document turns the reviewed documentation set into a delivery plan for a team of one or two developers [Confirmed Q1]. It defines the milestones M0 to M9 (ID, name, release, goal, scope, order and exit criteria), the order in which they depend on each other, the R2 and R3 backlog, and where the items other documents handed to planning land. It does not restate rules: every scope line points to the section that specifies the behaviour, and every exit criterion names test IDs from the [10 §6](10-testing-and-quality-gates.md#6-test-id-registry) registry. Capacity is unknown, so there are no calendar dates; effort is given in relative sizes.
+
+Related documents: [00 Context](00-context-assumptions-and-questions.md) · [01 Requirements](01-product-requirements.md) · [02 Journeys](02-user-journeys-and-acceptance-criteria.md) · [03 Architecture](03-system-architecture.md) · [04 Domain model](04-domain-model-and-data-dictionary.md) · [04a Tables](04a-data-dictionary-tables.md) · [05 Lifecycles](05-order-payment-and-inventory-lifecycles.md) · [06 API](06-api-design.md) · [07 Security](07-security-threat-model-and-permissions.md) · [08 UI](08-ui-ux-and-design-system.md) · [09 Code standards](09-code-structure-and-engineering-standards.md) · [10 Testing](10-testing-and-quality-gates.md) · [11 Operations](11-deployment-and-operations.md) · [Risks and open decisions](risks-and-open-decisions.md) · [ADRs](adr/README.md)
+
+Labels follow [00 §1.2](00-context-assumptions-and-questions.md#12-evidence-labels).
+
+## 1. Scope and how to read this document
+
+This lite version is enough to start M0 and to cut each milestone into tickets; [§8](#8-expanding-this-document) lists what the full version adds.
+
+- **12 owns** the milestone definitions, the dependency order, the R2 and R3 backlog and the scheduling of work that other documents hand over. Other documents cite milestones by ID; this document defines them. Release scope belongs to [01 §5](01-product-requirements.md#5-release-phases-mvp-scope-and-non-goals), and the decision gates to [risks §5](risks-and-open-decisions.md#5-decisions-that-block-implementation-by-milestone), which this document follows.
+- **Milestone names** are the ones the documents already use ([00 §7.3](00-context-assumptions-and-questions.md#73-what-blocks-which-milestone)). Where two documents disagreed about which milestone owns something, this document decides and records the decision in the Consistency notes.
+- **Reading order for a developer:** §3 for the whole plan, §4 for M0 (the next piece of work), the milestone's subsection in §5 when it starts.
+
+## 2. Planning principles
+
+### 2.1 Dependency-ordered vertical slices
+
+After M0, every milestone delivers whole journeys: the API operations, pages, jobs and tests for a set of FRs, on a schema the M0 baseline already created. The order follows the data: accounts, then shops, products, storefront, cart, orders, money and the gateway. Nothing is built as a layer for later use. With two developers, the next milestone's page work may overlap the current milestone's backend once the operations are fixed in [openapi.yaml](openapi.yaml) [Assumption].
+
+### 2.2 Effort sizes
+
+All sizes are estimates in ideal developer-weeks (focused work by one developer, before meetings and support) [Assumption: estimate; recalibrated after M0, §8].
+
+| Size | Ideal developer-weeks | Typical content                                                    |
+| ---- | --------------------- | ------------------------------------------------------------------ |
+| S    | under 1               | One operation or job with its tests                                |
+| M    | 1 to 3                | One journey on existing foundations                                |
+| L    | 3 to 6                | Several journeys, new pages and jobs                               |
+| XL   | 6 to 12               | A milestone with a new subsystem, or foundations used by all later |
+
+### 2.3 Definition of ready
+
+- **Milestone.** The previous milestone has exited, or the tech lead accepts named leftovers in writing. Every "blocks code" decision of [risks §5](risks-and-open-decisions.md#5-decisions-that-block-implementation-by-milestone) for it is Decided, or its safe default is recorded as accepted.
+- **Ticket.** It cites the document section it implements (operation, table, job, page or check), the AC IDs it satisfies and the test IDs that prove it. An unknown carries an OD or VX pointer instead of a placeholder.
+
+### 2.4 Definition of done
+
+- **Ticket.** Merged through the required checks of [10 §5.1](10-testing-and-quality-gates.md#51-every-pull-request-ciyml); the named tests exist, pass and carry their AC IDs in the title ([10 §6.1](10-testing-and-quality-gates.md#61-naming-and-numbering-rules)); the pull request template is complete ([09 §11.5](09-code-structure-and-engineering-standards.md#115-pull-request-template-and-review-checklist)); a behaviour that differs from a document changes that document in the same pull request ([00 §1.5](00-context-assumptions-and-questions.md#15-how-a-decision-changes)).
+- **Milestone exit review.** Held by the product owner and tech lead and recorded in the milestone's epic:
+  1. Every exit criterion in this document is green on `main`.
+  2. Every "blocks exit" item of risks §5 is resolved.
+  3. ADR statuses match the OD and VX register ([ADR-0001](adr/0001-record-architecture-decisions.md)).
+  4. The journeys the milestone completes pass the [02 §7](02-user-journeys-and-acceptance-criteria.md#7-journey-completion-checklist) checklist.
+  5. Every leftover is moved to a named milestone or to §6 with an owner.
+
+### 2.5 How decisions gate a milestone
+
+Risks §5 is authoritative. "Blocks code" means decided before the milestone's first feature pull request merges ("M*n* start"); "blocks exit" means decided before its exit review ("M*n* exit"). These two events are the anchors for every latest responsible moment in [risks §1.6](risks-and-open-decisions.md#16-latest-responsible-moment-and-safe-defaults). At the weekly review ([risks §1.4](risks-and-open-decisions.md#14-review-cadence)) the tech lead names the next anchor and the decisions due before it.
+
+### 2.6 From milestone to tickets
+
+One epic per scope group (the E rows of §4 and the scope bullets of §5), keyed `M<n>-E<k>`. Tasks inside an epic are one operation, job, page, migration or CI check each; each task links its section and test IDs. A needed test without an ID is registered in [10 §6](10-testing-and-quality-gates.md#6-test-id-registry) in the same pull request. Business tasks (answers from counsel, the accountant or a provider) get their own tickets owned by the product owner.
+
+### 2.7 Scope control
+
+R1 scope is [01 §5.2](01-product-requirements.md#52-r1-mvp-scope). Adding anything to a milestone names what moves out (R-12). Findings from the monthly operations review ([11 §13.6](11-deployment-and-operations.md#136-monthly-operations-review)) enter §6 with an owner. When an FR, test or milestone assignment moves, this document changes with it ([risks §1.5](risks-and-open-decisions.md#15-recording-a-decision)).
+
+## 3. Releases and milestones at a glance
+
+| ID  | Name                                     | Release   | Goal                                                                                                   | Depends on       | Blocking decisions (risks §5)                                                                                         | Effort (estimate) |
+| --- | ---------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------ | ---------------- | --------------------------------------------------------------------------------------------------------------------- | ----------------- |
+| M0  | Foundation hardening                     | R0        | Every high RF closed or guarded; CI gate; schema re-baseline; safe bootstrap                           | —                | Code: OD-01, OD-12, OD-13, OD-25. Exit: OD-23                                                                         | XL                |
+| M1  | Identity & accounts                      | R1        | Sign-up, verification, login, recovery, addresses; staff TOTP; user suspension                         | M0               | Code: OD-24. Exit: OD-08, VX-14, VX-10, VX-03                                                                         | L                 |
+| M2  | Shop onboarding & membership             | R1        | Existing users apply, admins review, approved shops set up profile, delivery, staff and payout account | M1               | Code: OD-16; OD-22 if kit blocks are wanted. Exit: OD-04 rate, OD-05, OD-11, VX-02, VX-10, VX-13 before any kit file  | L                 |
+| M3  | Catalog authoring & media                | R1        | Products with variants, images, disclosures and stock; moderation                                      | M2               | Code: OD-15, OD-20, OD-21. Exit: VX-02                                                                                | XL                |
+| M4  | Storefront discovery                     | R1        | Server-rendered listings, search, product and shop pages within budgets                                | M3               | Code: VX-12; OD-22 if kit blocks are wanted. Exit: VX-13 if any kit file is used                                      | L                 |
+| M5  | Cart & COD checkout                      | R1        | Server cart and one idempotent multi-shop COD order without oversell                                   | M4               | Code: OD-04 basis. Exit: OD-18                                                                                        | L                 |
+| M6  | Order processing & fulfillment           | R1        | Accept, ship, deliver, collect, return to origin; tracking; support cases and returns                  | M5               | Code: OD-17, OD-19. Exit: OD-06, OD-07, OD-26, VX-03, VX-04                                                           | XL                |
+| M7  | Ledger, admin ops & launch readiness     | R1 (gate) | Ledger, remittances, refunds, admin operations, proven operations; the R1 launch gate passes           | M6               | Code: OD-05, OD-14. Exit: OD-09, OD-11, OD-26, OD-27 (COD), OD-07 published, VX-02, VX-04, VX-05, VX-08, VX-09, VX-15 | XL                |
+| M8  | Gateway payments                         | R1.1      | One wallet gateway, gateway refunds, reconciliation, vendor payouts                                    | M7               | Code: OD-02, OD-03, VX-01, VX-06 or VX-07. Exit: OD-27, VX-05, OD-06 hold revision, OD-14 revisited                   | L                 |
+| M9  | Returns, reviews, wishlist, coupons, SMS | R2        | Self-serve returns, reviews, wishlist, platform coupons, SMS and phone OTP                             | M7 (M8 normally) | None of OD-01 to OD-27. Exit: VX-14 (SMS), VX-11 re-check; R-23 if the Nepali UI joins                                | XL                |
+
+R1 (M0 to M7) is roughly 40 to 70 ideal developer-weeks [Assumption: estimate]. The R1 launch is the M7 exit; `checkout_enabled` stays off in production until then ([11 §2.5](11-deployment-and-operations.md#25-production)).
+
+```mermaid
+flowchart LR
+  M0["M0 Foundation hardening (R0)"] --> M1["M1 Identity and accounts"]
+  M1 --> M2["M2 Shop onboarding"]
+  M2 --> M3["M3 Catalog and media"]
+  M3 --> M4["M4 Storefront discovery"]
+  M4 --> M5["M5 Cart and COD checkout"]
+  M5 --> M6["M6 Order processing"]
+  M6 --> M7["M7 Ledger, admin ops, launch readiness"]
+  M7 --> G{"R1 launch gate"}
+  G --> M8["M8 Gateway payments (R1.1)"]
+  G --> M9["M9 R2 core"]
+  M8 -.-> M9
+```
+
+M9 normally follows M8 ([01 §5.1](01-product-requirements.md#51-release-phases)), but nothing in it needs the gateway: if OD-02 or OD-03 hold M8 back, M9 may start after the launch (the dotted edge).
+
+## 4. M0 Foundation hardening (R0), ready to start
+
+**Goal.** Make the repository safe to build on: close or guard every high finding, put a blocking CI gate and a real test database in place, replace the 26 exploratory migrations with the reviewed baseline, and remove the unsafe defaults, before the first feature pull request. The application code has not changed since the audited commit `0282605`: there is no `.github` directory, there are 26 migration files, and `package.json` still lists `D` and `better-sqlite3` [Verified-repo]. Evidence for each finding is in [00 §4.6](00-context-assumptions-and-questions.md#46-consolidated-repository-findings-rf-01--rf-47) and [research: repository-audit](research/repository-audit.md).
+
+### 4.1 Epics and order
+
+| Epic                                   | Scope                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Specified in                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Tests                                                                                                                                                                                                        | Order         |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------- |
+| E1 Decisions and spikes                | OD-01 written confirmation; OD-12, OD-13 answers; OD-25 Inertia spike; `T-ARCH-004` pg-boss transactional send, including the `pgboss` schema install under the migrator role; `SELECT uuidv7()` on `postgres:18.4` and the managed cluster; the other M0 checks 09 lists (Bouncer or plain policies, Tuyau `validationErrorType`, `rawQuery` result shape, the no-model-in-response hook, update bot)                                                                                                                                                            | [risks §5](risks-and-open-decisions.md#5-decisions-that-block-implementation-by-milestone), [09 §10.5](09-code-structure-and-engineering-standards.md#105-the-inertia-v5-upgrade-od-25), [03 §10.1](03-system-architecture.md#101-transactional-send-the-job-table-is-the-outbox), [ADR-0010](adr/0010-postgres-jobs-pg-boss-transactional-send.md), [04 §2.1](04-domain-model-and-data-dictionary.md#21-identifiers), [11 §6.1](11-deployment-and-operations.md#61-where-and-how-migrations-run) | `T-ARCH-004`                                                                                                                                                                                                 | First days    |
+| E2 CI and quality gates                | `ci.yml` with the stages of 10 §5.1 and the subset of 10 §5.4 required on `main`; branch protection; PR template; ESLint rewrite clearing today's lint and typecheck errors; hooks; `release.yml` up to the image push                                                                                                                                                                                                                                                                                                                                            | [10 §5](10-testing-and-quality-gates.md#5-ci-quality-gates), [11 §5.2](11-deployment-and-operations.md#52-workflows), [09 §11](09-code-structure-and-engineering-standards.md#11-lint-format-typecheck-and-review), [09 §4.5](09-code-structure-and-engineering-standards.md#45-ci-checks-that-keep-the-contracts-in-sync)                                                                                                                                                                        | `T-ARCH-001` (with `T-SEC-016`, its outbound-HTTP rule), `T-ARCH-016`, `T-ARCH-021`, `T-ARCH-029`, `T-ARCH-030`, `T-ARCH-033`, `T-UI-029`, `T-SEC-025`, `T-SEC-026`, `T-SEC-038`, `T-API-009` to `T-API-011` | Week 1 onward |
+| E3 Test harness and test database      | `dripnepal_test` with the boot guard (first), two roles, runner setup, `@japa/api-client`, Ajv, Playwright; factories rewritten; concurrency suite and its self-test; browser smoke                                                                                                                                                                                                                                                                                                                                                                               | [10 §3](10-testing-and-quality-gates.md#3-test-layers-and-tooling), [09 §8.8](09-code-structure-and-engineering-standards.md#88-seeders-reference-data-versus-development-data)                                                                                                                                                                                                                                                                                                                   | `T-ARCH-031`, `T-ARCH-032`                                                                                                                                                                                   | Week 1 onward |
+| E4 Schema re-baseline                  | Tag `pre-baseline`; delete the 26 files; 14 baseline files in the foreign-key-safe order of 04 §20.2.2 (extensions, logistics reference, identity, platform, shops, media, catalog, cart, orders, inventory, payments, ledger, support and notifications, grants); `app/modules/` with `platform` and `audit` first ([09 §1.5](09-code-structure-and-engineering-standards.md#15-current-code--target-structure)); `schemaGeneration`; reference seeders; models and constants rewritten; int8 parser and `sumMinor`; migration-lock script; extension allow-list | [04 §20.2](04-domain-model-and-data-dictionary.md#202-re-baseline-procedure-adr-0011-od-01), [ADR-0011](adr/0011-schema-rebaseline-before-production.md), [09 §8](09-code-structure-and-engineering-standards.md#8-migrations-and-seeders), [ADR-0007](adr/0007-money-integer-minor-units.md)                                                                                                                                                                                                     | `T-ARCH-010` to `T-ARCH-015`, `T-ARCH-017`, `T-ARCH-022`, `T-ARCH-034`                                                                                                                                       | After E1      |
+| E5 Error contract and request IDs      | Exception handler rewrite, code registry, `toProblem()`, error pages showing `request_id`; `request_context` and `access_log` middleware; error-tracker hook                                                                                                                                                                                                                                                                                                                                                                                                      | [ADR-0018](adr/0018-error-contract-problem-details.md), [06 §5](06-api-design.md#5-error-contract), [06 §11](06-api-design.md#11-correlation-and-request-ids), [09 §5](09-code-structure-and-engineering-standards.md#5-error-handling), [09 §7.4](09-code-structure-and-engineering-standards.md#74-request-id-propagation)                                                                                                                                                                      | `T-API-001`, `T-API-005`, `T-API-012`, `T-SEC-027`, `T-ARCH-026`                                                                                                                                             | Week 1 onward |
+| E6 Configuration and logging           | Env schema and cross-field policy, `.env.example`, `.gitignore`, key ring; pino redaction; no `console`; SQL debug off; database TLS and pool; `trustProxy`; health endpoints; Dockerfile                                                                                                                                                                                                                                                                                                                                                                         | [09 §6](09-code-structure-and-engineering-standards.md#6-configuration-validation-and-secrets), [09 §7](09-code-structure-and-engineering-standards.md#7-structured-logging), [11 §3.4](11-deployment-and-operations.md#34-trusted-proxy-configuration-rf-31), [11 §4.2](11-deployment-and-operations.md#42-dockerfile), [11 §7.1](11-deployment-and-operations.md#71-endpoints)                                                                                                                  | `T-ARCH-023`, `T-ARCH-024`, `T-ARCH-025`, `T-OPS-010`                                                                                                                                                        | Week 1 onward |
+| E7 Sessions, rate limits and audit log | Database session store and `dripnepal_session` cookie; the per-request account check (status and `security_stamp`); remember-me removed; limiter database store (OD-10 Resolved); login limiters; multipart parsing off and the JSON body limit; `audit_logs` writer                                                                                                                                                                                                                                                                                              | [ADR-0005](adr/0005-session-auth-server-side-revocation.md), [07 §3.1](07-security-threat-model-and-permissions.md#31-guard-store-and-cookie), [07 §3.3](07-security-threat-model-and-permissions.md#33-the-per-request-account-check-and-the-suspension-decision), [07 §3.6](07-security-threat-model-and-permissions.md#36-login-throttling-and-generic-errors), [06 §9](06-api-design.md#9-rate-limits-and-request-size-limits), [04a §15.3](04a-data-dictionary-tables.md#153-audit_logs)     | `T-SEC-010` (stamp case), `T-SEC-011`, `T-SEC-101`, `T-SEC-102`, `T-MED-002`                                                                                                                                 | After E4      |
+| E8 Safe bootstrap                      | `reference/` and `dev/` seeders with their guards; demo seeder deleted; `node ace platform:create-admin` (FR-ADM-005); release-check queries script; README development setup                                                                                                                                                                                                                                                                                                                                                                                     | [09 §8.8](09-code-structure-and-engineering-standards.md#88-seeders-reference-data-versus-development-data), [09 §9](09-code-structure-and-engineering-standards.md#9-safe-production-initialization)                                                                                                                                                                                                                                                                                             | `T-ARCH-018` to `T-ARCH-020`, `T-OPS-019`                                                                                                                                                                    | After E4      |
+| E9 Routes and the membership guard     | `/seller/{shopSlug}` behind `seller_context` (owner or active member, else 404); storefront outside `guest()`; catch-all removed; development-only routes; the registration and cart hotfixes; development Compose and CORS fixes                                                                                                                                                                                                                                                                                                                                 | [ADR-0017](adr/0017-product-urls-public-id.md), [09 §12.4](09-code-structure-and-engineering-standards.md#124-seller_context-middleware), [08 §13](08-ui-ux-and-design-system.md#13-current-ui-remediation-list), [11 §4.3](11-deployment-and-operations.md#43-development-compose-rf-43-fix-list)                                                                                                                                                                                                | `T-SEC-005`, `T-SEC-037`, `T-SHOP-001`, `T-UI-025`, `T-UI-026`                                                                                                                                               | After E7      |
+| E10 SSR and frontend foundation        | OD-25 outcome applied; SSR flags, `hydrateRoot`, SSR-only page glob, theme from a cookie; `<html lang="en">` and the `resources/lang/en` skeleton; devtools development-only; `ui/` clean-up; licence tracking file; progress-bar and `sonner` styles for CSP; the reduced-motion and toast-stacking checks of 08 §5.7 and §5.9; SSR memory measured ([11 §13.2](11-deployment-and-operations.md#132-droplet-sizing-4-gb--2-vcpu))                                                                                                                                | [ADR-0003](adr/0003-inertia-ssr-storefront-csr-dashboards.md), [09 §13.8](09-code-structure-and-engineering-standards.md#138-ssr-safety-rules), [08 §1.2](08-ui-ux-and-design-system.md#12-theme-policy-light-by-default-dark-supported), [08 §11.8](08-ui-ux-and-design-system.md#118-localization-ready-text-and-formatting), [08 §12](08-ui-ux-and-design-system.md#12-maintaining-copied-shadcn-and-kit-components)                                                                           | `T-ARCH-002`, `T-UI-001`, `T-UI-012`, `T-UI-013`, `T-UI-024`                                                                                                                                                 | After OD-25   |
+| E11 CSP and headers                    | CSP in report-only mode with nonces and a `report-uri`; `encryptHistory` on authenticated surfaces                                                                                                                                                                                                                                                                                                                                                                                                                                                                | [07 §7.3](07-security-threat-model-and-permissions.md#73-csp-and-security-headers), [07 §3.11](07-security-threat-model-and-permissions.md#311-logout-and-inertia-history)                                                                                                                                                                                                                                                                                                                        | `T-SEC-035` (report-only part)                                                                                                                                                                               | After E10     |
+| E12 Removals and repository hygiene    | Remove `D`, `better-sqlite3`, the sqlite connection and the `@commercn` registry; untrack `.agents/` and `tsconfig.inertia.tsbuildinfo`; drop dead import aliases; apply OD-23 to `LICENSE` and `package.json`                                                                                                                                                                                                                                                                                                                                                    | [09 §10.4](09-code-structure-and-engineering-standards.md#104-removals-decided-for-m0-rf-39), [09 §1.5](09-code-structure-and-engineering-standards.md#15-current-code--target-structure), [ADR-0015](adr/0015-ui-foundation-shadcn-and-kit-policy.md), [07 §7.1](07-security-threat-model-and-permissions.md#71-dependency-policy)                                                                                                                                                               | `T-SEC-026`, `T-ARCH-027`, `T-ARCH-028`                                                                                                                                                                      | Week 1        |
+
+Order in practice: E1 and E12 first; E3 starts with the test-database guard, because a test run today would reach the developer's database; E2, E5 and E6 in parallel; E4 as soon as OD-01 and the E1 spikes are done; then E7 and E8 on the baseline tables; E9 once OD-12 is answered; E10 once OD-25 is; E11 last. The baseline is the largest single item ([ADR-0011](adr/0011-schema-rebaseline-before-production.md) expects several days of writing and review).
+
+### 4.2 Repository findings fixed in M0
+
+Every RF whose fix column in [00 §4.6](00-context-assumptions-and-questions.md#46-consolidated-repository-findings-rf-01--rf-47) includes M0, with the part M0 does.
+
+| RF    | M0 work                                                                               | Where                                                                                                  | Epic |
+| ----- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ---- |
+| RF-01 | Membership guard on every seller route; permissions and status gates in M2            | 09 §12.4                                                                                               | E9   |
+| RF-02 | Storefront outside `guest()`; unknown paths render 404                                | [08 §13](08-ui-ux-and-design-system.md#13-current-ui-remediation-list)                                 | E9   |
+| RF-03 | Hotfix so registration stops answering 500; replaced by `/sell` in M2                 | [09 §3.14](09-code-structure-and-engineering-standards.md#314-current-code--target-layers)             | E9   |
+| RF-04 | Database sessions, stamp check, remember-me removed                                   | [ADR-0005](adr/0005-session-auth-server-side-revocation.md)                                            | E7   |
+| RF-05 | Demo seeder deleted; development-seeder guard; `platform:create-admin`                | [09 §9.1](09-code-structure-and-engineering-standards.md#91-node-ace-platformcreate-admin)             | E8   |
+| RF-06 | Baseline: no cascade into orders or payments; address snapshot                        | [04 §20.1](04-domain-model-and-data-dictionary.md#201-mapping-from-current-tables-to-the-baseline)     | E4   |
+| RF-07 | Baseline: `orders`, `shop_orders`, `order_items`; checkout in M5                      | 04 §20.1                                                                                               | E4   |
+| RF-08 | SSR build fixed, `hydrateRoot`, theme class from the server                           | [ADR-0003](adr/0003-inertia-ssr-storefront-csr-dashboards.md)                                          | E10  |
+| RF-09 | `ci.yml`, branch protection, typecheck in hooks and CI                                | [10 §5.4](10-testing-and-quality-gates.md#54-the-smallest-gate-before-the-first-feature-code-m0)       | E2   |
+| RF-10 | One storefront layout provides the cart; server cart in M5                            | 08 §13                                                                                                 | E9   |
+| RF-11 | Baseline: recipient phone no longer unique                                            | 04 §20.1                                                                                               | E4   |
+| RF-12 | Login limiters; non-credential errors rethrown; the rest in M1                        | 07 §3.6                                                                                                | E7   |
+| RF-13 | Baseline: composite tenant foreign keys                                               | 04 §20.1                                                                                               | E4   |
+| RF-14 | Baseline: `inventory_items`, SKU per shop, unique combinations; screens in M3         | 04 §20.1                                                                                               | E4   |
+| RF-15 | Baseline: idempotency and refund tables; used in M5 and M8                            | 04 §20.1                                                                                               | E4   |
+| RF-16 | Baseline: `bigint` paisa; server pricing in M5                                        | ADR-0007                                                                                               | E4   |
+| RF-17 | Baseline: product names per shop, `draft` default, foreign keys; screens in M3        | 04 §20.1                                                                                               | E4   |
+| RF-20 | Baseline: `platform_staff`, `shop_memberships`, roles in code; completed in M2        | [ADR-0006](adr/0006-authorization-platform-roles-shop-memberships.md)                                  | E4   |
+| RF-23 | Baseline: status vocabularies with CHECKs                                             | 04 §20.1                                                                                               | E4   |
+| RF-24 | Baseline: soft-delete rules enforced                                                  | 04 §20.1                                                                                               | E4   |
+| RF-25 | `<html lang="en">` and the catalog skeleton; formatters in M4                         | 08 §13                                                                                                 | E10  |
+| RF-26 | Page-prop logging and SQL-binding debug removed; `no-console`                         | [09 §7.5](09-code-structure-and-engineering-standards.md#75-no-console-rf-26)                          | E6   |
+| RF-30 | Devtools development-only; duplicate CSS imports and Geist removed; images in M4      | [08 §10.5](08-ui-ux-and-design-system.md#105-fonts)                                                    | E10  |
+| RF-31 | `trustProxy`, database TLS and pool, health endpoints, Dockerfile; monitoring in M7   | 11 §3.4, §7.1                                                                                          | E6   |
+| RF-32 | `dripnepal_test` with the boot guard                                                  | [10 §3.2](10-testing-and-quality-gates.md#32-the-test-database)                                        | E3   |
+| RF-33 | Env schema complete, `.env.example`, env files ignored, build artefact untracked      | 09 §6                                                                                                  | E6   |
+| RF-34 | CSP report-only and history encryption; CSP enforced in M7                            | 07 §7.3                                                                                                | E11  |
+| RF-35 | Multipart parsing off on every route                                                  | [ADR-0013](adr/0013-media-direct-upload-async-processing.md)                                           | E7   |
+| RF-36 | Handler never sends raw messages; owner fields out of the shop transformer; signup M1 | [09 §5.5](09-code-structure-and-engineering-standards.md#55-never-leak-raw-messages-rf-36)             | E5   |
+| RF-39 | `D`, `better-sqlite3`, sqlite connection and `@commercn` removed                      | 09 §10.4                                                                                               | E12  |
+| RF-40 | Debug, mock and design-system routes development-only                                 | 08 §13                                                                                                 | E9   |
+| RF-41 | Baseline: generated timestamps, no constant imports; lock script                      | [09 §8.4](09-code-structure-and-engineering-standards.md#84-applied-migrations-are-never-edited-rf-41) | E4   |
+| RF-42 | README matches the code; one licence (OD-23); `.agents/` untracked                    | [09 §9.4](09-code-structure-and-engineering-standards.md#94-current-code--target-initialization)       | E12  |
+| RF-43 | Compose hardened and pinned; development CORS allowlist                               | 11 §4.3                                                                                                | E9   |
+| RF-45 | Baseline: indexes that match the query patterns                                       | 04 §20.1                                                                                               | E4   |
+| RF-47 | Frontend CI checks only; dead UI removed in M4 (Consistency note 1)                   | 08 §13                                                                                                 | E2   |
+
+### 4.3 Exit criteria
+
+1. `main` is protected and `ci.yml` blocks on the [10 §5.4](10-testing-and-quality-gates.md#54-the-smallest-gate-before-the-first-feature-code-m0) gate: `T-ARCH-021`, `T-UI-029`, `T-ARCH-001`, `T-ARCH-016`, `T-ARCH-023`, `T-ARCH-029`, `T-ARCH-033`, `T-SEC-025`, `T-SEC-026`, `T-SEC-038`, `T-API-009`, `T-API-010`, `T-API-011` (kit and licence checks `T-ARCH-027`, `T-ARCH-028`, `T-UI-024` once their files exist).
+2. The baseline is merged after the review ADR-0011 requires, with `T-ARCH-010`, `T-ARCH-011`, `T-ARCH-012`, `T-ARCH-013`, `T-ARCH-014`, `T-ARCH-015`, `T-ARCH-022`, `T-ARCH-031` and `T-ARCH-034` green and the `T-ARCH-017` script running in file-name mode ([09 §8.4](09-code-structure-and-engineering-standards.md#84-applied-migrations-are-never-edited-rf-41)). Tests run on `dripnepal_test` with the two roles of [10 §3.2](10-testing-and-quality-gates.md#32-the-test-database); the boot guard and the other environment rules pass `T-ARCH-024`.
+3. The functional suite runs with the `T-API-001` hook and passes `T-API-005`, `T-API-012`, `T-SEC-027`, `T-ARCH-026`, `T-SEC-010` (stamp-mismatch case), `T-SEC-011`, `T-SEC-101`, `T-SEC-102`, `T-MED-002`, `T-SEC-005`, `T-SEC-037`, `T-SHOP-001`, `T-UI-025` and `T-UI-026`; the report-only CSP header with nonces and `report-uri` passes the report-only part of `T-SEC-035`.
+4. The concurrency suite runs with `T-ARCH-032`.
+5. Every pull request builds the image and passes `T-ARCH-002`, `T-OPS-010`, `T-ARCH-025`, `T-UI-001`, `T-UI-012` (first bundle size recorded) and `T-UI-013`, plus the browser smoke home → product → cart → checkout.
+6. Seeders and bootstrap pass `T-ARCH-018`, `T-ARCH-019`, `T-ARCH-020` and `T-OPS-019`.
+7. The `T-ARCH-004` result is recorded in [ADR-0010](adr/0010-postgres-jobs-pg-boss-transactional-send.md) (confirmed, or the `outbox_events` fallback adopted), and the `uuidv7()` result in 04 §2.1.
+8. The 11 high findings are closed or guarded, and every row of §4.2 is done.
+9. OD-01, OD-12, OD-13 and OD-25 are Decided (or their safe defaults recorded) and OD-23 is Decided; ADR-0011 is Accepted and every ADR status matches the register.
+10. A fresh clone completes the local setup of [11 §4.4](11-deployment-and-operations.md#44-local-setup-in-five-commands) and runs the suites green.
+11. `T-ARCH-030` runs in warning mode.
+
+### 4.4 Dependencies, blocking decisions, business track and effort
+
+- **Depends on:** nothing; M0 is the first milestone and starts now.
+- **Blocks code:** OD-01 (before the baseline pull request), OD-25 (spike in the first days, before RF-08), OD-12 (before the RF-01 guard), OD-13 (before the first endpoint). **Blocks exit:** OD-23. OD-10 is Resolved. Safe defaults: `/seller/{shopSlug}`, snake_case, stay on `@adonisjs/inertia` 4.2.0 if the spike fails ([risks §5](risks-and-open-decisions.md#5-decisions-that-block-implementation-by-milestone)).
+- **Business track (product owner):** book the counsel and accountant engagements that must happen before M2 ([risks §3.2](risks-and-open-decisions.md#32-question-packs-by-verifier)); start the VX-15 card and FX question with the bank, needed before the staging server in M5 ([11 §1.8](11-deployment-and-operations.md#18-paying-for-it-from-nepal-r-32-vx-15)); ask the VX-13 question only if kit blocks are wanted (OD-22).
+- **Effort:** XL [Assumption: estimate 8 to 12 ideal developer-weeks]; E4 alone is L.
+
+## 5. Milestones M1 to M9
+
+Each subsection gives the goal, the scope with its FR IDs and pointers, what is out of scope, the dependencies, the decisions from risks §5, the exit criteria with test IDs, and the effort.
+
+### 5.1 M1 Identity & accounts (R1)
+
+**Goal.** Customers sign up, verify their email, log in and out, recover their account and keep a Nepal address book; platform staff sign in with mandatory TOTP; a suspension takes effect on the next request.
+
+**Scope.**
+
+- Accounts: FR-IAM-001 to FR-IAM-005, FR-IAM-013, and the deletion request of FR-IAM-009 (J-04, J-18; operations in [06 §13.3](06-api-design.md#133-auth-and-self)). Account emails FR-NOT-001 through the email port and the `notifications.*` and `identity.revoke_sessions` jobs ([03 §9](03-system-architecture.md#9-asynchronous-work)).
+- Addresses: FR-IAM-012 on the location seeds of [04 §21](04-domain-model-and-data-dictionary.md#21-reference-data-proposals) (VX-10), with `AddressForm` and `NepalPhoneInput` ([08 §4.3](08-ui-ux-and-design-system.md#43-dripnepal-owned-composed-components)) and phone encryption with a blind index ([04 §2.9](04-domain-model-and-data-dictionary.md#29-sensitive-column-encryption-and-blind-indexes)).
+- Staff and suspension: FR-IAM-006, FR-IAM-007, FR-ADM-002, FR-ADM-004 (J-17 user part); the MFA enrolment path of `platform:create-admin`.
+- RF halves: RF-12 (auth audit rows, 128-character passwords, label), RF-22 (email normalisation), RF-28 (auth-page labels, [08 §3.4](08-ui-ux-and-design-system.md#34-existing-repository-screens-and-what-happens-to-them)), RF-29 (77 districts, phone rule), RF-36 (no spread-payload sign-up), RF-37 (`forwardQueryString: false`, `return_to`), RF-38.
+- Contract: `ApiSerializer` emits `meta` ([06 §3.4](06-api-design.md#34-envelopes-and-the-existing-apiserializer)); API route names equal `operationId`; the 403 page ([08 §8.3](08-ui-ux-and-design-system.md#83-errors)).
+- Checks left to M1: session tag after `login()` and the unknown-email dummy hash ([07 §3.1](07-security-threat-model-and-permissions.md#31-guard-store-and-cookie)); scrypt re-benchmark ([ADR-0005](adr/0005-session-auth-server-side-revocation.md)).
+
+**Out of scope.** Phone OTP and owner MFA (R2), social login (R3), executing an anonymisation (`anonymizeUser`, M7).
+
+**Depends on.** M0. **Decisions.** Code: OD-24. Exit: OD-08 with VX-14 (test mail reaches Gmail and a Nepali ISP mailbox, gate G9), VX-10, VX-03. Safe defaults: Mailpit, an unticked 18+ confirmation.
+
+**Exit criteria.** `T-SEC-003` (sign-up fields), `T-SEC-006` (addresses), `T-SEC-008` (staff TOTP and admin gates), `T-SEC-009`, `T-SEC-010` (full), `T-SEC-011`, `T-SEC-012`, `T-SEC-013`, `T-SEC-017`, `T-SEC-034`, `T-SEC-036`, `T-IAM-103`, `T-IAM-104`, `T-IAM-105`, `T-IAM-107` to `T-IAM-110`, `T-IAM-112`, `T-API-002`, `T-API-006`, `T-API-008`, `T-ARCH-003`, `T-NOT-001`, `T-NOT-101`, `T-UI-005`, `T-UI-022`; J-04, J-17 (user part) and J-18 pass 02 §7.
+
+**Effort.** L.
+
+### 5.2 M2 Shop onboarding & membership (R1)
+
+**Goal.** A verified user applies to open a shop (several per owner), an admin approves or rejects it, and the approved shop sets up its profile, delivery zones and rates, staff and payout account. No product can be listed yet.
+
+**Scope.**
+
+- Application and review: FR-SHOP-001, FR-SHOP-002, FR-SHOP-013, FR-SHOP-014 (J-08, J-16 shop part); the seller agreement stays a draft v0 until OD-04, OD-05 and OD-11 are Decided; the shop-application queue of FR-ADM-001.
+- Shop settings: FR-SHOP-003, FR-SHOP-004 (coverage and zone rates), FR-SHOP-010 (capture and `verifyPayoutAccount`), FR-MED-003 (logo and banner).
+- Membership: FR-SHOP-005, FR-SHOP-006 (J-09); `seller_context` gains permissions and status gates ([07 §4.3](07-security-threat-model-and-permissions.md#43-shop-roles-and-permissions), [07 §4.4](07-security-threat-model-and-permissions.md#44-status-gating)); the `seller_shops` prop.
+- Admin: FR-SHOP-007 (J-17 shop part), FR-SHOP-012, admin `closeShop` ([06 §13.8](06-api-design.md#13-endpoint-catalogue); owner closure is R2).
+- Media: the FR-MED-001 direct-upload pipeline ([ADR-0013](adr/0013-media-direct-upload-async-processing.md), [03 §7.5](03-system-architecture.md#75-media-upload-pipeline-j-10-fr-med-001-adr-0013)) is built here for KYC documents (FR-SHOP-014), logos and banners: `createMediaUpload`, `completeMediaUpload`, `media.process_upload` with `sharp` ≥ 0.35.4 ([09 §10.6](09-code-structure-and-engineering-standards.md#106-sharp--0354)), `media.cleanup_abandoned`, the private bucket and audited signed views; MinIO in development (Consistency note 4).
+- UI: `DataTable`, `sidebar`, `ShopSwitcher` ([08 §4](08-ui-ux-and-design-system.md#4-component-inventory)). RF halves: RF-01, RF-03, RF-20, RF-21, RF-22 (slugs), RF-29 (shop form), RF-44.
+
+**Out of scope.** Products (M3), payouts (M8), owner closure and ownership transfer (R2).
+
+**Depends on.** M1. **Decisions.** Code: OD-16; OD-22 only if kit dashboard blocks are wanted. Exit: OD-04 rate, OD-05 and OD-11 (all in the agreement text), VX-02, VX-10 (coverage), VX-13 before any kit file is committed. No vendor accepts an agreement before OD-04, OD-05 and OD-11 are Decided. Business track: the first counsel and accountant engagements ([risks §3.2](risks-and-open-decisions.md#32-question-packs-by-verifier)); at least 10 target shops interviewed during onboarding to test problem P1 ([01 §2.2](01-product-requirements.md#22-the-problem-we-are-solving)).
+
+**Exit criteria.** `T-SEC-001`, `T-SEC-005`, `T-SEC-007`, `T-SEC-019`, `T-SEC-030`, `T-SEC-031`, `T-SEC-032`, `T-SHOP-001`, `T-SHOP-101` to `T-SHOP-110`, `T-MED-102`, `T-MED-103`, `T-MED-003`, `T-MED-001` and `T-SEC-018` for the upload kinds M2 uses, `T-UI-006`, `T-UI-007`, `T-UI-018`; `T-SHOP-005` if `revealPayoutAccount` is approved; J-08 and J-09 pass 02 §7.
+
+**Effort.** L.
+
+### 5.3 M3 Catalog authoring & media (R1)
+
+**Goal.** Shop staff create products with 0 to 2 variant axes, images, legal disclosures and stock; moderators approve, reject or block them; a published product gets a listing row.
+
+**Scope.**
+
+- Reference data: FR-CAT-001 and FR-CAT-002 seeded ([04 §21](04-domain-model-and-data-dictionary.md#21-reference-data-proposals), OD-15); FR-CAT-008 brands (OD-21, brands `pending` until approved).
+- Authoring: FR-CAT-003, FR-CAT-004, FR-CAT-007, FR-CAT-011, FR-CAT-012 and the compare-at validation of FR-PROMO-001 (J-10); the vertical slice of [09 §12](09-code-structure-and-engineering-standards.md#12-vertical-slice-vendor-product-creation-createproduct) is the template.
+- Moderation: FR-CAT-005, FR-CAT-006, `unblockProduct`; the review mode of OD-20; the moderation queue of FR-ADM-001 (J-16 product part).
+- Media: FR-MED-001 extended from M2 to product images with their derivative widths, and FR-MED-002 (`replaceProductMedia`: order, alt text, colour); image-processing memory measured ([11 §13.2](11-deployment-and-operations.md#132-droplet-sizing-4-gb--2-vcpu)).
+- Inventory: FR-INV-001, FR-INV-003, FR-INV-005 (J-11) with `inventory.drift_check` ([05 §5.10](05-order-payment-and-inventory-lifecycles.md#510-drift-detection-and-repair)).
+- Listing read model: `product_listings`, `catalog.refresh_listing`, `catalog.rebuild_listings` ([ADR-0014](adr/0014-postgres-search-and-listing-read-model.md)). RF halves: RF-14, RF-17, RF-18.
+
+**Out of scope.** Storefront pages (M4), reference-data admin UI (R2), bulk CSV and video (R3).
+
+**Depends on.** M2. **Decisions.** Code: OD-15, OD-20, OD-21. Exit: VX-02 (the s6 listing fields, REG-06). Safe defaults: `pre` moderation for every shop.
+
+**Exit criteria.** `T-CAT-001`, `T-CAT-002`, `T-CAT-007`, `T-CAT-101` to `T-CAT-106`, `T-CAT-108`, `T-CAT-109`, `T-MED-001` (product images), `T-MED-101`, `T-SEC-014`, `T-SEC-018`, `T-INV-001`, `T-INV-002`, `T-INV-005`, `T-INV-006`, `T-INV-101`, `T-API-004`, `T-API-007`; J-10, J-11 and J-16 pass 02 §7.
+
+**Effort.** XL.
+
+### 5.4 M4 Storefront discovery (R1)
+
+**Goal.** Guests and customers browse category and navigation listings, filter, sort and search, open a product page with variant availability and visit shop pages, server-rendered and within the phone budgets.
+
+**Scope.**
+
+- FR-SRCH-001, FR-SRCH-002, FR-SRCH-003, FR-SRCH-004, FR-SRCH-005, FR-SRCH-007; display of the FR-CAT-012 disclosures and FR-PROMO-001 compare-at prices (J-01, J-02); pages of [08 §2.2](08-ui-ux-and-design-system.md#22-storefront-and-public-pages); URL state and variant rules ([08 §11.1](08-ui-ux-and-design-system.md#111-search-and-filter-url-state-and-back-navigation), [08 §11.2](08-ui-ux-and-design-system.md#112-product-variant-selection-and-unavailable-combinations)); `catalog.generate_sitemap`.
+- Formatting: `formatNPR` and `formatDateTime` replace every ad-hoc call (RF-25; the "Rs" recommendation of [08 §5.11](08-ui-ux-and-design-system.md#511-money-and-numeral-display-vx-12)); the `lang="ne"` rule for vendor text; font fallback tuning; Devanagari search samples ([ADR-0014](adr/0014-postgres-search-and-listing-read-model.md)).
+- Performance and accessibility: responsive images from the M3 derivatives and a light home page (RF-30), the budgets of [08 §10.1](08-ui-ux-and-design-system.md#101-budgets), axe in CI, query-plan checks; storefront fixes of RF-28.
+- Clean-up: mocks deleted as pages get props (RF-27), `landing/**` and dead UI removed (RF-47), `zod` removed; shadcn CLI updated at M4 start ([00 §9.8](00-context-assumptions-and-questions.md#98-version-sensitive-decisions)).
+
+**Out of scope.** Cart (M5), autocomplete and facet counts (R2), a search engine (R3).
+
+**Depends on.** M3. **Decisions.** Code: VX-12 (formatter); OD-22 only if kit blocks are wanted. Exit: VX-13 if any kit file is used.
+
+**Exit criteria.** `T-CAT-003` to `T-CAT-006`, `T-CAT-107`, `T-API-003`, `T-SEC-015`, `T-SEC-024`, `T-PERF-002`, `T-A11Y-001`, `T-UI-002`, `T-UI-003`, `T-UI-004`, `T-UI-010`, `T-UI-011`, `T-UI-014`, `T-UI-015`, `T-UI-020`, `T-UI-021`, `T-UI-023`, `T-UI-027`, `T-UI-028`, `T-UI-031`, `T-UI-032`; `T-UI-012` within budget; `T-PERF-003` reported; J-01 and J-02 pass 02 §7.
+
+**Effort.** L.
+
+### 5.5 M5 Cart & COD checkout (R1)
+
+**Goal.** A verified customer builds one server cart across shops, gets a quote and places one idempotent cash-on-delivery order split per shop, with no oversell and no duplicate order on a flaky network.
+
+**Scope.**
+
+- Cart: FR-CART-001, FR-CART-002, FR-CART-003 (J-03); guest merge at login; `cart.expire_abandoned`. RF-10, RF-19, RF-27 (cart), RF-28 (cart entry on phones).
+- Checkout: FR-CHK-001, FR-CHK-002, FR-CHK-003, FR-CHK-004, FR-CHK-005, FR-CHK-007 (J-05); the `placeOrder` algorithm and lock order of [05 §4](05-order-payment-and-inventory-lifecycles.md#4-checkout-the-placeorder-algorithm); idempotency of [06 §7](06-api-design.md#7-idempotency); COD reservations committed at placement (FR-INV-002); the `checkout_enabled` check.
+- Money: the commission snapshot of FR-LED-001 (OD-04 basis); server totals only (RF-07, RF-15, RF-16, RF-46). Order-placed email (FR-NOT-002).
+- UI: `CartShopGroup`, `CheckoutStepper`, `OfflineBanner` and checkout recovery ([08 §11.3](08-ui-ux-and-design-system.md#113-cart-stock-and-price-changes), [08 §11.4](08-ui-ux-and-design-system.md#114-checkout-recovery-without-duplicate-orders)).
+- Staging and its deploy jobs ([11 §2.4](11-deployment-and-operations.md#24-staging)); staging exists before M5 exits (Consistency note 7).
+
+**Out of scope.** Gateway payment (M8), coupons (R2).
+
+**Depends on.** M4 (and M1 addresses, M2 rates). **Decisions.** Code: OD-04 basis. Exit: OD-18 (limits are settings; the `T-CHK-007` refusal rule depends on it). Safe default: items-only basis.
+
+**Exit criteria.** `T-INV-003`, `T-INV-102`, `T-CART-002`, `T-CART-101`, `T-CART-102`, `T-CHK-001` to `T-CHK-010`, `T-SEC-003`, `T-SEC-006`, `T-API-007`, `T-ORD-008`, `T-ORD-101`, `T-ORD-102`, `T-ORD-104`, `T-ORD-106`, `T-ORD-107`, `T-ORD-108`, `T-UI-009`, `T-UI-016`, `T-UI-017`; the staging release step passes `T-OPS-013` and `T-OPS-014`, and staging passes `T-OPS-006` (RF-31); J-03 and J-05 pass 02 §7.
+
+**Effort.** L. Business track: the VX-15 payment route is confirmed before the staging server is bought.
+
+### 5.6 M6 Order processing & fulfillment (R1)
+
+**Goal.** Vendors accept or reject orders, ship with tracking, and record delivery and the COD outcome; customers track and cancel; complaints and support-mediated returns have a register with deadlines.
+
+**Scope.**
+
+- Vendor: FR-ORD-003, FR-ORD-004 (J-12), FR-FUL-001, FR-FUL-002, FR-FUL-003, FR-PAY-001 (J-13 outcomes), FR-NOT-003; jobs `orders.acceptance_timeout`, `orders.acceptance_reminder`, `orders.cod_outcome_reminder`; customer-contact masking ([07 §5.2](07-security-threat-model-and-permissions.md#52-vendor-visibility-of-customer-contact-data), OD-17).
+- Customer: FR-ORD-001, FR-ORD-002, FR-ORD-006 (J-07) with `orders.auto_complete`; order emails FR-NOT-002.
+- Shop suspension with open orders: `orders.handle_shop_suspension` ([05 §8.10](05-order-payment-and-inventory-lifecycles.md#810-shop-suspension-while-orders-remain-open)).
+- Support cases: FR-ADM-009 with the 15-day clock (`platform.support_case_sla`) and its customer, seller and admin pages (J-19 up to the decision; admin cancellation and order notes of FR-ORD-005 and FR-RET-005, and the `/grievance` entry point, follow in M7; Consistency note 3).
+- Support-mediated returns from request to receipt: FR-RET-006 (J-20 first half); `approveReturnRequest` sets the REG-09 refund due date. The inspection close, which restocks and creates the refund (`closeReturnRequest`), follows in M7.
+- FR-ORD-007 only if OD-26 makes DripNepal the issuer of receipts or invoices (§7).
+
+**Out of scope.** Ledger postings and refunds (M7), self-serve returns and partial shipments (R2), courier APIs (R3).
+
+**Depends on.** M5. **Decisions.** Code: OD-17, OD-19. Exit: OD-06 values, OD-07, OD-26 (receipt or invoice at `delivered` and `collected`), VX-03, VX-04. Safe defaults: 30-day masking, 48 h acceptance SLA, 7-day windows, order receipt only.
+
+**Exit criteria.** `T-ORD-001` to `T-ORD-007`, `T-ORD-009`, `T-ORD-010`, `T-FUL-001` to `T-FUL-005`, `T-FUL-101`, `T-INV-007` (RTO and rejection; the return path in M7), `T-SEC-002`, `T-SEC-033`, `T-PAY-102`, `T-RET-001`, `T-RET-101`, `T-ADM-103`, `T-ORD-105`, `T-SEC-006` (support cases), `T-UI-008`, `T-UI-019`; J-12 passes 02 §7, and J-07 and J-19 pass it except their M7 steps (admin intervention, `/grievance`).
+
+**Effort.** XL.
+
+### 5.7 M7 Ledger, admin ops & launch readiness (R1 launch gate)
+
+**Goal.** Money owed between vendors and DripNepal is posted and reconciled, staff can run the marketplace, operations are proven, and every R1 launch gate of [01 §5.3](01-product-requirements.md#53-r1-launch-gates) passes.
+
+**Scope.**
+
+- Ledger: FR-LED-001 (golden example), FR-LED-002 (postings wired into the M6 transitions), FR-LED-003, FR-LED-004 (remittance recording), FR-LED-005 (J-13 ledger, J-15); `ledger.integrity_check`, `ledger.availability_digest` ([05 §7](05-order-payment-and-inventory-lifecycles.md#7-vendor-ledger-and-settlement)).
+- Refunds: FR-RET-001, FR-RET-007 with maker-checker (OD-14) and `refunds.sla_monitor`, which watches the REG-09 due dates set at return approval in M6 (J-14 manual); `closeReturnRequest` with restock and refund (J-20 second half).
+- Admin: FR-ORD-005, FR-RET-005, FR-ADM-001 overview, FR-ADM-003, FR-ADM-007, FR-ADM-008, FR-ADM-010 (settings, kill switch, banner), FR-ADM-011 with the `/legal` and `/grievance` pages; `anonymizeUser` (FR-IAM-009).
+- Retention: `platform.retention_purge` with the Ephemeral purges and the never-approved application purge with its KYC files ([11 §8.7](11-deployment-and-operations.md#87-platformretention_purge-scope)); the weekly saved query over permanent notes ([11 §9.2](11-deployment-and-operations.md#92-logs)).
+- Operations: production first deploy with `checkout_enabled` off ([09 §9.3](09-code-structure-and-engineering-standards.md#93-bootstrap-checklist-first-deploy-of-an-environment)); `database/migrations.lock` created at that deploy; backups and restore drills ([11 §11](11-deployment-and-operations.md#11-backup-policy-and-verified-restore)); alerts and dashboards ([11 §9](11-deployment-and-operations.md#9-observability-and-alerting)); runbooks ([11 §10](11-deployment-and-operations.md#10-runbooks)); CSP enforced (RF-34); RF-31 completed; second-provider rebuild ([11 §1.9](11-deployment-and-operations.md#19-portability-check-adopts-the-03-53-assumption)); load test.
+- Business track: gates G3 to G10; provider onboarding paperwork starts (R-31); hosting prices re-read ([ADR-0016](adr/0016-hosting-single-region-portable.md)).
+- Before M7 code: 06 defines how the second approval of a ledger adjustment is recorded, which `T-LED-103` needs ([11 Consistency note 62](11-deployment-and-operations.md#consistency-notes-for-editor)).
+
+**Out of scope.** Gateway payments and payouts (M8).
+
+**Depends on.** M6. **Decisions.** Code: OD-05, OD-14. Exit: OD-09, OD-11, OD-26, OD-27 (COD question), published policies (OD-07), VX-02 (DoCSCP listing number), VX-04, VX-05, VX-08, VX-09, VX-15. No safe default: launch waits.
+
+**Exit criteria.** `T-LED-001`, `T-LED-002`, `T-LED-003`, `T-LED-005`, `T-LED-101`, `T-LED-103`, `T-LED-104`, `T-SEC-004`, `T-RET-002`, `T-RET-005`, `T-INV-007` (return path), `T-PAY-009`, `T-ADM-102`, `T-IAM-106`, `T-IAM-111`, `T-SHOP-002` (after A2-101 is answered), `T-SHOP-003`, `T-SHOP-004`, `T-SEC-029`, `T-OPS-002`, `T-OPS-015`, `T-OPS-006` once in production, the first `T-OPS-005` staging rebuild; the launch rows of [10 §5.2](10-testing-and-quality-gates.md#52-release-gates): G1 (`T-SEC-001` to `T-SEC-004`, `T-SEC-010`, `T-INV-003`, `T-CHK-004`), G2 (`T-PERF-001`, `T-A11Y-001`, `T-OPS-001`), operations readiness (`T-OPS-003`, `T-OPS-004`, `T-OPS-007` to `T-OPS-009`, `T-OPS-012`, `T-OPS-016`, `T-OPS-017`, `T-OPS-018`, `T-OPS-020`, `T-SEC-019`, `T-SEC-035` with CSP enforced) and promotion (`T-OPS-011`, `T-OPS-013`, `T-OPS-014`, `T-UI-030`); G3 to G10 signed off; J-07, J-13, J-14, J-15, J-19 and J-20 pass 02 §7.
+
+**Effort.** XL.
+
+### 5.8 M8 Gateway payments (R1.1)
+
+**Goal.** Customers can pay with one wallet gateway, refunds go back through it, and vendors are paid by approved manual transfer.
+
+**Scope.**
+
+- Payment: FR-CHK-006, FR-PAY-002, FR-PAY-003, FR-PAY-004 (J-06): the `PaymentProvider` adapter for the OD-03 gateway with verify-by-lookup ([ADR-0012](adr/0012-payment-provider-isolation-verify-by-lookup.md), [03 §11](03-system-architecture.md#11-provider-isolation)), the return route ([06 §12.2](06-api-design.md#122-return-route-contract-get-paymentsproviderreturn)), held reservations with `inventory.expire_reservations`, and the `payments.*` jobs.
+- Refunds: FR-RET-003 (J-14 gateway) with the `refunds.*` jobs; the `needs_review` queue ([05 §9.5](05-order-payment-and-inventory-lifecycles.md#95-manual-review-queue-needs_review)) and its operations; runbooks [11 §10.2](11-deployment-and-operations.md#102-payment-gateway-outage-r11) and [11 §10.3](11-deployment-and-operations.md#103-payments-and-refunds-in-needs_review).
+- Payouts: the payout part of FR-LED-004 (J-15), `tax_withholding` per OD-27 ([05 §7.9](05-order-payment-and-inventory-lifecycles.md#79-tax_withholding-reserved-pending-od-27)), the hold revision of OD-06.
+- Acceptance: provider contracts re-read at M8 start ([00 §9.8](00-context-assumptions-and-questions.md#98-version-sensitive-decisions)); provider UAT in the sandbox (VX-06 or VX-07) and the REG-17 licence check.
+
+**Out of scope.** More gateways (R2), automated payouts (R3).
+
+**Depends on.** M7 (R1 live). **Decisions.** Code: OD-02, OD-03, VX-01, and VX-06 or VX-07. Exit: OD-27 (payout computation) with VX-05, OD-06 hold revision, OD-14 revisited if staff grew. Safe default: stay COD-only and move M8 out.
+
+**Exit criteria.** The M8 row of 10 §5.2 (every T-PAY and T-RET test green): `T-PAY-001` to `T-PAY-008`, `T-PAY-010`, `T-PAY-101`, `T-RET-003`, `T-RET-004`, `T-RET-102`; also `T-SEC-021`, `T-SEC-028`, `T-ADM-010`, `T-LED-004`, `T-LED-006`, `T-LED-007`, `T-LED-102`, `T-INV-004`; provider UAT signed off; J-06 passes 02 §7.
+
+**Effort.** L, plus the provider onboarding lead time (R-31).
+
+### 5.9 M9 Returns, reviews, wishlist, coupons, SMS (R2)
+
+**Goal.** The first growth release, planned in detail at R1 plus three months ([01 §5.1](01-product-requirements.md#51-release-phases)).
+
+**Scope (committed core).** FR-RET-002 (self-serve returns), FR-REV-001 (reviews, REG-12), FR-WISH-001, FR-PROMO-002 (platform coupons, designed now in [07 TM-20](07-security-threat-model-and-permissions.md#tm-20-coupon-abuse-r2)), FR-NOT-004 (SMS) and FR-IAM-010 (phone OTP); `node ace data:retention` with its `auth.*` rule ([04 §19.3](04-domain-model-and-data-dictionary.md#193-retention-schedule)), which must ship before the second anniversary of launch. R2 planning pulls further R2 epics from §6 into M9 or schedules them after it.
+
+**Out of scope.** Everything in §6 not pulled in.
+
+**Depends on.** M7; normally M8. **Decisions.** None of OD-01 to OD-27. Exit: VX-14 (SMS part) and VX-11 re-check before OTP; the SMS provider [Open: owner decision, registered at M9 planning]; Nepali legal texts reviewed by counsel (R-23) if the Nepali UI joins M9.
+
+**Exit criteria.** `T-SEC-022`, `T-SEC-023`, `T-CHK-011`; the other M9 tests are numbered in 10 §6 when written (Consistency note 11).
+
+**Effort.** XL.
+
+## 6. Backlog for R2 and R3
+
+R2 epics not in the M9 core; R2 planning places each one.
+
+| Epic                                    | FR IDs                   | Prerequisites                                                                                   |
+| --------------------------------------- | ------------------------ | ----------------------------------------------------------------------------------------------- |
+| Nepali UI                               | — (01 §5.4; A-10)        | Catalogs since M0; a Bikram Sambat date library; counsel review of texts (R-23)                 |
+| Owner and staff MFA                     | FR-IAM-008               | TOTP (M1)                                                                                       |
+| Owner closes a shop; ownership transfer | FR-SHOP-008, FR-SHOP-009 | Admin `closeShop` (M2); the A2-101 answer                                                       |
+| Curated collections                     | FR-CAT-009               | [04a §7.15](04a-data-dictionary-tables.md#715-collections-and-collection_products-r2) completed |
+| Autocomplete and facet counts           | FR-SRCH-006, FR-SRCH-008 | Listing read model (M3, M4)                                                                     |
+| Partial shipments                       | FR-FUL-005               | Shipments (M6)                                                                                  |
+| Receipts and invoices                   | FR-ORD-007               | OD-26; moves to M6 if DripNepal issues them (§7)                                                |
+| Disputes workflow                       | FR-RET-004               | Support cases (M6)                                                                              |
+| Category commission rates               | FR-LED-006               | Ledger (M7)                                                                                     |
+| Reference-data admin UI                 | FR-ADM-006               | Reference seeders (M3)                                                                          |
+| Low-stock indicator                     | FR-INV-004               | Inventory (M3)                                                                                  |
+| Notification preferences                | FR-NOT-005               | SMS (M9)                                                                                        |
+| Additional gateways                     | FR-PAY-005               | The provider port (M8)                                                                          |
+
+R3 epics start when the triggers of [01 §5.4](01-product-requirements.md#54-explicit-non-goals) fire.
+
+| Epic                                   | FR IDs       | Prerequisites or trigger                                                                                      |
+| -------------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------- |
+| Custom shop roles                      | FR-SHOP-011  | Three or more shops need a role the fixed set cannot express                                                  |
+| Bulk CSV import and export             | FR-CAT-010   | Catalog (M3)                                                                                                  |
+| Shop coupons                           | FR-PROMO-003 | Platform coupons (M9)                                                                                         |
+| Courier API integrations               | FR-FUL-004   | Two couriers with documented APIs and over 30% of shops on one                                                |
+| Automated payouts                      | FR-LED-007   | Over 150 active shops, or payout work over 4 hours a week; VX-01                                              |
+| Multi-location inventory               | FR-INV-006   | Inventory (M3)                                                                                                |
+| Social login                           | FR-IAM-011   | Identity (M1)                                                                                                 |
+| Video and social embeds                | FR-MED-004   | Media pipeline (M3)                                                                                           |
+| Dedicated search engine                | —            | Search p95 over 300 ms or over 200k listings ([ADR-0014](adr/0014-postgres-search-and-listing-read-model.md)) |
+| Mobile app API tokens                  | —            | [ADR-0004](adr/0004-inertia-reads-json-api-writes.md) decision 5                                              |
+| `node ace data:retention` 7-year rules | —            | Must ship before the first 7-year clock ends in 2033 (04 §19.3)                                               |
+
+## 7. Items scheduled from the audits and other documents
+
+| Item                                                                                               | Asked in                                                                         | Lands in                                                                                                           |
+| -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Never-approved application purge with its KYC files, live before the first rejection is a year old | 04 §19.3; 04 "Deep audit 2" (A2-070, FU-100); 11 §8.7; 10 §7                     | M7, so it runs from the launch; `T-SHOP-003`, `T-SHOP-004`                                                         |
+| `node ace data:retention` with its `auth.*` rule, before the second anniversary of launch          | Same                                                                             | M9 (R2)                                                                                                            |
+| `node ace data:retention` 7-year rules, before 2033                                                | Same                                                                             | R3 backlog (§6)                                                                                                    |
+| Weekly saved query over permanent free-text notes                                                  | 11 §9.2; FU-100                                                                  | M7 operations work                                                                                                 |
+| Requirement-to-test traceability (FR and AC to test IDs)                                           | 10 §1, §7, §8                                                                    | Full version of this document (§8); not in the lite version                                                        |
+| Master matrix FR → journey → tables → operations → permissions → tests → milestone                 | 00 §1.4, §1.5; 02 §1, §2; 05 §10                                                 | §8                                                                                                                 |
+| REG to FR to milestone map                                                                         | 01 §9.1 and its note 7                                                           | §8; the milestone column of 01 §9.8 is confirmed (note 5)                                                          |
+| Milestone IDs, names, releases and schedule                                                        | 00 §1.3, §2.4, §7.3; 01 §5.1; 05 and 06 headers; 06 §13.1; 07 §2.1; risks header | §3                                                                                                                 |
+| RF fix milestones                                                                                  | 00 §4.6                                                                          | §4.2 and §5, with the RF-28 and RF-47 splits (notes 1, 2)                                                          |
+| Blocking gates follow the register (OD-04 basis M5, rate M2; OD-27 COD question at launch)         | 00 note 6; risks notes 1 and 8                                                   | §3 and each milestone                                                                                              |
+| FR-ORD-007 if OD-26 makes DripNepal the issuer                                                     | 01 AC-FR-ORD-007-2 and note 1; risks OD-26                                       | M6 in that case (OD-26 already blocks the M6 exit); otherwise the R2 backlog                                       |
+| J-19 and J-20 milestones                                                                           | 02 §2 and note 1                                                                 | J-19 M6 (cases) and M7 (intervention, `/grievance`); J-20 M6 (to receipt) and M7 (close, restock, refund) (note 3) |
+| Support-case, return and settings operations and pages                                             | 06 §13.4 and note 28; 08 §3                                                      | Support cases and returns M6; refunds, settings, `/legal`, `/grievance` M7 (note 3)                                |
+| Staging start                                                                                      | 11 §2.4 and note 8                                                               | Exists before M5 exits (note 7)                                                                                    |
+| Monthly operations review findings                                                                 | 11 §13.6                                                                         | §6 with an owner (§2.7)                                                                                            |
+| ADR statuses compared with the register at each milestone exit                                     | ADR-0001                                                                         | §2.4 item 3                                                                                                        |
+| Latest responsible moments stated against milestone events; weekly review                          | risks §1.4, §1.6                                                                 | §2.5 (no calendar dates)                                                                                           |
+| Traceability updated when scope moves; exit criteria against scope creep (R-12)                    | risks §1.5; R-12                                                                 | §2.4, §2.7                                                                                                         |
+| Pointers that name 12 as owner only                                                                | 01, 03, 04, 06, 07, 09 and 10 headers; 04 §1.1; ADR-0001 and ADR-0011 "Related"  | Nothing to schedule                                                                                                |
+
+## 8. Expanding this document
+
+The full version adds, in this order:
+
+- **Traceability matrix**: FR → J → tables → `operationId` → permission → test IDs → milestone, generated where possible from `x-release` in [openapi.yaml](openapi.yaml), [07 §4.5](07-security-threat-model-and-permissions.md#45-operation--permission-condensed) and [10 §6](10-testing-and-quality-gates.md#6-test-id-registry), with a column per AC.
+- **REG and SM map**: each REG ID to its implementing FRs and milestone, and each success metric to the milestone that makes it measurable.
+- **AC coverage per milestone**: which acceptance criteria are automated and at which layer, from the test titles (`T-ARCH-033` index).
+- **Refined estimates**: sizes recalibrated from M0 actuals, then per-epic estimates and a capacity-based forecast once team capacity is known.
+- **Ticket export**: the epic and task list of each milestone as a CSV for the issue tracker.
+- **R2 milestone plan**: the split of §6 after R2 planning; R3 trigger monitoring.
+- **Risk burn-down**: the top risks of [risks §4.1](risks-and-open-decisions.md#41-top-risks-score--15) mapped to the milestone exits that retire them.
+
+## Consistency notes for editor
+
+1. **RF-47 milestone.** [00 §4.6](00-context-assumptions-and-questions.md#46-consolidated-repository-findings-rf-01--rf-47) gives M4 for the whole finding; [08 §13](08-ui-ux-and-design-system.md#13-current-ui-remediation-list) runs the frontend CI checks from M0 and removes dead UI in M4. Decided: the 08 split. Follow-up for 00 §4.6: RF-47 fix column "M0 (CI) / M4".
+2. **RF-28 milestone.** 00 §4.6 says M4 / M5; 08 §3.4 fixes the auth-page labels in M1. Decided: M1 (auth pages), M4 (storefront), M5 (cart on phones). Follow-up for 00 §4.6.
+3. **Support cases, returns, settings.** 02 placed J-19 in M7 and J-20 in M6/M7 as assumptions; 06 marked the support-case and return operations "R1" without a milestone. Decided: FR-ADM-009 in M6, because J-07 opens a case from the order page and J-20 starts from a `return_request` case; J-19 therefore spans M6 (the case flow) and M7 (admin intervention and notes of FR-ORD-005 and FR-RET-005, which 06 already places at R1·M7, and the `/grievance` entry point), and J-07 completes with it at M7; FR-RET-006 in M6 up to receipt, and `closeReturnRequest` (restock and refund) in M7; settings operations (already R1·M7 in 06), `/legal` and `/grievance` in M7. Follow-ups: 02 §2 journey index and the J-19 release row ("M6, M7"); 06 §13.4 to §13.6 and §13.8 release cells R1·M6 for the support-case and return operations, R1·M7 for `closeReturnRequest`, with the matching `x-release` in openapi.yaml; 08 §2.4 to §2.6 rows marked "milestone from 12"; 06 note 28 can close.
+4. **Media upload start.** 06 §13.5 marks `createMediaUpload` and `completeMediaUpload` R1·M3, but FR-SHOP-014 (J-08, M2) and the 08 `/sell` and `/seller/{shopSlug}/settings` pages (M2) need them. Decided: the FR-MED-001 pipeline, including `media.process_upload`, `media.cleanup_abandoned` and `sharp`, ships in M2 for `kyc_document`, logo and banner (AC-FR-MED-003-1 puts logos and banners on that pipeline, and `T-MED-001` for KYC files needs the image checks); M3 extends it to product images and adds FR-MED-002. Follow-ups: 06 §13.5 and openapi.yaml `x-release` to R1·M2; [09 §10.6](09-code-structure-and-engineering-standards.md#106-sharp--0354) and the §10.2 `allowBuilds` list: `sharp` added in M2; [11 §2.2](11-deployment-and-operations.md#22-development) and §4.3 MinIO "required from M2"; 07 §2.2 TM-15 milestone "M2 / M3", since its upload controls apply to KYC files first.
+5. **01 §9.8 milestones confirmed.** "M6 (refund due dates)" holds: `approveReturnRequest` sets `refund_due_at` in M6 (02 J-20 step 4), and M7 adds the refunds and `refunds.sla_monitor`. M0 (audit log), M1 (field encryption), M7 (retention, runbook, restore drill) and M8 (REG-17 check) also hold. No change.
+6. **M9 scope.** 01 §5.1, 08 §3.3, 04a §7.15 and risks §5 map all of R2 to M9. Decided: M9 is the R2 milestone with the committed core of §5.9; the other R2 epics wait in §6 and R2 planning pulls them into M9 or later R2 milestones. Nothing in those documents is wrong; 01 §5.1 may say "M9 and later".
+7. **Staging.** Confirms [11 §2.4](11-deployment-and-operations.md#24-staging): staging exists before M5 exits; 11 note 8 can close. Follow-up for [risks §3.2](risks-and-open-decisions.md#32-question-packs-by-verifier): the bank question "before the first paid plan, at the latest M7" becomes "before the staging server (M5 at the latest)", as 11 §1.8 already says.
+8. **00 §7.3 rows.** The M6 row omits VX-03 and VX-04, the M7 row VX-04, the M8 row "with VX-05" and "OD-14 revisited if staff grew", and the M9 row the R-23 counsel review, all of which risks §5 lists. This document follows risks §5. Follow-up for 00 §7.3.
+9. **Gates from the register.** §3 uses risks §5 throughout (OD-04 basis at M5 start and rate at M2 exit; OD-05 and OD-11 at M2 exit and launch; OD-06 at M6 exit and M8; OD-22 at M2 and M4; OD-26 at M6 exit and launch; OD-27 COD question at launch). 00 note 6 and risks notes 1 and 8 can close for 12.
+10. **Test placement decisions.** `T-SHOP-002` lands in M7, not with `closeShop` in M2, because it needs return and refund records; it still waits for A2-101. `T-INV-004` lands in M8, because the expiry job serves gateway holds and COD reservations are committed at placement (A-09). `T-SEC-016` runs as a rule of `T-ARCH-001` from M0; `T-OPS-006` runs on staging (M5) and once in production (M7); the first quarterly `T-OPS-005` rebuild is part of launch readiness; `T-INV-007` is split by path (M6 RTO and rejection, M7 return).
+11. **For 10: checks without an ID.** (a) `placeOrder` refused and the banner shown while `checkout_enabled` is off (FR-ADM-010, gate G10); (b) the Ephemeral rows of `platform.retention_purge` (tokens, carts, archived addresses, invitations, notifications), since `T-SHOP-004` covers applications only; (c) the M0 `uuidv7()` check (04 §2.1), or fold it into the `T-ARCH-004` spike record; (d) the legal disclosures page showing every `platform_legal_disclosures` field (FR-ADM-011, gate G3); (e) `node ace data:retention` when it is built (M9); (f) the M9 features, at M9 planning.
+12. **ADR-0001.** Its "milestone exit checklist in 12" is §2.4 item 3; the proposed item can close.
+13. **Open questions.** (a) A2-101, the `closeShop` preconditions; (b) approval of `revealPayoutAccount` (`T-SHOP-005` joins M2 if approved); (c) `identity.purge_sessions` (proposed in 04 §19.3 and 11 §8.7) joins the M7 retention jobs if approved; (d) the SMS-provider decision gets its OD number at M9 planning; (e) the size ranges of §2.2 are recalibrated after M0.
