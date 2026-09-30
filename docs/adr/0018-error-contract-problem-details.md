@@ -6,14 +6,14 @@ Reviewed: critic pass A4.3 (2026-09-25)
 
 ## Status
 
-| Field              | Value                                                                                                                           |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
-| Decision status    | **Accepted**                                                                                                                    |
-| Date               | 2026-09-25                                                                                                                      |
-| Deciders           | Lead developer                                                                                                                  |
-| Supersedes         | —                                                                                                                               |
-| Superseded by      | —                                                                                                                               |
-| Related open items | OD-13 (JSON casing of the extension members `request_id` and `errors[]`; the RFC members do not change). Fixes RF-36 and RF-12. |
+| Field              | Value                                                                                                                                                                               |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Decision status    | **Accepted**                                                                                                                                                                        |
+| Date               | 2026-09-25                                                                                                                                                                          |
+| Deciders           | Lead developer                                                                                                                                                                      |
+| Supersedes         | —                                                                                                                                                                                   |
+| Superseded by      | —                                                                                                                                                                                   |
+| Related open items | None open: OD-13 (JSON casing of the extension members `request_id` and `errors[]`) was decided on 2026-09-30 for snake_case; the RFC members do not change. Fixes RF-36 and RF-12. |
 
 ## Context
 
@@ -117,7 +117,6 @@ Reviewed: critic pass A4.3 (2026-09-25)
 ## When to revisit
 
 - 06 decides the proposed codes (`MALFORMED_REQUEST`, `CHECKOUT_DISABLED`) or a CSRF-specific code before `openapi.yaml` freezes.
-- OD-13 chooses camelCase: rename the extension members before the first endpoint merges.
 - External consumers need localised `title` and `detail` via `Accept-Language`, or `/api/v2` changes error semantics.
 - The code count passes about 40 [Assumption]: group by `type` hierarchy.
 

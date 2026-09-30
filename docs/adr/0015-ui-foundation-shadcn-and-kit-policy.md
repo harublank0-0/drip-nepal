@@ -6,14 +6,14 @@ Reviewed: critic pass A4.3 (2026-09-25)
 
 ## Status
 
-| Field              | Value                                                                                                                                                           |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Decision status    | **Accepted** (from Q7). Committing any kit item is gated on **VX-13**; the policy holds for OD-22 option (a), and option (b) would need a superseding ADR.      |
-| Date               | 2026-09-25                                                                                                                                                      |
-| Deciders           | Product owner (Q7), lead developer                                                                                                                              |
-| Supersedes         | —                                                                                                                                                               |
-| Superseded by      | —                                                                                                                                                               |
-| Related open items | **VX-13** (free kit items in a public MIT repo), **OD-22** (repo visibility and kit tier), OD-23 (MIT `LICENSE` vs `UNLICENSED` in `package.json`), OD-25, R-15 |
+| Field              | Value                                                                                                                                                                       |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Decision status    | **Accepted** (from Q7). Committing any kit item is gated on **VX-13**; the policy holds for OD-22 option (a), and option (b) would need a superseding ADR.                  |
+| Date               | 2026-09-25                                                                                                                                                                  |
+| Deciders           | Product owner (Q7), lead developer                                                                                                                                          |
+| Supersedes         | —                                                                                                                                                                           |
+| Superseded by      | —                                                                                                                                                                           |
+| Related open items | **VX-13** (free kit items in a public MIT repo), **OD-22** (repo visibility and kit tier), OD-23 (decided 2026-09-30: keep MIT; M0 sets `package.json` to MIT), OD-25, R-15 |
 
 ## Context
 
@@ -77,7 +77,7 @@ Reviewed: critic pass A4.3 (2026-09-25)
 
 ## When to revisit
 
-- OD-22 chooses "private + paid tier", or OD-23 changes the licence model: write a superseding ADR.
+- OD-22 chooses "private + paid tier", or the OD-23 ruling (keep MIT, decided 2026-09-30) is reversed: write a superseding ADR.
 - VX-13 is answered: record the reply or refusal here.
 - Dashboard work exceeds 10 developer-days that premium blocks would have covered [Assumption]: re-open OD-22 with that data.
 - shadcn deprecates Radix, or the OD-25 Inertia upgrade changes `Link`/`Head` usage.

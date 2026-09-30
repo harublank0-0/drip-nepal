@@ -6,11 +6,11 @@ Reviewed: critic pass A4.3 (2026-09-25)
 
 ## Status
 
-- **Decision status:** **Proposed**, pending **OD-01**: the product owner confirms in writing that no hosted database holds real sign-ups, shops or orders (Assumption A-01).
+- **Decision status:** **Accepted** on 2026-09-30, when OD-01 was decided: the product owner confirmed that no hosted instance holds real users, shops or orders (Assumption A-01 confirmed).
 - **Date:** 2026-09-25
 - **Deciders:** product owner (OD-01), lead developer
 - **Supersedes / superseded by:** — / — (after the R1 launch the forward-only rule is permanent)
-- **Related open items:** OD-01; VX-10 (location dataset for reference seeders)
+- **Related open items:** VX-10 (location dataset for reference seeders); OD-01 was decided on 2026-09-30 (re-baseline)
 
 ## Context
 
@@ -43,7 +43,7 @@ Fixing these incrementally would take dozens of ALTER migrations that convert or
 - Schema rules load only when `schemaGeneration.rulesPaths` is set.
 - `schema:dump --prune` exists, but it would snapshot the defective schema instead of replacing it.
 
-**Timing.** No production data is believed to exist [Assumption A-01 → OD-01]. Once real orders exist, their records must be kept for the statutory period [Verify-external VX-08; schedule in [04 §19.3](../04-domain-model-and-data-dictionary.md#193-retention-schedule)], and a destructive reset is no longer acceptable. The cheap moment is before launch.
+**Timing.** No production data exists: the product owner confirmed it when OD-01 was decided on 2026-09-30 (A-01). Once real orders exist, their records must be kept for the statutory period [Verify-external VX-08; schedule in [04 §19.3](../04-domain-model-and-data-dictionary.md#193-retention-schedule)], and a destructive reset is no longer acceptable. The cheap moment is before launch.
 
 ## Decision
 
@@ -97,12 +97,12 @@ Fixing these incrementally would take dozens of ALTER migrations that convert or
 
 **Risks**
 
-- _OD-01 is wrong_ and a staging database holds data someone values. Mitigation: written confirmation before merge, and a one-off export.
+- _OD-01 is wrong_ and a staging database holds data someone values. Mitigation: the product owner's confirmation recorded with OD-01 (2026-09-30), and a one-off export.
 - _A baseline mistake is found after launch_ and then costs an expand/contract migration. Mitigation: constraint tests, and a two-person review (or a product-owner walkthrough when there is one developer).
 
 ## When to revisit
 
-- OD-01 is answered "data exists": supersede this ADR with an incremental plan for the affected tables.
+- A hosted database with real data is found before the baseline merges, despite OD-01: supersede this ADR with an incremental plan for the affected tables.
 - 04 changes substantially before launch: the baseline may be re-squashed, **only before the first production deploy**.
 - After launch this ADR is not revisited. Only a superseding ADR can change the forward-only rule.
 

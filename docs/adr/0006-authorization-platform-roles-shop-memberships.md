@@ -6,14 +6,14 @@ Reviewed: critic pass A4.3 (2026-09-25)
 
 ## Status
 
-| Field              | Value                                                                                                                                                                           |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Decision status    | **Accepted**                                                                                                                                                                    |
-| Date               | 2026-09-25                                                                                                                                                                      |
-| Deciders           | Lead developer, product owner                                                                                                                                                   |
-| Supersedes         | —                                                                                                                                                                               |
-| Superseded by      | —                                                                                                                                                                               |
-| Related open items | OD-12 (seller prefix `/seller/{shopSlug}`), OD-14 (maker-checker vs single-operator mode), OD-17 (vendor access to customer contact). They set details, not the two-axis model. |
+| Field              | Value                                                                                                                                                                                               |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Decision status    | **Accepted**                                                                                                                                                                                        |
+| Date               | 2026-09-25                                                                                                                                                                                          |
+| Deciders           | Lead developer, product owner                                                                                                                                                                       |
+| Supersedes         | —                                                                                                                                                                                                   |
+| Superseded by      | —                                                                                                                                                                                                   |
+| Related open items | OD-12 (seller prefix `/seller/{shopSlug}`, decided 2026-09-30), OD-14 (maker-checker vs single-operator mode), OD-17 (vendor access to customer contact). They set details, not the two-axis model. |
 
 ## Context
 

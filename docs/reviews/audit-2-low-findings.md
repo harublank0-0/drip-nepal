@@ -10,7 +10,7 @@ Deep audit 2 of [04 Domain model and data dictionary](../04-domain-model-and-dat
 - Line numbers are from commit `b81e3f1`, before the audit fixes. Find the text by its section and wording.
 - Fix an entry when you next work in that section, or earlier if code shows that it matters. When an entry is fixed or found to be wrong, delete it in the same change.
 - IN-xx numbers are follow-ups for 04 and 04a that the earlier audits of 05 and 07 queued (their A1-xx and A4-xx findings). Audit 2 applied them, so an entry that calls an IN item "queued" describes the text before those fixes and may already be resolved.
-- One entry, A2-113, is an open owner decision for R2 (coupons). It stays open until coupons are planned.
+- One entry, A2-113, is an open owner decision for R2 (coupons). It stays open until coupons are planned. The [risks register](../risks-and-open-decisions.md#22-decision-table) tracks it as OD-54.
 
 ## Summary
 
@@ -472,7 +472,7 @@ Findings located in [04a-data-dictionary-tables.md](../04a-data-dictionary-table
 - **Category:** constraint
 - **Text:** `categories_slug_check CHECK (slug::text ~ '^[a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])$')` and `categories_path_check CHECK (path ~ '^/([a-z0-9]+(-[a-z0-9]+)*/)+$')`.
 - **Problem:** In 04a §7.1 (624, 626), a slug such as t--shirts passes the slug CHECK (the shop slug pattern of 04 §2.8), but its path /t--shirts/ fails the path CHECK with 23514 (tested on PG 18.6). A seeder therefore fails on a slug the documented rule allows.
-- **Suggested fix:** Use one segment rule for both. Either categories_slug_check CHECK (char_length(slug::text) BETWEEN 3 AND 40 AND slug::text ~ '^[a-z0-9]+(-[a-z0-9]+)\*$'), a pattern with no '?' (see the knex placeholder group), or relax categories_path_check to '^/([a-z0-9](\?:[a-z0-9-]{1,38}[a-z0-9])/)+$'.
+- **Suggested fix:** Use one segment rule for both. Either `categories_slug_check CHECK (char_length(slug::text) BETWEEN 3 AND 40 AND slug::text ~ '^[a-z0-9]+(-[a-z0-9]+)*$')`, a pattern with no '?' (see the knex placeholder group), or relax categories_path_check to `'^/([a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])/)+$'`.
 
 ### A2-109: Order address snapshot copies Nepali province and district names but not the local level's Nepali name
 
@@ -513,7 +513,7 @@ Findings located in [04a-data-dictionary-tables.md](../04a-data-dictionary-table
 - **Text:** 05 §3.4 rule 1: 'D = min(coupon amount, W) ... A fixed-amount coupon larger than the eligible subtotal therefore discounts it to zero'; 04a: `fee_minor` '`0` means free delivery to that zone'; `payments_amount_check CHECK (amount_minor > 0)`; `payment_allocations_amounts_check CHECK (amount_minor > 0 ...)`.
 - **Problem:** If every line of a shop is eligible, D = W, and the shop's zone fee is 0, that shop order's total_minor is 0. placeOrder must then insert a COD payment (one per shop order) or a gateway allocation with amount 0, which fails with 23514. If the whole order is 0, the gateway payment fails too. Skipping the payment also breaks the ledger, because 05 §7.3 posts the delivery group, including the platform-funded gross `sale`, only when the payment is collected or captured. 05 §3.4 records these R2 rules 'so the R1 schema already fits', but for this case it does not.
 - **Suggested fix:** Record one rule in 05 §3.4 and reflect it in 04 §18.3.3. Option (a): the coupon is capped so every shop order and the order keep at least 1 paisa payable, D = min(coupon, W - 1) per affected shop order. Option (b): a zero-total shop order gets no payment and no allocation, and 05 §7.3 posts its delivery group on `delivered` alone (with cod_cash_held 0). Add T-CHK-011 cases for a free-shipping shop fully covered by the coupon.
-- **Owner decision needed:** In R2, may a platform coupon bring a shop order (or the whole order) to Rs 0? If yes, how is such a shop order settled and posted without a payment row; if no, should the coupon be capped to leave at least 1 paisa (or a minimum payable) per shop order?
+- **Owner decision needed:** In R2, may a platform coupon bring a shop order (or the whole order) to Rs 0? If yes, how is such a shop order settled and posted without a payment row; if no, should the coupon be capped to leave at least 1 paisa (or a minimum payable) per shop order? Registered as OD-54 in the [risks register](../risks-and-open-decisions.md#22-decision-table).
 
 ### A2-114: The 12-month notification_deliveries purge has no index; every other daily purge has one
 

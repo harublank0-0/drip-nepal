@@ -110,7 +110,7 @@ The webhook route skips the CSRF check (exact-route exemption, §12.4) and the a
 
 ### 3.2 JSON casing (OD-13)
 
-`snake_case` for every JSON key in request bodies, response bodies, query parameters and problem extension members [Assumption; Open OD-13, decided before the first endpoint merges, risks §5 M0]. Transformers build every shape explicitly, so the casing is a transformer concern, not an automatic mapping. If OD-13 picks camelCase, the change is made once in transformers, validators and `openapi.yaml` before M1; RFC 9457 members (`type`, `title`, `status`, `detail`) are unaffected.
+`snake_case` for every JSON key in request bodies, response bodies, query parameters and problem extension members, and for Inertia props and `openapi.yaml` (OD-13, decided 2026-09-30). Transformers build every shape explicitly, so the casing is a transformer concern, not an automatic mapping. T-API-001 enforces it. RFC 9457 members (`type`, `title`, `status`, `detail`) keep their RFC names.
 
 ### 3.3 Money, time, identifiers, enums
 

@@ -6,14 +6,14 @@ Reviewed: critic pass A4.3 (2026-09-25)
 
 ## Status
 
-| Field              | Value                                                                                                                                                           |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Decision status    | **Accepted** for product URLs, shop and category slug redirects and canonical tags. **Proposed** for the seller prefix `/seller/{shopSlug}`, pending **OD-12**. |
-| Date               | 2026-09-25                                                                                                                                                      |
-| Deciders           | Lead developer; product owner informed (OD-12 reverses a recent commit)                                                                                         |
-| Supersedes         | —                                                                                                                                                               |
-| Superseded by      | —                                                                                                                                                               |
-| Related open items | **OD-12** (seller dashboard prefix), OD-13 (JSON casing); FR-SRCH-004, FR-SRCH-005, FR-SHOP-012, AC-FR-CAT-001-3                                                |
+| Field              | Value                                                                                                                                                                     |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Decision status    | **Accepted** for product URLs, shop and category slug redirects and canonical tags, and for the seller prefix `/seller/{shopSlug}` since OD-12 was decided on 2026-09-30. |
+| Date               | 2026-09-25                                                                                                                                                                |
+| Deciders           | Lead developer; product owner informed (OD-12 reverses a recent commit)                                                                                                   |
+| Supersedes         | —                                                                                                                                                                         |
+| Superseded by      | —                                                                                                                                                                         |
+| Related open items | None open: OD-12 (seller dashboard prefix) and OD-13 (JSON casing) were decided on 2026-09-30; FR-SRCH-004, FR-SRCH-005, FR-SHOP-012, AC-FR-CAT-001-3                     |
 
 ## Context
 
@@ -46,7 +46,7 @@ The slug rules are owned by [04 §2.8](../04-domain-model-and-data-dictionary.md
    - **Pages** answer 301 to the same path with the current slug, including `/seller/{old}/…` (AC-FR-SHOP-012-2).
    - **API routes** (`/api/v1/shops/{shopSlug}`, `/api/v1/seller/shops/{shopSlug}/…`) resolve the old slug and serve the same shop without a redirect, because a 301 may turn a POST into a GET. The response carries the current `slug`; membership checks run as usual (ADR-0006).
 6. **Redirect hygiene.** Every 301 carries `Cache-Control: public, max-age=86400` [Assumption], so a heuristically cached 301 plus a rename back cannot loop for more than a day. Redirects forward only the page's allow-listed query parameters (RF-37).
-7. **Seller namespace (Proposed, OD-12 option a).** The private dashboard is `/seller/{shopSlug}/…` and the public storefront `/shops/{shopSlug}`, so the `shopContext` middleware group (ADR-0006) attaches to one namespace and the RF-01 mistake (authentication checked, membership not) cannot recur. M0 builds `/seller` as the safe default until OD-12 closes.
+7. **Seller namespace (OD-12 option a, decided 2026-09-30).** The private dashboard is `/seller/{shopSlug}/…` and the public storefront `/shops/{shopSlug}`, so the `shopContext` middleware group (ADR-0006) attaches to one namespace and the RF-01 mistake (authentication checked, membership not) cannot recur. M0 moves the current `/shop/…` routes to `/seller`.
 8. **SEO.** Every storefront page emits an absolute `<link rel="canonical">`: the product's canonical URL, or the unfiltered listing for filtered views. `/search` is `noindex`. `sitemap.xml` and JSON-LD `Product` use canonical URLs only (AC-FR-SRCH-005-2/3/4). `/seller`, `/account`, `/admin` and `/checkout` are `noindex` and disallowed in `robots.txt` [Assumption].
 
 ## Alternatives considered

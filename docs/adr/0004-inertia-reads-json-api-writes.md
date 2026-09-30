@@ -6,14 +6,14 @@ Reviewed: critic pass A4.3 (2026-09-25)
 
 ## Status
 
-| Field              | Value                                                                                                                               |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
-| Decision status    | **Accepted**                                                                                                                        |
-| Date               | 2026-09-25                                                                                                                          |
-| Deciders           | Lead developer                                                                                                                      |
-| Supersedes         | —                                                                                                                                   |
-| Superseded by      | —                                                                                                                                   |
-| Related open items | OD-13 (JSON casing, snake_case proposed; decided before the first endpoint, does not change this ADR), OD-25 (Inertia v3 `useHttp`) |
+| Field              | Value                                                                                                                                                    |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Decision status    | **Accepted**                                                                                                                                             |
+| Date               | 2026-09-25                                                                                                                                               |
+| Deciders           | Lead developer                                                                                                                                           |
+| Supersedes         | —                                                                                                                                                        |
+| Superseded by      | —                                                                                                                                                        |
+| Related open items | OD-13 (JSON casing: snake_case, decided 2026-09-30; does not change this ADR), OD-25 (Inertia v3 `useHttp`; the M0 upgrade spike was decided 2026-09-30) |
 
 ## Context
 
@@ -30,7 +30,7 @@ Reviewed: critic pass A4.3 (2026-09-25)
    - _Exception:_ `POST /api/v1/webhooks/payments/{provider}` is reserved for a provider that notifies server-to-server, CSRF-exempt by exact route and trusted only after a lookup. eSewa ePay and Khalti KPG-2 web checkout document no such webhook ([01 §4.4](../01-product-requirements.md#44-r11-gateway-the-platform-as-payee), ADR-0012).
 3. **Contract rules** (full text in [06](../06-api-design.md)):
    - Version in the path; additive changes allowed; breaking changes need `/api/v2`, with a 6-month overlap and `Deprecation`/`Sunset` headers once external clients exist.
-   - Money is `{ "amount_minor": <int>, "currency": "NPR" }` (ADR-0007); timestamps are RFC 3339 UTC; field casing snake_case [Assumption; OD-13].
+   - Money is `{ "amount_minor": <int>, "currency": "NPR" }` (ADR-0007); timestamps are RFC 3339 UTC; field casing snake_case (OD-13, decided 2026-09-30).
    - `Idempotency-Key` is required on operations marked ⚷ (`placeOrder`, cancellations, fulfilment events, inventory adjustments, refunds, payouts…). Missing: 400 `IDEMPOTENCY_KEY_REQUIRED`; same key with a different body: 422 `IDEMPOTENCY_KEY_REUSED` (AC-J05-04).
    - `If-Match` is required on PATCH/PUT of versioned resources (⟳); `ETag: W/"<version>"` is returned; mismatch gives 412 `VERSION_CONFLICT`, a missing header 428 `PRECONDITION_REQUIRED`.
    - Server-computed fields (prices, totals, commission, `shop_id`, order numbers) are never read from request bodies (T-SEC-003).
@@ -69,7 +69,7 @@ Reviewed: critic pass A4.3 (2026-09-25)
 
 ## When to revisit
 
-- OD-25 upgrades to Inertia v3: `useHttp` and optimistic updates may simplify client calls; the API contract stays.
+- The OD-25 spike moves the app to Inertia v3: `useHttp` and optimistic updates may simplify client calls; the API contract stays.
 - External partners (R3 couriers, marketing tools) need OAuth or API keys: add a token guard in a new ADR.
 - More than 3 T-API-001 failures from spec drift in one milestone: evaluate a generator such as `@foadonis/openapi` 1.1.0 (peers `@adonisjs/core ^6.2 || ^7`) [Verified-doc, https://registry.npmjs.org/@foadonis/openapi, accessed 2026-09-25].
 

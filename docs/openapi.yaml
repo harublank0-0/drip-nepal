@@ -21,7 +21,7 @@ info:
     `x-foundation-scope` ∪ `x-pending-operations` equals the operationIds of 06 §13, and an
     operationId moves from the pending list to `paths` in the implementing PR.
 
-    **Conventions (06 §3).** JSON keys are `snake_case` [Assumption; Open OD-13]. Money is
+    **Conventions (06 §3).** JSON keys are `snake_case` (OD-13, decided 2026-09-30). Money is
     `{ "amount_minor": <integer paisa>, "currency": "NPR" }` (ADR-0007); request money is a
     bare integer field ending in `_minor`. Timestamps are RFC 3339 UTC with `Z` and millisecond
     precision. IDs are UUID strings; orders use `DN-XXXXXXX`, shop orders `DN-XXXXXXX-n`,
@@ -3261,9 +3261,12 @@ components:
 # 23. CSRF failure as 403 `FORBIDDEN` is ADR-0018's [Assumption]; 07 must confirm.
 # 24. Cookie name `dripnepal_session` is the target; the repository still uses `adonis-session`
 #     (`config/session.ts:14`) until M0. Staging host is a placeholder for docs/11.
-# 25. Open decisions that can change this contract: OD-13 (JSON casing), OD-14 (single operator
-#     mode), OD-18 (COD limits), OD-03 (first gateway); Verify-external VX-06/VX-07 (eSewa and
-#     Khalti return, lookup and refund details), VX-02 (7-day refund start), VX-12 (money display).
+# 25. Open decisions that can change this contract: OD-14 (single operator mode), OD-18 (COD
+#     limits), OD-03 (first gateway); Verify-external VX-06/VX-07 (eSewa and Khalti return,
+#     lookup and refund details), VX-02 (7-day refund start), VX-12 (money display). OD-49 (the
+#     audited staff reveals of 07 §5.5) changes the "never returned in full" wording of
+#     `RefundRecipientDetails` if approved. OD-13 (JSON casing) was decided on 2026-09-30:
+#     `snake_case`, as this file uses.
 #
 # Added by critic pass B2 (2026-09-26):
 # 26. `createProduct`: 06 §13.5 marks only `brand_id?` optional, so every other input key is now

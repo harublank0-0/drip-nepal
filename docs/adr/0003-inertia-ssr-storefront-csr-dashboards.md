@@ -6,14 +6,14 @@ Reviewed: critic pass A4.3 (2026-09-25)
 
 ## Status
 
-| Field              | Value                                                                                                                                              |
-| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Decision status    | **Accepted**                                                                                                                                       |
-| Date               | 2026-09-25                                                                                                                                         |
-| Deciders           | Lead developer, product owner                                                                                                                      |
-| Supersedes         | —                                                                                                                                                  |
-| Superseded by      | —                                                                                                                                                  |
-| Related open items | OD-25 (upgrade to @adonisjs/inertia 5 + @inertiajs/react 3 + @adonisjs/vite 6; proposed as an M0 spike). This decision holds under either version. |
+| Field              | Value                                                                                                                                                                                                              |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Decision status    | **Accepted**                                                                                                                                                                                                       |
+| Date               | 2026-09-25                                                                                                                                                                                                         |
+| Deciders           | Lead developer, product owner                                                                                                                                                                                      |
+| Supersedes         | —                                                                                                                                                                                                                  |
+| Superseded by      | —                                                                                                                                                                                                                  |
+| Related open items | OD-25 (upgrade to @adonisjs/inertia 5 + @inertiajs/react 3 + @adonisjs/vite 6), decided 2026-09-30: a time-boxed spike at the start of M0, staying on 4.2.0 if it fails. This decision holds under either version. |
 
 ## Context
 
@@ -71,7 +71,7 @@ DripNepal has three UI surfaces: the **public storefront** (SEO, fast first pain
 ## When to revisit
 
 - `web` CPU above 70 % at peak with SSR as the main consumer, or storefront TTFB p75 above 800 ms from Nepal [Assumption thresholds, 03 §6.4]: first edge-cache anonymous HTML (03 §12.5); then consider a separate SSR process; a Next.js storefront only if that is not enough.
-- OD-25 decides for the upgrade: update code and examples; the decision stays.
+- The OD-25 upgrade spike passes (OD-25, decided 2026-09-30): update code and examples; the decision stays.
 - A native mobile app (R3): it uses `/api/v1` with token auth (ADR-0004, ADR-0005), not Inertia.
 - A dashboard page must become publicly shareable: add it to `ssr.pages`.
 
