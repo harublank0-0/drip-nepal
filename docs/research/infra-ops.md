@@ -1,0 +1,299 @@
+# Research: Infrastructure and Operations
+
+Part of the [research digests](README.md) (digest name `infra_ops`). Compiled on 2026-09-25; repository paths refer to the code at commit `0282605`. This is a dated snapshot: re-check a fact against its source before relying on it.
+
+Original title: Research: infra-ops (accessed 2026-09-25)
+
+Status: verified-official = primary source read. Fact-check verdicts included where a skeptic re-checked.
+
+- [verified-official] AWS lists ap-south-1 Asia Pacific (Mumbai) and ap-southeast-1 Asia Pacific (Singapore) as enabled by default, and ap-south-2 Asia Pacific (Hyderabad) as opt-in ('Required'). Each has 3 AZs.
+  - Sources: AWS Regions - AWS Global Infrastructure docs <https://docs.aws.amazon.com/global-infrastructure/latest/regions/aws-regions.html>
+  - Implication: On AWS, Mumbai (ap-south-1) is the nearest region that needs no opt-in. Hyderabad has to be enabled first. Record the region choice as an ADR and treat the latency to Nepal as unmeasured until it is benchmarked.
+- [verified-official] Google Cloud lists asia-south1 (Mumbai), asia-south2 (Delhi) and asia-southeast1 (Singapore).
+  - Sources: Google Cloud locations <https://cloud.google.com/about/locations>
+  - Implication: Delhi is geographically the closest hyperscaler region to Kathmandu, and GCP is the only provider researched that has it. Include GCP asia-south2 as a candidate in latency benchmarks, even though the cost-focused shortlist does not include GCP.
+- [verified-official] Azure lists India regions Central India (Pune, centralindia), South India (Chennai, southindia), West India (Mumbai, westindia) and India South Central (Hyderabad, indiasouthcentral), plus Southeast Asia (Singapore, southeastasia).
+  - Sources: List of Azure regions | Microsoft Learn <https://learn.microsoft.com/en-us/azure/reliability/regions-list>
+  - Implication: Azure is a fallback option with several India regions. It is not on the cost-focused shortlist.
+- [verified-official] DigitalOcean has datacenters BLR1 (Bangalore, India) and SGP1 (Singapore). Droplets, Managed Databases (PostgreSQL), Spaces Object Storage and App Platform are all available in both.
+  - Sources: DigitalOcean Regional Availability <https://docs.digitalocean.com/platform/regional-availability/>; Spaces Availability - DigitalOcean Docs <https://docs.digitalocean.com/products/spaces/details/availability/>; App Platform Availability - DigitalOcean Docs <https://docs.digitalocean.com/products/app-platform/details/availability/>
+  - Implication: DigitalOcean BLR1 can host the whole stack (app, Postgres, object storage) in India, and SGP1 offers the same products. This makes BLR1 or SGP1 a strong single-provider option for a small team.
+- [verified-official] Hetzner Cloud has a Singapore location (sin, network zone ap-southeast) that offers only cloud products (Cloud Shared AMD, Cloud Dedicated AMD, and Cloud features). Hetzner Object Storage is listed only for Falkenstein, Nuremberg and Helsinki, not Singapore.
+  - Sources: Hetzner Cloud Locations <https://docs.hetzner.com/cloud/general/locations/>; Hetzner Object Storage Overview <https://docs.hetzner.com/storage/object-storage/overview/>
+  - Implication: On Hetzner Singapore, DripNepal would have to run Postgres itself and put object storage elsewhere (for example Cloudflare R2).
+- [verified-official] The Akamai/Linode public API (GET /v4/regions) lists these Asian core regions: ap-west (Mumbai, IN), in-bom-2 (Mumbai 2, IN), in-maa (Chennai, IN), ap-south (Singapore, SG) and sg-sin-2 (Singapore 2, SG). 'Managed Databases' capability: ap-west, in-bom-2, in-maa, sg-sin-2 (not ap-south). 'Object Storage' capability: in-maa, sg-sin-2 (not the Mumbai regions).
+  - Sources: Linode API v4 - List Regions <https://api.linode.com/v4/regions>
+  - Implication: If Akamai is chosen, Chennai (in-maa) is the only India region that has compute, managed Postgres and object storage together. Mumbai would need object storage from another region or provider.
+- [verified-official] Akamai docs say Chennai and Mumbai core sites are optimized for the India market, and recommend Singapore or Sydney for workloads serving the wider Asia-Pacific region.
+  - Sources: How to choose a data center - Akamai TechDocs <https://techdocs.akamai.com/cloud-computing/docs/how-to-choose-a-data-center>
+  - Implication: Nepal is not India, and routing from Nepal into Akamai India sites is not documented. Benchmark both Chennai and Singapore from Nepali ISPs before committing.
+- [verified-official] Render regions are Oregon, Ohio, Virginia, Frankfurt and Singapore. Render has no India region.
+  - Sources: Regions - Render Docs <https://render.com/docs/regions>
+  - Implication: On Render, Singapore is the only nearby region.
+- [verified-official] Railway deployment regions are us-west2, us-east4-eqdc4a, europe-west4-drams3a and asia-southeast1-eqsg3a (Southeast Asia Metal, Singapore). Railway has no India region.
+  - Sources: Deployment Regions - Railway Docs <https://docs.railway.com/reference/deployment-regions>
+  - Implication: On Railway, Singapore is the only nearby region.
+- [verified-official] Fly.io has regions bom (Mumbai, India) and sin (Singapore). The regions reference marks sin as supporting Managed Postgres (MPG) and bom as not supporting it.
+  - Sources: Regions - Fly Docs <https://docs.fly.io/reference/regions/>
+  - Implication: On Fly, an app in Mumbai could not use Fly MPG in the same region. The database would be in Singapore, adding cross-region latency to every query.
+- [verified-official] DigitalOcean Basic Droplets as published on 2026-09-25: $4/mo (512 MB, 1 vCPU, 10 GB SSD, 500 GiB transfer), $6/mo (1 GB, 1 vCPU, 25 GB, 1,000 GiB), $12/mo (2 GB, 1 vCPU, 50 GB, 2,000 GiB), $18/mo (2 GB, 2 vCPU, 60 GB, 3,000 GiB), $24/mo (4 GB, 2 vCPU, 80 GB, 4,000 GiB).
+  - Sources: Droplet Pricing | DigitalOcean <https://www.digitalocean.com/pricing/droplets>
+  - Implication: The $12 or $24 Droplet (as published on 2026-09-25) is the cost reference for a single-VM app plus worker, with Postgres managed separately.
+- [verified-official] DigitalOcean bandwidth overage as published on 2026-09-25: Droplets $0.01/GiB, App Platform $0.02/GiB, Spaces $0.01/GiB. The docs state 'There are no regional variations on bandwidth pricing.'
+  - Sources: Bandwidth Billing - DigitalOcean Docs <https://docs.digitalocean.com/platform/billing/bandwidth/>
+  - Implication: Egress costs the same in BLR1 and SGP1, so region choice can be decided on latency alone.
+- [partially-verified] DigitalOcean Managed PostgreSQL (Standard) pricing page as published on 2026-09-25: 1 GiB RAM / 1 vCPU at $15.15/mo ($0.02254/hr), and 2 GiB / 1 vCPU at $30.45/mo. Storage is $0.215/GiB/mo in 10 GiB increments. The docs pricing page instead says single-node clusters 'begin at $15.00 per month' and HA clusters 'begin at $30.00 per month for a 2 GiB RAM/1 vCPU primary node'.
+  - Sources: Managed Databases Pricing | DigitalOcean <https://www.digitalocean.com/pricing/managed-databases>; PostgreSQL Pricing - DigitalOcean Docs <https://docs.digitalocean.com/products/databases/postgresql/details/pricing/>
+  - Implication: Budget about $15 to $30/mo (as published on 2026-09-25) for the smallest managed Postgres. The two DigitalOcean pages disagree ($15.00 vs $15.15), so confirm the figure in the control panel before budgeting.
+- [verified-official] DigitalOcean docs: 'Standard Edition supports PostgreSQL v14, v15, v16, v17, and v18.' New Advanced Edition clusters default to v18.
+  - Sources: PostgreSQL Limits - DigitalOcean Docs <https://docs.digitalocean.com/products/databases/postgresql/details/limits/>
+  - Implication: Matches the local docker-compose postgres:18.4, so DigitalOcean needs no version change.
+- [verified-official] DigitalOcean Managed PostgreSQL backups run automatically once per day and are kept for seven days, and point-in-time recovery is limited to the last 7 days. A restore always creates a new cluster. Destroying a cluster also destroys its backups.
+  - Sources: How to Restore PostgreSQL from Backups - DigitalOcean Docs <https://docs.digitalocean.com/products/databases/postgresql/how-to/restore-from-backups/>; PostgreSQL Limits - DigitalOcean Docs <https://docs.digitalocean.com/products/databases/postgresql/details/limits/>
+  - Implication: Seven days is too short for long-horizon recovery and does not survive deleting the cluster. Add independent logical or physical backups (pg_dump or WAL-based) to object storage in another account or provider. The runbook must repoint the app to the new cluster after a restore.
+- [verified-official] DigitalOcean PostgreSQL: the 1 GiB plan allows 22 backend connections, and standby nodes are not available on some 1 vCPU Shared CPU plans.
+  - Sources: PostgreSQL Limits - DigitalOcean Docs <https://docs.digitalocean.com/products/databases/postgresql/details/limits/>
+  - Implication: With 22 connections, the Lucid pool, the worker pool and any job-queue LISTEN connections must be sized explicitly, or the smallest plan will run out of connections.
+- [verified-official] DigitalOcean PgBouncer pools default to transaction mode. Session mode is recommended when the application uses 'prepared statements, advisory locks, listen/notify'. Running pg_dump through a pool in transaction mode causes errors.
+  - Sources: How to Manage Connection Pools - DigitalOcean Docs <https://docs.digitalocean.com/products/databases/postgresql/how-to/manage-connection-pools/>
+  - Implication: Job workers that use LISTEN/NOTIFY (pg-boss, the BullMQ Postgres backend) and backup jobs should connect directly or through a session-mode pool. Web requests can use a transaction-mode pool.
+- [verified-official] DigitalOcean Spaces as published on 2026-09-25: $5/month includes 250 GiB storage and 1 TiB outbound transfer. Overage is $0.02/GiB storage and $0.01/GiB transfer, and a built-in CDN is included. The CDN is available in every Spaces region, but Cold Storage buckets do not support CDN.
+  - Sources: Spaces Object Storage Pricing | DigitalOcean <https://www.digitalocean.com/pricing/spaces-object-storage>; Spaces Availability - DigitalOcean Docs <https://docs.digitalocean.com/products/spaces/details/availability/>
+  - Implication: Spaces in BLR1 is a same-provider alternative to R2 for product images. Compare it against R2's $0 egress.
+- [verified-official] DigitalOcean Managed Valkey starts at $15.00 per month for a single-node cluster with 1 GiB RAM (as published on 2026-09-25).
+  - Sources: Valkey Pricing - DigitalOcean Docs <https://docs.digitalocean.com/products/databases/valkey/details/pricing/>
+  - Implication: Using Redis/Valkey for jobs in production adds roughly $15/mo (as published on 2026-09-25) plus another component to operate. That is the marginal cost of BullMQ with Redis over a Postgres-backed queue.
+- [verified-official] Hetzner price adjustment effective 15 June 2026, Singapore (SIN) cloud servers: CPX12 €7.99 to €15.49/mo ($9.49 to $17.99), CPX22 €15.99 to €26.49/mo ($18.49 to $30.99), CPX32 €32.49 to €48.99/mo ($38.49 to $57.99).
+  - Sources: Hetzner Price Adjustment 15 June 2026 - Hetzner Docs <https://docs.hetzner.com/general/infrastructure-and-availability/price-adjustment/>
+  - Implication: Hetzner Singapore is no longer much cheaper than DigitalOcean or Akamai at small sizes, and it has no managed Postgres. That weakens the case for it for a small team.
+- [partially-verified] Hetzner Singapore (SIN1) included traffic: CPX12 0.5 TB, CPX22 1 TB, CPX32 2 TB, CPX42 3 TB, CPX52 4 TB, CPX62 5 TB. EU locations include 'at least 20 TB'. The page says 'For each additional TB at AP locations we charge', but the price loads by JavaScript and could not be read.
+  - Sources: Hetzner Cloud Regular Performance <https://www.hetzner.com/cloud/regular-performance/>
+  - Implication: Singapore's small traffic allowance makes it essential to serve images from a zero-egress CDN or origin such as R2.
+- [partially-verified] The Hetzner Cloud product page lists Cloud Instances, Object Storage, Load Balancer, Managed Servers and others, but no managed PostgreSQL product.
+  - Sources: Hetzner Cloud <https://www.hetzner.com/cloud/>
+  - Implication: On Hetzner, the team would own Postgres HA, patching, PITR (pgBackRest or WAL-G) and restore drills. That is a significant operational load for a small team.
+- [verified-official] Akamai Cloud Asia-Pacific pricing as published on 2026-09-25: Nanode 1 GB $5/mo, Linode 2 GB $12/mo, Linode 4 GB $24/mo. It applies to Chennai, Mumbai, Osaka, Singapore, Tokyo, Melbourne and Sydney (Jakarta has its own regional pricing). Egress overage is US$0.005/GB for compute and storage.
+  - Sources: Akamai Cloud Pricing - Asia-Pacific <https://www.akamai.com/cloud/pricing/asia-pacific>
+  - Implication: Akamai has the lowest published egress overage of the VPS options. This matters if images are served from the origin.
+- [verified-official] Akamai Managed Databases (API /v4/databases/types, 2026-09-25): 'DBaaS - Nanode 1GB' $16/mo for 1 node or $37/mo for 3 nodes; 'Linode 2GB' $32/mo (1 node) or $74/mo (3 nodes); 'Linode 4GB' $63/mo or $147/mo.
+  - Sources: Linode API v4 - List Managed Database Types <https://api.linode.com/v4/databases/types>; Akamai Cloud Pricing - Asia-Pacific <https://www.akamai.com/cloud/pricing/asia-pacific>
+  - Implication: A 3-node HA Postgres for $37/mo (as published on 2026-09-25) is the cheapest HA managed option found, but only in regions with the Managed Databases capability.
+- [verified-official] The Akamai API /v4/databases/engines lists postgresql/15, 16, 17 and 18.
+  - Sources: Linode API v4 - List Managed Database Engines <https://api.linode.com/v4/databases/engines>
+  - Implication: Akamai supports Postgres 18, which matches local development.
+- [verified-official] Akamai Managed Databases: 'Automatic daily backups are provided at no additional cost and are retained for 14 days', and 'You can perform a point in time recovery for each day over the last 14 days.' Three-node clusters provide automatic failover.
+  - Sources: Managed Databases - Akamai TechDocs <https://techdocs.akamai.com/cloud-computing/docs/managed-databases>
+  - Implication: Akamai keeps backups for 14 days, twice DigitalOcean's 7. PITR granularity within a day is not documented, so test it before relying on RPO claims.
+- [verified-official] Render workspace plans as published on 2026-09-25: Hobby $0/mo + compute (5 GB bandwidth included), Pro $25/mo + compute (25 GB), Scale $499/mo + compute (1 TB). Bandwidth beyond the included amount is $0.15 per GB.
+  - Sources: Pricing | Render <https://render.com/pricing>
+  - Implication: At $0.15/GB with only 5 to 25 GB included, serving product images through Render would be expensive. Media must go through R2 or another CDN.
+- [verified-official] Render compute as published on 2026-09-25: 0.5c-512mb (formerly 'Starter') $7/month, 1c-2g $25/month, 2c-4g $85/month. Background workers use the same plans and have no free tier. Plan IDs were renamed on August 26, 2026 with 'no changes to pricing'.
+  - Sources: Pricing | Render <https://render.com/pricing>; Updates to Render Compute Plans - Render Docs <https://render.com/docs/compute-plans-update>; Render Compute Plans - Render Docs <https://render.com/docs/compute-plans>
+  - Implication: A web service plus a worker on Render costs at least $14/mo at 512 MB each (as published on 2026-09-25). Inertia SSR with React 19 may need 2 GB (1c-2g, $25). Measure memory use before choosing.
+- [verified-official] Render Postgres as published on 2026-09-25: 0.1c-256mb $6/month, 0.5c-1g $19/month, 1c-2g $40/month, 1c-4g $55/month. Storage is $0.30/GB. The point-in-time recovery window is 3 days on Hobby and 7 days on Pro and above. PITR is not provided on the Free plan, and logical backups are kept for 7 days on paid instances.
+  - Sources: Pricing | Render <https://render.com/pricing>; Backups & Recovery - Render Postgres Docs <https://render.com/docs/postgresql-backups>
+  - Implication: The 3-day PITR on Hobby is short. Use Pro, or add external backups, if Render is chosen.
+- [verified-official] Render gives full support to PostgreSQL 18, 17, 16, 15, 14 and 13, and supports in-place upgrades to PostgreSQL 18.
+  - Sources: Upgrading Postgres - Render Docs <https://render.com/docs/postgresql-upgrading>
+  - Implication: Render supports Postgres 18, which matches local development.
+- [verified-official] Railway plans as published on 2026-09-25: Hobby $5/month including $5 of usage, Pro $20/month including $20 of usage. Usage is RAM $10/GB/month, CPU $20/vCPU/month, volume storage $0.15/GB/month and network egress $0.05/GB.
+  - Sources: Plans - Railway Docs <https://docs.railway.com/reference/pricing/plans>
+  - Implication: Railway is billed by usage, so cost depends on measured RAM and CPU. SSR memory will drive it.
+- [verified-official] Railway calls its PostgreSQL templates 'unmanaged'. A Postgres service can be converted to an HA cluster (Patroni, etcd, HAProxy). Volume backups can be scheduled daily (kept 6 days), weekly (27 days) or monthly (89 days), and manual backups are limited to 50% of volume size. The backups docs do not mention Postgres PITR.
+  - Sources: PostgreSQL - Railway Docs <https://docs.railway.com/databases/postgresql>; Backups - Railway Docs <https://docs.railway.com/reference/backups>
+  - Implication: Railway offers no managed PITR, so DripNepal would run its own WAL archiving. That is a poor fit for an order and payment database.
+- [verified-official] Fly.io compute pricing uses a per-region markup: ams and iad 1.0, sin (Singapore) 2, bom (Mumbai) 3. The baseline shared-cpu-1x 512MB costs $0.00000128 per second and 1GB costs $0.00000228 per second, multiplied by the region markup.
+  - Sources: Fly.io Resource Pricing - Fly Docs <https://docs.fly.io/about/pricing/>
+  - Implication: Fly compute in Mumbai costs 3x baseline and in Singapore 2x (as published on 2026-09-25), which cancels Fly's usual price advantage for a Nepal audience.
+- [verified-official] Fly.io internet egress as published on 2026-09-25: $0.04/GB for Asia Pacific and Oceania regions, and $0.12/GB for Africa and India. Volumes are $0.15/GB-month provisioned.
+  - Sources: Fly.io Resource Pricing - Fly Docs <https://docs.fly.io/about/pricing/>
+  - Implication: Egress from Mumbai on Fly is expensive. Keep media off the app origin.
+- [verified-official] Fly.io Managed Postgres plans as published on 2026-09-25: Basic (Shared-2x, 1GB) $38/mo, Starter (Shared-2x, 2GB) $72/mo, Launch (Performance-2x, 8GB) $282/mo. Storage is $0.28 per provisioned GB for a 30-day month. All plans include high availability, backups and connection pooling.
+  - Sources: Managed Postgres - Fly Docs <https://docs.fly.io/mpg/>; Managed Postgres (index) - Fly Docs <https://docs.fly.io/postgres/index.md>
+  - Implication: Fly's entry price for HA managed Postgres is about 2.4x DigitalOcean's single node, as published on 2026-09-25.
+- [verified-official] The flyctl 'fly mpg create' reference says '--pg-major-version int ... Supported versions are 16 and 17. (default 16)'. PostgreSQL 18 is not listed.
+  - Sources: fly mpg create - Fly Docs <https://docs.fly.io/flyctl/cmd/fly_mpg_create.md>
+  - Implication: Fly MPG would need DripNepal to downgrade from Postgres 18 to 17. Avoid Fly MPG unless dev and CI are pinned to 17.
+- [partially-verified] Fly MPG can restore a backup, or a point in time inside the cluster's PITR recovery window, into a new cluster. The length of that window is not stated in the docs pages read; a community thread (not staff) reports 10 days.
+  - Sources: fly mpg restore - Fly Docs <https://docs.fly.io/flyctl/cmd/fly_mpg_restore.md>; Managed Postgres Backup Recovery Window - Fly.io Community <https://community.fly.io/t/managed-postgres-backup-recovery-window/25903>
+  - Implication: Do not assume a Fly PITR window. Confirm it with Fly support if Fly is shortlisted.
+- [verified-official] Lightsail Linux bundles start at $5/month (0.5 GB memory, 2 vCPUs, 20 GB SSD, 1 TB transfer). Bundles in Asia Pacific (Mumbai), among other regions, 'include half the data transfer allowances'. The Mumbai overage is $0.1093/GB.
+  - Sources: Amazon Lightsail Pricing <https://aws.amazon.com/lightsail/pricing/>
+  - Implication: Lightsail in Mumbai halves the transfer allowance and charges about 10x DigitalOcean's overage rate, as published on 2026-09-25. Serve media from R2 or a CDN.
+- [verified-official] Lightsail managed database plans as published on 2026-09-25: 1 GB $15 standard or $30 high availability, 2 GB $30 or $60, 4 GB $60 or $120.
+  - Sources: Amazon Lightsail Pricing <https://aws.amazon.com/lightsail/pricing/>
+  - Implication: Lightsail's managed Postgres entry price is similar to DigitalOcean's, but see the version limitation.
+- [partially-verified] The Lightsail docs page 'Select the right Lightsail database engine' says 'PostgreSQL 12, 13, 14, 15, and 16 are available in Lightsail.' PostgreSQL 17 and 18 are not mentioned.
+  - Sources: Select the right Lightsail database engine - Amazon Lightsail <https://docs.aws.amazon.com/lightsail/latest/userguide/amazon-lightsail-choosing-a-database.html>
+  - Implication: The page may be out of date, but as documented Lightsail databases cannot run Postgres 18. Prefer RDS (or another provider) if staying on AWS.
+- [verified-official] Lightsail: 'Point-in-time backups of your database are available in 5-minute increments, and for the previous seven days.' A restore creates a new database, which cannot use a smaller plan than the original.
+  - Sources: Restore a database from a point-in-time backup in Lightsail <https://docs.aws.amazon.com/lightsail/latest/userguide/amazon-lightsail-creating-a-database-from-point-in-time-backup.html>
+  - Implication: Lightsail restores in 5-minute increments over a 7-day window, and a restore produces a new endpoint.
+- [verified-official] The Amazon RDS for PostgreSQL release notes list PostgreSQL 18 minor versions from 18.1 upward as available on RDS; earlier betas and RCs were preview-only.
+  - Sources: Amazon RDS for PostgreSQL updates - Release Notes <https://docs.aws.amazon.com/AmazonRDS/latest/PostgreSQLReleaseNotes/postgresql-versions.html>
+  - Implication: RDS supports Postgres 18, which matches local development.
+- [verified-official] The RDS automated backup retention period can be set between 0 and 35 days, where 0 disables backups. The default is 7 days in the console and 1 day via API or CLI, and PITR is possible anywhere within the retention period. Changing retention between 0 and nonzero causes an outage.
+  - Sources: Backup retention period - Amazon RDS <https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_WorkingWithAutomatedBackups.BackupRetention.html>; Introduction to backups - Amazon RDS <https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_WorkingWithAutomatedBackups.html>
+  - Implication: RDS has the longest managed PITR found (up to 35 days). If RDS is provisioned with IaC or the CLI, set retention explicitly, because the API default is only 1 day.
+- [verified-official] The AWS Price List API for AmazonRDS ap-south-1 (published 2026-09-24T21:10:11Z) gives these PostgreSQL on-demand rates: db.t4g.micro (1 GiB) $0.021/hr Single-AZ and $0.042/hr Multi-AZ; db.t4g.small (2 GiB) $0.042/hr and $0.084/hr; db.t4g.medium (4 GiB) $0.084/hr and $0.167/hr. gp3 storage is $0.131/GB-month, and backup storage beyond the free allocation is $0.095/GB-month.
+  - Sources: AWS Price List API - AmazonRDS ap-south-1 offer file <https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonRDS/current/ap-south-1/index.json>
+  - Implication: RDS rates are hourly and storage is billed separately. Compute monthly totals from these rates with the AWS calculator rather than from assumed figures.
+- [verified-official] The AWS Price List API for ap-south-1 (Mumbai), published September 2026, lists: internet data transfer out $0.1093/GB for the first 10 TB/month beyond the global free tier, then $0.085/GB for the next 40 TB. S3 Standard storage is $0.025/GB for the first 50 TB/month.
+  - Sources: AWS Price List API - AWSDataTransfer ap-south-1 <https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AWSDataTransfer/current/ap-south-1/index.json>; AWS Price List API - AmazonS3 ap-south-1 <https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonS3/current/ap-south-1/index.json>
+  - Implication: Serving images directly from S3 in Mumbai costs $0.1093/GB (as published in September 2026). Front it with CloudFront (free S3-to-CloudFront transfer) or use R2.
+- [verified-official] Cloudflare R2 pricing as published on 2026-09-25: Standard storage $0.015/GB-month, Class A operations $4.50/million, Class B operations $0.36/million. Egress is 'Free'. The monthly free tier (Standard only) is 10 GB-month storage, 1M Class A and 10M Class B operations.
+  - Sources: R2 Pricing - Cloudflare Docs <https://developers.cloudflare.com/r2/pricing/>
+  - Implication: R2 removes the egress cost for image-heavy catalog pages, which is the dominant variable cost in the other options. Make R2 the default media store; the compute region choice does not affect it.
+- [verified-official] R2 location hints include 'apac' (Asia-Pacific). The docs state 'Location Hints are a best effort and not a guarantee'.
+  - Sources: Data location - R2 Cloudflare Docs <https://developers.cloudflare.com/r2/reference/data-location/>
+  - Implication: Create buckets with the apac hint to keep origin reads close, but do not make data-residency promises based on it.
+- [verified-official] R2 docs: 'Public access through r2.dev subdomains is rate-limited and should only be used for development purposes.' Custom domains enable Cloudflare Cache, WAF custom rules, access controls and Bot Management.
+  - Sources: Public buckets - R2 Cloudflare Docs <https://developers.cloudflare.com/r2/buckets/public-buckets/>
+  - Implication: Serve media from a custom domain such as media.dripnepal.com and never from r2.dev in production.
+- [verified-official] Cloudflare Images pricing as published on 2026-09-25: the Free plan allows 5,000 unique transformations per month. Once exceeded, cached transformations keep serving but new ones return error 9422, with no charge. The paid plan is 5,000 included then $0.50 per 1,000 unique transformations, $5 per 100,000 images stored and $1 per 100,000 images delivered. Repeat requests for the same transformation within a calendar month count once.
+  - Sources: Pricing - Cloudflare Images Docs <https://developers.cloudflare.com/images/pricing/>
+  - Implication: Limit the image variants (widths and quality) to a fixed allow-list so the unique-transformation count stays predictable. Set the onerror fallback so a Free-plan overflow does not break product images.
+- [verified-official] Cloudflare Images transformations work on images 'stored outside of Images' (any origin) through https://<ZONE>/cdn-cgi/image/<OPTIONS>/<SOURCE-IMAGE>. With format=auto it tries AVIF first, falls back to WebP, then JPEG, and notes AVIF encoding 'can be an order of magnitude slower'.
+  - Sources: Transform images - Cloudflare Images Docs <https://developers.cloudflare.com/images/transform-images/>; Transform via URL - Cloudflare Images Docs <https://developers.cloudflare.com/images/transform-images/transform-via-url/>
+  - Implication: DripNepal can keep originals in R2 and resize at the edge instead of creating every variant with sharp, which cuts worker CPU. AVIF/WebP output helps users on slow mobile networks.
+- [verified-official] Cloudflare's network page lists 'Kathmandu, NP' among its data center locations, alongside India cities such as Mumbai, New Delhi, Kolkata, Chennai and Bangalore, plus Dhaka and Thimphu.
+  - Sources: Cloudflare Global Network <https://www.cloudflare.com/network/>
+  - Implication: A Cloudflare edge exists in Kathmandu, but whether traffic from a given Nepali ISP and plan is served there is unverified. Measure it with cf-ray and colo headers from NTC, Ncell, WorldLink and Vianet connections.
+- [verified-official] Bunny CDN pricing as published on 2026-09-25: Standard network $0.03/GB for Asia & Oceania and $0.01/GB for Europe & North America. The Volume network is $0.005/GB for the first 500 TB. The minimum is 'as little as $1 per month'. Bunny's network page lists a Kathmandu, Nepal PoP.
+  - Sources: Bunny CDN Pricing <https://bunny.net/pricing/cdn/>; bunny.net Global Network <https://bunny.net/network/>
+  - Implication: Bunny is an alternative CDN with a Kathmandu PoP. Its Standard network charges per GB in Asia, unlike Cloudflare's included delivery.
+- [verified-official] Bunny Optimizer is $9.50 per website per month (as published on 2026-09-25) with 'Unlimited requests', 'Unlimited optimizations' and 'Unlimited transformations'.
+  - Sources: Bunny Optimizer Pricing <https://bunny.net/pricing/optimizer/>
+  - Implication: Bunny Optimizer is a flat-fee alternative to Cloudflare Images' per-transformation billing if variant counts grow.
+- [verified-official] The AWS Price List API for AmazonCloudFront (published 2026-09-16) lists India data transfer out at $0.109/GB for the first 10 TB/month and India HTTPS requests at $0.0120 per 10,000. The CloudFront pricing page lists an always-free tier of 1 TB data transfer out and 10M requests.
+  - Sources: AWS Price List API - AmazonCloudFront <https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonCloudFront/current/index.json>; Amazon CloudFront Pricing <https://aws.amazon.com/cloudfront/pricing/>
+  - Implication: Pay-as-you-go CloudFront in India is 10x Bunny's Asia rate, as published in September 2026. Compare it against the flat-rate plans.
+- [verified-official] CloudFront flat-rate plans: Free at $0 (1M requests and 100 GB data transfer monthly allowance) and Pro at $15/month (10M requests, 50 TB). Plans have 'no overage charges'; sustained excess usage may lead to adjusted delivery, for example serving from fewer or more distant edge locations. Transfer from S3 to CloudFront is free.
+  - Sources: CloudFront flat-rate pricing plans - Developer Guide <https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/flat-rate-pricing-plan.html>; Amazon CloudFront Pricing <https://aws.amazon.com/cloudfront/pricing/>
+  - Implication: If AWS is chosen, the $15 Pro flat-rate plan (as published on 2026-09-25) caps CDN cost for S3-hosted media.
+- [partially-verified] The CloudFront features page lists India edge locations (regular and embedded PoPs) in South Asia. It does not list Nepal (Kathmandu) or Bangladesh.
+  - Sources: Amazon CloudFront Features - Global edge network <https://aws.amazon.com/cloudfront/features/>
+  - Implication: CloudFront probably serves Nepali users from Indian edges, which is further than the Kathmandu PoPs of Cloudflare and Bunny.
+- [verified-official] pg-boss latest is 12.34.0, published 2026-09-23T19:56Z on npm. It requires Node 22.12 or higher (or Bun) and PostgreSQL 13 or higher, is MIT licensed, and the README says it 'is maintained by one person'.
+  - Sources: pg-boss - npm registry metadata <https://registry.npmjs.org/pg-boss>; timgit/pg-boss - GitHub README <https://github.com/timgit/pg-boss>
+  - Implication: pg-boss works with Node 24. Having a single maintainer is a bus-factor risk; record it in the ADR.
+- [verified-official] pg-boss docs: it uses SKIP LOCKED. Queue options include retryLimit (default 2), retryDelay (default 0 s), retryBackoff (exponential with jitter), retryDelayMax, and a deadLetter queue (with redrive()). Policies are standard, short, singleton, stately, exclusive and key_strict_fifo, and most can be extended with singletonKey. expireInSeconds defaults to 15 minutes, retentionSeconds to 14 days and deleteAfterSeconds to 7 days, and heartbeatSeconds is optional.
+  - Sources: pg-boss docs - Queues API <https://github.com/timgit/pg-boss/blob/master/docs/api/queues.md>; pg-boss docs - Jobs API <https://github.com/timgit/pg-boss/blob/master/docs/api/jobs.md>
+  - Implication: pg-boss covers retries, dead-letter queues, deduplication (singletonKey, for example per orderId) and ordered per-key processing (key_strict_fifo, for example per vendor or order) without Redis.
+- [verified-official] pg-boss docs: when a worker only looked dead, 'the job can run twice and handlers should be idempotent'. The result of a stale attempt is discarded, and a transactional worker rolls its writes back.
+  - Sources: pg-boss docs - Queues API (Heartbeat vs expiration) <https://github.com/timgit/pg-boss/blob/master/docs/api/queues.md>
+  - Implication: Jobs such as payment verification, stock release and email must be idempotent, keyed by business IDs. Delivery is at-least-once.
+- [verified-official] pg-boss send/insert/fetch/complete accept a 'db' option to run inside an existing transaction, with built-in adapters for Knex (fromKnex), Kysely, Drizzle and Prisma. 'If the transaction rolls back, so does the job.'
+  - Sources: pg-boss docs - ORM Transaction Adapters <https://github.com/timgit/pg-boss/blob/master/docs/api/adapters.md>
+  - Implication: Order creation and its follow-up jobs can commit atomically (a transactional outbox without a separate outbox table). Lucid is built on Knex, but whether a Lucid transaction client works with fromKnex needs a spike.
+- [verified-official] pg-boss scheduling accepts cron or RRULE expressions with a tz option. Schedules are checked every 30 seconds, and a schedule sends at most one job a minute. At least one instance must be running, and clock skew against the DB server is compensated.
+  - Sources: pg-boss docs - Scheduling <https://github.com/timgit/pg-boss/blob/master/docs/api/scheduling.md>
+  - Implication: Recurring jobs (payout batches, abandoned-cart sweeps) can be scheduled in Asia/Kathmandu with tz. Minute granularity is enough for these.
+- [partially-verified] pg-boss's repository docker-compose.yaml for the default test suite uses image 'postgres:18', and CI runs on a node:24 container against the untagged 'postgres' image. No explicit Postgres 18 compatibility statement was found; the README says 'PostgreSQL 13 or higher'.
+  - Sources: pg-boss docker-compose.yaml <https://github.com/timgit/pg-boss/blob/master/docker-compose.yaml>; pg-boss CI workflow <https://github.com/timgit/pg-boss/blob/master/.github/workflows/ci.yml>
+  - Implication: There is good evidence pg-boss is tested on Postgres 18 with Node 24. Still run DripNepal's own integration tests against postgres:18.4.
+- [verified-official] BullMQ latest is 6.3.8 (npm, 2026-09-18). v6.0.0 (2026-07-30) added pluggable backends including PostgreSQL, removed the legacy repeatable-jobs API (the repeat option and the Repeat class), and made ioredis an optional peer dependency.
+  - Sources: bullmq - npm registry metadata <https://registry.npmjs.org/bullmq>; Changelog | BullMQ <https://docs.bullmq.io/changelog>
+  - Implication: Most BullMQ tutorials and AdonisJS wrappers target v5 APIs, and the v6 break is recent. Pin the major version and use Job Schedulers, not repeat.
+- [verified-official] BullMQ PostgreSQL backend: requires PostgreSQL 13+ (14+ recommended) and the pg package, and implements the same API (flows, job schedulers, rate limiting, priorities, delays, deduplication). Throughput is 'often around ~1.5–2× fewer jobs/s' than Redis. It uses LISTEN/NOTIFY on a dedicated connection, and schema migrations must be applied explicitly. 'The Redis backend remains the default and the most battle-tested option.'
+  - Sources: PostgreSQL backend | BullMQ <https://docs.bullmq.io/guide/postgresql>
+  - Implication: BullMQ can now run without Redis, but its Postgres backend is only about two months old (v6.0.0, 2026-07-30). pg-boss is the more established Postgres-native choice today.
+- [verified-official] BullMQ docs describe its semantics as 'Exactly once queue semantics, i.e., attempts to deliver every message exactly one time, but it will deliver at least once in the worst case scenario'.
+  - Sources: What is BullMQ | BullMQ <https://docs.bullmq.io/>
+  - Implication: BullMQ is at-least-once in the worst case, like pg-boss. Handlers must be idempotent whichever queue is chosen.
+- [verified-official] BullMQ production guide: set Redis maxmemory-policy to noeviction, 'the only setting that guarantees the correct behavior of the queues'. Enable AOF persistence (fsync every second is enough for most applications), set maxRetriesPerRequest to null for Workers, and close workers on SIGINT/SIGTERM.
+  - Sources: Going to production | BullMQ <https://docs.bullmq.io/guide/going-to-production>
+  - Implication: If BullMQ with Redis is used, the local Redis and any managed Redis/Valkey must use noeviction and AOF. The Redis instance cannot then double as an evicting cache.
+- [verified-official] The AdonisJS docs describe @adonisjs/queue as 'currently experimental. Its API may change between minor releases'. Latest on npm is 0.6.2, requiring Node >=24 and built on @boringnode/queue. Adapters are Redis (recommended for production), Database through Lucid (PostgreSQL/MySQL/SQLite) and Sync. Features include retries with exponential, linear, fixed or custom backoff, timeouts, cron/interval scheduling, deduplication and a failed() hook. Workers start with 'node ace queue:work'.
+  - Sources: Queues - AdonisJS Documentation <https://docs.adonisjs.com/guides/digging-deeper/queues>; @adonisjs/queue - npm registry metadata <https://registry.npmjs.org/@adonisjs/queue>
+  - Implication: The first-party queue fits AdonisJS best, but it is pre-1.0 and experimental. Consider it only behind an internal job interface so the queue can be swapped for pg-boss.
+- [verified-official] pgBackRest v2.59.1 (August 17, 2026) is the current stable release. PostgreSQL 18 support was added in v2.55.0 (April 21, 2025), and 19beta support in v2.59.x. Features include full, differential and incremental backups (file or block level), parallel backup and restore, S3/Azure/GCS repositories, repository encryption, per-file checksums, and async WAL push/get.
+  - Sources: pgBackRest - Reliable PostgreSQL Backup & Restore <https://pgbackrest.org/>; pgBackRest Releases <https://pgbackrest.org/release.html>
+  - Implication: If Postgres is self-hosted (Hetzner, or a VPS on DigitalOcean or Akamai), pgBackRest with an encrypted repository on R2 or S3 is the documented, PG18-supported option.
+- [verified-official] pgBackRest 'verify' 'determines if the backups and archives in a repository are valid'. 'check' validates the archive_command and backup configuration and detects missing WAL segments.
+  - Sources: pgBackRest Command Reference <https://pgbackrest.org/command.html>
+  - Implication: Run 'check' and 'verify' on a schedule and alert on failure. Also run a periodic full restore into a scratch instance, because verify checks integrity, not the ability to restore.
+- [partially-verified] The latest WAL-G release is v3.0.9 (August 20, 2026). A PR running the PostgreSQL integration suite on PostgreSQL 10 and 14–18 (wal-g/wal-g#2504) was merged 2026-08-25, after that release. No release note explicitly declaring PostgreSQL 18 support was found.
+  - Sources: Releases - wal-g/wal-g <https://github.com/wal-g/wal-g/releases>; test(pg): run the integration suite on PostgreSQL 10 and 14-18 - wal-g PR #2504 <https://github.com/wal-g/wal-g/pull/2504>
+  - Implication: PG18 support is documented for pgBackRest but not yet confirmed in a WAL-G release, so prefer pgBackRest.
+- [verified-official] PostgreSQL 18 docs: continuous archiving needs 'a continuous sequence of archived WAL files that extends back at least as far as the start time of your backup', and 'you should set up and test your procedure for archiving WAL files before you take your first base backup.' pg_basebackup --incremental plus pg_combinebackup supports incremental backups.
+  - Sources: PostgreSQL 18 Docs - Continuous Archiving and Point-in-Time Recovery (PITR) <https://www.postgresql.org/docs/18/continuous-archiving.html>
+  - Implication: The ops doc should require a restore drill before launch and on a recurring schedule. Record measured RTO and RPO, and restore to a new instance, which is also how DigitalOcean, Render, Lightsail and Fly restores work.
+- [verified-official] Sentry Developer (free) plan as published on 2026-09-25: one user, 5k errors, 5M spans, 50 replays, 1 cron monitor, 1 uptime monitor, 5GB logs, 30-day lookback. The Team plan starts at $26/mo billed annually.
+  - Sources: Plans and Pricing | Sentry <https://sentry.io/pricing/>
+  - Implication: The free tier allows only one user, so a team of two or more needs Team ($26/mo, as published on 2026-09-25) or another tool.
+- [verified-official] @sentry/node 11.0.0 (npm, 2026-09-23) requires Node >=20.19.0 <22, >=22.12.0 <23, or >=23.2.0, so it covers Node 24. @sentry/react 11.0.0 has peer dependency react 17.x, 18.x or 19.x. The Node docs say to initialize through an instrument file loaded with 'node --import ./instrument.js'.
+  - Sources: @sentry/node - npm registry metadata <https://registry.npmjs.org/@sentry/node>; @sentry/react - npm registry metadata <https://registry.npmjs.org/@sentry/react>; Sentry for Node.js docs <https://docs.sentry.io/platforms/javascript/guides/node/>
+  - Implication: Sentry supports DripNepal's Node 24 and React 19 stack. Because the app uses ESM, Sentry has to load before the app, which conflicts with @adonisjs/otel's bin/otel.ts ordering unless the two are coordinated.
+- [partially-verified] No AdonisJS guide exists on docs.sentry.io; integrations are community packages such as @rlanz/sentry and @outloud/adonis-sentry.
+  - Sources: RomainLanz/sentry - AdonisJS Sentry wrapper <https://github.com/RomainLanz/sentry>; madebyoutloud/adonis-sentry <https://github.com/madebyoutloud/adonis-sentry>
+  - Implication: Either depend on a community wrapper or write a small provider plus exception-handler hook around @sentry/node.
+- [verified-official] Sentry's custom OpenTelemetry setup docs: set enableOpenTelemetrySetup: false, leave tracesSampleRate and tracesSampler unset, 'Initialize your OpenTelemetry provider before calling Sentry.init()', and add Sentry.openTelemetryIntegration(). Sampling must be configured on the OTel provider.
+  - Sources: Using Your Existing OpenTelemetry Setup - Sentry Docs <https://docs.sentry.io/platforms/javascript/guides/node/opentelemetry/custom-setup/>
+  - Implication: If both @adonisjs/otel and Sentry are used, let @adonisjs/otel own the OTel SDK and put Sentry in custom-setup mode, to avoid duplicate spans.
+- [verified-official] @adonisjs/otel exists (npm latest 1.2.3, 2026-03-15; peer @adonisjs/core ^6.2.0 || ^7.0.0; depends on @opentelemetry/sdk-node ^0.213.0). Per the AdonisJS docs it auto-traces incoming and outgoing HTTP, Lucid queries (via Knex) and Redis, and creates bin/otel.ts imported at the top of bin/server.ts. By default it exports OTLP over gRPC to localhost:4317, configured with OTEL_EXPORTER_OTLP_ENDPOINT and OTEL_EXPORTER_OTLP_HEADERS. It supports samplingRatio, injects trace_id and span_id into Pino logs, and is disabled when NODE_ENV === 'test'.
+  - Sources: OpenTelemetry - AdonisJS Documentation <https://docs.adonisjs.com/guides/digging-deeper/opentelemetry>; @adonisjs/otel - npm registry metadata <https://registry.npmjs.org/@adonisjs/otel>; adonisjs/otel - GitHub <https://github.com/adonisjs/otel>
+  - Implication: Use @adonisjs/otel for vendor-neutral traces and send OTLP to Grafana Cloud, Axiom or Better Stack. Set samplingRatio below 1.0 in production to stay within free-tier trace quotas.
+- [verified-official] The OpenTelemetry JavaScript status table lists Traces as Stable, Metrics as Stable and Logs as Development. 'OpenTelemetry JavaScript supports all active or maintenance LTS versions of Node.js.' The latest @opentelemetry/sdk-node on npm is 0.222.0 (2026-08-31).
+  - Sources: OpenTelemetry JavaScript <https://opentelemetry.io/docs/languages/js/>; @opentelemetry/sdk-node - npm registry metadata <https://registry.npmjs.org/@opentelemetry/sdk-node>
+  - Implication: @adonisjs/otel's caret range ^0.213.0 on a 0.x package pins it to 0.213.x, nine minors behind latest. Do not add a separate sdk-node version that could create duplicate OTel instances. Ship logs through Pino rather than OTel logs, which are still Development.
+- [verified-official] Grafana Cloud Free as published on 2026-09-25: 10k active metric series per month, 50 GB ingested per month for logs, traces and profiles, 14-day retention, and 3 active users. Pro has a $19/month platform fee plus usage.
+  - Sources: Grafana Cloud Pricing <https://grafana.com/pricing/>
+  - Implication: Grafana Cloud Free accepts OTLP traces, metrics and logs from @adonisjs/otel for up to 3 users at no cost. Keep metric cardinality low to stay under 10k series.
+- [verified-official] Better Stack free tier as published on 2026-09-25: 10 monitors and heartbeats, 1 status page, Slack and e-mail alerts, 100,000 exceptions per month, 3 GB logs retained 3 days, 3 GB traces retained 3 days, and 30 GB metrics.
+  - Sources: Pricing | Better Stack <https://betterstack.com/pricing>
+  - Implication: Better Stack Free covers uptime and heartbeat monitoring (for example a heartbeat from the job worker). Three days of log retention is too short for incident forensics.
+- [verified-official] Axiom Personal plan as published on 2026-09-25: '500 GB/mo data loading compute', 30-day retention, 25 GB storage. Axiom Cloud starts at $25/month plus usage.
+  - Sources: Pricing | Axiom <https://axiom.co/pricing>
+  - Implication: Axiom gives the longest free log retention among the options researched (30 days). It is a candidate log sink for Pino JSON logs.
+- [verified-official] AdonisJS Drive supports Amazon S3, Google Cloud Storage, Cloudflare R2, DigitalOcean Spaces, Supabase Storage and the local filesystem. It provides getSignedUrl for private files and getSignedUploadUrl for direct browser uploads. @adonisjs/drive 4.0.0 requires Node >=24.
+  - Sources: Drive - AdonisJS Documentation <https://docs.adonisjs.com/guides/digging-deeper/drive>; @adonisjs/drive - npm registry metadata <https://registry.npmjs.org/@adonisjs/drive>
+  - Implication: With Drive, the choice between R2 and Spaces is a config swap. Direct-to-R2 signed uploads keep large vendor photo uploads off the app server, which matters on slow connections.
+- [verified-official] sharp latest is 0.35.4 (npm, 2026-08-26). It requires a 'Node-API v9 compatible runtime e.g. Node.js >= 20.9.0'. Its CI builds against Node 20, 22 and 24 on linux x64 and arm64, including node:24-alpine. Prebuilt @img/sharp-libvips-\* 1.3.3 packages cover linux glibc and musl, and package.json config requires libvips >=8.18.6.
+  - Sources: sharp - npm registry metadata <https://registry.npmjs.org/sharp>; Installation - sharp <https://sharp.pixelplumbing.com/install>; sharp CI workflow <https://github.com/lovell/sharp/blob/main/.github/workflows/ci.yml>
+  - Implication: sharp works on Node 24 with prebuilt binaries, so no system libvips is needed in the Docker image. With pnpm 11, allow the build scripts for the sharp and @img packages or their install may be skipped.
+- [verified-official] GitHub security advisories for sharp: GHSA-rgj7-g3m4-5g8c (high, 2026-08-27, libheif CVE-2026-84383) affects sharp < 0.35.4, patched in 0.35.4. GHSA-f88m-g3jw-g9cj (high, 2026-07-17, libvips CVE-2026-33327, -33328, -35590, -35591, -69242) affects sharp < 0.35.0.
+  - Sources: Security advisories - lovell/sharp <https://github.com/lovell/sharp/security/advisories>
+  - Implication: Pin sharp >= 0.35.4, and add dependency alerts (Dependabot or Renovate) because libvips and codec CVEs are frequent. Consider disallowing HEIC/HEIF uploads, or converting them client-side, to reduce the libheif attack surface.
+- [verified-official] sharp constructor options: limitInputPixels defaults to 268402689 (0x3FFF x 0x3FFF) and rejects inputs whose width x height exceeds it. failOn defaults to 'warning', and the docs say 'Use the default 'warning' level with untrusted input'. unlimited defaults to false; setting it true removes 'safety features that help prevent memory exhaustion (JPEG, PNG, SVG, HEIF)'.
+  - Sources: Constructor - sharp <https://sharp.pixelplumbing.com/api-constructor>
+  - Implication: The default limit (about 268 MP) is far too large for product photos on a small VM. Set an explicit lower limitInputPixels and max upload size, never set unlimited: true, and keep failOn at 'warning'.
+- [verified-official] sharp.block() and sharp.unblock() block or allow libvips operations at runtime, in addition to the VIPS_BLOCK_UNTRUSTED environment variable, which 'when set will block all "untrusted" operations'. The libvips developer checklist advises handling untrusted data with VIPS_BLOCK_UNTRUSTED set and only the tested loaders.
+  - Sources: Global properties (utilities) - sharp <https://sharp.pixelplumbing.com/api-utility>; Checklist for programmers using libvips <https://www.libvips.org/API/8.17/developer-checklist.html>
+  - Implication: Set VIPS_BLOCK_UNTRUSTED=1 in the worker container, and use sharp.block/unblock to allow only the JPEG, PNG, WebP and AVIF loaders that uploads need.
+- [verified-official] The libvips developer checklist advises: 'Sanity check image dimensions to protect you from decompression bombs'. It warns that interlaced (progressive) images 'prevent any streaming processing and hugely increase memory use', recommends detecting the 'interlaced' metadata item and banning such images or queueing them at low priority, and suggests enabling only the formats you need.
+  - Sources: Checklist for programmers using libvips <https://www.libvips.org/API/8.17/developer-checklist.html>
+  - Implication: The upload pipeline should read metadata first (sharp().metadata(), header only), reject images that are oversized by dimensions or interlaced before decoding, and run processing in the background worker rather than the web process.
+- [verified-official] sharp.concurrency() defaults to the number of CPU cores, except on glibc-based Linux, where it defaults to 1 'to minimize memory fragmentation'. sharp.cache() sets limits on libvips' operation cache.
+  - Sources: Global properties (utilities) - sharp <https://sharp.pixelplumbing.com/api-utility>
+  - Implication: On a 1 to 2 vCPU VPS, cap job-level parallelism for image jobs, for example one image job at a time, and set sharp.cache limits so the web process keeps its memory.
+
+## Could not verify
+
+- Measured round-trip latency from major Nepali ISPs (Nepal Telecom, Ncell, WorldLink, Vianet, Subisu) to AWS ap-south-1, GCP asia-south2 Delhi, DigitalOcean BLR1/SGP1, Akamai in-maa/sg-sin-2, and Singapore PaaS regions. No authoritative published measurements were found, so 'closest' is geographic only until benchmarked (e.g., RIPE Atlas probes or test VMs pinged from Nepali connections).
+- Whether Nepali users are actually served from Cloudflare's or Bunny's Kathmandu PoP. This depends on ISP peering and possibly on Cloudflare plan; no official statement was found.
+- Hetzner Singapore traffic overage price per TB. The price is rendered by JavaScript and did not appear in the fetched page.
+- Whether Hetzner prices include VAT, and the extra cost of a Primary IPv4 in Singapore.
+- Whether DigitalOcean Droplet and Managed Database prices differ between BLR1 and SGP1. Bandwidth pricing is documented as not varying by region; compute pricing was not explicitly confirmed.
+- Which DigitalOcean Managed PostgreSQL 1 GiB price is correct: $15.15/mo on the pricing page or 'begin at $15.00' in the docs.
+- The length of Fly.io Managed Postgres's PITR window (only a non-staff community post says 10 days).
+- The default Postgres major version of Railway's Postgres template, and whether it offers PG18.
+- Whether Lightsail managed databases now offer PostgreSQL 17 or 18. The docs list only 12–16 and may be stale.
+- Which CloudFront pricing region applies to viewers in Nepal (probably India edges, but not confirmed).
+- Cloudflare Images input limits (maximum megapixels or file size). The supported-formats-and-limitations page returned 404.
+- BullMQ's minimum supported Redis version (not stated on the connections page).
+- An explicit official statement from pg-boss that PostgreSQL 18 is supported. Only test-harness evidence (postgres:18 in docker-compose) was found.
+- A WAL-G release that officially includes PostgreSQL 18 support. PG18 integration tests were merged after v3.0.9.
+- Akamai Managed Database PITR granularity beyond 'point in time recovery for each day over the last 14 days'.
+- Whether Lucid's transaction client can be passed to pg-boss's fromKnex adapter (needs a code spike).
+- Render web-service outbound bandwidth pricing in Singapore specifically. The page shows one global $0.15/GB rate, and no regional differences were found.
+
+## Requires human/legal confirmation
+
+- Data residency: whether Nepali law (for example the Individual Privacy Act 2075 and its regulations, or Nepal Rastra Bank rules for payment data) restricts storing Nepali customers' personal or payment data outside Nepal, in India or Singapore. Not researched; needs legal review before choosing a region.
+- Payment gateway requirements (eSewa, Khalti, Fonepay, ConnectIPS): whether callbacks need IP allow-listing, static egress IPs, or a hosting location. This may rule out PaaS options without static outbound IPs (Render dedicated IPs cost $100/mo, as published on 2026-09-25).
+- Billing feasibility: every provider found bills in USD or EUR by card. Whether the company can pay foreign SaaS or cloud invoices from Nepal (NRB foreign-exchange limits, dollar card caps) must be confirmed by the business owner.
+- Where Sentry, Grafana Cloud, Better Stack and Axiom store data (US or EU), and whether sending customer PII such as names, phone numbers and addresses in logs and traces is acceptable. Configure PII scrubbing either way.
+- Budget ceiling and acceptable RPO/RTO for orders and payments. This decides between 7-day PITR (DigitalOcean, Render Pro, Lightsail), 14-day (Akamai) or up to 35-day (RDS) managed retention, and whether off-provider backups are mandatory.
+- Adopting pre-1.0 or experimental components (@adonisjs/queue 0.6.x, which the docs call experimental; BullMQ's PostgreSQL backend, which is two months old) is a risk decision for the team lead.
+- Side observation from the read-only repo inspection: package.json lists a dependency "D": "^1.0.0". On npm, 'D' is a deprecated placeholder held by npm ('To avoid malicious use, npm is hanging on to the package name'). It looks accidental, and a human should confirm and remove it.
