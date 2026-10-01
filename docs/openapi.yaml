@@ -53,8 +53,11 @@ info:
     `IDEMPOTENCY_IN_PROGRESS` with `Retry-After: 2`. A business failure inside the transaction
     stores nothing, so a retry re-executes. Retention 24 h (72 h for `placeOrder`).
 
-    **Concurrency (06 §8).** Operations marked `x-if-match: true` need `If-Match: W/"<version>"`:
-    missing → 428 `PRECONDITION_REQUIRED`; stale → 412 `VERSION_CONFLICT` with `current`.
+    **Concurrency (06 §8).** Versioned resources return the strong tag `ETag: "<version>"` (no
+    `W/` prefix). Operations marked `x-if-match: true` need `If-Match: "<version>"`, compared
+    strongly (RFC 9110 §13.1.1): missing, `*` or a list → 428 `PRECONDITION_REQUIRED`; a stale
+    version, a weak tag (`W/"<version>"`) or any other value → 412 `VERSION_CONFLICT` with
+    `current` (tech lead decision, 2026-10-01).
 
     **Extensions used on operations.** `x-release` (release and milestone from 06 §13),
     `x-permission` (permission slug of 07 §4.2 and §4.3; seller slugs `shop.*`, admin slugs
@@ -286,8 +289,9 @@ paths:
         are named by the filterable attribute's code with value codes.
         Side effects: none. Rate limit `catalog_ip` 120/min per IP [Assumption]. The read is
         cancelled after 2 s and at most 4 of the web process's 8 connections run it at once; a
-        read that waits more than 1 s for a slot gets 503 `SERVICE_BUSY` with `Retry-After` (all
-        proposed, 07 TM-24; 06 §5.2, §9.1) [Assumption].
+        read that waits more than 1 s for a slot, or that the 2 s limit cancels, gets 503
+        `SERVICE_BUSY` with `Retry-After`, never 500 `INTERNAL` (all proposed, 07 TM-24; 06 §5.2,
+        §5.3, §9.1) [Assumption].
         `Cache-Control: private, no-store` in R1 (06 §3.8). Release R1·M4.
       x-release: R1·M4
       security: []
@@ -414,7 +418,26 @@ paths:
                       - { field: sort, code: enum, message: Unsupported sort. }
         '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/Internal' }
-        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+        '503':
+          description: |
+            503 `SERVICE_BUSY` (proposed together with the catalog-read cap and the 2 s read limit
+            of 07 TM-24; 06 §5.2, §5.3). Two causes: the read waited more than 1 s for a slot under
+            the cap, or the 2 s limit cancelled it (knex `KnexTimeoutError` or SQLSTATE 57014,
+            caught inside this query only). Never 500 `INTERNAL`; a query cancelled on any other
+            path stays 500. `Retry-After` is sent. This 503 is not sent until the cap and the
+            limit are adopted.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+            Retry-After: { $ref: '#/components/headers/Retry-After' }
+          content:
+            application/problem+json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Problem503'
+                  - type: object
+                    properties:
+                      code: { const: SERVICE_BUSY }
 
   /api/v1/seller/shops/{shopSlug}/products:
     parameters:
@@ -431,7 +454,7 @@ paths:
         `category_id` must be an active leaf category; the s6 disclosure fields may be null
         on a draft and are required at submit (04a §7.6, FR-CAT-012).
         Side effects: product row `draft`, `version` 1, audit. Idempotency: ⚷, 24 h.
-        Body limit 512 KB (06 §9.2). Returns 201 with `Location` and `ETag: W/"1"`. Release R1·M3.
+        Body limit 512 KB (06 §9.2). Returns 201 with `Location` and `ETag: "1"`. Release R1·M3.
       x-release: R1·M3
       x-permission: shop.products.edit
       x-idempotency: { required: true, retention_hours: 24 }
@@ -524,8 +547,10 @@ paths:
         reordered in place (04a §7.8). Removing or replacing an axis once a variant of the product
         has an inventory movement or an order line answers 409 `CONFLICT` (axis set frozen, 04a §7.8).
         Concurrency: ⟳ `If-Match` on `products.version`; bumps it and each changed variant's
-        `version`. Missing → 428; stale → 412 with `current`. Not ⚷ (the version check stops a
-        second apply, 06 §7.7). Body limit 512 KB. Release R1·M3.
+        `version`. Missing, `*` or a list → 428; a stale version, a weak tag (`W/"2"` even when
+        2 is current, because the comparison is strong) or any other value → 412 with `current`
+        (06 §8, §14.2). Not ⚷ (the version check stops a second apply, 06 §7.7). Body limit
+        512 KB. Release R1·M3.
       x-release: R1·M3
       x-permission: shop.products.edit
       x-if-match: true
@@ -614,8 +639,11 @@ paths:
         Actor: `shop.inventory.adjust`; shop status gate of 06 §4.4. Scope: `{variantId}` is
         looked up inside the shop, else 404 (T-SEC-001).
         Rules (05 §5.9): `delta` ≠ 0; the result may not take `on_hand` below `reserved`
-        (409 `CONFLICT`, `errors[0].code = "below_reserved"`). `reason_code` is one of the six
-        vendor reasons of the `inventory_movements_reason_code_check` (04a §8.3).
+        (409 `CONFLICT`, `errors[0].code = "below_reserved"`). That item splits `reserved` into
+        `reserved_committed` with `committed_shop_orders` (proposed; the shop-order numbers the
+        client links) and `reserved_held` (a count only, no order number; 06 §5.1, 05 §8.13,
+        AC-FR-INV-003-2). `reason_code` is one of the six vendor reasons of the
+        `inventory_movements_reason_code_check` (04a §8.3).
         Side effects: `inventory_items` update, `adjustment` movement with `request_id`, audit,
         listing refresh. Idempotency: ⚷, 24 h; a replay returns the same 201 and stock changes
         once (AC-FR-INV-001-4). Release R1·M3.
@@ -665,7 +693,36 @@ paths:
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/Conflict' }
+        '409':
+          description: |
+            `CONFLICT` with a `below_reserved` item (the adjustment would take `on_hand` below
+            `reserved`), or an idempotency conflict. Nothing is written.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+            Retry-After: { $ref: '#/components/headers/Retry-After' }
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem409' }
+              examples:
+                belowReserved:
+                  summary: 06 §14.3, a delta of -31 against `on_hand` 32 and `reserved` 2 (the split of `reserved`, the field, the message and the shop-order number are illustrative)
+                  value:
+                    type: https://dripnepal.com/problems/conflict
+                    title: Conflict
+                    status: 409
+                    detail: This change would leave less stock than is reserved for orders.
+                    code: CONFLICT
+                    request_id: 01929a60-0000-7000-8000-000000000409
+                    errors:
+                      - field: delta
+                        code: below_reserved
+                        message: On hand cannot go below the 2 reserved units.
+                        on_hand: 32
+                        reserved: 2
+                        reserved_committed: 1
+                        committed_shop_orders: [DN-7K3M9QX-1]
+                        reserved_held: 1
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '422': { $ref: '#/components/responses/UnprocessableContent' }
         '429': { $ref: '#/components/responses/RateLimited' }
@@ -684,8 +741,10 @@ paths:
         The client sends the count and the `on_hand` it displayed; the server sets `on_hand` to
         the count only if `on_hand` still equals `expected_on_hand` (05 §5.9). Otherwise 409
         `CONFLICT` with `errors[0].code = "stock_changed"` and the current `on_hand` and
-        `reserved`; a count below `reserved` is 409 `below_reserved`. Nothing is written and no
-        key is stored on a conflict, so the vendor confirms again with a new key.
+        `reserved`; a count below `reserved` is 409 `below_reserved`, whose item carries
+        `reserved_committed`, `committed_shop_orders` (proposed) and `reserved_held` as in
+        `adjustInventory` (06 §5.1). Nothing is written and no key is stored on a conflict, so
+        the vendor confirms again with a new key.
         Side effects: `stocktake` movement (delta may be 0), audit. Idempotency: ⚷, 24 h.
         Stocktake uses `expected_on_hand` instead of `If-Match` (06 §8). Release R1·M3.
       x-release: R1·M3
@@ -738,7 +797,7 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409':
-          description: Stock changed while counting, the count is below `reserved`, or an idempotency conflict.
+          description: Stock changed while counting, the count is below `reserved` (a `below_reserved` item as in `adjustInventory`), or an idempotency conflict.
           headers:
             X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
             Cache-Control: { $ref: '#/components/headers/Cache-Control' }
@@ -1150,7 +1209,9 @@ paths:
         covering every line consumed at shipment, each `restock_quantity` from 0 to the units of
         that line consumed, and a `note` of at most 500 characters when any unit is not
         restocked, else 422 `VALIDATION_FAILED`, 05 §5.8; `rto_restock` movements of the units
-        marked resaleable, shop order `cancelled` with `undeliverable`).
+        marked resaleable, shop order `cancelled` with `undeliverable`). An `items[].order_item_id`
+        that is not a line of this shop order, such as another shop's line, is 404 `NOT_FOUND`
+        (06 §13.5, T-SEC-001 case (c)).
         While the COD payment is `collected`, `delivery_failed`, `returning` and
         `returned_to_origin` are 409 `INVALID_STATE_TRANSITION` and change nothing: cash recorded
         at the door means the parcel was handed over (05 §6.3, 06 §14.6, T-FUL-004).
@@ -1707,13 +1768,14 @@ components:
       in: header
       required: true
       description: |
-        The `ETag` read with the resource (06 §8). The server compares the version number and
-        accepts `W/"7"` or `"7"`. Missing, `*` or a list → 428 `PRECONDITION_REQUIRED`;
-        mismatch → 412 `VERSION_CONFLICT` with `current`.
+        Strong tag read with the resource (06 §8). Only `"<version>"` equal to the current
+        version passes; a stale version, a weak tag (`W/"n"`) or any other value → 412
+        `VERSION_CONFLICT` with `current`; missing, `*` or a list → 428
+        `PRECONDITION_REQUIRED`. The schema has no pattern on purpose, so that every such value
+        reaches the 412 or 428 instead of a validation error (tech lead decision, 2026-10-01).
       schema:
         type: string
-        pattern: '^(W/)?"[0-9]{1,10}"$'
-      example: 'W/"1"'
+      example: '"1"'
     RequestId:
       name: X-Request-Id
       in: header
@@ -1827,15 +1889,16 @@ components:
       description: |
         Seconds before retrying: 429 `RATE_LIMITED`, 409 `IDEMPOTENCY_IN_PROGRESS` (2), transient
         409 `CONFLICT` (2), 503 `PROVIDER_UNAVAILABLE` for a provider outage (30), 503
-        `SERVICE_BUSY` (proposed). The checkout kill switch sends no `Retry-After` (06 §5.2).
+        `SERVICE_BUSY` (proposed; a catalog read that waited more than 1 s for a slot or that the
+        2 s read limit cancelled). The checkout kill switch sends no `Retry-After` (06 §5.2).
       schema: { type: integer, minimum: 0 }
     Location:
       description: Path of the created resource (06 §3.7); rebuilt from the stored resource on an idempotent replay.
       schema: { type: string, format: uri-reference }
     ETag:
-      description: Weak tag of the resource `version` (06 §8); send it back as `If-Match`. Not sent on an idempotent replay (06 §7.5).
-      schema: { type: string, pattern: '^W/"[0-9]{1,10}"$' }
-      example: 'W/"2"'
+      description: Strong tag of the resource version, `"<version>"` with no `W/` prefix (06 §8); send it back as `If-Match`. Not sent on an idempotent replay (06 §7.5).
+      schema: { type: string, pattern: '^"[0-9]{1,10}"$' }
+      example: '"2"'
     Idempotency-Replayed:
       description: '`true` when the body is the stored response of an earlier request with the same key (06 §7.4–§7.5).'
       schema: { type: string, enum: ['true'] }
@@ -1904,7 +1967,7 @@ components:
         application/problem+json:
           schema: { $ref: '#/components/schemas/Problem409' }
     PreconditionFailed:
-      description: '412 `VERSION_CONFLICT`: `If-Match` does not match; `current` holds the current representation.'
+      description: '412 `VERSION_CONFLICT`: `If-Match` is a stale version, a weak tag or any other value (strong comparison, 06 §8); `current` holds the current representation.'
       headers:
         X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
         Cache-Control: { $ref: '#/components/headers/Cache-Control' }
@@ -1913,7 +1976,7 @@ components:
           schema: { $ref: '#/components/schemas/Problem412' }
           examples:
             secondEditor:
-              summary: 06 §14.2, a second editor still holds W/"1" (`current` written out in full where 06 says "as above")
+              summary: 06 §14.2, a second editor still holds "1" (`current` written out in full where 06 says "as above")
               value:
                 type: https://dripnepal.com/problems/version-conflict
                 title: Version conflict
@@ -1956,7 +2019,9 @@ components:
       description: |
         422: `VALIDATION_FAILED` (schema, rule, `unknown_field`; also non-JSON or unparseable
         bodies until `MALFORMED_REQUEST` is adopted, with `errors[0].code =
-        "unsupported_media_type"` for a non-JSON content type, 06 §3.5), `IDEMPOTENCY_KEY_REUSED`,
+        "unsupported_media_type"` for a non-JSON content type, 06 §3.5; also a value too long for
+        its column that a validator missed, SQLSTATE 22001, with one `errors[]` item whose `field`
+        is `null`, 06 §5.3, tech lead decision 2026-10-01), `IDEMPOTENCY_KEY_REUSED`,
         `DELIVERY_NOT_AVAILABLE`, `COD_LIMIT_EXCEEDED` or `REFUND_EXCEEDS_REFUNDABLE`.
       headers:
         X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
@@ -1977,7 +2042,7 @@ components:
                 errors:
                   - { field: shop_id, code: unknown_field, message: This field is not allowed. }
     PreconditionRequired:
-      description: '428 `PRECONDITION_REQUIRED`: a ⟳ operation without a single `If-Match` tag.'
+      description: '428 `PRECONDITION_REQUIRED`: a ⟳ operation without a single `If-Match` tag (missing, `*` or a list; 06 §8).'
       headers:
         X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
         Cache-Control: { $ref: '#/components/headers/Cache-Control' }
@@ -2007,8 +2072,10 @@ components:
         today also the checkout kill switch (`checkout_enabled = false`; `detail` is the
         `maintenance_banner` text, no `Retry-After`). `CHECKOUT_DISABLED` (proposed) would
         replace it for the kill switch only. 503 `SERVICE_BUSY` (proposed, with the catalog-read
-        cap of 07 TM-24): `listProducts` waited more than 1 s for a slot; `Retry-After` is sent
-        (06 §5.2, §5.3).
+        cap and the 2 s read limit of 07 TM-24): the storefront listing or search read of
+        `listProducts` waited more than 1 s for a slot, or the 2 s limit cancelled it (never 500
+        `INTERNAL`; a query cancelled on any other path stays 500); `Retry-After` is sent (06
+        §5.2, §5.3). `listProducts` declares its own 503.
       headers:
         X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
         Cache-Control: { $ref: '#/components/headers/Cache-Control' }
@@ -2122,8 +2189,10 @@ components:
         503 `PROVIDER_UNAVAILABLE`, `CHECKOUT_DISABLED` (proposed), `SERVICE_BUSY` (proposed).
         Until adopted, the three proposed codes are never sent: malformed bodies give 422
         `VALIDATION_FAILED`, the kill switch gives 503 `PROVIDER_UNAVAILABLE`, and
-        `SERVICE_BUSY` exists only with the proposed catalog-read cap (07 TM-24). Clients fall
-        back by status class for unknown codes (06 §5.4, §10).
+        `SERVICE_BUSY` exists only with the proposed catalog-read cap and 2 s read limit (07
+        TM-24), for a storefront listing or search read that waited more than 1 s for a slot or
+        that the limit cancelled. Clients fall back by status class for unknown codes (06 §5.4,
+        §10).
       enum:
         - INVALID_QUERY_PARAMETER
         - IDEMPOTENCY_KEY_REQUIRED
@@ -2157,12 +2226,17 @@ components:
     ProblemErrorItem:
       type: object
       description: |
-        One reason (06 §5.1). `field` is a dotted path (`variants.2.sku`, `lines.0`) or `null`.
+        One reason (06 §5.1). `field` is a dotted path (`variants.2.sku`, `lines.0`) or `null`
+        for a non-field reason (also the one item of a SQLSTATE 22001, 06 §5.3).
         `code` is a rule name (`required`, `regex`, `enum`, `unique`, `unknown_field`) or a
-        business reason (`insufficient_stock`, `below_reserved`, `stock_changed`, and
-        `payout_stale` on the `approvePayout` 409, proposed in 06 §13.6). Allowed on
-        `VALIDATION_FAILED`, `INVALID_QUERY_PARAMETER`, `OUT_OF_STOCK`, `CART_CHANGED`,
-        `DELIVERY_NOT_AVAILABLE` and `CONFLICT` (06 widens ADR-0018 decision 1; see the notes at the end).
+        business reason (`insufficient_stock`, `below_reserved`, `stock_changed`; `payout_stale`
+        on the `approvePayout` 409 and `nothing_to_pay` on the `createPayout` 422, both proposed
+        in 06 §13.6). Allowed on `VALIDATION_FAILED`, `INVALID_QUERY_PARAMETER`, `OUT_OF_STOCK`,
+        `CART_CHANGED`, `DELIVERY_NOT_AVAILABLE` and `CONFLICT` (06 §5.1, ADR-0018 decision 1).
+        Optional code-specific members: `available`, `on_hand` and `reserved` (stock reasons),
+        `cart_item_id` (the cart line of a checkout reason, 06 §14.4 example A), and on a
+        `below_reserved` item `reserved_committed`, `committed_shop_orders` (proposed) and
+        `reserved_held` (06 §5.1, 05 §8.13).
       additionalProperties: false
       required: [field, code, message]
       properties:
@@ -2184,6 +2258,25 @@ components:
             description: Current `reserved` (stocktake and adjustment reasons).,
           }
         cart_item_id: { $ref: '#/components/schemas/Uuid' }
+        reserved_committed:
+          type: integer
+          minimum: 0
+          description: |
+            `below_reserved` only: units of `reserved` held for shop orders the vendor can act on
+            (`awaiting_acceptance`, or `accepted` before shipment; 06 §5.1, 05 §8.13).
+        committed_shop_orders:
+          type: array
+          description: |
+            `below_reserved` only (proposed, 06 §5.1): the numbers of the shop orders counted in
+            `reserved_committed`, which the client links to their order pages.
+          items: { $ref: '#/components/schemas/ShopOrderNumber' }
+        reserved_held:
+          type: integer
+          minimum: 0
+          description: |
+            `below_reserved` only: units held for gateway payments still in progress (R1.1). A
+            count only, with no order number and no release time, because a vendor never sees an
+            `awaiting_payment` shop order (06 §5.1, 07 §5.2 rule 0).
     Problem:
       type: object
       description: |
@@ -3069,7 +3162,8 @@ components:
         §6.3 and 06 §13.5 do not say]. `returned_to_origin` requires `items[]` with
         `order_item_id` and `restock_quantity` (0 to the units consumed at shipment) for every
         line consumed at shipment, and a `note` with the reason when any unit is not restocked
-        (05 §5.8, §6.3). `note` is stored in `shipment_events.note` (`shipment_events_note_check`,
+        (05 §5.8, §6.3); an `order_item_id` that is not a line of this shop order is 404
+        `NOT_FOUND` (06 §13.5). `note` is stored in `shipment_events.note` (`shipment_events_note_check`,
         04a §11.6) and kept for the record's life, so it must never hold contact data (04 §19.1).
       additionalProperties: false
       required: [event]
@@ -3188,7 +3282,7 @@ components:
         amount_minor: { type: integer, format: int64, minimum: 1 }
     RefundRecipientDetails:
       type: object
-      description: '`manual_transfer` recipient; stored encrypted in `refunds.recipient_details_enc` and never returned in full. Where the details come from is [Open OD-38]; a staff reveal is proposed (OD-49).'
+      description: '`manual_transfer` recipient; stored encrypted in `refunds.recipient_details_enc`. No list or detail response and no Inertia prop carries it; the full value comes only from the audited `revealRefundRecipient` (proposed; step-up, `Cache-Control: no-store`, only while the refund is `approved` or `processing`; 07 §5.5, 04a §12.4) [Open OD-49]. Where the details come from is [Open OD-38].'
       additionalProperties: false
       required: [account_name, bank_or_wallet, account_number]
       properties:
@@ -3293,7 +3387,8 @@ components:
 # ---------------------------------------------------------------------------------------------
 # Decisions taken in 06-api-design.md where the early sources were ambiguous (this file follows 06):
 #  1. `IDEMPOTENCY_KEY_REQUIRED` is 400, not 428 (06 §5.2 and note 1, 02 AC-J05-04, ADR-0004).
-#     ADR-0018 decision 2 still quotes the early "428?" wording.
+#     ADR-0018 decision 2 still quotes the early "428?" wording. Done in the consistency review,
+#     2026-09-30: ADR-0018 decision 2 lists `IDEMPOTENCY_KEY_REQUIRED` as "400, not 428".
 #  2. Checkout kill switch: 503 `PROVIDER_UNAVAILABLE` today. `CHECKOUT_DISABLED` (503) and
 #     `MALFORMED_REQUEST` (400) are in the `ProblemCode` enum as (proposed) and are never sent
 #     until adopted. `SERVICE_BUSY` (503, proposed) is added in the consistency review (note 33).
@@ -3301,11 +3396,14 @@ components:
 #     shapes `{ next_cursor }` / `{ page, per_page, total? }` (06 §3.4, note 23). The installed
 #     `@adonisjs/http-transformers` 2.3.1 emits `metadata`; the M1 `ApiSerializer` renames it.
 #  4. `errors[]` is allowed on `INVALID_QUERY_PARAMETER`, `OUT_OF_STOCK`, `CART_CHANGED`,
-#     `DELIVERY_NOT_AVAILABLE` and `CONFLICT`, beyond ADR-0018 decision 1 (06 note 10).
+#     `DELIVERY_NOT_AVAILABLE` and `CONFLICT`, beyond ADR-0018 decision 1 (06 note 10). Done in
+#     the consistency review, 2026-09-30: ADR-0018 decision 1 allows `errors[]` on these five
+#     codes too (06 §5.1), and the `ProblemErrorItem` description cites both.
 #  5. Every request body has `additionalProperties: false` (unknown fields rejected with 422
 #     `unknown_field`, 06 §3.5), except `receivePaymentWebhook`, whose body is the provider's own
-#     payload. T-SEC-003, a base ID (10 §6), allows "rejected or ignored"; 01 AC-FR-IAM-001-4 still
-#     says "ignored" (06 note 6).
+#     payload. Done in the consistency review, 2026-09-30: 10 §6.4 registers T-SEC-003, a base
+#     ID, as rejected with 422 `VALIDATION_FAILED` (`unknown_field`), with "or ignored" dropped,
+#     and 01 AC-FR-IAM-001-4 rejects these fields with 422 too.
 #  6. No 415 response is specified: 06 §5 uses no 415 (non-JSON bodies are 400
 #     `MALFORMED_REQUEST`, proposed, else 422 `VALIDATION_FAILED`).
 #  7. `GET /payments/{provider}/return` is a page route with no operationId (06 §13.7);
@@ -3336,12 +3434,18 @@ components:
 #     the 06 §14.2 examples and this file now return `is_default: false` for size/colour variants.
 # 15. `createProduct`: 04a §7.6 says a product is created "with its default variant", while 06 §14.2
 #     returns `variants: []` and `missing_for_submit: [variants, media]`. This file follows 06.
+#     Still open after the consistency review (2026-09-30): 04 §3.4 also inserts the default
+#     variant in the create transaction, and `missing_for_submit` leaves out `warranty_text`,
+#     which the request sends as `null` (09 note 58). The cross-doc check decides the 201 for
+#     06 §13.5 and §14.2; this file's example and `SellerProduct` follow that decision.
 # 16. 06 §14 examples omit fields that 06 §3.3 says are always present (shipment fields in §14.6,
 #     product fields in the §14.2 PUT response, `succeeded_at`/`amount`/`method` in §14.8). The
 #     examples here add them (null where unknown); `missing_for_submit: [media]` after variants
 #     are set is an inference. The schemas require the full shapes, so T-API-001 checks them.
 # 17. `ProblemErrorItem.cart_item_id` is used by 06 §14.4 example A but is not in the 06 §5.1 list
-#     of optional members (`available`, `on_hand`, `reserved`); 06 §5.1 should add it.
+#     of optional members (`available`, `on_hand`, `reserved`); 06 §5.1 should add it. Done in the
+#     consistency review, 2026-09-30: 06 §5.1 lists `cart_item_id`, and the `ProblemErrorItem`
+#     description names it.
 # 18. Tracking number: resolved. The product owner decided on 2026-09-29 that it is optional in R1
 #     (05 §6.3, 01 AC-FR-FUL-001-1, 06 note 9), so `tracking_number` is not in `required`.
 # 19. Assumed shapes not fixed by 06: `ListingCard.brand` as `{slug, name}` (06 §14.1 shows only
@@ -3359,7 +3463,16 @@ components:
 #     Done in the consistency review, 2026-09-30: 07 §3.3 decides both paths (06 §4.2) and 10 §6.4
 #     registers T-SEC-010 as "403 while the session exists, 401 after revocation".
 # 22. Weak `ETag` with `If-Match` (RFC 9110 strong comparison; 06 note 11); `IfMatch` accepts
-#     `W/"n"` and `"n"`.
+#     `W/"n"` and `"n"`. Done in the consistency review, 2026-09-30: decided 2026-10-01 (tech
+#     lead). Versioned resources return the strong tag `"<version>"` (no `W/`); `If-Match` uses
+#     strong comparison, so only `"<version>"` equal to the current version passes, a stale
+#     version, a weak tag or any other value is 412 `VERSION_CONFLICT` with `current`, and a
+#     missing header, `*` or a list stays 428 (06 §8); the version is treated as a strong
+#     validator of the editable state [Assumption]. The `ETag` header has the pattern
+#     `^"[0-9]{1,10}"$`; the `IfMatch` parameter has no pattern, so a weak tag or any other
+#     value reaches the 412 instead of a validation error. The info text, the `createProduct`
+#     and `replaceProductVariants` descriptions, the 412 and 428 responses and the examples
+#     follow it.
 # 23. CSRF failure as 403 `FORBIDDEN` is ADR-0018's [Assumption]; 07 must confirm.
 #     Done in the consistency review, 2026-09-30: 07 §3.3 decides the split (06 §4.1): 401
 #     `UNAUTHENTICATED` when the session holds no `auth_web` on a route that runs `auth`, else 403
@@ -3375,7 +3488,11 @@ components:
 #     audited staff reveals of 07 §5.5) changes the "never returned in full" wording of
 #     `RefundRecipientDetails` if approved. OD-13 (JSON casing) was decided on 2026-09-30:
 #     `snake_case`, as this file uses. OD-23 was decided on 2026-09-30 (keep MIT), so
-#     `info.license` is MIT, as `LICENSE` says.
+#     `info.license` is MIT, as `LICENSE` says. Done in the consistency review, 2026-09-30, for
+#     `RefundRecipientDetails`: it now says what 07 §5.5 and OD-49 option (a) say (no list,
+#     detail or prop carries the details; the full value comes only from the audited
+#     `revealRefundRecipient`), marked [Open OD-49]; if OD-49 is rejected, it reverts to "never
+#     returned in full".
 #
 # Added by critic pass B2 (2026-09-26):
 # 26. `createProduct`: 06 §13.5 marks only `brand_id?` optional, so every other input key is now
@@ -3397,29 +3514,40 @@ components:
 #     `AddressSnapshot.area_tole` not null (04a §5.5).
 # 31. Examples added where 06 §14 only describes the outcome: `stocktakeInventory` 201 (the
 #     confirmation after the §14.3 conflict), `approveRefund` 200 (`version` 2), and the 412
-#     `current` written out in full. Their IDs and versions are illustrative.
+#     `current` written out in full. Their IDs and versions are illustrative. The consistency
+#     review (2026-09-30) adds the `adjustInventory` 409 `belowReserved` example of the 06 §14.3
+#     sentence; its split of `reserved`, `field`, message and shop-order number are illustrative.
 # 32. Redocly 2.x (`recommended`) reports 0 errors; its 9 warnings are the localhost server, the page
 #     route without operationId, 4 `no-required-schema-properties-undefined` false positives on the
 #     `if`/`then` blocks, and the unused `Cursor`, `Limit` and `CursorMeta` components kept for the
 #     pending cursor lists. Re-run in the consistency review, 2026-09-30 (Redocly CLI 2.54.3,
 #     built-in `recommended`): 0 errors and 10 warnings, the same list with 5 false positives,
 #     because `FulfillmentEventRequest` now has a third `if`/`then` block (`returned_to_origin`
-#     requires `items`).
+#     requires `items`). Re-run after the changes of note 39 (same CLI and rules): 0 errors and the
+#     same 10 warnings; every request and response example validates against its schema.
 #
 # Added in the consistency review (2026-09-30):
 # 33. `SERVICE_BUSY` (503, proposed with the catalog-read cap of 07 TM-24; 06 §5.2, §5.3, note 29)
 #     is in `ProblemCode` and `Problem503`, `ServiceUnavailable` describes it, and `listProducts`
-#     declares 503. `Retry-After` lists it.
+#     declares 503. `Retry-After` lists it. Done in the consistency review, 2026-09-30, for the
+#     second cause: 06 §5.2, §5.3 and §9.1 (with 07 TM-24, 03 §8.2 and 09 §5.4) also answer a
+#     storefront listing or search read cancelled by the 2 s limit with 503 `SERVICE_BUSY`
+#     (proposed) and `Retry-After`, never 500; a query cancelled on any other path stays 500.
+#     `listProducts` (description and its own 503, narrowed to `SERVICE_BUSY`), `ProblemCode`,
+#     `ServiceUnavailable` and `Retry-After` give both causes.
 # 34. `Refund.affects_vendor_ledger` (proposed; 04a §12.4, 05 §7.4) is a required property, set in
 #     every refund example (true: `return_accepted` after the delivery posting, 06 §14.8), and the
 #     `createRefund` and `resolveRefundReview` descriptions say when it posts ledger entries.
 # 35. `Problem.next_action` is added for the `startOrderPayment` 409 of a resumable attempt, which
 #     06 §7.8 and §13.4 put in the problem body (02 AC-J06-08). 06 §5.1 does not list `next_action`
-#     among the extension members yet and should add it.
+#     among the extension members yet and should add it. Done in the consistency review,
+#     2026-09-30: 06 §5.1 lists `next_action` among the extension members.
 # 36. `recordFulfillmentEvent` adds the 06 §14.6 refusal of `delivery_failed` after COD
 #     `collected` (request and 409 examples; T-FUL-004) and the `returned_to_origin` rules of 06
 #     §13.5. Open: 06 §13.5 names no error for a `returned_to_origin` `items[].order_item_id` that
-#     is not a line of this shop order (T-SEC-001 case (c); 06 note 32).
+#     is not a line of this shop order (T-SEC-001 case (c); 06 note 32). Done in the consistency
+#     review, 2026-09-30: 06 §13.5 names 404 `NOT_FOUND` for it, and the `recordFulfillmentEvent`
+#     and `FulfillmentEventRequest` descriptions say so (the 404 response is the shared one).
 # 37. Pending operations keep their 06 §13 rows as the source; the PR that specifies one takes
 #     from its row what the consistency review changed there, for example: `logIn` and
 #     `verifyMfaChallenge` `return_to`/`redirect_to` and the `logIn` 409; the `token` and
@@ -3435,9 +3563,38 @@ components:
 #     `recipient_masked` (name initial, district and phone last four digits; 06 §3.6, 07 §5.2
 #     rules 1 and 2), never `recipient`; the closed `getPublicShop` schema (07 TM-29); the
 #     100-character `q` maximum of 06 §6.3; and the milestones of the support-case, return,
-#     settings and media operations.
+#     settings and media operations. Added in the consistency review (2026-09-30), from the 06
+#     rows changed by the leftover follow-ups and the decisions of 2026-10-01 (06 note 36): the
+#     `notices[]` schema of `getCart` and every cart write
+#     `{ kind, cart_item_id, previous_unit_price, available }` with the kinds `price_changed`,
+#     `insufficient_stock`, `out_of_stock`, `unavailable`, `merge_capped` and `quantity_capped`
+#     (proposed, below the 06 §13.4 table); `updateCartItem` reading `unit_price_minor_at_add`
+#     again, so the unchanged quantity accepts a `price_changed` notice [Assumption];
+#     `listMyOrders` items with `number`, `placed_at` and `grand_total` (Money); `getProduct`
+#     variants with `option_values` (axis code → value code, never `option_signature`),
+#     `in_stock` and `available_capped` (proposed, capped at 10); `updateProduct` returning a
+#     `rejected` product to `draft`; `submitProductForReview` giving `pending_review` only (in
+#     `pre` mode, or in `post` mode for a product whose brand has `requires_moderation`) and the
+#     `publishProduct` 409 cases; the `createPayout` 422 `nothing_to_pay` (proposed);
+#     `createMediaUpload` and `completeMediaUpload` with `shop_logo` or `shop_banner` for the
+#     owner of a `pending_review` or `rejected` shop (product owner decision 2026-10-01); and
+#     `getShopShipping` and `replaceShopShipping` for that owner under OD-47, decided 2026-10-01.
 # 38. `x-pending-operations` adds the eight 06 §13.8 operations proposed in the consistency review:
 #     `acceptSellerAgreement`, `viewKycDocument`, `revealPayoutAccountForVerification`,
 #     `revealRefundRecipient`, `approveLedgerAdjustment`, `cancelLedgerAdjustment`, `cancelPayout`
 #     and `revealPayoutAccount`. The user contact reveal of 07 §5.5 (06 note 35) joins the list
 #     once 06 §13.8 names it.
+# 39. Leftover follow-ups and the decisions of 2026-10-01, consistency review (2026-09-30). Applied
+#     here, following 06: the strong `ETag` and the pattern-free `IfMatch` (note 22); the
+#     `below_reserved` members `reserved_committed`, `committed_shop_orders` (proposed) and
+#     `reserved_held` in `ProblemErrorItem`, named in the `adjustInventory` and
+#     `stocktakeInventory` descriptions, with an `adjustInventory` 409 example (note 31);
+#     `nothing_to_pay` (proposed) among the business reasons, because `createPayout` is still
+#     pending (note 37); both `SERVICE_BUSY` causes (note 33); the SQLSTATE 22001 case in
+#     `UnprocessableContent` (tech lead decision, 2026-10-01); the `recordFulfillmentEvent` 404
+#     (note 36); the OD-49 wording of `RefundRecipientDetails` (note 25); notes 1, 4, 5, 17 and
+#     35 are done. Still needed elsewhere: 07 §5.5 and its note 18 quote the old "never returned
+#     in full" wording of `RefundRecipientDetails`, and the OD-49 row of the risks register says
+#     this file drops it only on approval; the strong-ETag decision record of the risks register
+#     still lists this file as "to align"; the 09 §5.3 `ProblemErrorItem` type allows only
+#     string, number or null member values, while `committed_shop_orders` is an array of strings.
