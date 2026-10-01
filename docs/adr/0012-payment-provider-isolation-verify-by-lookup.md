@@ -12,6 +12,8 @@ Reviewed: critic pass A4.3 (2026-09-25)
 - **Supersedes / superseded by:** — / —
 - **Related open items:** OD-03 (eSewa or Khalti first), OD-02 / VX-01 (legality of platform collection), VX-06 (eSewa), VX-07 (Khalti)
 
+Edited 2026-09-30 (consistency review): the late-capture rule of decision 8 follows [05 §6.4](../05-order-payment-and-inventory-lifecycles.md#64-payment-gateway-r11) (latest attempt pays the order, a superseded one is refunded per allocation); the decision is unchanged.
+
 ## Context
 
 Gateway payments arrive in R1.1 (M8), after a COD-only launch [Confirmed Q4]. Customers pay on mobile networks, where a tab closes or the redirect back never loads. The current `payments` table has a free-text status, no event log, no refunds and CASCADE from orders [Verified-repo, RF-15].
@@ -41,7 +43,7 @@ eSewa's separate Intent API does POST a signed callback (<https://developer.esew
    - **Both:** a mismatched amount → `needs_review`. Refund statuses confirm refunds and never change the payment state.
 6. **Reconciliation is required, not optional.** `payments.verify` looks up each attempt every 1 min for 30 min after redirect, every 5 min until 2 h, and every 30 min until 24 h, then moves it to `needs_review` with an alert. `payments.reconcile_sweeper` (every 5 min) re-sends lost verify jobs, and `payments.daily_reconciliation` (06:00) compares against merchant statements ([05 §9.4](../05-order-payment-and-inventory-lifecycles.md#94-reconciliation-schedule)). Unknown outcomes never cancel orders or release stock (ADR-0008).
 7. **Webhook endpoint for providers that have one** (`receivePaymentWebhook`, `POST /api/v1/webhooks/payments/{provider}`, the only CSRF exemption). It inserts `provider_events` with UNIQUE `(provider, provider_event_key)`, answers 200 once the insert is durable, and sends `payments.process_provider_event`, which does a lookup. A signed callback is a hint, not proof.
-8. **Late capture** follows [05 §8.4](../05-order-payment-and-inventory-lifecycles.md#84-payment-success-after-reservation-expiry-r11). If released stock can be re-reserved, the order proceeds. Otherwise the shop order is cancelled (`stock_unavailable_after_payment`) and a system refund is created. A capture on an `expired`/`failed` payment is refunded in full after finance approval.
+8. **Late capture** follows [05 §8.4](../05-order-payment-and-inventory-lifecycles.md#84-payment-success-after-reservation-expiry-r11). If released stock can be re-reserved, the order proceeds. Otherwise the shop order is cancelled (`stock_unavailable_after_payment`) and a system refund is created. A late capture on an `expired`, `failed` or `cancelled` attempt pays the order only if it is the order's latest attempt and its shop orders are still `awaiting_payment`; otherwise it is marked `is_late_capture` (proposed) and refunded per allocation after finance approval ([05 §6.4](../05-order-payment-and-inventory-lifecycles.md#64-payment-gateway-r11), [§8.4](../05-order-payment-and-inventory-lifecycles.md#84-payment-success-after-reservation-expiry-r11)).
 9. **Refund methods** ([05 §6.7](../05-order-payment-and-inventory-lifecycles.md#67-refund), [§8.8](../05-order-payment-and-inventory-lifecycles.md#88-refund-failure-and-retry-including-esewa-without-a-refund-api)):
    - `gateway_api` (Khalti): `refunds.execute` commits `processing` before the call. On a timeout or 5xx, `refunds.verify` looks up the payment and never re-sends without a lookup. After 5 inconclusive lookups the refund goes to `needs_review`.
    - `gateway_manual` (eSewa, which has no refund API): the operator refunds in the merchant portal or through support. `markRefundSucceeded` only stores eSewa's reference, and the refund stays `processing`. `refunds.verify` checks daily and marks `succeeded` when it sees `FULL_REFUND`/`PARTIAL_REFUND` covering the amount. After 3 daily checks without that, the refund goes to `needs_review`.
@@ -78,7 +80,7 @@ eSewa's separate Intent API does POST a signed callback (<https://developer.esew
 ## When to revisit
 
 - A provider publishes signed server-to-server notifications for ePay or KPG-2: wire them in, poll less, and keep verify-by-lookup.
-- A second gateway (R2, FR-PAY-005), or connectIPS for carts above the NPR 50,000 wallet-balance cap [Verified-doc, NRB Unified Directive 2082, `nepal_payments` research, accessed 2026-09-25].
+- A second gateway (R2, FR-PAY-005), or connectIPS for carts above the NPR 50,000 wallet-balance cap [Verified-doc, NRB Unified Directive 2082, [research: nepal-payments](../research/nepal-payments.md), accessed 2026-09-25].
 - More than 2% of gateway payments reach `needs_review` in a month [Assumption].
 - VX-01 requires per-vendor merchant accounts.
 
@@ -96,7 +98,7 @@ eSewa's separate Intent API does POST a signed callback (<https://developer.esew
   - **T-PAY-010**: status mapping table and amount mismatch;
   - **T-RET-003**: eSewa manual refund;
   - **T-RET-004**: retry after lookup.
-- **Contract tests** against recorded sandbox responses. **CSRF scope test**: only the webhook route is exempt.
+- **Contract tests** against recorded sandbox responses. **CSRF scope test** (T-API-006, proposed): only the webhook route is exempt.
 
 ## Related
 

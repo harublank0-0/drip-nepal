@@ -113,9 +113,9 @@ Fixing these incrementally would take dozens of ALTER migrations that convert or
 - **T-ARCH-012 (proposed)**: `UPDATE` and `DELETE` on each append-only table fail for both roles.
 - **T-ARCH-013 / T-ARCH-014 (proposed)**: the int8 parser and the money-column lint (ADR-0007).
 - **Constraint tests**: T-SEC-004 (refund CHECK), T-INV-003 (stock CHECK), T-ORD-104 (proposed, composite FK).
-- **Migration immutability check** (after launch): CI compares checksums against `database/migrations.lock`.
-- **Lint rule**: `database/migrations/**` may not import from `#constants/*`, `#models/*` or `#modules/*`.
-- **Seeder guard test**: a dev seeder with `NODE_ENV=production` exits non-zero.
+- **Migration immutability check** (T-ARCH-017, proposed; after launch): CI compares checksums against `database/migrations.lock`.
+- **Lint rule** (its fixtures are part of T-ARCH-021, proposed): `database/migrations/**` may not import from `#constants/*`, `#models/*` or `#modules/*`.
+- **Seeder guard test** (T-ARCH-019, proposed): a dev seeder with `NODE_ENV=production` exits non-zero.
 
 ## Related
 

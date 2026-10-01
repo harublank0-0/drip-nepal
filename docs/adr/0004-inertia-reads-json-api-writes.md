@@ -15,10 +15,12 @@ Reviewed: critic pass A4.3 (2026-09-25)
 | Superseded by      | —                                                                                                                                                        |
 | Related open items | OD-13 (JSON casing: snake_case, decided 2026-09-30; does not change this ADR), OD-25 (Inertia v3 `useHttp`; the M0 upgrade spike was decided 2026-09-30) |
 
+Edited 2026-09-30 (consistency review): decision 6 names the `start/routes/api_v1/` folder of [09 §3.3](../09-code-structure-and-engineering-standards.md#33-routes) instead of a single file; the rule is unchanged.
+
 ## Context
 
 - **Mutations today are Inertia form posts with no contract** [Verified-repo]. Signup spreads the request payload into the model (RF-36). The client sends prices, shop IDs and order numbers (RF-16). Orders have no idempotency key, so a double tap on "Place order" over a slow connection creates two COD orders (RF-15).
-- **Inertia's validation flow is lossy.** With a session, @adonisjs/session 8.1.0 flashes validation errors and redirects back, and @adonisjs/inertia 4.2.0 keeps only the first message per field [Verified-doc, `adonis_stack` digest of the 4.2.0 `getValidationErrors` source, https://registry.npmjs.org/@adonisjs/inertia/-/inertia-4.2.0.tgz, accessed 2026-09-25]. A redirect cannot carry `OUT_OF_STOCK` line details, `PRICE_CHANGED` with a new quote, an `ETag` or a replayed idempotent response.
+- **Inertia's validation flow is lossy.** With a session, @adonisjs/session 8.1.0 flashes validation errors and redirects back, and @adonisjs/inertia 4.2.0 keeps only the first message per field [Verified-doc, [research: adonis-stack](../research/adonis-stack.md), 4.2.0 `getValidationErrors` source, https://registry.npmjs.org/@adonisjs/inertia/-/inertia-4.2.0.tgz, accessed 2026-09-25]. A redirect cannot carry `OUT_OF_STOCK` line details, `PRICE_CHANGED` with a new quote, an `ETag` or a replayed idempotent response.
 - **Tooling.** @tuyau/core 1.2.2 gives a typed client from the route registry and copies the `XSRF-TOKEN` cookie into an `X-XSRF-TOKEN` header automatically [Verified-doc, @tuyau/core 1.2.2 `build/client/index.js`, https://registry.npmjs.org/@tuyau/core/-/core-1.2.2.tgz, accessed 2026-09-25]. No maintained OpenAPI generator targets Adonis 7; `@tuyau/openapi` 1.0.2 predates it [Verified-doc, https://registry.npmjs.org/@tuyau/openapi, accessed 2026-09-25]. Transformers give allowlisted serialization and generated `Data.*` prop types.
 - **Future clients.** The R3 mobile app, provider callbacks (R1.1) and possible partners need one language-neutral mutation contract.
 
@@ -36,7 +38,7 @@ Reviewed: critic pass A4.3 (2026-09-25)
    - Server-computed fields (prices, totals, commission, `shop_id`, order numbers) are never read from request bodies (T-SEC-003).
 4. **Idempotency mechanism.** Rows live in `idempotency_keys`, UNIQUE (`actor_scope`, `operation`, `key`) ([04a §15.2](../04a-data-dictionary-tables.md#152-idempotency_keys)). The row is inserted as the **first statement of the business transaction**, so a concurrent duplicate waits on the unique index and then replays the committed response; if the first request rolls back (for example `OUT_OF_STOCK`), nothing is stored and a retry runs again. Keys are client-generated, 16–64 characters `[A-Za-z0-9_-]`; retention 24 h, 72 h for `placeOrder` [A-32]. The walk-through is [05 §4.6](../05-order-payment-and-inventory-lifecycles.md#46-idempotency-handling).
 5. **Authentication** is the same session cookie and CSRF header as pages (ADR-0005). Token auth for non-browser clients waits for R3.
-6. **Route files.** Unsafe methods are registered only in `start/routes/api_v1.ts` and `start/routes/webhooks.ts`; page route files register GET routes only.
+6. **Route files.** Unsafe methods are registered only under `start/routes/api_v1/` (one file per surface, [09 §3.3](../09-code-structure-and-engineering-standards.md#33-routes)) and in `start/routes/webhooks.ts`; page route files register GET routes only.
 
 ## Alternatives considered
 
@@ -78,7 +80,7 @@ Reviewed: critic pass A4.3 (2026-09-25)
 - **T-API-001**: every response in the functional suite validates against `docs/openapi.yaml`.
 - **T-CHK-004**: repeated `placeOrder` with the same key returns the same order; concurrent duplicates create one order.
 - **T-SEC-003**: client-supplied price, total, `shop_id` and commission fields are ignored or rejected.
-- **Route rule check** (proposed CI script, [10](../10-testing-and-quality-gates.md)): lists registered routes and fails if a POST/PUT/PATCH/DELETE route is outside `/api/v1/`.
+- **Route rule check** (T-API-006, proposed; [10 §6.3](../10-testing-and-quality-gates.md#63-api-contract-t-api)): lists registered routes and fails if a POST/PUT/PATCH/DELETE route is outside `/api/v1/`.
 - **T-ARCH-001**: controllers call module actions only.
 
 ## Related

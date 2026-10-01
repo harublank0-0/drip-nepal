@@ -47,7 +47,7 @@ The topology diagram and environments are owned by [03 §5.1](../03-system-archi
 
 ## Alternatives considered
 
-Prices are as published on 2026-09-25 (VX-15 register and `infra_ops` research); they are inputs to OD-09, not quotes.
+Prices are as published on 2026-09-25 (VX-15 register and [research: infra-ops](../research/infra-ops.md)); they are inputs to OD-09, not quotes.
 
 | Alternative                | Key facts                                                                                                   | Why not chosen now                                                                   |
 | -------------------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
@@ -90,9 +90,9 @@ Prices are as published on 2026-09-25 (VX-15 register and `infra_ops` research);
 ## Verification
 
 - **Latency benchmark (VX-15, before OD-09 closes)**: test VMs in BLR1, SGP1 and Akamai Chennai; from NTC, Ncell, WorldLink and Vianet, record TCP connect, TLS and TTFB with `curl -w` (20 samples, 3 times a day, 3 days) and the `cf-ray` colo.
-- **T-OPS-001 restore drill** before launch and quarterly [Assumption]: a PITR restore to a new cluster with staging smoke tests, and a restore of the nightly dump on a second provider (R-08); measured RTO and RPO recorded in 11.
-- **CI portability checks**: CI runs on `postgres:18.4` and MinIO; a migration lint rejects extensions outside the allow-list; T-ARCH-001 forbids provider SDKs outside adapters.
-- **Edge checks (T-OPS area, proposed)**: a direct request to the origin IP fails; `r2.dev` is disabled on production buckets.
+- **T-OPS-001 restore drill** before launch and quarterly [Assumption], plus a monthly dump-restore check ([11 §11.6](../11-deployment-and-operations.md#116-restore-drills-t-ops-001)): a PITR restore to a new cluster with staging smoke tests, and a restore of the nightly dump on a second provider (R-08; T-OPS-004 in [11 §1.9](../11-deployment-and-operations.md#19-portability-check-adopts-the-03-53-assumption)); measured RTO and RPO recorded in 11.
+- **CI portability checks**: CI runs on `postgres:18.4` and MinIO; a migration lint rejects extensions outside the allow-list (T-ARCH-034, proposed); T-ARCH-001 forbids provider SDKs outside adapters.
+- **Edge checks** ([11 §3.8](../11-deployment-and-operations.md#38-how-the-network-design-is-verified)): a direct request to the origin IP fails (T-OPS-007, proposed); `r2.dev` is disabled on production buckets (T-OPS-008, proposed).
 - **Monthly cost review** against the table; prices re-read at M7.
 
 ## Related

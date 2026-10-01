@@ -15,6 +15,8 @@ Reviewed: critic pass A4.3 (2026-09-25)
 | Superseded by      | —                                                                                             |
 | Related open items | OD-15 (audience values, size systems, colour list: they define the filter arrays), A-03, R-13 |
 
+Edited 2026-09-30 (consistency review): decision 1 follows the queue policies of [03 §9](../03-system-architecture.md#9-asynchronous-work) (`catalog.refresh_listing` sends carry no `singletonKey`); the decision is unchanged.
+
 ## Context
 
 **Requirements** ([01 §7.6](../01-product-requirements.md#76-discovery-and-search-fr-srch)): R1 needs listings with filters, sort, pagination and URL state (FR-SRCH-001), keyword search of 2–100 characters with typo tolerance and Devanagari exact-word matches (FR-SRCH-002), shop pages (FR-SRCH-003), SEO (FR-SRCH-005) and code-configured navigation entries such as `/men/t-shirts` (FR-SRCH-007). Autocomplete (FR-SRCH-006) and facet counts (FR-SRCH-008) are R2; a dedicated search engine is R3. Ranking must contain no paid placement (AC-FR-SRCH-001-5, REG-11).
@@ -40,7 +42,7 @@ The table, columns, indexes and refresh rules are owned by [04a §7.12](../04a-d
 1. **Read model `product_listings`**, owned and written only by the `catalog` module.
    - One row per product visible on the storefront: product `published`, shop `active`, at least one `ready` image and one active variant. A product that stops being visible loses its row.
    - Denormalised columns for cards, filters and search: shop, `public_id` and `slug` (ADR-0017), category path and names, brand, audience/size/colour value-ID arrays, min/max price in minor units (ADR-0007), `in_stock`, `published_at`, `search_tsv`.
-   - Recomputed per product by `catalog.refresh_listing` (coalesced by `singletonKey`), sent transactionally (ADR-0010) after product, variant, inventory-availability, `media.ready` and shop-status events; fully rebuilt by `catalog.rebuild_listings` daily at 03:30 ([03 §9](../03-system-architecture.md#9-asynchronous-work)). Each run rewrites the whole row, so replays are harmless.
+   - Recomputed per product by `catalog.refresh_listing`, sent transactionally (ADR-0010) after product, variant, inventory-availability, `media.ready` and shop-status events; fully rebuilt by `catalog.rebuild_listings` daily at 03:30 ([03 §9](../03-system-architecture.md#9-asynchronous-work)). Its queue is `standard` and its sends carry no `singletonKey`, because business transactions send it and a keyed send would wait on another transaction's job (03 §9). Each run rewrites the whole row from the source tables, so replays and duplicate runs are harmless ([05 §4.7](../05-order-payment-and-inventory-lifecycles.md#47-what-runs-after-commit)).
    - Checkout re-reads the source tables (ADR-0008, AC-FR-CAT-005-3), so seconds of staleness are safe.
 2. **Search document.** `search_tsv` is a generated column using the `simple` configuration: title (weight A), brand name (B), category names and shop name (C). Descriptions are excluded in R1.
 3. **Query.**
@@ -92,8 +94,8 @@ Move to a dedicated engine (R3) when **any** of these holds:
 - **T-PERF-001**: k6 listing and search scenarios at the NFR-PERF-003 load.
 - **T-CAT-108 (proposed)**: a row exists if and only if the product is visible; two refreshes give the same row; publish, unpublish, block, shop suspension and stock-out update or remove the row; a rebuild on a consistent database produces no diff.
 - **T-CAT-107 (proposed)**: navigation entries resolve against seeded reference data.
-- **Search tests (T-CAT area, proposed)**: "snekers" finds "sneakers" (AC-FR-SRCH-002-2); a Devanagari title word is found (AC-FR-SRCH-002-3); paging is deterministic and duplicate-free; an unknown parameter returns 400 `INVALID_QUERY_PARAMETER`.
-- **CI index check**: an `EXPLAIN` test on seeded data asserts index scans for the canonical category, shop and search queries.
+- **Search tests** (T-CAT-003, proposed): "snekers" finds "sneakers" (AC-FR-SRCH-002-2); a Devanagari title word is found (AC-FR-SRCH-002-3); paging is deterministic and duplicate-free; an unknown parameter returns 400 `INVALID_QUERY_PARAMETER`.
+- **CI index check** (T-PERF-002, proposed): an `EXPLAIN` test on seeded data asserts index scans for the canonical category, shop and search queries.
 
 ## Related
 

@@ -10,7 +10,9 @@ Reviewed: critic pass A4.3 (2026-09-25)
 - **Date:** 2026-09-25
 - **Deciders:** lead developer
 - **Supersedes / superseded by:** — / —
-- **Related open items:** `reservation_ttl_minutes` (30), the 10-minute buffer, the 90-minute cap and the 24-hour `needs_review` hold are [Assumption] values (A-09, canon §17.1). Provider expiry values are [Verify-external VX-06, VX-07]. Multi-location stock is R3 (FR-INV-006).
+- **Related open items:** `reservation_ttl_minutes` (30), the 10-minute buffer, the 90-minute cap and the 24-hour `needs_review` hold are [Assumption] values (A-09; [05 §5.3](../05-order-payment-and-inventory-lifecycles.md#53-creating-reservations) and [§5.4](../05-order-payment-and-inventory-lifecycles.md#54-expiration-job); the cap is OD-28). Provider expiry values are [Verify-external VX-06, VX-07]. Multi-location stock is R3 (FR-INV-006).
+
+Edited 2026-09-30 (consistency review): decisions 4 and 6 follow [05 §5.4](../05-order-payment-and-inventory-lifecycles.md#54-expiration-job) and [§5.10](../05-order-payment-and-inventory-lifecycles.md#510-drift-detection-and-repair) (the lookup path, what the expiry job releases, orphan reservations); the decision is unchanged.
 
 ## Context
 
@@ -51,9 +53,9 @@ Reviewed: critic pass A4.3 (2026-09-25)
    - `held → committed` in the capture transaction (a `commit` movement with zero deltas). `held`/`committed → released` on cancellation, rejection or definitive payment failure.
    - `committed → consumed` when the shipment is `shipped` (a `ship` movement: `on_hand −q`, `reserved −q`). A `held` reservation can never be consumed.
    - Restock is a separate movement: `rto_restock` when the shipment reaches `returned_to_origin`, and `return_restock` when support closes a return with `restock_quantity > 0` for the line (one movement of that quantity; [04a §11.8](../04a-data-dictionary-tables.md#118-return_items)).
-4. **Expiry never releases stock whose payment outcome is unknown.** `inventory.expire_reservations` runs every minute ([05 §5.4](../05-order-payment-and-inventory-lifecycles.md#54-expiration-job)). For a hold past `expires_at` whose payment is `initiated`/`pending`, it first runs the same `verifyPayment` lookup as `payments.verify` (ADR-0012). It releases only on a definitive non-success. When the payment is in `needs_review`, it releases the stock 24 h after `expires_at` (reason `needs_review_timeout`) and leaves the payment for finance. A capture after release takes the late-capture path in [05 §8.4](../05-order-payment-and-inventory-lifecycles.md#84-payment-success-after-reservation-expiry-r11): re-reserve, or cancel with `stock_unavailable_after_payment` and refund.
+4. **Expiry never releases stock whose payment outcome is unknown.** `inventory.expire_reservations` runs every minute ([05 §5.4](../05-order-payment-and-inventory-lifecycles.md#54-expiration-job)). For a hold past `expires_at` whose payment is `initiated`/`pending`, it first runs the same `payments.lookupPayment` lookup and `orders.applyPaymentOutcome` transaction as `payments.verify` (ADR-0012). It releases only on a definitive non-success, and only past `expires_at`: a failed, cancelled or expired attempt before then releases nothing, because the customer may still pay again. Past `expires_at` with no live attempt (Case A), one transaction releases the held reservations and cancels the order's `awaiting_payment` shop orders. When the payment is in `needs_review`, it releases the stock 24 h after `expires_at` (reason `needs_review_timeout`) and leaves the payment for finance. Every release re-checks the payment under the parent `orders` lock and releases only `held` reservations, so stock that a concurrent capture has just committed is never released. A capture after release takes the late-capture path in [05 §8.4](../05-order-payment-and-inventory-lifecycles.md#84-payment-success-after-reservation-expiry-r11): re-reserve, or cancel with `stock_unavailable_after_payment` and refund.
 5. **Vendor stock changes** ([05 §5.9](../05-order-payment-and-inventory-lifecycles.md#59-adjustments-and-stocktake)). `adjustInventory` (a delta plus one of the six adjustment reasons) and `stocktakeInventory` (`counted_quantity` plus `expected_on_hand`) are idempotent, audited conditional UPDATEs. If zero rows are updated, the API returns 409 `CONFLICT` with `errors[0].code` `stock_changed` or `below_reserved`, so a stale screen or a cut below the units promised to open orders never overwrites stock.
-6. **Projection invariant.** For each variant, `on_hand = Σ on_hand_delta`, `reserved = Σ reserved_delta`, and `reserved = Σ` open reservations. `inventory.drift_check` (daily 02:30, REPEATABLE READ) alerts on any difference and never repairs automatically. A repair is an admin `correction` movement ([05 §5.10](../05-order-payment-and-inventory-lifecycles.md#510-drift-detection-and-repair)).
+6. **Projection invariant.** For each variant, `on_hand = Σ on_hand_delta`, `reserved = Σ reserved_delta`, and `reserved = Σ` open reservations. `inventory.drift_check` (daily 02:30, REPEATABLE READ) alerts on any difference, and also on orphan reservations (open reservations that no open order line still needs). It never repairs automatically. A repair first closes a wrong reservation (release or consume with reason `drift_repair`), then corrects the projection with an admin `correction` movement ([05 §5.10](../05-order-payment-and-inventory-lifecycles.md#510-drift-detection-and-repair)).
 
 ## Alternatives considered
 
@@ -81,7 +83,7 @@ Reviewed: critic pass A4.3 (2026-09-25)
 **Risks**
 
 - _A write path skips its movement._ Mitigation: the single-writer rule (T-ARCH-001), the drift check within 24 h, and `inventory_movements_reference_once_key`, which stops a replayed restock or ship from applying twice.
-- _The expiry job stalls._ Mitigation: an alert when a `held` reservation whose payment is not in `needs_review` is more than 10 minutes past `expires_at` [Assumption; [11](../11-deployment-and-operations.md)], plus the job-age alerts of ADR-0010.
+- _The expiry job stalls._ Mitigation: the stalled-reservation alert of [11 §8.6](../11-deployment-and-operations.md#86-watching-the-queues): a `held` reservation more than 5 minutes past the point where the job should have acted (Case A with no live attempt, Case B with `next_verification_at` overdue, or Case C past `expires_at` + 24 h, [05 §5.4](../05-order-payment-and-inventory-lifecycles.md#54-expiration-job)) [Assumption], plus the job-age alerts of ADR-0010.
 
 ## When to revisit
 
@@ -95,7 +97,7 @@ Reviewed: critic pass A4.3 (2026-09-25)
 - Proposed in [05 §10](../05-order-payment-and-inventory-lifecycles.md#10-traceability-and-test-index):
   - **T-INV-001**: CHECK backstop;
   - **T-INV-002**: adjustment below reserved;
-  - **T-INV-004**: two expiry-job instances over 200 expired holds release each exactly once;
+  - **T-INV-004**: two expiry-job instances over 200 expired holds release each exactly once; also a superseded attempt, a failed attempt before `expires_at`, a captured order whose reservations are still `held`, and a Case C release racing a capture ([05 §5.4](../05-order-payment-and-inventory-lifecycles.md#54-expiration-job));
   - **T-INV-005**: drift detection and repair;
   - **T-INV-006**: the journal is append-only;
   - **T-INV-007**: restock paths;

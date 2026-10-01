@@ -15,11 +15,13 @@ Reviewed: critic pass A4.3 (2026-09-25)
 | Superseded by      | —                                                                                                                                                                         |
 | Related open items | None open: OD-12 (seller dashboard prefix) and OD-13 (JSON casing) were decided on 2026-09-30; FR-SRCH-004, FR-SRCH-005, FR-SHOP-012, AC-FR-CAT-001-3                     |
 
+Edited 2026-09-30 (consistency review): decision 5 notes that a `/seller` page answers 301 only after the actor check, and decision 7 uses the middleware name `seller_context` ([07 §4.8](../07-security-threat-model-and-permissions.md#48-how-policies-are-implemented)); the decision is unchanged.
+
 ## Context
 
 **Repository today** [Verified-repo]:
 
-- `products.name` and product slugs are globally `UNIQUE`, so two shops cannot both sell a "Black Hoodie" (audit F10, RF-17).
+- `products.name` and product slugs are globally `UNIQUE`, so two shops cannot both sell a "Black Hoodie" ([research: repository-audit](../research/repository-audit.md) F10, RF-17).
 - The seller dashboard is one letter from the public shop page: the route is `/shop/:shopSlug/…` (`start/routes/shops.ts:27`), commit 0282605's title says `/shops/:shopSlug/dashboard`, and the public page is `/shops/{shopSlug}` (OD-12).
 
 **How links travel.** Customers share product links in social media and chat apps. A link that breaks when a vendor fixes a typo is lost traffic and trust. Search engines need one canonical URL per page (AC-FR-SRCH-005-2), and the storefront is server-rendered (ADR-0003).
@@ -43,10 +45,10 @@ The slug rules are owned by [04 §2.8](../04-domain-model-and-data-dictionary.md
    - In R1 only staff with `platform.shops.update` change a shop slug, via `adminUpdateShop` (AC-FR-SHOP-012-1). `updateShopProfile` rejects a `slug` field (T-SEC-003). Category slugs change only through staff seeders.
    - Every change inserts a `slug_redirects` row (`entity_type`, `old_slug`, `entity_id`, `created_by`) in the same transaction as the rename. Rows point straight at the entity (no chains); an old slug stays reserved for its entity; renaming back deletes that row.
 5. **Resolving an old slug.** A slug that is not found falls back to `slug_redirects`.
-   - **Pages** answer 301 to the same path with the current slug, including `/seller/{old}/…` (AC-FR-SHOP-012-2).
+   - **Pages** answer 301 to the same path with the current slug, including `/seller/{old}/…` (AC-FR-SHOP-012-2), where the 301 comes only after the actor check, so a non-member gets 404 (ADR-0006 decision 3).
    - **API routes** (`/api/v1/shops/{shopSlug}`, `/api/v1/seller/shops/{shopSlug}/…`) resolve the old slug and serve the same shop without a redirect, because a 301 may turn a POST into a GET. The response carries the current `slug`; membership checks run as usual (ADR-0006).
 6. **Redirect hygiene.** Every 301 carries `Cache-Control: public, max-age=86400` [Assumption], so a heuristically cached 301 plus a rename back cannot loop for more than a day. Redirects forward only the page's allow-listed query parameters (RF-37).
-7. **Seller namespace (OD-12 option a, decided 2026-09-30).** The private dashboard is `/seller/{shopSlug}/…` and the public storefront `/shops/{shopSlug}`, so the `shopContext` middleware group (ADR-0006) attaches to one namespace and the RF-01 mistake (authentication checked, membership not) cannot recur. M0 moves the current `/shop/…` routes to `/seller`.
+7. **Seller namespace (OD-12 option a, decided 2026-09-30).** The private dashboard is `/seller/{shopSlug}/…` and the public storefront `/shops/{shopSlug}`, so the `seller_context` middleware group (ADR-0006) attaches to one namespace and the RF-01 mistake (authentication checked, membership not) cannot recur. M0 moves the current `/shop/…` routes to `/seller`.
 8. **SEO.** Every storefront page emits an absolute `<link rel="canonical">`: the product's canonical URL, or the unfiltered listing for filtered views. `/search` is `noindex`. `sitemap.xml` and JSON-LD `Product` use canonical URLs only (AC-FR-SRCH-005-2/3/4). `/seller`, `/account`, `/admin` and `/checkout` are `noindex` and disallowed in `robots.txt` [Assumption].
 
 ## Alternatives considered
@@ -90,14 +92,14 @@ The slug rules are owned by [04 §2.8](../04-domain-model-and-data-dictionary.md
 
 ## Verification
 
-Tests are in the T-CAT, T-SHOP and T-UI areas ([10](../10-testing-and-quality-gates.md)); those without canon IDs are (proposed).
+Tests are in the T-CAT, T-SHOP and T-UI areas, registered in [10 §6](../10-testing-and-quality-gates.md#6-test-id-registry). T-SEC-001 and T-SEC-003 are base (10 §6); the others are (proposed).
 
-- **Product URL tests (proposed)**: wrong, old or missing slug, uppercase ID and alias form each return 301 with the exact canonical `Location`; unknown ID, unpublished product or suspended shop return 404; a malformed segment returns 404.
-- **Redirect tests (proposed)**: only allow-listed query parameters survive (RF-37); every 301 carries `Cache-Control: public, max-age=86400`.
-- **Shop rename (FR-SHOP-012)**: the `slug_redirects` row is written in the rename transaction; old `/shops/{old}` and `/seller/{old}/orders` return 301; another shop cannot take the old slug (AC-FR-SHOP-012-3); renaming back deletes the row; T-SHOP-104 (proposed) checks every redirect resolves.
+- **Product URL tests** (T-CAT-004, proposed): wrong, old or missing slug, uppercase ID and alias form each return 301 with the exact canonical `Location`; unknown ID, unpublished product or suspended shop return 404; a malformed segment returns 404.
+- **Redirect tests** (T-CAT-005, proposed): only allow-listed query parameters survive (RF-37); every 301 carries `Cache-Control: public, max-age=86400`.
+- **Shop rename (FR-SHOP-012)**: the `slug_redirects` row is written in the rename transaction; old `/shops/{old}` and `/seller/{old}/orders` return 301; another shop cannot take the old slug (AC-FR-SHOP-012-3, T-SHOP-106); renaming back deletes the row; T-SHOP-104 (proposed) checks every redirect resolves.
 - **T-SEC-001**: an old slug on `/api/v1/seller/shops/{old}` reaches the same shop, and a non-member still gets 404. **T-SEC-003**: a `slug` sent to `updateShopProfile` is rejected.
-- **SEO (proposed)**: server-rendered HTML contains `<link rel="canonical">` (AC-J01-06); a CI crawl of the seeded sitemap finds every URL returns 200 without a redirect.
-- **`public_id` generation (proposed)**: 10,000 IDs match `^[0-9A-HJKMNP-TV-Z]{8}$`, and a forced collision is retried.
+- **SEO** (T-CAT-006, proposed): server-rendered HTML contains `<link rel="canonical">` (AC-J01-06); a CI crawl of the seeded sitemap finds every URL returns 200 without a redirect.
+- **`public_id` generation** (T-CAT-007, proposed): 10,000 IDs match `^[0-9A-HJKMNP-TV-Z]{8}$`, and a forced collision is retried.
 
 ## Related
 
@@ -105,4 +107,4 @@ Tests are in the T-CAT, T-SHOP and T-UI areas ([10](../10-testing-and-quality-ga
 - [04a §6.10 `slug_redirects`](../04a-data-dictionary-tables.md#610-slug_redirects)
 - [01 FR-SHOP-012](../01-product-requirements.md#fr-shop-012-slug-change-by-admin-with-redirect), [01 §7.6 discovery and search](../01-product-requirements.md#76-discovery-and-search-fr-srch)
 - [Risks and open decisions: OD-12](../risks-and-open-decisions.md#22-decision-table)
-- [ADR-0003](0003-inertia-ssr-storefront-csr-dashboards.md) (SSR storefront), [ADR-0006](0006-authorization-platform-roles-shop-memberships.md) (`shopContext`), [ADR-0014](0014-postgres-search-and-listing-read-model.md) (read model carries `public_id` and `slug`)
+- [ADR-0003](0003-inertia-ssr-storefront-csr-dashboards.md) (SSR storefront), [ADR-0006](0006-authorization-platform-roles-shop-memberships.md) (`seller_context`), [ADR-0014](0014-postgres-search-and-listing-read-model.md) (read model carries `public_id` and `slug`)

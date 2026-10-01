@@ -15,19 +15,21 @@ Reviewed: critic pass A4.3 (2026-09-25)
 | Superseded by      | —                                                                                                                                                                                                                  |
 | Related open items | OD-25 (upgrade to @adonisjs/inertia 5 + @inertiajs/react 3 + @adonisjs/vite 6), decided 2026-09-30: a time-boxed spike at the start of M0, staying on 4.2.0 if it fails. This decision holds under either version. |
 
+Edited 2026-09-30 (consistency review): decision 6 and the history-encryption context follow [07 §3.11](../07-security-threat-model-and-permissions.md#311-logout-and-inertia-history); the decision is unchanged.
+
 ## Context
 
 DripNepal has three UI surfaces: the **public storefront** (SEO, fast first paint on congested mobile networks), the **seller dashboard** (`/seller/{shopSlug}/…`, OD-12) and the **platform admin** (`/admin/…`). Auth and account pages sit between them.
 
 **Installed stack** [Verified-repo, `pnpm-lock.yaml`]: @adonisjs/inertia 4.2.0, @inertiajs/react 2.3.27, React 19.2.7, Vite 7, Tailwind 4.3.1.
 
-**SSR is broken today (RF-08)** [Verified-repo]: `config/inertia.ts:11` enables SSR but `vite.config.ts:11` disables it in the Vite plugin, which in adapter 4.2.0 is the only thing that builds the SSR bundle the production server imports [Verified-doc, `adonis_stack` digest from the 4.2.0 package source]. `inertia/app.tsx:30` calls `createRoot`, not `hydrateRoot`, so server HTML is discarded; the theme is applied only after JavaScript runs.
+**SSR is broken today (RF-08)** [Verified-repo]: `config/inertia.ts:11` enables SSR but `vite.config.ts:11` disables it in the Vite plugin, which in adapter 4.2.0 is the only thing that builds the SSR bundle the production server imports [Verified-doc, [research: adonis-stack](../research/adonis-stack.md), 4.2.0 package source]. `inertia/app.tsx:30` calls `createRoot`, not `hydrateRoot`, so server HTML is discarded; the theme is applied only after JavaScript runs.
 
-**Per-page SSR is supported.** @adonisjs/inertia 4.2.0 accepts `ssr.pages` as `string[]` or `(ctx, page) => boolean` [Verified-doc, https://cdn.jsdelivr.net/npm/@adonisjs/inertia@4.2.0/build/src/types.d.ts, accessed 2026-09-25]; the current guide documents the same option [Verified-doc, https://docs.adonisjs.com/guides/frontend/inertia, accessed 2026-09-25]. The canon's "verify" note is resolved.
+**Per-page SSR is supported.** @adonisjs/inertia 4.2.0 accepts `ssr.pages` as `string[]` or `(ctx, page) => boolean` [Verified-doc, https://cdn.jsdelivr.net/npm/@adonisjs/inertia@4.2.0/build/src/types.d.ts, accessed 2026-09-25]; the current guide documents the same option [Verified-doc, https://docs.adonisjs.com/guides/frontend/inertia, accessed 2026-09-25].
 
 **Requirements.** FR-SRCH-005 requires SSR, canonical URLs, a sitemap and JSON-LD. NFR-PERF-001 (LCP p75 ≤ 2.5 s, INP p75 ≤ 200 ms, CLS ≤ 0.1) and NFR-PERF-002 (≤ 250 KB gzip initial storefront JS per route) are owned by [01 §8](../01-product-requirements.md#8-non-functional-requirements) [A-25]. Seller and admin pages have no SEO value; rendering them on the server spends CPU on the small host proposed in ADR-0016.
 
-**Inertia versions.** Inertia v3 is the default and v2 is on the npm `legacy` tag; adapter 5 needs @inertiajs/react ^3.4 and @adonisjs/vite ^6 [Verified-doc, https://github.com/adonisjs/inertia/releases, accessed 2026-09-25]. Adapter 4.2.0 already has `encryptHistory` and `clearHistory()`, which keep private pages out of history on shared phones; history encryption needs HTTPS [Verified-doc, https://inertiajs.com/docs/v2/security/history-encryption, accessed 2026-09-25].
+**Inertia versions.** Inertia v3 is the default and v2 is on the npm `legacy` tag; adapter 5 needs @inertiajs/react ^3.4 and @adonisjs/vite ^6 [Verified-doc, https://github.com/adonisjs/inertia/releases, accessed 2026-09-25]. Adapter 4.2.0 already has `encryptHistory` and `clearHistory()`, which keep private pages out of history on shared phones; history encryption needs a secure context, that is HTTPS or a loopback origin such as `localhost` [Verified-doc, https://inertiajs.com/docs/v2/security/history-encryption, accessed 2026-09-25; https://developer.mozilla.org/en-US/docs/Web/Security/Secure_Contexts, accessed 2026-09-28].
 
 ## Decision
 
@@ -36,7 +38,7 @@ DripNepal has three UI surfaces: the **public storefront** (SEO, fast first pain
 3. **Fix RF-08 in M0.** Enable the Vite plugin's `ssr.enabled`; the client entry hydrates when the root element has server markup and mounts otherwise (`el.hasChildNodes() ? hydrateRoot(…) : createRoot(…)` [Assumption, checked by T-ARCH-002]); `inertia/ssr.tsx` globs only SSR-eligible pages so dashboard code stays out of the SSR bundle; the theme class comes from a cookie on the server.
 4. **SSR-safety rules for shared components.** No `window`, `localStorage` or `matchMedia` during render. Money and dates use the one shared formatter with an explicit locale (`en-IN`, NPR, `Asia/Kathmandu`; ADR-0007) so Node and browser output match. Browser-only widgets (charts, drag and drop) appear only on CSR pages.
 5. **Slow-network data loading** ([08](../08-ui-ux-and-design-system.md)): SEO-critical product data (title, price, availability, main image) is in the initial props, never deferred; below-the-fold data uses `inertia.defer()` with few groups; product cards use `prefetch="click"`, not hover.
-6. **Private-page hygiene.** `encryptHistory` for `account/`, `seller/` and `admin/`; logout calls `inertia.clearHistory()` (ADR-0005).
+6. **Private-page hygiene.** `encryptHistory` for every authenticated surface (`/account`, `/seller`, `/admin`, `/checkout`). The client's `logOut` success handler calls `router.clearHistory()`, and the server renders `/login`, `/mfa` and every page for a guest with `inertia.clearHistory()` ([07 §3.11](../07-security-threat-model-and-permissions.md#311-logout-and-inertia-history), ADR-0005).
 7. **Version.** Examples target @adonisjs/inertia 4.2.0 and Inertia v2 until OD-25 closes. An upgrade changes APIs (`useHttp`, `once()`, the removed `@adonisjs/inertia/vite` plugin) but not this decision.
 
 ## Alternatives considered

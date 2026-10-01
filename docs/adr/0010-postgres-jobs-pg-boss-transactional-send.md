@@ -12,6 +12,8 @@ Reviewed: critic pass A4.3 (2026-09-25)
 - **Supersedes / superseded by:** — / —
 - **Related open items:** OD-10 resolved 2026-09-25 (limiter on the database store, so R1 needs no Redis)
 
+Edited 2026-09-30 (consistency review): the T-ARCH-004 exit criterion in decision 2 also covers the queue policies of [03 §9](../03-system-architecture.md#9-asynchronous-work), as [12 §4.3](../12-roadmap-and-backlog.md#43-exit-criteria) item 7 asks; the decision is unchanged.
+
 ## Context
 
 **Work outside the request** (catalogue in [03 §9](../03-system-architecture.md#9-asynchronous-work)):
@@ -46,7 +48,7 @@ Reviewed: critic pass A4.3 (2026-09-25)
 
 1. **pg-boss 12.x** (exact version pinned) runs in the `worker` process in its own `pgboss` schema, over a direct connection with a pool of 4. `web` only sends jobs. A send inside a request transaction reuses that transaction's connection. A rare send outside a transaction uses a 1-connection send-only instance ([03 §3.4](../03-system-architecture.md#34-postgresql-layout-and-connection-budget)).
 2. **Transactional send: the job table is the outbox.** Domain actions call `sendJob(trx, queue, data, { singletonKey, startAfter })`, which passes `db: fromKnex(trx.knexClient)`. The job therefore commits or rolls back with the state change ([03 §10.1](../03-system-architecture.md#101-transactional-send-the-job-table-is-the-outbox)).
-   - **M0 spike T-ARCH-004 (proposed), exit criterion:** a rollback leaves no job; a commit makes the job visible; the send uses the transaction's own connection; the savepoint behaviour is documented.
+   - **M0 spike T-ARCH-004 (proposed), exit criterion:** a rollback leaves no job; a commit makes the job visible; the send uses the transaction's own connection; the savepoint behaviour is documented. The spike also checks the queue policies of [03 §9](../03-system-architecture.md#9-asynchronous-work) that [11 §8.5](../11-deployment-and-operations.md#85-overlap-and-singleton-rules) assumes: keyed sends on `stately` queues; a running job's successor accepted; a sweeper re-send refused while one is queued; `standard` queues with no `singletonKey`. Its result (confirmed, or the fallback adopted) is recorded in this ADR ([12 §4.3](../12-roadmap-and-backlog.md#43-exit-criteria) item 7).
    - **Fallback:** an `outbox_events` table written in the business transaction, and a relay that claims rows with `FOR UPDATE SKIP LOCKED` and sends them to pg-boss. Handlers do not change.
 3. **Idempotent handlers.** Payloads carry business IDs plus `request_id` and `causation_id`, never PII. A raw token appears only in the few queues that must carry one, encrypted, and those queues delete completed jobs after one day. Each effect is guarded by one of:
    - a unique key (`notification_deliveries.dedupe_key`, `ledger_entries.dedupe_key`, `provider_events (provider, provider_event_key)`, `payout_entries.ledger_entry_id`);
@@ -105,7 +107,7 @@ Reviewed: critic pass A4.3 (2026-09-25)
 - **T-PAY-005**: duplicate and concurrent events give one state change and one ledger posting.
 - **Double-run tests** in the T-NOT, T-LED and T-INV suites (for example T-INV-004, T-LED-005): each handler run twice has one effect.
 - **T-OPS-002 (proposed)**: SIGTERM during a long job gives one completion and no duplicate effect.
-- **Alert test** (proposed for [10](../10-testing-and-quality-gates.md)): an exhausted job fires the dead-letter alert, and a stopped worker misses its heartbeat.
+- **Alert test** (T-OPS-018, proposed; [10 §6.8](../10-testing-and-quality-gates.md#68-notifications-administration-and-operations-t-not-t-adm-t-ops)): an exhausted job fires the dead-letter alert, and a stopped worker misses its heartbeat.
 - **Config test** (proposed): the sum of pool maxima in 03 §3.4 does not exceed 22.
 
 ## Related

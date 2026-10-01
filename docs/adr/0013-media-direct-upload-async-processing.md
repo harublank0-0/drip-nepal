@@ -15,11 +15,13 @@ Reviewed: critic pass A4.3 (2026-09-25)
 | Superseded by      | —                                                                                                                                     |
 | Related open items | VX-09 (data location, especially KYC documents), VX-15 (storage and CDN prices), OD-16 (which KYC documents are required), A-31, R-20 |
 
+Edited 2026-09-30 (consistency review): decisions 2, 3, 5 and 6 follow [03 §7.5](../03-system-architecture.md#75-media-upload-pipeline-j-10-fr-med-001-adr-0013) and [07 TM-15](../07-security-threat-model-and-permissions.md#tm-15-unsafe-uploads-and-image-processing) (permission per `kind`, the ETag and `If-Match` read, magic bytes before sharp, the loader allowlist, the KYC branch, the final key); the decision is unchanged.
+
 ## Context
 
 **Repository findings** [Verified-repo, [00](../00-context-assumptions-and-questions.md)]:
 
-- RF-18: the vendor `ImageUpload` reads files as base64 data URLs, accepts any `image/*` including SVG with no size limit, and `product_media` stores a 255-character URL with a text sort order and no storage key (audit F15, A3-14).
+- RF-18: the vendor `ImageUpload` reads files as base64 data URLs, accepts any `image/*` including SVG with no size limit, and `product_media` stores a 255-character URL with a text sort order and no storage key ([research: repository-audit](../research/repository-audit.md) F15, A3-14).
 - RF-35: multipart bodies up to 20 MB are parsed on every route before authentication.
 - RF-30: committed demo images reach 2.8 MB, and about 5 MB of images load on a first visit.
 
@@ -45,18 +47,21 @@ The flow and bucket layout are owned by [03 §7.5](../03-system-architecture.md#
 
 1. **Upload bytes never pass through the web process.** Multipart parsing is disabled globally in M0 (RF-35), and no R1 endpoint accepts file bytes.
 2. **Presigned upload.**
-   - `createMediaUpload` (`kind`, `mime`, `bytes`) checks `shop.products.edit`, the MIME allow-list (JPEG, PNG, WebP; PDF only for `kind = kyc_document`, A-31) and size ≤ 10 MB, and is rate-limited to 120 per hour per shop. It inserts `media_assets` with `status = pending_upload` and `original_key = originals/<shop_id>/<id>`.
+   - `createMediaUpload` (`kind`, `mime`, `bytes`) checks the permission of the `kind` (`shop.products.edit` for `product_image`, `shop.profile.manage` for `shop_logo` and `shop_banner`, the owner for `kyc_document`; [07 §4.5](../07-security-threat-model-and-permissions.md#45-operation--permission-condensed)), the MIME allow-list (JPEG, PNG, WebP; PDF only for `kind = kyc_document`, A-31) and size ≤ 10 MB, and is rate-limited to 120 per hour per shop. It inserts `media_assets` with `status = pending_upload` and `original_key` set to the upload key `originals/<shop_id>/<id>`.
    - It returns a presigned PUT URL for the **private** bucket, valid 10 minutes (03 §3.5).
    - The browser uploads directly. Client-side downscaling saves data but is not a security control.
-   - `completeMediaUpload` runs `HEAD` on the object (presence and ≤ 10 MB, because binding `Content-Length` in the presigned URL is unverified), then compare-and-sets `pending_upload` → `processing` and sends `media.process_upload` in the same transaction (ADR-0010).
-3. **Worker processing** (`media.process_upload`: one image at a time, `VIPS_BLOCK_UNTRUSTED=1`, sharp ≥ 0.35.4 pinned):
-   - Read header metadata only. Reject if the magic bytes disagree with the allow-list (no SVG, no HEIC/HEIF in R1), if the image exceeds 40 MP, or if it is interlaced and over 12 MP [Assumption].
-   - Decode with `limitInputPixels: 40_000_000` and `failOn: 'warning'`; auto-orient, convert to sRGB, strip all metadata (EXIF, GPS, XMP).
-   - Write WebP derivatives at the widths in AC-FR-MED-001-2 to the **public** bucket under content-addressed keys `p/<media_asset_id>/<sha256-prefix>-<width>.webp`, never overwritten.
-   - Store `derived_keys`, `width`, `height` and `sha256`, set `ready` and emit `media.ready` (which triggers `catalog.refresh_listing`). A rejection sets `rejected` with a `rejection_reason` shown to the vendor and deletes the original.
+   - `completeMediaUpload` runs `HEAD` on the object (presence and ≤ 10 MB, because the presigned URL does not bind the size), stores the object's ETag and size (`upload_etag`, `upload_bytes`), then compare-and-sets `pending_upload` → `processing` and sends `media.process_upload` in the same transaction (ADR-0010).
+3. **Worker processing** (`media.process_upload`: one image at a time, `VIPS_BLOCK_UNTRUSTED=1`, sharp ≥ 0.35.4 pinned; the order is owned by [03 §7.5](../03-system-architecture.md#75-media-upload-pipeline-j-10-fr-med-001-adr-0013) and [07 TM-15](../07-security-threat-model-and-permissions.md#tm-15-unsafe-uploads-and-image-processing)):
+   - Read the upload key with `If-Match` on the stored ETag, refuse a `Content-Length` above 10 MB, and read into memory through a stream that aborts at 10 MB + 1 byte; sharp never gets a stream. A failed precondition or an aborted read rejects the asset.
+   - Check the magic bytes first, before any sharp call: only JPEG, PNG and WebP, plus PDF for `kind = kyc_document`, and only when they match `media_assets.mime` (no SVG, no HEIC/HEIF in R1). At worker start, the worker calls `sharp.block({ operation: ['VipsForeignLoad'] })` and unblocks only the JPEG, PNG and WebP buffer loaders (class names confirmed in M3).
+   - A KYC PDF never reaches sharp: signature, size and `sha256` only. Every image, KYC images included, takes the next steps.
+   - Then read header metadata with `sharp(buf, { limitInputPixels: 40_000_000, failOn: 'warning' }).metadata()`. Reject an image above 40 MP, or interlaced and over 12 MP [Assumption].
+   - Decode with the same options; auto-orient, convert to sRGB, strip all metadata (EXIF, GPS, XMP).
+   - Except for KYC images, which get no derivative, write WebP derivatives at the widths in AC-FR-MED-001-2 to the **public** bucket under content-addressed keys `p/<media_asset_id>/<sha256-prefix>-<width>.webp`, never overwritten.
+   - Write the validated bytes to a final key that no presigned URL targets ([03 §3.5](../03-system-architecture.md#35-object-storage-layout)). In one transaction, store the final key in `original_key` with `derived_keys`, `width`, `height` and `sha256`, set `ready` and emit `media.ready` (which triggers `catalog.refresh_listing`). Delete the upload key only after that commit, so a job retried after a crash can still read it. A rejection sets `rejected` with a `rejection_reason` shown to the vendor, then deletes the upload key.
 4. **Delivery.** The public bucket is served from `media.<domain>` behind Cloudflare with `Cache-Control: public, max-age=31536000, immutable`. Pages emit `srcset`/`sizes` and explicit dimensions. `r2.dev` is never used in production.
-5. **KYC documents** get no derivatives (`media_assets_kyc_private_check`), stay in the private bucket, and are viewable only by staff with `platform.shops.review` through a 5-minute presigned GET; every issuance is audit-logged (AC-FR-SHOP-014-2).
-6. **Housekeeping.** `media.cleanup_abandoned` (daily 02:45, 03 §9) deletes `pending_upload` assets older than 24 h and originals of rejected assets, marking them `deleted`. Derived public images are not deleted in R1, because order snapshots may point at them (04a §7.13).
+5. **KYC documents** get no derivatives (`media_assets_kyc_private_check`), stay in the private bucket, and are viewable only by staff with `platform.shops.review` through a 5-minute presigned GET of the final key, issued only by `viewKycDocument` (proposed, [06 §13.8](../06-api-design.md#138-proposed-operations)); every issuance is audit-logged (AC-FR-SHOP-014-2).
+6. **Housekeeping.** `media.cleanup_abandoned` (daily 02:45, 03 §9) deletes `pending_upload` assets older than 24 h and originals of rejected assets, marking them `deleted`. Derived public images are not deleted in R1, because order snapshots may point at them (04a §7.13). An object PUT to the upload key after `media.process_upload` deleted it, while the URL is still valid, is never read, but nothing deletes it yet; a cleanup of the upload key or a bucket lifecycle rule on the upload prefix is an open follow-up ([07 TM-15](../07-security-threat-model-and-permissions.md#tm-15-unsafe-uploads-and-image-processing), residual risk).
 7. **Storage access** goes only through @adonisjs/drive disks (`private`, `public`). Development and CI use MinIO, so changing provider (R2, Spaces, or a Nepal provider under VX-09) is configuration only.
 
 ## Alternatives considered
@@ -84,8 +89,8 @@ The flow and bucket layout are owned by [03 §7.5](../03-system-architecture.md#
 
 **Risks**
 
-- _Presigned URL abuse_ (junk or oversized uploads). Mitigation: the `HEAD` size check, per-shop rate limit, daily cleanup, and no public read on the private bucket.
-- _libvips/libheif CVEs._ Mitigation: dependency alerts, the sharp version gate, and no HEIC in R1.
+- _Presigned URL abuse_ (junk or oversized uploads; the URL can be reused until it expires). Mitigation: the `HEAD` size check with the stored ETag, the worker's `If-Match` read capped at 10 MB + 1 byte, the final key (a later PUT to the upload URL is never read), per-shop rate limit, daily cleanup, and no public read on the private bucket.
+- _libvips/libheif CVEs._ Mitigation: dependency alerts, the sharp version gate, no HEIC in R1, and the loader allowlist (only the JPEG, PNG and WebP loaders parse an upload).
 - _VX-09_ may require KYC documents, or all media, to be stored in Nepal. Mitigation: a Drive disk change.
 
 ## When to revisit
@@ -97,11 +102,12 @@ The flow and bucket layout are owned by [03 §7.5](../03-system-architecture.md#
 
 ## Verification
 
-- **T-MED-001 (proposed)**: an SVG or a polyglot renamed `.jpg` is rejected by magic bytes; a 50 MP decompression bomb is rejected before decode; derivatives carry no EXIF or GPS; oversized objects fail the `HEAD` check.
+- **T-MED-001 (proposed)**: a 50 MP decompression bomb is rejected before decode; derivatives carry no EXIF or GPS; oversized objects fail the `HEAD` check; a wrong-type file is rejected.
+- **T-SEC-018 (proposed)** ([07 TM-15](../07-security-threat-model-and-permissions.md#tm-15-unsafe-uploads-and-image-processing)): an SVG or HTML file renamed `.jpg` is rejected by magic bytes; a JPEG/HTML polyglot yields only a re-encoded WebP derivative that contains none of the HTML bytes, and its original is never served publicly; an object overwritten after `completeMediaUpload` is rejected; CI fails if the lockfile resolves sharp below 0.35.4.
 - **T-MED-103 (proposed)**: no code path produces a public key for a `kyc_document`; KYC signed URLs expire and each issuance writes an audit row.
-- **Cleanup test (proposed)**: `pending_upload` assets older than 24 h are purged and marked `deleted`.
-- **T-SEC-001**: referencing another shop's `mediaAssetId` in `replaceProductMedia` returns 404.
-- **CI checks**: a route test proves a `multipart/form-data` body is refused on every route; the dependency audit fails if sharp is below 0.35.4.
+- **Cleanup test** (T-MED-003, proposed): `pending_upload` assets older than 24 h are purged and marked `deleted`.
+- **T-SEC-001**: referencing another shop's `mediaAssetId` in `replaceProductMedia` returns 404 `NOT_FOUND` (case (c), as [06 §13.5](../06-api-design.md#135-seller) names).
+- **CI checks**: a route test proves a `multipart/form-data` body is refused on every route (T-MED-002, proposed); the dependency audit fails if sharp is below 0.35.4 (T-SEC-018).
 
 ## Related
 

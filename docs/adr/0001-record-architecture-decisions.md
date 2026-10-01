@@ -15,11 +15,13 @@ Reviewed: critic pass A4.3 (2026-09-25)
 | Superseded by   | —                             |
 | Blocking items  | none                          |
 
+Edited 2026-09-30 (consistency review): the Context line on the seller prefix records that OD-12 was decided; the decision is unchanged.
+
 ## Context
 
 DripNepal is built by 1–2 developers on a small budget [Confirmed, Q1]. With so few people, the reason behind a decision usually lives in one person's head or in a pull-request thread. The repository already shows the cost ([00 §4.6](../00-context-assumptions-and-questions.md#46-consolidated-repository-findings-rf-01--rf-47)):
 
-- **Decisions reversed without a record.** Commit `0282605` moved the vendor dashboard from `/vendors/dashboard` to `/shop/:shopSlug/dashboard` without updating callers, which broke vendor registration (RF-03). The plan now proposes `/seller/{shopSlug}` (OD-12). The first change had no written rationale, so the second cannot be checked against it [Verified-repo, `start/routes/shops.ts:11`].
+- **Decisions reversed without a record.** Commit `0282605` moved the vendor dashboard from `/vendors/dashboard` to `/shop/:shopSlug/dashboard` without updating callers, which broke vendor registration (RF-03). The plan now moves it to `/seller/{shopSlug}` (OD-12, decided 2026-09-30). The first change had no written rationale, so the second cannot be checked against it [Verified-repo, `start/routes/shops.ts:11`].
 - **Documentation and code disagree.** `database/README.md` names pivot tables the migrations never create (RF-20), and the README contradicts the code on stack, licence and status (RF-42) [Verified-repo].
 - **History was rewritten.** Applied migrations were edited in place (RF-41), so nobody can tell which schema choices were deliberate.
 
@@ -56,7 +58,7 @@ We record architecture decisions as ADRs in `docs/adr/`, using a trimmed MADR la
 
 - A new developer can learn why the system looks the way it does from 18 short files.
 - Each decision carries its own revisit triggers, so the team reacts to measured conditions.
-- Proposed ADRs make external blockers (OD-01, VX-09, VX-13) visible next to the design that depends on them.
+- Proposed ADRs make external blockers (OD-02, VX-09, VX-13) visible next to the design that depends on them.
 
 **Negative**
 
@@ -66,7 +68,7 @@ We record architecture decisions as ADRs in `docs/adr/`, using a trimmed MADR la
 **Risks**
 
 - _ADR rot_: code changes, ADR is not superseded. Mitigation: every ADR names the tests or CI checks that enforce it, so removing them shows in the PR diff.
-- _Status drift_: a Proposed ADR outlives its OD. Mitigation: the milestone exit checklist in [12](../12-roadmap-and-backlog.md) compares ADR statuses with the OD/VX register.
+- _Status drift_: a Proposed ADR outlives its OD. Mitigation: the milestone exit review in [12 §2.4](../12-roadmap-and-backlog.md#24-definition-of-done) (item 3) compares ADR statuses with the OD/VX register.
 
 ## When to revisit
 
@@ -76,9 +78,9 @@ We record architecture decisions as ADRs in `docs/adr/`, using a trimmed MADR la
 
 ## Verification
 
-- **CI docs check** (proposed; job defined in [10](../10-testing-and-quality-gates.md)): validates Markdown links; checks every `docs/adr/NNNN-*.md` has the eight required `##` headings; fails on duplicate numbers or an ADR missing from `README.md`.
+- **CI docs check** (T-ARCH-029, proposed; registered in [10 §6.2](../10-testing-and-quality-gates.md#62-architecture-schema-and-repository-t-arch)): validates Markdown links; checks every `docs/adr/NNNN-*.md` has the eight required `##` headings; fails on duplicate numbers or an ADR missing from `README.md`.
 - **PR template checkbox**: "Does this change a decision listed in docs/adr? If yes, link the new or superseding ADR."
-- **Milestone exit review** ([12](../12-roadmap-and-backlog.md)): ADR statuses match the OD/VX register (for example, ADR-0011 becomes Accepted when OD-01 closes).
+- **Milestone exit review** ([12 §2.4](../12-roadmap-and-backlog.md#24-definition-of-done), item 3): ADR statuses match the OD/VX register (for example, ADR-0011 became Accepted when OD-01 was decided on 2026-09-30).
 
 ## Related
 

@@ -12,15 +12,17 @@ Reviewed: critic pass A4.3 (2026-09-25)
 - **Supersedes / superseded by:** — / —
 - **Related open items:** OD-02, OD-04 (commission rate and basis), OD-05 (COD commission remittance, blocks launch), OD-06 (hold days), OD-07 (refund routes), OD-11 / OD-27 (tax), VX-01, VX-02, VX-08
 
+Edited 2026-09-30 (consistency review): the refund rule of decision 4 follows [05 §7.4](../05-order-payment-and-inventory-lifecycles.md#74-refund-postings-and-commission-reversal) (vendor impact fixed when the refund is created); the decision is unchanged.
+
 ## Context
 
-**Confirmed answers** (canon §1): one payment for a multi-shop cart, split into per-shop suborders (Q2). DripNepal is the payee for gateway payments and pays vendors out, subject to VX-01 (Q3). COD at launch and one wallet gateway in R1.1 (Q4). Vendors ship with their own couriers (Q5).
+**Confirmed answers** ([00 §3.2](../00-context-assumptions-and-questions.md#32-product-owner-answers-q1q8-and-their-consequences)): one payment for a multi-shop cart, split into per-shop suborders (Q2). DripNepal is the payee for gateway payments and pays vendors out, subject to VX-01 (Q3). COD at launch and one wallet gateway in R1.1 (Q4). Vendors ship with their own couriers (Q5).
 
 **Consequence for R1.** The vendor or its courier collects COD cash, so the platform holds no customer money and _the vendor owes the platform its commission_. The ledger must therefore allow negative balances and net them against later gateway credits. How vendors remit is OD-05.
 
 **Repository** [Verified-repo, RF-07]: one `orders` row spans shops with a single `status`, `payment_status` and `shipping_total` (`1780074257570_create_orders_table.ts:18-34`). Per-shop acceptance, shipping, cancellation, commission and payout cannot be represented.
 
-**Law and providers** [Verified-doc, `nepal_payments` research, accessed 2026-09-25]:
+**Law and providers** [Verified-doc, [research: nepal-payments](../research/nepal-payments.md), accessed 2026-09-25]:
 
 - E-Commerce Act 2081 s8(1) deems payment to a delivery provider as received by the business entity, and s14 makes the intermediary accept returns and refunds "notwithstanding any terms of the contract" (<https://giwmscdnone.gov.np/media/files/E-Commerce%20Act,%202081_yr7k9o5.pdf>) [Verify-external VX-02].
 - Neither eSewa nor Khalti documents split payments or sub-merchants (<https://developer.esewa.com.np/pages/Epay>, <https://docs.khalti.com/khalti-epayment/>). Whether a platform may collect for vendors is unconfirmed [Verify-external VX-01].
@@ -43,7 +45,7 @@ Reviewed: critic pass A4.3 (2026-09-25)
 4. **Posting rules.** The authoritative table is [05 §7.2](../05-order-payment-and-inventory-lifecycles.md#72-entry-types-and-posting-rules). In summary:
    - Nothing is posted before delivery. The delivery posting runs in the transaction that makes the shop order both `delivered` and paid (`collected` or `captured`): `sale +I`, `shipping_income +S`, `commission −K`, and for COD `cod_cash_held −(I+S)`.
    - `available_at` follows a group rule. If the posting's net is positive (gateway), its entries become available at `delivered_at + ledger_hold_days` (default 7) [Assumption A-06; OD-06]. Otherwise (COD) they are available immediately. Debts are never deferred.
-   - A refund posts `refund` (negative) and `commission_reversal` (positive) only if the shop order already has a delivery posting. Refunds before delivery are between the platform and the customer only.
+   - A refund posts `refund` (negative) and `commission_reversal` (positive) only if it affects the vendor, which the create transaction fixes in `refunds.affects_vendor_ledger` (proposed): a `reason_code` of `return_accepted`, `goodwill` or `other`, and a delivery posting that already exists ([05 §7.4](../05-order-payment-and-inventory-lifecycles.md#74-refund-postings-and-commission-reversal)). Refunds of rejected, cancelled or undeliverable units never post, even if they succeed after delivery; they and every other refund that does not affect the vendor are between the platform and the customer only.
    - `vendor_remittance` is recorded by finance (`recordVendorRemittance`). A payout (R1.1) posts `payout`, and a bounced payout posts `payout_reversal`.
 5. **Commission** is snapshotted per order item at placement and rounded half up per line (ADR-0007). Shipping is commission-free [Assumption; OD-04].
 

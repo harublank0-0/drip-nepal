@@ -84,9 +84,9 @@ Reviewed: critic pass A4.3 (2026-09-25)
 
 ## Verification
 
-- **CI checks** ([10](../10-testing-and-quality-gates.md)): `components.json` has no `@commercn`; any `@shadcnuikit` header uses `${SHADCNUIKIT_API_KEY}`, never a literal; no repo-root `components/` directory; ESLint `no-restricted-imports` bans `next/*` under `inertia/`; every file in `inertia/components/kit/` has a provenance header; the directory is empty until the VX-13 reply is linked from the register.
-- **Licence audit**: the npm dependency licence report runs in CI and fails on a non-permissive licence.
-- **T-A11Y-001**: axe checks on core storefront, seller and admin pages. **T-UI area (proposed)**: icon buttons have accessible names; storefront targets are at least 24 px.
+- **CI checks** (T-ARCH-027, proposed; [10 §6.2](../10-testing-and-quality-gates.md#62-architecture-schema-and-repository-t-arch)): `components.json` has no `@commercn`; any `@shadcnuikit` header uses `${SHADCNUIKIT_API_KEY}`, never a literal; no repo-root `components/` directory; ESLint `no-restricted-imports` bans `next/*` under `inertia/`; every file in `inertia/components/kit/` has a provenance header; the directory is empty until the VX-13 reply is linked from the register.
+- **Licence audit** (T-ARCH-028, proposed): the npm dependency licence report runs in CI and fails on a non-permissive licence.
+- **T-A11Y-001**: axe checks on core storefront, seller and admin pages. **T-UI-028 and T-UI-004 (proposed)**: icon buttons have accessible names; storefront targets are at least 24 px.
 
 ## Related
 

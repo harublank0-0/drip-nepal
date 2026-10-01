@@ -15,15 +15,17 @@ Reviewed: critic pass A4.3 (2026-09-25)
 | Superseded by      | —                                                                                                                                                                                   |
 | Related open items | None open: OD-13 (JSON casing of the extension members `request_id` and `errors[]`) was decided on 2026-09-30 for snake_case; the RFC members do not change. Fixes RF-36 and RF-12. |
 
+Edited 2026-09-30 (consistency review): decisions 1 and 2 follow [06 §5](../06-api-design.md#5-error-contract) and [07 §3.3](../07-security-threat-model-and-permissions.md#33-the-per-request-account-check-and-the-suspension-decision): `errors[]` also carries the per-line reasons of five non-validation codes, `IDEMPOTENCY_KEY_REQUIRED` is 400, `SERVICE_BUSY` is proposed, and the CSRF mapping is decided; the contract is otherwise unchanged.
+
 ## Context
 
-**Repository today** [Verified-repo, audit]:
+**Repository today** [Verified-repo; [research: repository-audit](../research/repository-audit.md)]:
 
 - `app/exceptions/handler.ts:10` sets `debug = !app.inProduction`; status pages are enabled only in production (404 → `errors/not_found`, 5xx → `errors/server_error`); `handle` delegates to the parent.
 - For a JSON request, @adonisjs/http-server 9.1.0 `renderErrorAsJSON` sends `{ message: error.message }` with debug off. Knex and pg errors put SQL and constraint names in `message`, so production 5xx bodies leak internals (**RF-36**).
 - Login swallows non-credential errors and returns an empty response (**RF-12**). No machine-readable codes exist.
 
-**Framework facts** [Verified-doc, `adonis_stack` research, accessed 2026-09-25]:
+**Framework facts** [Verified-doc, [research: adonis-stack](../research/adonis-stack.md), accessed 2026-09-25]:
 
 - For Inertia requests with a session, @adonisjs/session 8.1.0 flashes validation errors and redirects back; @adonisjs/inertia 4.2.0 keeps one message per field.
 - @tuyau/core 1.2.2 adds a `422 { errors: SimpleError[] }` variant to every route's error type; its `validationErrorType` option can replace it. The client exports `TuyauHTTPError`.
@@ -35,7 +37,7 @@ Reviewed: critic pass A4.3 (2026-09-25)
 
 ## Decision
 
-1. **Envelope** (canon §6.6). Every 4xx and 5xx under `/api/` is `Content-Type: application/problem+json` with `Cache-Control: no-store`, whatever `Accept` says:
+1. **Envelope** ([06 §5.1](../06-api-design.md#51-shape)). Every 4xx and 5xx under `/api/` is `Content-Type: application/problem+json` with `Cache-Control: no-store`, whatever `Accept` says:
 
    ```json
    {
@@ -59,27 +61,27 @@ Reviewed: critic pass A4.3 (2026-09-25)
    - `type` is a constant base URI plus the kebab-case code [Assumption: production domain `dripnepal.com`]; `title` is fixed per code, English in R1.
    - `detail` is occurrence-specific, safe for end users, and never built from an exception message.
    - `request_id` equals the `X-Request-Id` response header.
-   - `errors[]` appears only for `VALIDATION_FAILED`, as `{field, code, message}` with a dotted `field` path (`items.0.quantity`).
+   - `errors[]` appears for `VALIDATION_FAILED`, and for the per-line reasons of `INVALID_QUERY_PARAMETER`, `OUT_OF_STOCK`, `CART_CHANGED`, `DELIVERY_NOT_AVAILABLE` and `CONFLICT` ([06 §5.1](../06-api-design.md#51-shape)), as `{field, code, message}` plus optional code-specific members, with a dotted `field` path (`items.0.quantity`) or `null`.
    - Code-specific extension members (for example the current representation with `VERSION_CONFLICT`) are defined in [06](../06-api-design.md). `instance` is omitted in R1.
 
-2. **Codes.** The canonical list is canon §6.6; rows marked _proposed_ are not canonical until 06 and `openapi.yaml` adopt them.
+2. **Codes.** The list is owned by [06 §5.2](../06-api-design.md#52-codes); rows marked _proposed_ are not final until 06 and `openapi.yaml` adopt them.
 
-   | Status | Codes                                                                                                                                                                                                                                               |
-   | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-   | 400    | `INVALID_QUERY_PARAMETER`, `IDEMPOTENCY_KEY_REQUIRED` (canon: "428? use 400"); _proposed_ `MALFORMED_REQUEST` (unparseable JSON body)                                                                                                               |
-   | 401    | `UNAUTHENTICATED`, `MFA_REQUIRED`                                                                                                                                                                                                                   |
-   | 403    | `FORBIDDEN`, `ACCOUNT_SUSPENDED` (T-SEC-010), `SHOP_NOT_ACTIVE`, `EMAIL_NOT_VERIFIED`                                                                                                                                                               |
-   | 404    | `NOT_FOUND` (missing, **or in another shop or customer's scope**, or an unknown route)                                                                                                                                                              |
-   | 409    | `CONFLICT`, `IDEMPOTENCY_IN_PROGRESS`, `OUT_OF_STOCK`, `PRICE_CHANGED`, `CART_CHANGED`, `INVALID_STATE_TRANSITION`                                                                                                                                  |
-   | 412    | `VERSION_CONFLICT` (`If-Match` mismatch)                                                                                                                                                                                                            |
-   | 413    | `PAYLOAD_TOO_LARGE`                                                                                                                                                                                                                                 |
-   | 422    | `VALIDATION_FAILED`, `IDEMPOTENCY_KEY_REUSED`, `DELIVERY_NOT_AVAILABLE`, `COD_LIMIT_EXCEEDED`, `REFUND_EXCEEDS_REFUNDABLE`                                                                                                                          |
-   | 428    | `PRECONDITION_REQUIRED` (`If-Match` missing)                                                                                                                                                                                                        |
-   | 429    | `RATE_LIMITED`, with `Retry-After`                                                                                                                                                                                                                  |
-   | 500    | `INTERNAL`                                                                                                                                                                                                                                          |
-   | 503    | `PROVIDER_UNAVAILABLE`, with `Retry-After`; also the checkout kill switch (`checkout_enabled = false`, [05 §4.1](../05-order-payment-and-inventory-lifecycles.md#41-inputs-preconditions-and-the-quote) and note 9); _proposed_ `CHECKOUT_DISABLED` |
+   | Status | Codes                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+   | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+   | 400    | `INVALID_QUERY_PARAMETER`, `IDEMPOTENCY_KEY_REQUIRED` (400, not 428; [06 §5.2](../06-api-design.md#52-codes)); _proposed_ `MALFORMED_REQUEST` (unparseable JSON body)                                                                                                                                                                                                                                                                   |
+   | 401    | `UNAUTHENTICATED`, `MFA_REQUIRED`                                                                                                                                                                                                                                                                                                                                                                                                       |
+   | 403    | `FORBIDDEN`, `ACCOUNT_SUSPENDED` (T-SEC-010), `SHOP_NOT_ACTIVE`, `EMAIL_NOT_VERIFIED`                                                                                                                                                                                                                                                                                                                                                   |
+   | 404    | `NOT_FOUND` (missing, **or in another shop or customer's scope**, or an unknown route)                                                                                                                                                                                                                                                                                                                                                  |
+   | 409    | `CONFLICT`, `IDEMPOTENCY_IN_PROGRESS`, `OUT_OF_STOCK`, `PRICE_CHANGED`, `CART_CHANGED`, `INVALID_STATE_TRANSITION`                                                                                                                                                                                                                                                                                                                      |
+   | 412    | `VERSION_CONFLICT` (`If-Match` mismatch)                                                                                                                                                                                                                                                                                                                                                                                                |
+   | 413    | `PAYLOAD_TOO_LARGE`                                                                                                                                                                                                                                                                                                                                                                                                                     |
+   | 422    | `VALIDATION_FAILED`, `IDEMPOTENCY_KEY_REUSED`, `DELIVERY_NOT_AVAILABLE`, `COD_LIMIT_EXCEEDED`, `REFUND_EXCEEDS_REFUNDABLE`                                                                                                                                                                                                                                                                                                              |
+   | 428    | `PRECONDITION_REQUIRED` (`If-Match` missing)                                                                                                                                                                                                                                                                                                                                                                                            |
+   | 429    | `RATE_LIMITED`, with `Retry-After`                                                                                                                                                                                                                                                                                                                                                                                                      |
+   | 500    | `INTERNAL`                                                                                                                                                                                                                                                                                                                                                                                                                              |
+   | 503    | `PROVIDER_UNAVAILABLE`, with `Retry-After`; also the checkout kill switch (`checkout_enabled = false`, [05 §4.1](../05-order-payment-and-inventory-lifecycles.md#41-inputs-preconditions-and-the-quote) and note 9); _proposed_ `CHECKOUT_DISABLED`; _proposed_ `SERVICE_BUSY`, with `Retry-After` (the catalog-read cap of [07 TM-24](../07-security-threat-model-and-permissions.md#tm-24-resource-exhaustion-and-expensive-queries)) |
 
-   Until `MALFORMED_REQUEST` is adopted, an unparseable body maps to `VALIDATION_FAILED`. A CSRF failure maps to `FORBIDDEN` [Assumption; 07 confirms]. Adding a code updates this table, `openapi.yaml` and the code enum in one PR; changing a code's meaning needs a superseding ADR (ADR-0001).
+   Until `MALFORMED_REQUEST` is adopted, an unparseable body maps to `VALIDATION_FAILED`. A CSRF failure maps to 403 `FORBIDDEN`, except 401 `UNAUTHENTICATED` when the session holds no `auth_web` and the route runs the `auth` middleware ([07 §3.3](../07-security-threat-model-and-permissions.md#33-the-per-request-account-check-and-the-suspension-decision), [06 §4.1](../06-api-design.md#41-session-and-csrf)). Adding a code updates this table, `openapi.yaml` and the code enum in one PR; changing a code's meaning needs a superseding ADR (ADR-0001).
 
 3. **404, not 403, across tenants.** Another shop's resources or another customer's orders return `NOT_FOUND` with the same `title` and `detail` as a missing ID, produced by the same scoped query. `FORBIDDEN` is only for in-scope actors lacking a permission (ADR-0006). No code may act as an existence oracle; for example, signup with a registered email gets the same response as a new one (RF-38, [07](../07-security-threat-model-and-permissions.md)).
 4. **One translation point.** Domain code throws `DomainError(code, { detail?, extensions? })`; status and title come from the code registry. The exception handler maps validator errors to `VALIDATION_FAILED` with `errors[]`, the auth guard to `UNAUTHENTICATED`, the limiter to `RATE_LIMITED`, the body limit to `PAYLOAD_TOO_LARGE`, SQLSTATE 23505/23514/22001 on allow-listed constraints to field errors ([04 §2.8](../04-domain-model-and-data-dictionary.md#28-text-normalisation-and-lengths)), and anything else to `INTERNAL` with "Something went wrong. Quote the request ID to support." Production never echoes `error.message`, SQL, constraint names or stacks.
@@ -116,18 +118,18 @@ Reviewed: critic pass A4.3 (2026-09-25)
 
 ## When to revisit
 
-- 06 decides the proposed codes (`MALFORMED_REQUEST`, `CHECKOUT_DISABLED`) or a CSRF-specific code before `openapi.yaml` freezes.
+- 06 decides the proposed codes (`MALFORMED_REQUEST`, `CHECKOUT_DISABLED`, `SERVICE_BUSY`) before `openapi.yaml` freezes. A CSRF-specific code is not needed: [07 §3.3](../07-security-threat-model-and-permissions.md#33-the-per-request-account-check-and-the-suspension-decision) maps `E_BAD_CSRF_TOKEN` to 401 or 403.
 - External consumers need localised `title` and `detail` via `Accept-Language`, or `/api/v2` changes error semantics.
 - The code count passes about 40 [Assumption]: group by `type` hierarchy.
 
 ## Verification
 
 - **T-API-001**: every response in the functional suite validates against `openapi.yaml`, and every 4xx and 5xx under `/api/v1` is `application/problem+json`.
-- **Code registry test (proposed)**: the code enum, `openapi.yaml`'s `Problem.code` enum and each code's status and title match exactly.
-- **RF-36 test (proposed)**: with `NODE_ENV=production`, a constraint violation yields `INTERNAL` with the generic detail and no SQL, constraint name or stack; the log line holds the full error with the same `request_id`.
-- **T-SEC-001, T-SEC-002**: out-of-scope reads and writes return 404 bodies identical, apart from `request_id`, to a nonexistent ID. **T-SEC-010**: a suspended user's next API request gets 403 `ACCOUNT_SUSPENDED`.
-- **Header checks (proposed)**: `RATE_LIMITED` and `PROVIDER_UNAVAILABLE` carry `Retry-After`; body `request_id` equals `X-Request-Id`.
-- **Frontend component tests (proposed)**: two errors on one field both render; an unknown code shows the fallback with the request ID.
+- **Code registry test** (T-API-011, proposed): the code enum, `openapi.yaml`'s `Problem.code` enum and each code's status and title match exactly.
+- **RF-36 test** (T-SEC-027, proposed): with `NODE_ENV=production`, a constraint violation yields `INTERNAL` with the generic detail and no SQL, constraint name or stack; the log line holds the full error with the same `request_id`.
+- **T-SEC-001, T-SEC-002**: out-of-scope reads and writes return 404 bodies identical, apart from `request_id`, to a nonexistent ID. **T-SEC-010**: a suspended user's next API request gets 403 `ACCOUNT_SUSPENDED` while the session exists, and 401 `UNAUTHENTICATED` once `identity.revoke_sessions` has destroyed it, never a 2xx; a stamp-only mismatch is 401 ([07 §3.3](../07-security-threat-model-and-permissions.md#33-the-per-request-account-check-and-the-suspension-decision)).
+- **Header checks** (T-API-005, proposed): `RATE_LIMITED` and `PROVIDER_UNAVAILABLE` carry `Retry-After`; body `request_id` equals `X-Request-Id`.
+- **Frontend component tests** (T-UI-005, proposed): two errors on one field both render; an unknown code shows the fallback with the request ID.
 
 ## Related
 
