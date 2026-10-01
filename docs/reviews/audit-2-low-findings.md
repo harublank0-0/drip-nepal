@@ -18,12 +18,12 @@ Deep audit 2 of [04 Domain model and data dictionary](../04-domain-model-and-dat
 | --------------------------------------------------------------------------------------------------- | ------------ |
 | [DripNepal: Context, Assumptions and Open Questions](../00-context-assumptions-and-questions.md)    | 1            |
 | [DripNepal — User Journeys and Acceptance Criteria](../02-user-journeys-and-acceptance-criteria.md) | 3            |
-| [Domain Model and Data Dictionary](../04-domain-model-and-data-dictionary.md)                       | 43           |
-| [Data Dictionary: Tables (§5–§15)](../04a-data-dictionary-tables.md)                                | 49           |
+| [Domain Model and Data Dictionary](../04-domain-model-and-data-dictionary.md)                       | 42           |
+| [Data Dictionary: Tables (§5–§15)](../04a-data-dictionary-tables.md)                                | 44           |
 | [Order, Payment and Inventory Lifecycles](../05-order-payment-and-inventory-lifecycles.md)          | 1            |
-| [DripNepal API Design](../06-api-design.md)                                                         | 2            |
+| [DripNepal API Design](../06-api-design.md)                                                         | 0            |
 | [Deployment and Operations](../11-deployment-and-operations.md)                                     | 1            |
-| Total                                                                                               | 100          |
+| Total                                                                                               | 92           |
 
 ## Fixed with an owner decision (2026-09-29)
 
@@ -79,14 +79,6 @@ Findings located in [02-user-journeys-and-acceptance-criteria.md](../02-user-jou
 ## Domain Model and Data Dictionary
 
 Findings located in [04-domain-model-and-data-dictionary.md](../04-domain-model-and-data-dictionary.md).
-
-### A2-017: T-CAT-102 cites an error field path and input name that 06 does not use
-
-- **Where:** §3.5 Duplicate variant combinations are impossible (Tradeoff) (lines at `b81e3f1`: 04:402)
-- **Category:** cross-doc
-- **Text:** 04:402 "T-CAT-102 (proposed) submits a duplicate combination and expects 422 on field `variants[n].options` … `constraint_map.ts` maps it to that field"
-- **Problem:** 06 owns the field paths. `errors[].field` is a dotted path (`variants.2.sku`), and the variant input member is `option_value_codes`, so `variants[n].options` never appears. A test or constraint map written from 04 would assert the wrong field.
-- **Suggested fix:** 04 §3.5: "… expects 422 on field `variants.<n>.option_value_codes` … `constraint_map.ts` maps `product_variants_product_signature_key` to that field (code `unique`)".
 
 ### A2-018: §2.12 says 03 §3.4 names the first four append-only tables; 03 names five and defers to 04's nine
 
@@ -539,22 +531,6 @@ Findings located in [04a-data-dictionary-tables.md](../04a-data-dictionary-table
 - **Problem:** 07 §3.8 (owner of token rules) invalidates an email_verification token on a newer token, email change, suspension or anonymisation, but not on a password change or reset; a password change invalidates only password_reset and mfa_enrollment tokens, and mfa_enrollment also on revokePlatformStaff. At anonymisation 04 §19.2 deletes the tokens rather than consuming them. Following 04a, a pending user who resets a forgotten password loses their verification link.
 - **Suggested fix:** Replace the sentence with: 'Live tokens are invalidated per purpose as 07 §3.8 lists; anonymizeUser deletes them (04 §19.2).'
 
-### A2-118: inventory_movements retention says the command deletes rows; deleting breaks the journal sums, 04 §19.3 plans compaction, and the clocks differ
-
-- **Where:** §8.3 and §8.2 Lifecycle and retention (lines at `b81e3f1`: 04a:1190, 1222-1239, 1272; 04:1823; 05:709)
-- **Category:** retention-privacy
-- **Text:** §8.3 'Retained for 7 years with the order records they explain ... Only the retention maintenance command deletes rows'; §8.2 'Retained with the order record, 7 years after the order's last shop order became terminal'.
-- **Problem:** on_hand = Σ on_hand_delta and reserved = Σ reserved_delta hold only over the whole journal (05 §5.1), so deleting old movements makes the daily drift check flag every affected variant. 04 §19.3, the owner of the schedule, says 'Compaction into a checkpoint movement per variant' instead, which needs a kind and reference rule that inventory_movements_kind_check and inventory_movements_reference_check do not have. 04 §19.3's clock is created_at / resolved_at, 04a §8.2's the order's last terminal shop order.
-- **Suggested fix:** 04a §8.3: 'Never deleted row by row; after the retention period old movements are compacted into one checkpoint movement per variant (04 §19.3, designed when the table passes 10 million rows, not built in R1), which adds a kind to inventory_movements_kind_check and its reference rule.' Use one clock in 04 §19.3 and 04a §8.2/§8.3.
-
-### A2-119: shop_payout_accounts.branch_name has no API input
-
-- **Where:** §6.7 shop_payout_accounts vs 06 §13.5 replacePayoutAccount (lines at `b81e3f1`: 04a:508; 06:780)
-- **Category:** cross-doc
-- **Text:** '`branch_name` | text | yes | Bank branch, when the bank needs it for transfers'
-- **Problem:** 06 replacePayoutAccount (owner of the operation fields) takes method, account_name, bank_name, account_number and password; no operation writes branch_name, so the column is always null and finance lacks the branch that the note says some banks need for transfers.
-- **Suggested fix:** Add `branch_name?` (2–100 characters, bank_transfer only) to 06 §13.5 replacePayoutAccount with `shop_payout_accounts_branch_name_check CHECK (branch_name IS NULL OR (method = 'bank_transfer' AND char_length(branch_name) BETWEEN 2 AND 100))`, or drop the column.
-
 ### A2-120: FK-target comments on the shop_orders keys omit most of their referencing tables
 
 - **Where:** §11.2 shop_orders, Keys and constraints (lines at `b81e3f1`: 04a:1730-1731)
@@ -674,14 +650,6 @@ Findings located in [04a-data-dictionary-tables.md](../04a-data-dictionary-table
 - **Problem:** No constraint or re-check keeps active variants of an already published product above 0, and openapi allows `price_minor` 0 on `replaceProductVariants`. For such a product the refresh computes min_price_minor = 0, the upsert fails with 23514, and `catalog.refresh_listing` exhausts its retries. The old row, with its old prices and stock, stays visible. A nightly `catalog.rebuild_listings` written as one statement would fail entirely. The root gap (price 0 on a published product) is separate; this is the effect it has on this table.
 - **Suggested fix:** 04a:944: add 'and every active variant has `price_minor > 0`' to the visibility rule, so such a product loses its row instead of failing the refresh. State that `catalog.rebuild_listings` recomputes products independently, so one bad product does not abort the rebuild.
 
-### A2-143: product_listings has no column for the card image's alt text (nor a brand slug) that openapi ListingCard requires, though listings are read with no joins
-
-- **Where:** §7.12 product_listings, columns (lines at `b81e3f1`: 944, 953, 961)
-- **Category:** schema
-- **Text:** 04a:944 'Storefront listings, filters and search read only this table (ADR-0014), one query per page, with no joins.' 04a:953 `brand_id`, `brand_name`; 04a:961 `primary_image_keys` 'Derived image keys of position 1'.
-- **Problem:** openapi ListingCard requires `image.alt` (openapi.yaml:2433-2441) and `brand {slug, name}` (2415-2424). The read model stores neither the alt text of the position-1 image (`product_media.alt_text`, or the '{title}, {colour}' fallback of AC-FR-MED-002-2) nor a brand slug. The card can be built only by joining product_media and brands, or by dropping the alt text, which is an accessibility loss. The brand object shape is an [Assumption] (openapi note 19); the missing alt text is not logged anywhere.
-- **Suggested fix:** Add `primary_image_alt text NOT NULL` (position-1 alt text, or the fallback computed at refresh; CHECK char_length <= 200) and, if the brand object is kept, `brand_slug citext NULL` to product_listings. The refresh sets both, and a brand rename queues `catalog.rebuild_listings`.
-
 ### A2-144: Listing rows are not refreshed when a shop is closed, renamed or re-slugged; 03 triggers catalog.refresh_listing only on shop.suspended and shop.reinstated
 
 - **Where:** §7.12 product_listings, Lifecycle and retention (lines at `b81e3f1`: 944, 949, 963, 982)
@@ -689,14 +657,6 @@ Findings located in [04a-data-dictionary-tables.md](../04a-data-dictionary-table
 - **Text:** 04a:944 a row requires 'shop `active`'; 04a:949 `shop_slug`, `shop_name` are copied; 04a:963 `search_tsv` includes `shop_name`; 04a:982 refresh 'after product, variant, inventory-availability, media and shop-status events'.
 - **Problem:** 03 owns the events and jobs. 03:988 triggers `catalog.refresh_listing` only on `shop.suspended` and `shop.reinstated`, and the shops module (03:385) emits no closure or profile/slug event. After `active --> closed` (05:1358) the shop's products stay in listings and search until the 03:30 rebuild. After `adminUpdateShop` changes the slug (06:822), or the shop name changes, `shop_slug`, `shop_name` and `search_tsv` stay stale. T-CAT-108 ('a row exists if and only if the product is visible') cannot hold in between.
 - **Suggested fix:** 03 §4.4 and §9 (owner): add `shop.closed` and `shop.profile_updated` (name or slug) events that queue `catalog.refresh_listing` for each product of the shop (or one `catalog.refresh_shop_listings` job). 04a §7.12 and T-CAT-108 name closure and rename explicitly.
-
-### A2-145: 06 and openapi listing examples use image keys p/<public_id>/<position>-<width>.webp, not the content-addressed key format of 03 §3.5 and 04a §7.13
-
-- **Where:** §7.13 media_assets, derived_keys (lines at `b81e3f1`: 998, 1027)
-- **Category:** cross-doc
-- **Text:** 04a:998 `derived_keys` 'Width → public WebP key, for example `{"320": "p/<id>/<sha-prefix>-320.webp", …}`'; 04a:1027 'Derived public images are content-addressed and never overwritten'; 03:257 `p/<media_asset_id>/<sha256-prefix>-<width>.webp`.
-- **Problem:** 06:922 and openapi.yaml:375-376 show `"320": "p/7K3M9QXA/1-320.webp"`, keyed by the product's public_id and gallery position. Such a key is not content-addressed: reordering images would change what `1-320.webp` means under an immutable one-year cache. 03 (storage layout) and 04a agree with each other; the examples are wrong.
-- **Suggested fix:** 06 §14.1 and openapi.yaml: use keys of the form `p/<media_asset_id>/<sha256-prefix>-320.webp` in the examples.
 
 ### A2-146: The 5-KYC-document limit has no lock, so parallel uploads exceed it, and which statuses count is unstated
 
@@ -770,14 +730,6 @@ Findings located in [04a-data-dictionary-tables.md](../04a-data-dictionary-table
 - **Problem:** The guard raises P0001 whenever the payout is not `draft`, and it fires for every role, the migrator included. Links of approved, paid or failed payouts can therefore never be deleted. Their ON DELETE RESTRICT FKs then block deleting those ledger_entries and payouts. The retention exemption proposed in 07 §4.10 covers only forbid_mutation(), not this guard. Tested on PostgreSQL 18.6: as the owner role, `DELETE FROM payout_entries` for a paid payout gave "payout_entries can change only while the payout is a draft".
 - **Suggested fix:** When the 07 §4.10 exemption is approved, give payout_entries_guard() the same branch as its first statement: `IF TG_OP = 'DELETE' AND current_user = 'dripnepal_migrator' AND current_setting('dripnepal.retention_purge', true) = 'on' THEN RETURN OLD; END IF;`. The purge then deletes, in order: links, then ledger_entries (self-references in one statement), then payouts and vendor_remittances. Until then, say in §13.1 and §13.3 that the purge needs this exemption.
 
-### A2-167: support_cases.subject is NOT NULL (3-150 characters) but no operation, journey or system path supplies it
-
-- **Where:** §14.1 support_cases (subject column, support_cases_text_check) | 14.1 support_cases (lines at `b81e3f1`: 2725, 2760)
-- **Category:** edge-case
-- **Text:** `subject` text, not null, default "App", "3–150 characters, for lists"; `CHECK (char_length(subject) BETWEEN 3 AND 150 ...)`
-- **Problem:** 04a §14.1 (2725, 2760) requires a subject, but no input provides one: 01 AC-FR-ADM-009-1 has a category and a description, 02 J-19 step 1 asks for category, optional order and description, 06 openSupportCase takes category, order_number?, shop_order_number? and message, and 08 shows only category and order link. System-opened cases (second delivery failure, COD dispute, reversal) name none either. Each implementer would invent a value, and the insert fails when it is not 3-150 characters.
-- **Suggested fix:** 04a §14.1 subject note: 'Generated by the server: the category label plus the linked shop order or order number (for example Delivery · DN-7K3M9QX-1), otherwise the first line of the first message truncated to 150 characters; system-opened cases use a fixed template per trigger; always 3-150 characters.' Alternatively, add subject (3-150) to openSupportCase in 06, 01 and 02 J-19 step 1.
-
 ### A2-168: support_cases can link an order and a shop with no shop order, so the shop-to-order link is unenforced
 
 - **Where:** §14.1 support_cases (INV-02/INV-03 scope) (lines at `b81e3f1`: 2743-2755)
@@ -850,21 +802,7 @@ Findings located in [05-order-payment-and-inventory-lifecycles.md](../05-order-p
 
 Findings located in [06-api-design.md](../06-api-design.md).
 
-### A2-180: 06 refuses only a '4th reattempt'; 04a's CHECK and 05 allow at most two reattempts
-
-- **Where:** §5.3 error table; §13.5 recordFulfillmentEvent row; notes item 4 (lines at `b81e3f1`: 06:309, 06:801, 06:1305; 04a:1938, 04a:1958)
-- **Category:** cross-doc
-- **Text:** 06:309 INVALID_STATE_TRANSITION "also a 4th delivery reattempt"; 06:801 "(incl. 4th reattempt)". 04a:1938 attempt_count "1 at first shipment, +1 per reattempt"; 04a:1958 `CHECK (attempt_count BETWEEN 0 AND 3)`.
-- **Problem:** With attempt_count = 1 at shipment and reattempt allowed only while attempt_count < 3 (05 §6.3, 01 AC-FR-FUL-002-2, 02 AC-J13-05), the third reattempt (the 4th attempt) is refused. 06 says the 4th reattempt is refused, which implies a third reattempt is allowed. That would set attempt_count = 4, which the 04a CHECK rejects with 23514, so the API returns 500 instead of 409. 04a and 05 are the owners and agree.
-- **Suggested fix:** In 06, write "a reattempt when attempt_count is already 3 (a 4th delivery attempt)" at 06:309, 06:801 and 06:1305.
-
-### A2-181: 06 updateSupportCase names the resolution field resolution_note; 04a, 01 and 02 call it resolution_summary
-
-- **Where:** §13.6 Admin, updateSupportCase row (vs 04a §14.1 resolution_summary) (lines at `b81e3f1`: 852 (06); 2727 (04a))
-- **Category:** cross-doc
-- **Text:** 06: `updateSupportCase` input "`status?`, `assignee_user_id?`, `resolution_note?`"
-- **Problem:** The written decision the customer sees is `resolution_summary` in 04a §14.1, 01 AC-FR-ADM-009-3 and 02 J-19 step 6. AC-J19-04 expects `VALIDATION_FAILED` for 'resolved without resolution_summary', naming the field the API should report. 06 calls the input `resolution_note`, so the field error and the stored column disagree, and a test written from 02 checks a field the API does not have.
-- **Suggested fix:** Rename the 06 input to `resolution_summary` (1–5,000 characters, required when `status` becomes `resolved` or `closed`, per `support_cases_resolution_check`), and use the same name in openapi when these operations are specified.
+No open entries: the cross-document check of 2026-10-01 resolved the last two.
 
 ## Deployment and Operations
 

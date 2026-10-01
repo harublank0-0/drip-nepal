@@ -89,6 +89,8 @@ flowchart TD
 - _A seller endpoint registered outside the `seller_context` group._ Mitigation: T-SEC-001 is generated from the route list, so every `/api/v1/seller` route is exercised with another shop's credentials.
 - _Status-gate gaps_ (a suspended shop still publishing). Mitigation: a table-driven gate function with unit tests per status × permission.
 
+  Edited 2026-10-01 (cross-doc check decision): the gate is keyed by operation, not by permission, because a permission alone cannot express the exceptions of [07 §4.8](../07-security-threat-model-and-permissions.md#48-how-policies-are-implemented); its tests cover every shop status and suspension mode × `operationId` (T-SEC-031, proposed). The rest of the risk is unchanged.
+
 ## When to revisit
 
 - More than 3 shops a month ask for custom roles, or any shop has more than 10 staff: plan FR-SHOP-011 in a superseding ADR.
@@ -100,7 +102,7 @@ flowchart TD
 
 - **T-SEC-001**: Vendor A cannot read or modify Vendor B's products, orders, inventory, members or ledger; every seller endpoint returns 404.
 - **T-SEC-002**: a customer cannot read or cancel another customer's order (404).
-- **T-SEC-003**: `shop_id`, price and commission fields in bodies are ignored or rejected.
+- **T-SEC-003**: `shop_id`, price and commission fields in bodies are rejected with 422 `VALIDATION_FAILED` (`unknown_field`).
 - **T-SEC-010**: suspended users are rejected (403 `ACCOUNT_SUSPENDED` while the session exists, 401 `UNAUTHENTICATED` after revocation, [07 §3.3](../07-security-threat-model-and-permissions.md#33-the-per-request-account-check-and-the-suspension-decision)); shop status gates are covered per status and suspension mode by T-SEC-031 (proposed).
 - **Permission-map unit tests** (T-SEC-032, proposed; [10 §6.4](../10-testing-and-quality-gates.md#64-security-and-identity-t-sec-t-iam)): each role × action matches [07 §4.2](../07-security-threat-model-and-permissions.md#42-platform-roles-and-permissions) and [§4.3](../07-security-threat-model-and-permissions.md#43-shop-roles-and-permissions).
 - **Constraint tests**: a `product_variants` row pointing at another shop's product fails the composite FK (T-CAT-109, proposed); T-LED-101 (proposed) approves one's own refund without the single-operator flag and expects 23514.

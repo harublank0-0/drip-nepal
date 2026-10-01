@@ -88,7 +88,7 @@ Worked examples (a two-shop order, per-line commission, an R2 coupon split) are 
 
 ## Verification
 
-- **T-SEC-003**: client-supplied prices and totals are ignored or rejected, and the server recomputes them.
+- **T-SEC-003**: client-supplied prices and totals are rejected with 422 `VALIDATION_FAILED` (`unknown_field`), and the server computes them.
 - **T-SEC-004**: a refund above the refundable amount returns 422 `REFUND_EXCEEDS_REFUNDABLE`, and a direct SQL update that breaks `refunded_minor <= captured_minor` fails.
 - **T-ORD-106 (proposed)**: property test of `allocate`. Shares sum to the total, each share is within one paisa of its exact value, and the result does not depend on input order. **T-ORD-008 (proposed)** covers the cumulative rule.
 - **T-ARCH-013 (proposed)**: the int8 parser round-trips 2^53 − 1, throws on 2^53, and `sumMinor` returns a `number`; also the `parseRupeesToMinor` and eSewa rupee-conversion cases of [04 §18.4](../04-domain-model-and-data-dictionary.md#184-lucid-and-node-postgres-bigint-handling).

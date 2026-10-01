@@ -10,7 +10,7 @@ Reviewed: 2026-09-25 · consistency review 2026-09-30 to 2026-10-01
 - **Date:** 2026-09-25
 - **Deciders:** lead developer
 - **Supersedes / superseded by:** — / —
-- **Related open items:** `reservation_ttl_minutes` (30), the 10-minute buffer, the 90-minute cap and the 24-hour `needs_review` hold are [Assumption] values (A-09; [05 §5.3](../05-order-payment-and-inventory-lifecycles.md#53-creating-reservations) and [§5.4](../05-order-payment-and-inventory-lifecycles.md#54-expiration-job); the cap is OD-28). Provider expiry values are [Verify-external VX-06, VX-07]. Multi-location stock is R3 (FR-INV-006).
+- **Related open items:** `reservation_ttl_minutes` (30), the 10-minute buffer, the 90-minute cap and the 24-hour `needs_review` hold are [Assumption] values (A-09, and A-46 for the 24-hour hold; [05 §5.3](../05-order-payment-and-inventory-lifecycles.md#53-creating-reservations) and [§5.4](../05-order-payment-and-inventory-lifecycles.md#54-expiration-job); the cap is OD-28). Provider expiry values are [Verify-external VX-06, VX-07]. Multi-location stock is R3 (FR-INV-006).
 
 Edited 2026-09-30 (consistency review): decisions 4 and 6 follow [05 §5.4](../05-order-payment-and-inventory-lifecycles.md#54-expiration-job) and [§5.10](../05-order-payment-and-inventory-lifecycles.md#510-drift-detection-and-repair) (the lookup path, what the expiry job releases, orphan reservations); the decision is unchanged.
 

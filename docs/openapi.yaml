@@ -154,7 +154,7 @@ x-pending-operations:
   - addCartItem
   - updateCartItem
   - removeCartItem
-  - listMyOrders
+  - listMyOrders # x-release R1·M5 when specified (06 §13.4): the 08 §11.4 checkout recovery reads it
   - cancelMyShopOrder
   - startOrderPayment
   - applyForShop
@@ -270,6 +270,7 @@ x-pending-operations:
   - cancelLedgerAdjustment
   - cancelPayout
   - revealPayoutAccount
+  - revealUserContact # POST /api/v1/admin/users/{userId}/contact-reveal, R1·M1 (06 §13.8, note 41)
 
 paths:
   /api/v1/catalog/products:
@@ -555,15 +556,18 @@ paths:
         one are created with an `inventory_items` row at 0, and variants left out are archived
         (or deleted if never stocked or ordered, 04a §7.9), such as the default variant
         `createProduct` made, which is deleted with its zero `inventory_items` row (06 §14.2).
-        Validation: no duplicate combination, SKU unique per shop among active variants
-        (`product_variants_shop_sku_key` → 422 on `variants.N.sku`, code `unique`),
-        `compare_at_price_minor` > `price_minor`, at most 100 variants (`is_default` is not an
-        input: the server sets it true only for the single option-less variant,
-        `product_variants_default_signature_check`), `price_minor` 0–100,000,000 paisa (04a
-        §7.9); a product in `published` or `unpublished` keeps at least one active variant and
-        every active variant priced above zero (AC-FR-CAT-004-3). An `id` naming an
-        archived variant of this product re-activates it; at most two option axes, which may be
-        reordered in place (04a §7.8). Removing or replacing an axis once a variant of the product
+        Validation (422 `VALIDATION_FAILED`): no duplicate combination, SKU unique per shop among
+        active variants, `compare_at_price_minor` > `price_minor`, at most 100 variants
+        (`is_default` is not an input: the server sets it true only for the single option-less
+        variant, `product_variants_default_signature_check`), `price_minor` 0–100,000,000 paisa
+        (04a §7.9); a product in `published` or `unpublished` keeps at least one active variant
+        and every active variant priced above zero (AC-FR-CAT-004-3). The action's pre-check
+        answers a duplicate SKU on `variants.N.sku` and a duplicate combination on
+        `variants.N.option_value_codes`, code `unique`. `product_variants_shop_sku_key` and
+        `product_variants_product_signature_key` are only the backstop for a race: their 23505
+        carries no row index, so it answers field `variants`, code `unique` (06 §5.3, §14.2;
+        04 §3.5, §16.5; 09 §5.4). An `id` naming an archived variant of this product
+        re-activates it; at most two option axes, which may be reordered in place (04a §7.8). Removing or replacing an axis once a variant of the product
         has an inventory movement or an order line answers 409 `CONFLICT` (axis set frozen, 04a §7.8).
         Concurrency: ⟳ `If-Match` on `products.version`; bumps it and each changed variant's
         `version`. Missing, `*` or a list → 428; a stale version, a weak tag (`W/"2"` even when
@@ -859,10 +863,15 @@ paths:
         shipping fee, shop totals, `grand_total`, `cart_version` and `problems[]`, the line or
         shop problems (05 §4.1); the review screen shows it and `placeOrder` echoes
         `cart_version` and the grand total back. A shop that does not deliver to the address
-        district is a `problems[]` item with code `delivery_not_available` naming that shop, and
-        the shops that deliver are still priced (06 §13.4; cross-doc check decision,
-        2026-10-01; 02 AC-J05-08). `quoteCheckout` never answers 422 `DELIVERY_NOT_AVAILABLE`,
-        which only `placeOrder` returns (06 §5.2).
+        district, or has no rate for its zone (05 §3.3), is a `problems[]` item with code
+        `delivery_not_available` whose `field` is `shops.N`, the index of that shop's group in
+        `shops[]`, and whose `message` names the shop; the shops that deliver are still priced
+        (06 §13.4; cross-doc check decision, 2026-10-01; 02 AC-J05-08). That group stays in
+        `shops[]` with its lines and `items_subtotal`, and its `shipping_fee`, `total` and
+        `delivery_estimate_days` are `null`; `grand_total` sums the groups that deliver (06
+        §13.4, §14.4). `quoteCheckout` never answers 422 `DELIVERY_NOT_AVAILABLE`; only
+        `placeOrder` does, until the customer removes that shop's lines or changes the address
+        (06 §5.2, §14.4).
         Kill switch: with `checkout_enabled = false` the answer is 503 `PROVIDER_UNAVAILABLE`
         whose `detail` is the `maintenance_banner` text and no `Retry-After` (06 §5.2; the
         dedicated `CHECKOUT_DISABLED` is proposed).
@@ -923,6 +932,42 @@ paths:
                           delivery_estimate_days: { min: 3, max: 6 }
                       grand_total: { amount_minor: 634800, currency: NPR }
                       problems: []
+                shopNotDelivering:
+                  summary: 06 §14.4, the same cart if Pokhara Kicks did not deliver to Lalitpur (lines written out where 06 says "as above")
+                  value:
+                    data:
+                      cart_version: 14
+                      payment_methods: [{ method: cod, available: true }]
+                      shops:
+                        - shop: { slug: kathmandu-threads, name: Kathmandu Threads }
+                          lines:
+                            - cart_item_id: 01929a71-0000-7000-8000-000000000011
+                              title: Organic cotton crew tee
+                              variant_label: 'Size: M / Color: Black'
+                              quantity: 2
+                              unit_price: { amount_minor: 129900, currency: NPR }
+                              line_total: { amount_minor: 259800, currency: NPR }
+                          items_subtotal: { amount_minor: 259800, currency: NPR }
+                          shipping_fee: { amount_minor: 10000, currency: NPR }
+                          total: { amount_minor: 269800, currency: NPR }
+                          delivery_estimate_days: { min: 2, max: 4 }
+                        - shop: { slug: pokhara-kicks, name: Pokhara Kicks }
+                          lines:
+                            - cart_item_id: 01929a71-0000-7000-8000-000000000012
+                              title: Canvas sneaker
+                              variant_label: 'Size: 42'
+                              quantity: 1
+                              unit_price: { amount_minor: 350000, currency: NPR }
+                              line_total: { amount_minor: 350000, currency: NPR }
+                          items_subtotal: { amount_minor: 350000, currency: NPR }
+                          shipping_fee: null
+                          total: null
+                          delivery_estimate_days: null
+                      grand_total: { amount_minor: 269800, currency: NPR }
+                      problems:
+                        - field: shops.1
+                          code: delivery_not_available
+                          message: Pokhara Kicks does not deliver to Lalitpur.
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -1521,9 +1566,11 @@ paths:
         never sends a line amount (06 §13.6; cross-doc check decision, 2026-10-01).
         `amount_minor` is the refund total: the computed item amounts plus a shipping part,
         `amount_minor` − Σ item amounts, which must be at least 0 and at most the shipping not
-        yet refunded on the shop order (05 §3.3), else 422 `REFUND_EXCEEDS_REFUNDABLE`. A
-        goodwill amount that is not whole units plus shipping cannot be recorded yet [Open
-        OD-33]. `reason_code = return_accepted` requires `return_number` (and only then).
+        yet refunded on the shop order (05 §3.3). An `amount_minor` below Σ item amounts (a
+        negative shipping part) and a shipping part above that cap both answer 422
+        `REFUND_EXCEEDS_REFUNDABLE`, not `VALIDATION_FAILED` (06 §5.2, §13.6). A goodwill
+        amount that is not whole units plus shipping cannot be recorded yet [Open OD-33].
+        `reason_code = return_accepted` requires `return_number` (and only then).
         `recipient_details` is required for `manual_transfer` and stored encrypted; where they
         come from is [Open OD-38]. `note` is an optional internal note, stored in
         `refunds.note` and never shown to the customer (04a §12.4).
@@ -2268,9 +2315,9 @@ components:
         `below_reserved`, `stock_changed`; `payout_stale` on the `approvePayout` 409,
         `shop_frozen` on the `createPayout` and `approvePayout` 409 `CONFLICT` and
         `nothing_to_pay` on the `createPayout` 422, all proposed in 06 §5.2 and §13.6;
-        `delivery_not_available` as a `CheckoutQuote.problems` item, 06 §13.4). Allowed on
-        `VALIDATION_FAILED`, `INVALID_QUERY_PARAMETER`, `OUT_OF_STOCK`, `CART_CHANGED`,
-        `DELIVERY_NOT_AVAILABLE` and `CONFLICT` (06 §5.1, ADR-0018 decision 1).
+        `delivery_not_available` as a `CheckoutQuote.problems` item with `field` `shops.N`, 06
+        §13.4). Allowed on `VALIDATION_FAILED`, `INVALID_QUERY_PARAMETER`, `OUT_OF_STOCK`,
+        `CART_CHANGED`, `DELIVERY_NOT_AVAILABLE` and `CONFLICT` (06 §5.1, ADR-0018 decision 1).
         Optional code-specific members: `available`, `on_hand` and `reserved` (stock reasons),
         `cart_item_id` (the cart line of a checkout reason, 06 §14.4 example A), and on a
         `below_reserved` item `reserved_committed`, `committed_shop_orders` (proposed) and
@@ -2939,6 +2986,11 @@ components:
         line_total: { $ref: '#/components/schemas/Money' }
     QuoteShop:
       type: object
+      description: |
+        One shop's group of the quote (06 §13.4). The group of a shop that does not deliver to
+        the address district (a `delivery_not_available` problem whose `field` is `shops.N`)
+        stays in `shops[]` with its lines and `items_subtotal`, so the client can mark it, and
+        its `shipping_fee`, `total` and `delivery_estimate_days` are `null` (06 §13.4, §14.4).
       additionalProperties: false
       required: [shop, lines, items_subtotal, shipping_fee, total, delivery_estimate_days]
       properties:
@@ -2948,11 +3000,21 @@ components:
           minItems: 1
           items: { $ref: '#/components/schemas/QuoteLine' }
         items_subtotal: { $ref: '#/components/schemas/Money' }
-        shipping_fee: { $ref: '#/components/schemas/Money' }
-        total: { $ref: '#/components/schemas/Money' }
+        shipping_fee:
+          description: '`null` for a shop that does not deliver to the address district.'
+          oneOf:
+            - $ref: '#/components/schemas/Money'
+            - type: 'null'
+        total:
+          description: '`null` for a shop that does not deliver to the address district.'
+          oneOf:
+            - $ref: '#/components/schemas/Money'
+            - type: 'null'
         delivery_estimate_days:
-          type: object
-          description: The shop's promise at checkout, 0–30 days (snapshotted on the shop order).
+          type: [object, 'null']
+          description: |
+            The shop's promise at checkout, 0–30 days (snapshotted on the shop order); `null` for
+            a shop that does not deliver to the address district.
           additionalProperties: false
           required: [min, max]
           properties:
@@ -2977,15 +3039,22 @@ components:
           type: array
           maxItems: 50
           items: { $ref: '#/components/schemas/QuoteShop' }
-        grand_total: { $ref: '#/components/schemas/Money' }
+        grand_total:
+          $ref: '#/components/schemas/Money'
+          description: |
+            Sum of the groups that deliver: a group whose shop has a `delivery_not_available`
+            problem is not counted, so this is what the customer pays after removing that shop's
+            lines (06 §13.4, §14.4).
         problems:
           type: array
           description: |
-            Line or shop problems to fix before placing (05 §4.1); items reuse the `errors[]`
-            item shape [Assumption]. A shop that does not deliver to the address district is an
-            item with code `delivery_not_available` whose `message` names the shop [Assumption:
-            06 §13.4 does not say which member names it]; the shops that deliver are still
-            priced, and only `placeOrder` answers 422 `DELIVERY_NOT_AVAILABLE` (06 §13.4, §5.2).
+            Line or shop problems to fix before placing (05 §4.1); each item has the `errors[]`
+            item shape (`field`, `code`, `message`), as the 06 §14.4 example shows. A shop that
+            does not deliver to the address district is an item with code
+            `delivery_not_available` whose `field` is `shops.N`, the index of that shop's group in
+            `shops[]`, and whose `message` names the shop; the shops that deliver are still
+            priced, and only `placeOrder` answers 422 `DELIVERY_NOT_AVAILABLE` (06 §13.4, §14.4,
+            §5.2).
           items: { $ref: '#/components/schemas/ProblemErrorItem' }
     CheckoutQuoteResponse:
       type: object
@@ -3365,8 +3434,9 @@ components:
           description: |
             The refund total: the server-computed item amounts plus a shipping part
             (`amount_minor` − Σ item amounts), which must be at least 0 and at most the shipping
-            not yet refunded on the shop order (05 §3.3), else 422 `REFUND_EXCEEDS_REFUNDABLE`
-            (06 §13.6).
+            not yet refunded on the shop order (05 §3.3). A total below Σ item amounts (a
+            negative shipping part) or a shipping part above the cap is 422
+            `REFUND_EXCEEDS_REFUNDABLE`, not `VALIDATION_FAILED` (06 §5.2, §13.6).
         reason_code: { $ref: '#/components/schemas/RefundReasonCode' }
         items:
           type: array
@@ -3488,7 +3558,8 @@ components:
 #  9. Operation `resolveRefundReview` (x-proposed; 06 §13.8/§14.8) and the `shipped → shipped`
 #     tracking-correction variant of `recordFulfillmentEvent` (05 §6.3, 06 §13.8). The other
 #     proposed operations of 06 §13.8 are in `x-pending-operations` (twenty-one since the
-#     consistency review added eight, note 38).
+#     consistency review added eight, note 38; twenty-two since the cross-doc check added
+#     `revealUserContact`, note 41).
 # 10. Permission `platform.payments.review` (proposed, 07 §4.2 and §4.5); `resolveRefundReview`
 #     declares `platform.ledger.adjust` until the product owner approves the new slug.
 # 11. Limiters `mfa`, `payment_return`, `webhook_ip` and the 64 KB webhook body limit (proposed,
@@ -3543,7 +3614,15 @@ components:
 #     Also open: 06 §13.4 and 05 §4.1 do not say what `shops[]` holds for that shop.
 #     `QuoteShop` requires `shipping_fee`, `total` and `delivery_estimate_days`, which an
 #     uncovered shop has no value for, so the group is either left out of `shops[]` or carries
-#     null amounts, and `grand_total` either counts its items or not.
+#     null amounts, and `grand_total` either counts its items or not. Done in the consistency
+#     review, 2026-09-30, for both open parts and for `CheckoutQuote.problems[]`: in the
+#     cross-doc check, stage B follow-up (2026-10-01), 06 §13.4 and §14.4 give the problem
+#     `field` `shops.N` (the index of that shop's group) and a `message` that names the shop,
+#     keep the group in `shops[]` with its lines, `items_subtotal` and `null` `shipping_fee`,
+#     `total` and `delivery_estimate_days`, and count only the groups that deliver in
+#     `grand_total`; the 06 §14.4 example shows the `{field, code, message}` item. `QuoteShop`,
+#     `CheckoutQuote` and the `quoteCheckout` description and `shopNotDelivering` example
+#     follow, with no [Assumption] left. Still open: the COD "amount due per parcel" of 05 §4.1.
 # 20. `createRefund.reason_code` accepts the full 04a enum, including the system reasons
 #     `late_capture` and `stock_unavailable_after_payment`; 07 or 05 may restrict staff input.
 #
@@ -3617,7 +3696,8 @@ components:
 #     requires `items`). Re-run after the changes of note 39 (same CLI and rules): 0 errors and the
 #     same 10 warnings; every request and response example validates against its schema. Re-run
 #     after the cross-doc check (2026-10-01; same CLI and rules): 0 errors and the same 10
-#     warnings.
+#     warnings. Re-run after the stage B follow-up of note 41 (same CLI and rules): 0 errors and
+#     the same 10 warnings; the new `shopNotDelivering` example validates against `QuoteShop`.
 #
 # Added in the consistency review (2026-09-30):
 # 33. `SERVICE_BUSY` (503, proposed with the catalog-read cap of 07 TM-24; 06 §5.2, §5.3, note 29)
@@ -3678,7 +3758,8 @@ components:
 #     product the storefront does not show; the R1.1 `cancelMyShopOrder` 409 `CONFLICT` for an
 #     `awaiting_payment` order whose `pending` attempt's lookup is inconclusive, and the
 #     cancellation of every shop order of such an order; `resubmitShopApplication` only from
-#     `rejected`; `openSupportCase` with no `subject` input (the server derives it);
+#     `rejected` (otherwise 409 `INVALID_STATE_TRANSITION`, a `pending_review` shop included);
+#     `openSupportCase` with no `subject` input (the server derives it);
 #     `createAddress` answering 422 from the validator before the insert (a location-chain
 #     23503 stays a backstop 500); the `replaceProductMedia` 409 `INVALID_STATE_TRANSITION` for
 #     a product in `pending_review`, `archived` or `blocked`, as `replaceProductVariants`;
@@ -3688,17 +3769,25 @@ components:
 #     `resolved` or `closed`, else 422);
 #     `resolution_note` (1–2,000 characters) on `rejectReturnRequest` and
 #     `rejectReturnAfterInspection`; `closeReturnRequest` with no line amounts
-#     (`refund.amount_minor` is the total, as on `createRefund`); the `setPlatformStaffRole` 409
-#     `CONFLICT` for the last active admin; `retryRefund` sending `refunds.execute` with the new
-#     `attempts` value; the `createPayout` and `approvePayout` 409 `CONFLICT` `shop_frozen`
-#     (proposed); the `adminRecordCodCollection` audit actions of 05 §6.5; and no `Location` on
-#     the 201s of `createPayout`, `createReturnRequest`, `createLedgerAdjustment`,
-#     `recordVendorRemittance` and `inviteMember`, which no read operation serves (06 §3.7).
+#     (`refund.amount_minor` is the total, as on `createRefund`, and a total below the
+#     server-computed item amounts is 422 `REFUND_EXCEEDS_REFUNDABLE`, not `VALIDATION_FAILED`);
+#     the `setPlatformStaffRole` 409 `CONFLICT` for the last active admin; `retryRefund`
+#     sending `refunds.execute` with the new `attempts` value; the `createPayout` and
+#     `approvePayout` 409 `CONFLICT` `shop_frozen` (proposed); the `adminRecordCodCollection`
+#     audit actions of 05 §6.5; and no `Location` on the 201s of `createPayout`,
+#     `createReturnRequest`, `createLedgerAdjustment`, `recordVendorRemittance` and `inviteMember`, which no read operation serves (06 §3.7).
+#     Added in the cross-doc check, stage B follow-up (2026-10-01), from the 06 rows it changed
+#     (06 note 38): `listMyOrders` at R1·M5, because the checkout recovery of 08 §11.4 reads it
+#     (its pending entry says so; it has no `x-release` until its path is specified); the
+#     `inviteMember` 409 `CONFLICT` also for the owner's own email; the `closeReturnRequest`
+#     total rule above; and `revealUserContact` (proposed, note 41).
 # 38. `x-pending-operations` adds the eight 06 §13.8 operations proposed in the consistency review:
 #     `acceptSellerAgreement`, `viewKycDocument`, `revealPayoutAccountForVerification`,
 #     `revealRefundRecipient`, `approveLedgerAdjustment`, `cancelLedgerAdjustment`, `cancelPayout`
 #     and `revealPayoutAccount`. The user contact reveal of 07 §5.5 (06 note 35) joins the list
-#     once 06 §13.8 names it.
+#     once 06 §13.8 names it. Done in the consistency review, 2026-09-30: in the cross-doc check,
+#     stage B follow-up (2026-10-01), 06 §13.8 has the proposed `revealUserContact` row, and
+#     `x-pending-operations` lists it (note 41).
 # 39. Leftover follow-ups and the decisions of 2026-10-01, consistency review (2026-09-30). Applied
 #     here, following 06: the strong `ETag` and the pattern-free `IfMatch` (note 22); the
 #     `below_reserved` members `reserved_committed`, `committed_shop_orders` (proposed) and
@@ -3744,3 +3833,25 @@ components:
 #     use the 04a CHECK lists and bounds (`shipments_attempt_count_check`, the
 #     `shipment_events` reason and note checks, the refund, payment and movement enums); the
 #     one gap, `refunds.note`, is the new `note` input.
+#
+# Added in the cross-doc check, stage B follow-up (2026-10-01), consistency review:
+# 41. Applied here, following the 06 pass of the same run (06 note 38). `x-pending-operations`
+#     adds `revealUserContact` (proposed, 06 §13.8):
+#     `POST /api/v1/admin/users/{userId}/contact-reveal`, `allOf` of `platform.users.view` and
+#     `platform.support_cases.manage` (07 §4.5), the user's phone and address-book entries with
+#     `Cache-Control: no-store`, no `Idempotency-Key` (06 §7.7), no step-up (07 §3.10 lists
+#     none), audit `user.contact_reveal` (proposed), R1·M1.
+#     The `listMyOrders` entry notes its R1·M5 release (06 §13.4). `quoteCheckout`, `QuoteShop`
+#     and `CheckoutQuote` give a shop that does not deliver the problem `field` `shops.N`, keep
+#     its group with `null` `shipping_fee`, `total` and `delivery_estimate_days`, and count only
+#     the groups that deliver in `grand_total`, with the 06 §14.4 example as `shopNotDelivering`
+#     (note 19). The `replaceProductVariants` description says that the action's pre-check
+#     answers `variants.N.sku` or `variants.N.option_value_codes` (code `unique`) and that the
+#     two `product_variants_*` keys are only the backstop, answering field `variants` (06 §5.3,
+#     §14.2; 04 §16.5). `createRefund` and `CreateRefundRequest.amount_minor` say that a total
+#     below the server-computed item amounts is 422 `REFUND_EXCEEDS_REFUNDABLE`, not
+#     `VALIDATION_FAILED` (06 §5.2, §13.6; 05 §3.3). The pending `inviteMember` and
+#     `closeReturnRequest` changes are in note 37. Checked as already done in the stage B pass:
+#     the `Location` description (06 §3.7, §7.5) and no `Location` on the `createRefund` 201,
+#     the `Retry-After` text, `ListingCard.brand`, `RefundItemInput`, the `createProduct` 201,
+#     the `replaceProductVariants` status gate, `getMyOrder` at R1·M5 and `shop_frozen`.

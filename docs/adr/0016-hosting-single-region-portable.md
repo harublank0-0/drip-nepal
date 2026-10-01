@@ -77,7 +77,7 @@ Prices are as published on 2026-09-25 (VX-15 register and [research: infra-ops](
 
 - _R-08, forced migration._ Mitigation: portability rules plus a T-OPS-001 restore on a second provider before launch.
 - _Gateways or SMS require IP allow-listing (VX-14)._ The Droplet has a static IP.
-- _Card payment of USD invoices fails_ (VX-15). Mitigation: confirm before M7.
+- _Card payment of USD invoices fails_ (VX-15). Mitigation: confirm before the staging server (M5 at the latest; [risks §5](../risks-and-open-decisions.md#5-decisions-that-block-implementation-by-milestone), [11 §1.8](../11-deployment-and-operations.md#18-paying-for-it-from-nepal-r-32-vx-15)).
 
 ## When to revisit
 

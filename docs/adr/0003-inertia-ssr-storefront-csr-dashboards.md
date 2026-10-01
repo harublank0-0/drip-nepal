@@ -81,7 +81,7 @@ DripNepal has three UI surfaces: the **public storefront** (SEO, fast first pain
 
 - **T-ARCH-002** (proposed; production-build SSR smoke, [03 §6.1](../03-system-architecture.md#61-surfaces-and-rendering-modes)): `node ace build`, boot the built server against CI Postgres, request `/`, a category page and `/p/{slug}-{publicId}`; assert 200 and server markup with the product title and canonical `<link>`; request a `/seller/…` page and assert an empty root element.
 - **T-A11Y-001**: axe checks on SSR storefront and CSR dashboard pages.
-- **T-PERF-001**: k6 load on listing and product pages; Lighthouse CI for NFR-PERF-001 and the bundle-size gate for NFR-PERF-002 ([10](../10-testing-and-quality-gates.md)).
+- **T-PERF-001**: k6 load on listing and product pages. **T-PERF-003** (proposed): Lighthouse, report only, for NFR-PERF-001. **T-UI-012** (proposed): the bundle-size gate for NFR-PERF-002 ([10 §6.9](../10-testing-and-quality-gates.md#69-ui-accessibility-and-performance-t-ui-t-a11y-t-perf)).
 - **Browser suite** (proposed): no React hydration warnings on home, listing, product, cart and checkout.
 
 ## Related
