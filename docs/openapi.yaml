@@ -391,8 +391,8 @@ paths:
                         image:
                           alt: Black crew tee, front
                           srcset_keys:
-                            '320': p/7K3M9QXA/1-320.webp
-                            '640': p/7K3M9QXA/1-640.webp
+                            '320': p/01929a55-3b6c-7d8e-9f01-2a3b4c5d6e7f/9f2c4e1a-320.webp
+                            '640': p/01929a55-3b6c-7d8e-9f01-2a3b4c5d6e7f/9f2c4e1a-640.webp
                         published_at: '2026-10-01T04:10:00.000Z'
                     meta:
                       { page: 2, per_page: 24, total: 25, total_is_capped: false, has_more: false }
@@ -453,8 +453,16 @@ paths:
         them is 422 `VALIDATION_FAILED` with `errors[].code = "unknown_field"` (06 §3.5, T-SEC-003).
         `category_id` must be an active leaf category; the s6 disclosure fields may be null
         on a draft and are required at submit (04a §7.6, FR-CAT-012).
-        Side effects: product row `draft`, `version` 1, audit. Idempotency: ⚷, 24 h.
-        Body limit 512 KB (06 §9.2). Returns 201 with `Location` and `ETag: "1"`. Release R1·M3.
+        Side effects, in one transaction (04 §3.4, 04a §7.6): product row `draft`, `version` 1,
+        and its default variant (`is_default` true, `option_signature` `''`, `price_minor` 0,
+        SKU `DN-<public_id>`, shown with the label `Default`, 04a §7.9) with its
+        `inventory_items` row at 0; `catalog.refresh_listing` (09 §12.2 decision 3); audit
+        (06 §13.5). The 201 shows that variant, and `missing_for_submit` lists `variants` (the
+        only active variant has `price_minor = 0`), `media` (no `ready` image) and the
+        disclosures still missing, here `warranty_text`, which the request sent as `null`
+        (06 §14.2). Idempotency: ⚷, 24 h. Body limit 512 KB (06 §9.2). Returns 201 with
+        `Location` (the product, which `getShopProduct` reads, 06 §3.7) and `ETag: "1"`.
+        Release R1·M3.
       x-release: R1·M3
       x-permission: shop.products.edit
       x-idempotency: { required: true, retention_hours: 24 }
@@ -508,9 +516,15 @@ paths:
                       title: Organic cotton crew tee
                       category:
                         { id: 01928f00-1111-7000-8000-00000000a001, path: /clothing/tops/t-shirts/ }
-                      variants: []
+                      variants:
+                        - id: 01929a50-2c3d-7e4f-8a90-1b2c3d4e5f61
+                          sku: DN-7K3M9QXA
+                          label: Default
+                          price: { amount_minor: 0, currency: NPR }
+                          is_default: true
+                          on_hand: 0
                       media: []
-                      missing_for_submit: [variants, media]
+                      missing_for_submit: [variants, media, warranty_text]
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -534,15 +548,20 @@ paths:
         looked up inside the shop; another shop's product is 404 (T-SEC-001). A `variants[].id`
         that names no variant of this product, such as another shop's variant, is 404
         `NOT_FOUND` (T-SEC-001 case (c), as `replaceProductMedia` answers).
+        Status gate: a product in `pending_review`, `archived` or `blocked` is 409
+        `INVALID_STATE_TRANSITION`, as `updateProduct` answers (06 §13.5; cross-doc check
+        decision, 2026-10-01).
         Whole-set replacement (PUT): variants carrying an `id` are updated, variants without
         one are created with an `inventory_items` row at 0, and variants left out are archived
-        (or deleted if never stocked, 04a §7.9). Validation: no duplicate combination, SKU
-        unique per shop among active variants (`product_variants_shop_sku_key` → 422 on
-        `variants.N.sku`, code `unique`), `compare_at_price_minor` > `price_minor`, at most 100 variants
-        (`is_default` is not an input: the server sets it true only for the single option-less
-        variant, `product_variants_default_signature_check`), `price_minor` 0–100,000,000 paisa (04a §7.9);
-        a product in `pending_review`, `published` or `unpublished` keeps at least one active
-        variant and every active variant priced above zero (AC-FR-CAT-004-3). An `id` naming an
+        (or deleted if never stocked or ordered, 04a §7.9), such as the default variant
+        `createProduct` made, which is deleted with its zero `inventory_items` row (06 §14.2).
+        Validation: no duplicate combination, SKU unique per shop among active variants
+        (`product_variants_shop_sku_key` → 422 on `variants.N.sku`, code `unique`),
+        `compare_at_price_minor` > `price_minor`, at most 100 variants (`is_default` is not an
+        input: the server sets it true only for the single option-less variant,
+        `product_variants_default_signature_check`), `price_minor` 0–100,000,000 paisa (04a
+        §7.9); a product in `published` or `unpublished` keeps at least one active variant and
+        every active variant priced above zero (AC-FR-CAT-004-3). An `id` naming an
         archived variant of this product re-activates it; at most two option axes, which may be
         reordered in place (04a §7.8). Removing or replacing an axis once a variant of the product
         has an inventory movement or an order line answers 409 `CONFLICT` (axis set frozen, 04a §7.8).
@@ -614,7 +633,7 @@ paths:
                           is_default: false
                           on_hand: 0
                       media: []
-                      missing_for_submit: [media]
+                      missing_for_submit: [media, warranty_text]
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -837,10 +856,13 @@ paths:
         address; another customer's or an archived `address_id` is 404 (T-SEC-006; 06 §4.5,
         07 §4.6).
         Read-only: takes no locks and writes nothing (05 §4.1). Returns per-shop lines,
-        shipping fee, shop totals, `grand_total`, `cart_version` and any line or shop
-        problems; the review screen shows it and `placeOrder` echoes `cart_version` and the
-        grand total back. A shop that does not deliver to the address district is 422
-        `DELIVERY_NOT_AVAILABLE`.
+        shipping fee, shop totals, `grand_total`, `cart_version` and `problems[]`, the line or
+        shop problems (05 §4.1); the review screen shows it and `placeOrder` echoes
+        `cart_version` and the grand total back. A shop that does not deliver to the address
+        district is a `problems[]` item with code `delivery_not_available` naming that shop, and
+        the shops that deliver are still priced (06 §13.4; cross-doc check decision,
+        2026-10-01; 02 AC-J05-08). `quoteCheckout` never answers 422 `DELIVERY_NOT_AVAILABLE`,
+        which only `placeOrder` returns (06 §5.2).
         Kill switch: with `checkout_enabled = false` the answer is 503 `PROVIDER_UNAVAILABLE`
         whose `detail` is the `maintenance_banner` text and no `Retry-After` (06 §5.2; the
         dedicated `CHECKOUT_DISABLED` is proposed).
@@ -934,7 +956,8 @@ paths:
         (AC-FR-CHK-003-1). A business failure stores nothing, so a retry re-executes. A replay
         returns the byte-identical 201 with `Idempotency-Replayed: true` (T-CHK-004); for a
         gateway order the stored body never contains a payment redirect (05 §4.6).
-        Kill switch: 503 `PROVIDER_UNAVAILABLE` with the `maintenance_banner` text (06 §5.2).
+        Kill switch: 503 `PROVIDER_UNAVAILABLE` with the `maintenance_banner` text and no
+        `Retry-After` (06 §5.2).
         Rate limit `place_order` 10/min per user; a replay still consumes a point [Assumption].
         Release R1·M5 (COD); gateway methods R1.1·M8.
       x-release: R1·M5
@@ -959,9 +982,9 @@ paths:
       responses:
         '201':
           description: |
-            Order placed. `Location` is the customer order resource. A replay (same key, same
-            body; example C of 06 §14.4) returns this status and body byte-identical, with
-            `Idempotency-Replayed: true`.
+            Order placed. `Location` is the customer order, which `getMyOrder` reads (06 §3.7).
+            A replay (same key, same body; example C of 06 §14.4) returns this status and body
+            byte-identical, with `Idempotency-Replayed: true`.
           headers:
             X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
             Cache-Control: { $ref: '#/components/headers/Cache-Control' }
@@ -1102,8 +1125,9 @@ paths:
         the same 404 body as a nonexistent one (T-SEC-002).
         The address is the snapshot taken at placement and the recipient phone is masked even
         for its owner. The payload never contains `customer_user_id`, commission, internal
-        notes, `shop_id` or provider references. Side effects: none. Release R1·M6.
-      x-release: R1·M6
+        notes, `shop_id` or provider references. Side effects: none. Release R1·M5, because
+        the order-complete page `/checkout/complete/{orderNumber}` reads it (06 §13.4, 02 J-05).
+      x-release: R1·M5
       security:
         - cookieAuth: []
       parameters:
@@ -1204,9 +1228,11 @@ paths:
         `tracking_url` are optional, 01 AC-FR-FUL-001-1 and 05 §6.3; `tracking_url` https only),
         `delivered` (sets `delivered_at` and the stored `return_window_ends_at`; ledger
         delivery posting only if the payment is already collected or captured),
-        `delivery_failed` (needs `failure_reason`), `reattempt` (at most 3 attempts; a 4th is
-        409 `INVALID_STATE_TRANSITION`), `returning`, `returned_to_origin` (needs `items[]`
-        covering every line consumed at shipment, each `restock_quantity` from 0 to the units of
+        `delivery_failed` (needs `failure_reason`), `reattempt` (at most 3 delivery attempts: a
+        `reattempt` when `attempt_count` is already 3, which would be a 4th delivery attempt,
+        is 409 `INVALID_STATE_TRANSITION`; 05 §6.3, `shipments_attempt_count_check` in 04a
+        §11.5), `returning`, `returned_to_origin` (needs `items[]` covering every line consumed
+        at shipment, each `restock_quantity` from 0 to the units of
         that line consumed, and a `note` of at most 500 characters when any unit is not
         restocked, else 422 `VALIDATION_FAILED`, 05 §5.8; `rto_restock` movements of the units
         marked resaleable, shop order `cancelled` with `undeliverable`). An `items[].order_item_id`
@@ -1293,8 +1319,9 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409':
           description: |
-            `INVALID_STATE_TRANSITION` (including a 4th reattempt, and `delivery_failed`, `returning`
-            or `returned_to_origin` while the COD payment is `collected`) or an idempotency conflict.
+            `INVALID_STATE_TRANSITION` (including a `reattempt` when `attempt_count` is already 3,
+            a 4th delivery attempt, and `delivery_failed`, `returning` or `returned_to_origin`
+            while the COD payment is `collected`) or an idempotency conflict.
           headers:
             X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
             Cache-Control: { $ref: '#/components/headers/Cache-Control' }
@@ -1488,11 +1515,18 @@ paths:
         Rules (05 §6.7): the refundable amount is checked with the allocation and payment rows
         locked; above it → 422 `REFUND_EXCEEDS_REFUNDABLE` with `refundable_minor`, and the
         `payments_refunded_le_captured_check` CHECK is the backstop (T-SEC-004).
-        `amount_minor` = Σ `items[].amount_minor` + a shipping part of at most the shipping not
-        yet refunded on the shop order (05 §3.3); a larger shipping part is also 422
-        `REFUND_EXCEEDS_REFUNDABLE`. `reason_code = return_accepted` requires `return_number`
-        (and only then). `recipient_details` is required for `manual_transfer` and stored
-        encrypted; where they come from is [Open OD-38].
+        Lines and quantities only: `items[]` names `order_item_id` and `quantity`, and the
+        server computes each line's amount `A(k + r) − A(k)` and its vendor and commission
+        parts in this transaction and stores them on `refund_items` (05 §3.2, §7.4); a client
+        never sends a line amount (06 §13.6; cross-doc check decision, 2026-10-01).
+        `amount_minor` is the refund total: the computed item amounts plus a shipping part,
+        `amount_minor` − Σ item amounts, which must be at least 0 and at most the shipping not
+        yet refunded on the shop order (05 §3.3), else 422 `REFUND_EXCEEDS_REFUNDABLE`. A
+        goodwill amount that is not whole units plus shipping cannot be recorded yet [Open
+        OD-33]. `reason_code = return_accepted` requires `return_number` (and only then).
+        `recipient_details` is required for `manual_transfer` and stored encrypted; where they
+        come from is [Open OD-38]. `note` is an optional internal note, stored in
+        `refunds.note` and never shown to the customer (04a §12.4).
         Methods: `manual_transfer` in R1; `gateway_api` (Khalti) and `gateway_manual` (eSewa)
         from R1.1. `due_at` is the return's `refund_due_at` or `created_at` + 7 days
         (AC-FR-RET-007-1) [Assumption pending Verify-external VX-02]; a refund that names a
@@ -1500,8 +1534,8 @@ paths:
         `refund_items` and `affects_vendor_ledger`. `affects_vendor_ledger` (proposed) is fixed
         in this transaction and never changes (05 §7.4, 04a §12.4).
         A shop order or return whose state allows no refund is 409 `INVALID_STATE_TRANSITION`
-        (06 §13.6). Side effects: refund `requested`, refund items with their vendor and
-        commission amounts, audit. Idempotency: ⚷, 24 h. Release R1·M7.
+        (06 §13.6). Side effects: refund `requested`, refund items with their computed amounts
+        and vendor and commission parts, audit. Idempotency: ⚷, 24 h. Release R1·M7.
       x-release: R1·M7
       x-permission: platform.refunds.create
       x-idempotency: { required: true, retention_hours: 24 }
@@ -1522,19 +1556,16 @@ paths:
                   reason_code: return_accepted
                   method: gateway_api
                   items:
-                    - {
-                        order_item_id: 01929b10-0000-7000-8000-0000000000d1,
-                        quantity: 1,
-                        amount_minor: 139900,
-                      }
+                    - { order_item_id: 01929b10-0000-7000-8000-0000000000d1, quantity: 1 }
                   return_number: RT-3H8K2MZ
       responses:
         '201':
-          description: Refund created in `requested`; `Location` is the refund resource.
+          description: |
+            Refund created in `requested`. No `Location`: no read operation serves a single
+            refund (06 §3.7); the refund appears in `adminGetOrder` (06 §14.8).
           headers:
             X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
             Cache-Control: { $ref: '#/components/headers/Cache-Control' }
-            Location: { $ref: '#/components/headers/Location' }
             Idempotency-Replayed: { $ref: '#/components/headers/Idempotency-Replayed' }
           content:
             application/json:
@@ -1615,8 +1646,8 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/ApproveRefundRequest' }
             examples:
-              secondOfficer:
-                summary: 06 §14.8, a second finance officer approves
+              financeOfficer:
+                summary: 06 §14.8, a finance officer approves (support or the admin created the refund)
                 value: {}
       responses:
         '200':
@@ -1893,7 +1924,11 @@ components:
         2 s read limit cancelled). The checkout kill switch sends no `Retry-After` (06 §5.2).
       schema: { type: integer, minimum: 0 }
     Location:
-      description: Path of the created resource (06 §3.7); rebuilt from the stored resource on an idempotent replay.
+      description: |
+        Path of the created resource, sent only when a read operation serves it (06 §3.7:
+        `createProduct` → `getShopProduct`, `placeOrder` → `getMyOrder`, `openSupportCase` →
+        `getMySupportCase`); on an idempotent replay it is rebuilt from the stored resource only
+        when the first response sent one (06 §7.5).
       schema: { type: string, format: uri-reference }
     ETag:
       description: Strong tag of the resource version, `"<version>"` with no `W/` prefix (06 §8); send it back as `If-Match`. Not sent on an idempotent replay (06 §7.5).
@@ -2006,7 +2041,7 @@ components:
                       is_default: false
                       on_hand: 0
                   media: []
-                  missing_for_submit: [media]
+                  missing_for_submit: [media, warranty_text]
     PayloadTooLarge:
       description: '413 `PAYLOAD_TOO_LARGE`: body over the route limit (256 KB default, 512 KB catalog writes, 64 KB webhook; 06 §9.2).'
       headers:
@@ -2229,10 +2264,13 @@ components:
         One reason (06 §5.1). `field` is a dotted path (`variants.2.sku`, `lines.0`) or `null`
         for a non-field reason (also the one item of a SQLSTATE 22001, 06 §5.3).
         `code` is a rule name (`required`, `regex`, `enum`, `unique`, `unknown_field`) or a
-        business reason (`insufficient_stock`, `below_reserved`, `stock_changed`; `payout_stale`
-        on the `approvePayout` 409 and `nothing_to_pay` on the `createPayout` 422, both proposed
-        in 06 §13.6). Allowed on `VALIDATION_FAILED`, `INVALID_QUERY_PARAMETER`, `OUT_OF_STOCK`,
-        `CART_CHANGED`, `DELIVERY_NOT_AVAILABLE` and `CONFLICT` (06 §5.1, ADR-0018 decision 1).
+        business reason (`insufficient_stock`, also on the `addCartItem` 409 `OUT_OF_STOCK`;
+        `below_reserved`, `stock_changed`; `payout_stale` on the `approvePayout` 409,
+        `shop_frozen` on the `createPayout` and `approvePayout` 409 `CONFLICT` and
+        `nothing_to_pay` on the `createPayout` 422, all proposed in 06 §5.2 and §13.6;
+        `delivery_not_available` as a `CheckoutQuote.problems` item, 06 §13.4). Allowed on
+        `VALIDATION_FAILED`, `INVALID_QUERY_PARAMETER`, `OUT_OF_STOCK`, `CART_CHANGED`,
+        `DELIVERY_NOT_AVAILABLE` and `CONFLICT` (06 §5.1, ADR-0018 decision 1).
         Optional code-specific members: `available`, `on_hand` and `reserved` (stock reasons),
         `cart_item_id` (the cart line of a checkout reason, 06 §14.4 example A), and on a
         `below_reserved` item `reserved_committed`, `committed_shop_orders` (proposed) and
@@ -2308,7 +2346,10 @@ components:
         retry_after_seconds:
           type: integer
           minimum: 0
-          description: Mirrors `Retry-After` (429, 503, `IDEMPOTENCY_IN_PROGRESS`).
+          description: |
+            Mirrors `Retry-After` (429, 409 `IDEMPOTENCY_IN_PROGRESS`, a transient 409
+            `CONFLICT`, 503 `SERVICE_BUSY` and a provider-outage 503 `PROVIDER_UNAVAILABLE`;
+            never on the kill-switch 503, 06 §5.2).
         shop_status:
           $ref: '#/components/schemas/ShopStatus'
           description: '`SHOP_NOT_ACTIVE` only.'
@@ -2578,7 +2619,11 @@ components:
     # ---------- listProducts ----------
     ListingCard:
       type: object
-      description: One storefront card from `product_listings` (04a §7.12).
+      description: |
+        One storefront card from `product_listings` (04a §7.12). Every field comes from a column
+        of that table, the image alt text and the brand slug from the derived `primary_image_alt`
+        and `brand_slug` columns, so the read needs no join (06 §13.2; cross-doc check decision,
+        2026-10-01).
       additionalProperties: false
       required:
         [
@@ -2600,7 +2645,7 @@ components:
         title: { type: string, minLength: 3, maxLength: 120 }
         shop: { $ref: '#/components/schemas/ShopSummary' }
         brand:
-          description: '`null` for own label. The object shape `{slug, name}` is an [Assumption]; 06 §14.1 only shows `null`.'
+          description: '`{slug, name}` from `product_listings.brand_slug` and `brand_name`, or `null` for own label (06 §13.2, 04a §7.12).'
           oneOf:
             - type: object
               additionalProperties: false
@@ -2617,7 +2662,11 @@ components:
             - type: 'null'
         in_stock: { type: boolean }
         image:
-          description: The listing image; storage keys per width (ADR-0013). Listings always have a ready image.
+          description: |
+            The listing image (ADR-0013); listings always have a ready image. `alt` is
+            `product_listings.primary_image_alt` (the position-1 image's `alt_text` or its
+            fallback, 04a §7.12). `srcset_keys` maps each width to its content-addressed storage
+            key `p/<media_asset_id>/<sha256-prefix>-<width>.webp` (03 §3.5, 06 §14.1).
           type: object
           additionalProperties: false
           required: [alt, srcset_keys]
@@ -2804,7 +2853,12 @@ components:
           items: { $ref: '#/components/schemas/ProductMediaItem' }
         missing_for_submit:
           type: array
-          description: What still blocks `submitProductForReview` (for example `variants`, `media`, a disclosure field).
+          description: |
+            What still blocks `submitProductForReview`, in this order: `variants` while the
+            product has no active variant or an active variant with `price_minor = 0` (such as
+            the default variant `createProduct` makes), `media` while no image is `ready`, then
+            each required disclosure field still `null`, such as `warranty_text` (06 §14.2; the
+            `missingForSubmit` check of 09 §12.9).
           items: { type: string }
     SellerProductResponse:
       type: object
@@ -2926,7 +2980,12 @@ components:
         grand_total: { $ref: '#/components/schemas/Money' }
         problems:
           type: array
-          description: Line or shop problems to fix before placing (05 §4.1); items reuse the `errors[]` item shape [Assumption].
+          description: |
+            Line or shop problems to fix before placing (05 §4.1); items reuse the `errors[]`
+            item shape [Assumption]. A shop that does not deliver to the address district is an
+            item with code `delivery_not_available` whose `message` names the shop [Assumption:
+            06 §13.4 does not say which member names it]; the shops that deliver are still
+            priced, and only `placeOrder` answers 422 `DELIVERY_NOT_AVAILABLE` (06 §13.4, §5.2).
           items: { $ref: '#/components/schemas/ProblemErrorItem' }
     CheckoutQuoteResponse:
       type: object
@@ -3274,12 +3333,16 @@ components:
     # ---------- createRefund, approveRefund, resolveRefundReview ----------
     RefundItemInput:
       type: object
+      description: |
+        A line and the units to refund, with no amount; an `amount_minor` member is 422
+        `unknown_field`. The server computes the line amount `A(k + r) − A(k)` and its vendor
+        and commission parts in the create transaction and stores them on `refund_items` (05
+        §3.2, §7.4; 06 §13.6; cross-doc check decision, 2026-10-01).
       additionalProperties: false
-      required: [order_item_id, quantity, amount_minor]
+      required: [order_item_id, quantity]
       properties:
         order_item_id: { $ref: '#/components/schemas/Uuid' }
         quantity: { type: integer, minimum: 1 }
-        amount_minor: { type: integer, format: int64, minimum: 1 }
     RefundRecipientDetails:
       type: object
       description: '`manual_transfer` recipient; stored encrypted in `refunds.recipient_details_enc`. No list or detail response and no Inertia prop carries it; the full value comes only from the audited `revealRefundRecipient` (proposed; step-up, `Cache-Control: no-store`, only while the refund is `approved` or `processing`; 07 §5.5, 04a §12.4) [Open OD-49]. Where the details come from is [Open OD-38].'
@@ -3299,7 +3362,11 @@ components:
           type: integer
           format: int64
           minimum: 1
-          description: Σ `items[].amount_minor` plus a shipping part of at most the shipping not yet refunded on the shop order (05 §3.3).
+          description: |
+            The refund total: the server-computed item amounts plus a shipping part
+            (`amount_minor` − Σ item amounts), which must be at least 0 and at most the shipping
+            not yet refunded on the shop order (05 §3.3), else 422 `REFUND_EXCEEDS_REFUNDABLE`
+            (06 §13.6).
         reason_code: { $ref: '#/components/schemas/RefundReasonCode' }
         items:
           type: array
@@ -3308,6 +3375,12 @@ components:
         method: { $ref: '#/components/schemas/RefundMethod' }
         recipient_details: { $ref: '#/components/schemas/RefundRecipientDetails' }
         return_number: { $ref: '#/components/schemas/ReturnNumber' }
+        note:
+          type: [string, 'null']
+          maxLength: 2000
+          description: |
+            Internal staff note, stored in `refunds.note` and never shown to the customer (04a
+            §12.4; 06 §13.6; cross-doc check decision, 2026-10-01).
         replaces_refund_id:
           $ref: '#/components/schemas/Uuid'
           description: |
@@ -3437,11 +3510,20 @@ components:
 #     Still open after the consistency review (2026-09-30): 04 §3.4 also inserts the default
 #     variant in the create transaction, and `missing_for_submit` leaves out `warranty_text`,
 #     which the request sends as `null` (09 note 58). The cross-doc check decides the 201 for
-#     06 §13.5 and §14.2; this file's example and `SellerProduct` follow that decision.
+#     06 §13.5 and §14.2; this file's example and `SellerProduct` follow that decision. Done in
+#     the consistency review, 2026-09-30: in the cross-doc check (2026-10-01) 06 §13.5 and §14.2
+#     return the default variant (SKU `DN-<public_id>`, label `Default`, price 0, `on_hand` 0;
+#     04a §7.9) and `missing_for_submit` `[variants, media, warranty_text]`, and the following
+#     `replaceProductVariants` deletes the never-stocked default variant. The `createProduct`
+#     description and 201 example, the `replaceProductVariants` description and 200 example, the
+#     412 example (`[media, warranty_text]`) and the `missing_for_submit` description follow.
 # 16. 06 §14 examples omit fields that 06 §3.3 says are always present (shipment fields in §14.6,
 #     product fields in the §14.2 PUT response, `succeeded_at`/`amount`/`method` in §14.8). The
 #     examples here add them (null where unknown); `missing_for_submit: [media]` after variants
 #     are set is an inference. The schemas require the full shapes, so T-API-001 checks them.
+#     Done in the consistency review, 2026-09-30, for `missing_for_submit`: 06 §14.2 now shows
+#     `[media, warranty_text]` after the PUT (cross-doc check, 2026-10-01), so that list is no
+#     longer an inference.
 # 17. `ProblemErrorItem.cart_item_id` is used by 06 §14.4 example A but is not in the 06 §5.1 list
 #     of optional members (`available`, `on_hand`, `reserved`); 06 §5.1 should add it. Done in the
 #     consistency review, 2026-09-30: 06 §5.1 lists `cart_item_id`, and the `ProblemErrorItem`
@@ -3452,7 +3534,16 @@ components:
 #     `null`); `CheckoutQuote.problems[]` reusing `ProblemErrorItem`; `ProductMediaItem` taken from
 #     the `replaceProductMedia` input, with the 04a §7.14 bounds (position 1–12, nullable
 #     `alt_text` of at most 150 characters). 05 §4.1 also mentions "amount due per parcel for
-#     COD" in the quote, which the 06 §14.4 quote example does not carry.
+#     COD" in the quote, which the 06 §14.4 quote example does not carry. Done in the
+#     consistency review, 2026-09-30, for `ListingCard.brand`: in the cross-doc check
+#     (2026-10-01) 06 §13.2 gives `{slug, name}` or `null`, from the `brand_slug` and
+#     `brand_name` columns of 04a §7.12, so the shape is no longer assumed. Still open: 06 §13.4
+#     says a `delivery_not_available` quote problem names the shop but not with which member;
+#     `CheckoutQuote.problems` assumes `message`, and a shop member would be an additive change.
+#     Also open: 06 §13.4 and 05 §4.1 do not say what `shops[]` holds for that shop.
+#     `QuoteShop` requires `shipping_fee`, `total` and `delivery_estimate_days`, which an
+#     uncovered shop has no value for, so the group is either left out of `shops[]` or carries
+#     null amounts, and `grand_total` either counts its items or not.
 # 20. `createRefund.reason_code` accepts the full 04a enum, including the system reasons
 #     `late_capture` and `stock_unavailable_after_payment`; 07 or 05 may restrict staff input.
 #
@@ -3524,7 +3615,9 @@ components:
 #     built-in `recommended`): 0 errors and 10 warnings, the same list with 5 false positives,
 #     because `FulfillmentEventRequest` now has a third `if`/`then` block (`returned_to_origin`
 #     requires `items`). Re-run after the changes of note 39 (same CLI and rules): 0 errors and the
-#     same 10 warnings; every request and response example validates against its schema.
+#     same 10 warnings; every request and response example validates against its schema. Re-run
+#     after the cross-doc check (2026-10-01; same CLI and rules): 0 errors and the same 10
+#     warnings.
 #
 # Added in the consistency review (2026-09-30):
 # 33. `SERVICE_BUSY` (503, proposed with the catalog-read cap of 07 TM-24; 06 §5.2, §5.3, note 29)
@@ -3579,6 +3672,28 @@ components:
 #     `createMediaUpload` and `completeMediaUpload` with `shop_logo` or `shop_banner` for the
 #     owner of a `pending_review` or `rejected` shop (product owner decision 2026-10-01); and
 #     `getShopShipping` and `replaceShopShipping` for that owner under OD-47, decided 2026-10-01.
+#     Added in the cross-doc check (2026-10-01), from the 06 rows it changed (06 note 37):
+#     `addCartItem` 409 `OUT_OF_STOCK` (`insufficient_stock` with `available`) for a variant
+#     with no available stock and 404 `NOT_FOUND` for an unknown or archived variant or a
+#     product the storefront does not show; the R1.1 `cancelMyShopOrder` 409 `CONFLICT` for an
+#     `awaiting_payment` order whose `pending` attempt's lookup is inconclusive, and the
+#     cancellation of every shop order of such an order; `resubmitShopApplication` only from
+#     `rejected`; `openSupportCase` with no `subject` input (the server derives it);
+#     `createAddress` answering 422 from the validator before the insert (a location-chain
+#     23503 stays a backstop 500); the `replaceProductMedia` 409 `INVALID_STATE_TRANSITION` for
+#     a product in `pending_review`, `archived` or `blocked`, as `replaceProductVariants`;
+#     `branch_name` in `getPayoutAccount` and `branch_name?` in `replacePayoutAccount`;
+#     `suspendShop` input `suspension_mode` (not `mode`); `updateSupportCase`
+#     `assigned_to_user_id?` and `resolution_summary?` (required when the case becomes
+#     `resolved` or `closed`, else 422);
+#     `resolution_note` (1–2,000 characters) on `rejectReturnRequest` and
+#     `rejectReturnAfterInspection`; `closeReturnRequest` with no line amounts
+#     (`refund.amount_minor` is the total, as on `createRefund`); the `setPlatformStaffRole` 409
+#     `CONFLICT` for the last active admin; `retryRefund` sending `refunds.execute` with the new
+#     `attempts` value; the `createPayout` and `approvePayout` 409 `CONFLICT` `shop_frozen`
+#     (proposed); the `adminRecordCodCollection` audit actions of 05 §6.5; and no `Location` on
+#     the 201s of `createPayout`, `createReturnRequest`, `createLedgerAdjustment`,
+#     `recordVendorRemittance` and `inviteMember`, which no read operation serves (06 §3.7).
 # 38. `x-pending-operations` adds the eight 06 §13.8 operations proposed in the consistency review:
 #     `acceptSellerAgreement`, `viewKycDocument`, `revealPayoutAccountForVerification`,
 #     `revealRefundRecipient`, `approveLedgerAdjustment`, `cancelLedgerAdjustment`, `cancelPayout`
@@ -3598,3 +3713,34 @@ components:
 #     this file drops it only on approval; the strong-ETag decision record of the risks register
 #     still lists this file as "to align"; the 09 §5.3 `ProblemErrorItem` type allows only
 #     string, number or null member values, while `committed_shop_orders` is an array of strings.
+#     Done in the consistency review, 2026-09-30 (checked in the cross-doc check, 2026-10-01):
+#     07 §5.5 and its note 18 cite the new `RefundRecipientDetails` wording; the OD-49 row of
+#     the risks register says this file already carries option (a), labelled [Open OD-49]; the
+#     strong-ETag decision record lists this file under "Docs updated"; and the 09 §5.3
+#     `ProblemErrorItem` type allows string arrays.
+#
+# Added in the cross-doc check (2026-10-01), consistency review:
+# 40. Applied here, following 06 (its note 37) and the decisions of 2026-10-01. `createProduct`
+#     creates the default variant with its stock row and sends `catalog.refresh_listing`; its
+#     201 shows that variant and `missing_for_submit` with `warranty_text` (note 15).
+#     `replaceProductVariants` is 409 `INVALID_STATE_TRANSITION` for a product in
+#     `pending_review`, `archived` or `blocked`, and its active-variant rule covers `published`
+#     and `unpublished` only. `quoteCheckout` answers 200 with a `delivery_not_available`
+#     problem and never 422 `DELIVERY_NOT_AVAILABLE` (note 19). `getMyOrder` moves to R1·M5 for
+#     the order-complete page. The `recordFulfillmentEvent` refusal is a `reattempt` when
+#     `attempt_count` is already 3 (a 4th delivery attempt, 05 §6.3, 04a §11.5).
+#     `RefundItemInput` has no `amount_minor`: the server computes each line amount (05 §3.2,
+#     §7.4); `CreateRefundRequest.amount_minor` is the total with a shipping part within the
+#     05 §3.3 cap, and an optional internal `note` is stored in `refunds.note` (04a §12.4).
+#     `Location` is sent only when a read operation serves the new resource (06 §3.7, §7.5), so
+#     the `createRefund` 201 has none. `ListingCard.brand` and `image.alt` come from the derived
+#     `brand_slug` and `primary_image_alt` columns (04a §7.12), and the listing example uses
+#     the content-addressed keys of 03 §3.5. `ProblemErrorItem` names `shop_frozen` (proposed)
+#     and the `addCartItem` use of `insufficient_stock`; `retry_after_seconds` and the
+#     `placeOrder` description follow the kill-switch rule (no `Retry-After`, 06 §5.2). The
+#     `approveRefund` example is approved by a finance officer, as in 06 §14.8. No operation
+#     resets a lost staff authenticator in R1 (06 §13.6, 11 §14.6), so none is pending here.
+#     Checked against the 04a tables (04 "For other documents" item 9): the foundation shapes
+#     use the 04a CHECK lists and bounds (`shipments_attempt_count_check`, the
+#     `shipment_events` reason and note checks, the refund, payment and movement enums); the
+#     one gap, `refunds.note`, is the new `note` input.
