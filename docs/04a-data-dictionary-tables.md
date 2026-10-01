@@ -2,9 +2,7 @@
 
 Status: Draft v1 (2026-09-25)
 
-Reviewed: critic pass A4.2b (2026-09-25)
-
-Audited: deep audit 2 (2026-09-30)
+Reviewed: 2026-09-25 · audited 2026-09-30 (audit 2) · consistency review 2026-09-30 to 2026-10-01
 
 This file is the table-by-table part of the domain model. It shares section numbering with [04 Domain model and data dictionary](04-domain-model-and-data-dictionary.md), which owns the scope and reading guide ([04 §1](04-domain-model-and-data-dictionary.md)), modelling conventions ([04 §2](04-domain-model-and-data-dictionary.md)), key modelling decisions ([04 §3](04-domain-model-and-data-dictionary.md)), ER diagrams ([04 §4](04-domain-model-and-data-dictionary.md)), invariants ([04 §16](04-domain-model-and-data-dictionary.md)), the index summary ([04 §17](04-domain-model-and-data-dictionary.md)), money rules ([04 §18](04-domain-model-and-data-dictionary.md)), data classification and retention ([04 §19](04-domain-model-and-data-dictionary.md)), the migration plan ([04 §20](04-domain-model-and-data-dictionary.md)) and reference data ([04 §21](04-domain-model-and-data-dictionary.md)). Read [04 §1.4](04-domain-model-and-data-dictionary.md) first: it defines the entry format every table below follows, the sensitivity classes and the lifecycle classes.
 

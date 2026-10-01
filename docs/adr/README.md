@@ -2,7 +2,7 @@
 
 Status: Draft v1 (2026-09-25)
 
-Reviewed: critic pass A4.3 (2026-09-25)
+Reviewed: 2026-09-25 · consistency review 2026-09-30 to 2026-10-01
 
 This folder records the architecture decisions for DripNepal: one file per decision, with the context, the choice, the alternatives rejected, and how the decision is verified. The specification documents (`docs/00`–`docs/12`) hold the detail. An ADR records _why_, and links to them.
 
@@ -17,7 +17,7 @@ The rules are in [ADR-0001](0001-record-architecture-decisions.md). In short:
   - `Accepted`: the team builds against it;
   - `Deprecated`;
   - `Superseded by ADR-NNNN`.
-- **Immutability.** An Accepted ADR's Context, Decision and Alternatives are not rewritten. A changed decision gets a new ADR that supersedes it, and both Status tables are updated. In-place edits are limited to typos, links, status changes and new Verification entries.
+- **Immutability.** An Accepted ADR's Context, Decision and Alternatives are not rewritten. A changed decision gets a new ADR that supersedes it, and both Status tables are updated. In-place edits are limited to typos, links, status changes and new Verification entries. Until the first production release, a correction from a documentation review may also be recorded in place as a dated `Edited YYYY-MM-DD` note next to the text it changes ([ADR-0001](0001-record-architecture-decisions.md) decision 4, tech lead decision 2026-10-01); after it, a changed decision always gets a superseding ADR.
 - **Evidence labels.** ADRs use the labels defined in [docs/00](../00-context-assumptions-and-questions.md): [Confirmed], [Verified-repo], [Verified-doc] (with URL and access date), [Assumption], [Open] OD-xx and [Verify-external] VX-xx. Prices are always written "as published on <date>".
 - **When one is required.** A PR needs a new or superseding ADR when it changes any of these:
   - money or ledger rules;

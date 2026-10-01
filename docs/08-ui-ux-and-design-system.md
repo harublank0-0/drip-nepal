@@ -2,11 +2,7 @@
 
 Status: Draft v1 (2026-09-26)
 
-Reviewed: critic pass B4 part 1 (2026-09-26)
-
-Reviewed: critic pass B4 part 2 (2026-09-26)
-
-Reviewed: critic pass B4 part 3 (2026-09-26)
+Reviewed: 2026-09-26 · consistency review 2026-09-30 to 2026-10-01
 
 This document defines how DripNepal looks and behaves on its three surfaces: the public storefront, the seller dashboard and the platform admin. It turns the product requirements ([01](01-product-requirements.md)), the journeys ([02](02-user-journeys-and-acceptance-criteria.md)), the frontend architecture ([03 §6](03-system-architecture.md#6-frontend-architecture)) and the API contract ([06](06-api-design.md)) into pages, components, tokens and layout rules that a team of one or two developers can build and review. It owns the decisions registered against it in [risks-and-open-decisions.md](risks-and-open-decisions.md): VX-12 (NPR display), the UI side of OD-22 and VX-13 (Shadcn UI Kit use), and the accessibility target. The component-copying policy itself is [ADR-0015](adr/0015-ui-foundation-shadcn-and-kit-policy.md).
 

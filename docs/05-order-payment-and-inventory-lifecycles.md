@@ -2,9 +2,7 @@
 
 Status: Draft v1 (2026-09-25)
 
-Reviewed: critic pass A4.1 (2026-09-25)
-
-Audited: deep audit 1 (2026-09-27)
+Reviewed: 2026-09-25 · audited 2026-09-27 (audit 1) · consistency review 2026-09-30 to 2026-10-01
 
 This document owns the rules for how money, stock and orders change state in DripNepal: the multi-shop order model, the `placeOrder` checkout algorithm, inventory reservations, every order-related state machine with its transition table, the vendor ledger posting rules, and the operational playbook for the scenarios that go wrong in production. The entities and invariants it uses are defined in [04 Domain model and data dictionary](04-domain-model-and-data-dictionary.md), and the columns, CHECK value lists and `platform_settings` keys in [04a Data dictionary tables](04a-data-dictionary-tables.md). The endpoints are catalogued in [06 API design](06-api-design.md) and [openapi.yaml](openapi.yaml). Job infrastructure is in [03 System architecture](03-system-architecture.md), and test registration is in [10 Testing and quality gates](10-testing-and-quality-gates.md).
 

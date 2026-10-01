@@ -2,7 +2,7 @@
 
 Status: Draft v1 (lite, 2026-09-30)
 
-Reviewed: critic pass B7-lite (2026-09-30)
+Reviewed: 2026-09-30 · consistency review 2026-09-30 to 2026-10-01
 
 This document says how DripNepal is tested and which checks stop a change from merging or a release from shipping. It owns the test strategy, the test layers and tooling, the mandatory test sets, the CI quality gates and the test ID registry. It is sized for a team of one or two developers [Confirmed, Q1]: every check either protects money, stock, tenancy or personal data, or is cheap enough to run on every pull request. It points to the documents that own the behaviour under test instead of restating it.
 

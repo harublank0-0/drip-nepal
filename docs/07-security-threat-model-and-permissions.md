@@ -2,9 +2,7 @@
 
 Status: Draft v1 (2026-09-26)
 
-Reviewed: critic pass B3 (2026-09-26)
-
-Audited: deep audit 4 (2026-09-28)
+Reviewed: 2026-09-26 · audited 2026-09-28 (audit 4) · consistency review 2026-09-30 to 2026-10-01
 
 This document is the security source of truth for DripNepal. It owns the threat register (`TM-xx`), the authentication and session rules, the permission slugs and role maps, the status gates, the privacy and encryption rules, the incident response procedure and the secure-development hooks. It references, and does not repeat, the rules that other documents own: the API contract and rate-limit values ([06](06-api-design.md)), table and constraint definitions ([04a](04a-data-dictionary-tables.md)), the retention schedule ([04 §19.3](04-domain-model-and-data-dictionary.md#193-retention-schedule)), state machines ([05](05-order-payment-and-inventory-lifecycles.md)), job names ([03 §9](03-system-architecture.md#9-asynchronous-work)), the test registry ([10](10-testing-and-quality-gates.md)), runbooks ([11](11-deployment-and-operations.md)) and milestones ([12](12-roadmap-and-backlog.md)).
 

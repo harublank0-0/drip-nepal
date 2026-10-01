@@ -2,13 +2,7 @@
 
 Status: Draft v1 (2026-09-26)
 
-Reviewed: critic pass B6 part 1 (2026-09-26)
-
-Reviewed: critic pass B6 part 2 (2026-09-26)
-
-Reviewed: critic pass B6 part 3 (2026-09-26)
-
-Reviewed: critic pass B6 parts 4 and 5 (2026-09-27; written in parallel, spliced by the editor)
+Reviewed: 2026-09-26 and 2026-09-27 · consistency review 2026-09-30 to 2026-10-01
 
 This document says how DripNepal is hosted, deployed, watched, backed up and recovered by a team of one or two developers [Confirmed, Q1]. It owns the operational procedures that other documents hand over to "11": the environment set, the hosting recommendation behind [ADR-0016](adr/0016-hosting-single-region-portable.md), the release and migration procedure, job operations, monitoring and alerts, runbooks, backups, targets, capacity and operational access. It does not restate rules owned elsewhere. Topology and the connection budget come from [03 §5](03-system-architecture.md#5-deployment) and [03 §3.4](03-system-architecture.md#34-postgresql-layout-and-connection-budget), secrets policy from [07 §5.6](07-security-threat-model-and-permissions.md#56-secret-management-and-rotation), environment variables from [09 §6.1](09-code-structure-and-engineering-standards.md#61-variable-catalogue), and test IDs from [10](10-testing-and-quality-gates.md).
 

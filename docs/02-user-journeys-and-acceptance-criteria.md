@@ -2,7 +2,7 @@
 
 Status: Draft v1 (2026-09-25)
 
-Reviewed: critic pass A3.3 (2026-09-25)
+Reviewed: 2026-09-25 · consistency review 2026-09-30 to 2026-10-01
 
 ## 1. Purpose and scope
 

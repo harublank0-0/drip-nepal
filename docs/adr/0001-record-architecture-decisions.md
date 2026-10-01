@@ -2,7 +2,7 @@
 
 Status: Draft v1 (2026-09-25)
 
-Reviewed: critic pass A4.3 (2026-09-25)
+Reviewed: 2026-09-25 · consistency review 2026-09-30 to 2026-10-01
 
 ## Status
 
@@ -16,6 +16,8 @@ Reviewed: critic pass A4.3 (2026-09-25)
 | Blocking items  | none                          |
 
 Edited 2026-09-30 (consistency review): the Context line on the seller prefix records that OD-12 was decided; the decision is unchanged.
+
+Edited 2026-10-01 (tech lead decision): decision 4 allows dated amendment notes until the first production release.
 
 ## Context
 
@@ -37,6 +39,7 @@ We record architecture decisions as ADRs in `docs/adr/`, using a trimmed MADR la
 2. **Required sections**, in order: Status, Context, Decision, Alternatives considered, Consequences (positive, negative, risks), When to revisit, Verification, Related. MADR's "Considered Options" maps to _Alternatives considered_ and "Confirmation" to _Verification_. _When to revisit_ is added because a small team needs explicit triggers instead of periodic reviews.
 3. **Status values.** `Proposed` (depends on an open OD-xx or VX-xx, named in the Status table), `Accepted`, `Deprecated`, `Superseded by ADR-NNNN`.
 4. **Immutability.** Once Accepted, Context, Decision and Alternatives are not rewritten; a changed decision gets a new, superseding ADR. In-place edits are limited to typos, link repairs, status changes and new _Verification_ entries.
+   Edited 2026-10-01 (tech lead decision): until the first production release, while no code depends on an ADR, a correction from a documentation review may also be recorded in place as a dated note (`Edited YYYY-MM-DD (<who or which review>): <what changed and why>`) next to the text it changes. After the first production release, a changed decision always gets a new, superseding ADR.
 5. **Labels.** ADRs use the evidence labels of [00](../00-context-assumptions-and-questions.md): [Confirmed], [Verified-repo], [Verified-doc], [Assumption], [Open] OD-xx, [Verify-external] VX-xx. External facts cite a URL and access date; prices are written "as published on <date>".
 6. **Ownership split.** An ADR records the decision and its reason, and links to the owning document for detail. Example: ADR-0007 decides "integer paisa"; the columns live in [04 §2.3](../04-domain-model-and-data-dictionary.md#23-money).
 7. **When an ADR is required.** A pull request needs a new or superseding ADR when it changes money or ledger rules (ADR-0007, ADR-0009); tenancy, authorization or authentication (ADR-0005, ADR-0006); adds a stateful service such as Redis or a search engine (ADR-0002, ADR-0010, ADR-0014); adds or replaces an external provider (ADR-0012, ADR-0013, ADR-0016); changes the public URL scheme, API versioning or error contract (ADR-0004, ADR-0017, ADR-0018); changes the migration policy (ADR-0011); adds a UI registry or component source (ADR-0015); or weakens a security control such as CSP or CSRF on a route. Library patch upgrades, new shadcn primitives within ADR-0015 and new endpoints that follow ADR-0004 need no ADR.

@@ -2,7 +2,7 @@
 
 Status: Draft v1 (2026-09-25)
 
-Reviewed: critic pass A3.1 (2026-09-25)
+Reviewed: 2026-09-25 · consistency review 2026-09-30 to 2026-10-01
 
 This is the entry document of the DripNepal documentation set. It records what we know and how we know it: the product owner's answers, what the repository actually contains (with file and line evidence), what was checked against official sources, and which parts are still assumptions or open decisions. The other documents build on it. When a statement elsewhere cites a repository finding (RF-xx), an assumption (A-xx) or the research log, the definition is here.
 
@@ -639,7 +639,7 @@ The research ran on 2026-09-25 in six topics (sections 9.2–9.7). Each claim wa
 - **secondary**: only a reputable secondary source was available (law-firm summary, mirror copy).
 - **contradicted**: sources disagree, or the source disagrees with the installed code.
 
-A qualifier after the status (for example "partially verified", "possibly out of date" or "translation") records what the source did not settle. Critic pass A3.1 re-checked 25 rows of sections 9.2–9.7 against the [research files](research/README.md) on 2026-09-25; it added three missing or imprecise source URLs (Unified Directive 2082, E-Invoice Procedure 2082, Lightsail) and qualified two statuses (Tuyau, Lightsail).
+A qualifier after the status (for example "partially verified", "possibly out of date" or "translation") records what the source did not settle. A review on 2026-09-25 re-checked 25 rows of sections 9.2–9.7 against the [research files](research/README.md) on 2026-09-25; it added three missing or imprecise source URLs (Unified Directive 2082, E-Invoice Procedure 2082, Lightsail) and qualified two statuses (Tuyau, Lightsail).
 
 Where a status is not stated, the fact is verified-official. English texts of Nepali laws are translations, and the Nepali text prevails. Prices are "as published on 2026-09-25" and must not be extrapolated. The full research, with every source and fact-check, is in [research/](research/README.md) as a dated snapshot of 2026-09-25. Only the decision-relevant facts are repeated here.
 

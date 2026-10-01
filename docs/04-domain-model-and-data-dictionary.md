@@ -2,9 +2,7 @@
 
 Status: Draft v1 (2026-09-25)
 
-Reviewed: critic pass A4.2a (2026-09-25)
-
-Audited: deep audit 2 (2026-09-30)
+Reviewed: 2026-09-25 · audited 2026-09-30 (audit 2) · consistency review 2026-09-30 to 2026-10-01
 
 This document is the source of truth for DripNepal's persistent data: every table, column, key, constraint and index, the invariants the database enforces, how money is represented and rounded, how personal data is classified and how long it is kept, and how the current exploratory schema is replaced by a reviewed baseline. It is written for the 1–2 developers who will write the migrations, and for the product owner, reviewer and accountant who need to know what the system remembers and why.
 

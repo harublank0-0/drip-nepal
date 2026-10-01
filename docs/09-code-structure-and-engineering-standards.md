@@ -2,13 +2,7 @@
 
 Status: Draft v1 (2026-09-26)
 
-Reviewed: critic pass B5 part 1 (2026-09-26)
-
-Reviewed: critic pass B5 part 2 (2026-09-26)
-
-Reviewed: critic pass B5 part 3 (2026-09-26)
-
-Reviewed: critic pass B5 part 4 (2026-09-26)
+Reviewed: 2026-09-26 · consistency review 2026-09-30 to 2026-10-01
 
 This document is the standard the DripNepal codebase must meet: where code lives, which module may depend on which, what each layer of a request may and may not do, and (in later sections) how errors, configuration, logging, migrations, dependencies, reviews and the frontend are handled. It describes the **target state**. Files in the repository today are evidence of what exists and are cited as [Verified-repo]; a file is kept only where it already meets the standard, and each "Current code → target" table says whether it is kept, fixed, rewritten or deleted (product owner, 2026-09-26: "rewrite is fine where needed").
 
@@ -1980,7 +1974,7 @@ CI and its gates are owned by [10](10-testing-and-quality-gates.md); this sectio
 
 **State today** [Verified-repo; run read-only on 2026-09-27 against the code of `main` at `0282605`]:
 
-- `eslint .` reports **56 errors**: 50 `@unicorn/filename-case` (shadcn files such as `inertia/components/ui/dropdown-menu.tsx` and the `inertia/pages/shops/**` and `landing/**` prototypes), 2 `eqeqeq`, and single hits of `react/jsx-key`, `react-hooks/purity`, `@typescript-eslint/consistent-type-imports` and `@adonisjs/prefer-adonisjs-inertia-link` (re-counted by the part 3 critic on 2026-09-27 with `eslint . -f json`).
+- `eslint .` reports **56 errors**: 50 `@unicorn/filename-case` (shadcn files such as `inertia/components/ui/dropdown-menu.tsx` and the `inertia/pages/shops/**` and `landing/**` prototypes), 2 `eqeqeq`, and single hits of `react/jsx-key`, `react-hooks/purity`, `@typescript-eslint/consistent-type-imports` and `@adonisjs/prefer-adonisjs-inertia-link` (re-counted on 2026-09-27 with `eslint . -f json`).
 - `tsc --noEmit` reports 1 error, the stale route name of A5-02. `tsc --noEmit --project inertia/tsconfig.json` reports 38 errors.
 - `.husky/pre-commit` runs `lint-staged`, which only runs Prettier. `.husky/pre-push` runs `pnpm lint`, which fails, so either nobody pushes through the hook or it is bypassed. Typecheck is not run anywhere (A5-02, IAM-29), and there is no CI (RF-09).
 
