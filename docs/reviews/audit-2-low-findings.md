@@ -2,7 +2,7 @@
 
 Status: Open list (2026-09-30)
 
-Deep audit 2 of [04 Domain model and data dictionary](../04-domain-model-and-data-dictionary.md) and [04a Data dictionary: tables](../04a-data-dictionary-tables.md) found 184 issues: 3 high, 74 medium and 107 low. The high and medium findings were verified by independent reviewers and fixed in 04, 04a and the documents they affect; the "Deep audit 2" note at the end of the consistency notes in [04](../04-domain-model-and-data-dictionary.md) summarises that work. By plan, the low findings were neither verified nor fixed, except the 6 that needed an owner decision and were fixed with it. This file keeps the other 101 so they are not lost.
+Deep audit 2 of [04 Domain model and data dictionary](../04-domain-model-and-data-dictionary.md) and [04a Data dictionary: tables](../04a-data-dictionary-tables.md) found 184 issues: 3 high, 74 medium and 107 low. The high and medium findings were verified by independent reviewers and fixed in 04, 04a and the documents they affect; the "Deep audit 2" note at the end of the consistency notes in [04](../04-domain-model-and-data-dictionary.md) summarises that work. By plan, the low findings were neither verified nor fixed, except the 6 that needed an owner decision and were fixed with it. This file keeps the other 101 so they are not lost; an entry is deleted once it is fixed, and the Summary counts the entries still open.
 
 **How to use this list.**
 
@@ -18,12 +18,12 @@ Deep audit 2 of [04 Domain model and data dictionary](../04-domain-model-and-dat
 | --------------------------------------------------------------------------------------------------- | ------------ |
 | [DripNepal: Context, Assumptions and Open Questions](../00-context-assumptions-and-questions.md)    | 1            |
 | [DripNepal — User Journeys and Acceptance Criteria](../02-user-journeys-and-acceptance-criteria.md) | 3            |
-| [Domain Model and Data Dictionary](../04-domain-model-and-data-dictionary.md)                       | 44           |
+| [Domain Model and Data Dictionary](../04-domain-model-and-data-dictionary.md)                       | 43           |
 | [Data Dictionary: Tables (§5–§15)](../04a-data-dictionary-tables.md)                                | 49           |
 | [Order, Payment and Inventory Lifecycles](../05-order-payment-and-inventory-lifecycles.md)          | 1            |
 | [DripNepal API Design](../06-api-design.md)                                                         | 2            |
 | [Deployment and Operations](../11-deployment-and-operations.md)                                     | 1            |
-| Total                                                                                               | 101          |
+| Total                                                                                               | 100          |
 
 ## Fixed with an owner decision (2026-09-29)
 
@@ -333,14 +333,6 @@ Findings located in [04-domain-model-and-data-dictionary.md](../04-domain-model-
 - **Text:** 04:1808 'A restore can resurrect them, so the restore runbook replays anonymisations. ... `node ace data:replay-anonymizations` re-applies every ID in the newest list plus any logged since that list was written.'
 - **Problem:** A restore returns every privacy action to its state at the restore point, not only anonymisations. Two cases are lost. A user who asked for deletion after that point is `active` again and can sign in (07 §3.12), and the request disappears from the queue that staff must clear within 30 days (AC-FR-IAM-009-4). A marketing consent withdrawn after that point is back, although 07 §5.3 says withdrawal 'takes effect immediately' (REG-26). R1 sends only transactional email, so the consent case matters from R2. The list written with each dump and the log lines carry anonymised IDs only.
 - **Suggested fix:** Log `user.deletion_requested user_id=<id>` and `user.consent_withdrawn user_id=<id> channel=<email|sms>` (no personal values) next to `user.anonymize`. Write the IDs of `deactivated` users and of users with withdrawn consent into the list stored with each dump. Have the replay command, renamed `data:replay-privacy-actions` in 11 §11.5 step 7, re-apply all three: deactivate with `deletion_requested_at`, null the consent, anonymise.
-
-### A2-067: The §19.3 Sessions row misstates how long rows live and omits the hourly purge that 07 owns (queued IN-29 changes only 04a)
-
-- **Where:** 19.3 Sessions row (lines at `b81e3f1`: 1836)
-- **Category:** cross-doc
-- **Text:** 04:1836 'Until expiry: 7 days idle for customers, shorter for sellers and staff (A-23) | Last write | Delete | Session store garbage collection'
-- **Problem:** The store has one `age`. Every signed-in row, seller and staff included, lives 7 days after its last write. The 12 h seller and 2 h admin idle limits are middleware checks on timestamps in `data` (04a §5.3, 07 §3.1). Rows without a signed-in user expire after 2 h. 07 §3.1 and §5.4 add the hourly `identity.purge_sessions` job (proposed) to garbage collection, and 11 §8.7 proposes a daily backstop inside `platform.retention_purge` instead. The queued IN-29 changes only 04a §5.3.
-- **Suggested fix:** Row: 'Signed-in sessions of every role: 7 days after the last write (shorter idle and absolute limits are middleware checks, 07 §3.4); sessions without a signed-in user: 2 h (07 §3.1) | Last write | Delete | Store garbage collection plus the hourly `identity.purge_sessions` job (proposed, 07 §3.1)'. Ask 11 §8.7 to drop its duplicate daily backstop or name the same job.
 
 ### A2-068: 04 §19.3 rate-limit row cites the wrong limiter file and understates how long expired counters stay
 

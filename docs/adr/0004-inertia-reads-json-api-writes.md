@@ -34,8 +34,12 @@ Edited 2026-09-30 (consistency review): decision 6 names the `start/routes/api_v
    - Version in the path; additive changes allowed; breaking changes need `/api/v2`, with a 6-month overlap and `Deprecation`/`Sunset` headers once external clients exist.
    - Money is `{ "amount_minor": <int>, "currency": "NPR" }` (ADR-0007); timestamps are RFC 3339 UTC; field casing snake_case (OD-13, decided 2026-09-30).
    - `Idempotency-Key` is required on operations marked ⚷ (`placeOrder`, cancellations, fulfilment events, inventory adjustments, refunds, payouts…). Missing: 400 `IDEMPOTENCY_KEY_REQUIRED`; same key with a different body: 422 `IDEMPOTENCY_KEY_REUSED` (AC-J05-04).
-   - `If-Match` is required on PATCH/PUT of versioned resources (⟳); `ETag: W/"<version>"` is returned; mismatch gives 412 `VERSION_CONFLICT`, a missing header 428 `PRECONDITION_REQUIRED`.
+   - `If-Match` is required on PATCH/PUT of versioned resources (⟳); the strong tag `ETag: "<version>"` is returned (note below); a mismatch gives 412 `VERSION_CONFLICT`, a missing header 428 `PRECONDITION_REQUIRED`.
+
+     Edited 2026-10-01 (tech lead decision): strong ETags. Versioned resources return `ETag: "<version>"` with no `W/` prefix, which replaces `ETag: W/"<version>"`. `If-Match` uses strong comparison (RFC 9110 §13.1.1): only `"<version>"` equal to the current version passes; a weak tag or any other value gives 412 `VERSION_CONFLICT` with the current representation; a missing header, `*` or a list of tags stays 428 `PRECONDITION_REQUIRED`. The version is treated as a strong validator of the resource's editable state [Assumption] ([06 §8](../06-api-design.md#8-concurrent-edits-etag-and-if-match), [09 §4.1](../09-code-structure-and-engineering-standards.md#41-transformer-rules) rule 7). The rest of the decision is unchanged.
+
    - Server-computed fields (prices, totals, commission, `shop_id`, order numbers) are never read from request bodies (T-SEC-003).
+
 4. **Idempotency mechanism.** Rows live in `idempotency_keys`, UNIQUE (`actor_scope`, `operation`, `key`) ([04a §15.2](../04a-data-dictionary-tables.md#152-idempotency_keys)). The row is inserted as the **first statement of the business transaction**, so a concurrent duplicate waits on the unique index and then replays the committed response; if the first request rolls back (for example `OUT_OF_STOCK`), nothing is stored and a retry runs again. Keys are client-generated, 16–64 characters `[A-Za-z0-9_-]`; retention 24 h, 72 h for `placeOrder` [A-32]. The walk-through is [05 §4.6](../05-order-payment-and-inventory-lifecycles.md#46-idempotency-handling).
 5. **Authentication** is the same session cookie and CSRF header as pages (ADR-0005). Token auth for non-browser clients waits for R3.
 6. **Route files.** Unsafe methods are registered only under `start/routes/api_v1/` (one file per surface, [09 §3.3](../09-code-structure-and-engineering-standards.md#33-routes)) and in `start/routes/webhooks.ts`; page route files register GET routes only.
@@ -80,6 +84,7 @@ Edited 2026-09-30 (consistency review): decision 6 names the `start/routes/api_v
 - **T-API-001**: every response in the functional suite validates against `docs/openapi.yaml`.
 - **T-CHK-004**: repeated `placeOrder` with the same key returns the same order; concurrent duplicates create one order.
 - **T-SEC-003**: client-supplied price, total, `shop_id` and commission fields are ignored or rejected.
+- **Concurrency check** (T-API-004, proposed; [10 §6.3](../10-testing-and-quality-gates.md#63-api-contract-t-api)): every ⟳ operation answers 428 without `If-Match`, with `*` or with a list, and 412 `VERSION_CONFLICT` with `current` for a stale version or a weak tag; reads carry the strong `ETag`.
 - **Route rule check** (T-API-006, proposed; [10 §6.3](../10-testing-and-quality-gates.md#63-api-contract-t-api)): lists registered routes and fails if a POST/PUT/PATCH/DELETE route is outside `/api/v1/`.
 - **T-ARCH-001**: controllers call module actions only.
 
