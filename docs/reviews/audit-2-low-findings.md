@@ -17,13 +17,13 @@ Deep audit 2 of [04 Domain model and data dictionary](../04-domain-model-and-dat
 | Document                                                                                            | Open entries |
 | --------------------------------------------------------------------------------------------------- | ------------ |
 | [DripNepal: Context, Assumptions and Open Questions](../00-context-assumptions-and-questions.md)    | 1            |
-| [DripNepal — User Journeys and Acceptance Criteria](../02-user-journeys-and-acceptance-criteria.md) | 3            |
+| [DripNepal — User Journeys and Acceptance Criteria](../02-user-journeys-and-acceptance-criteria.md) | 0            |
 | [Domain Model and Data Dictionary](../04-domain-model-and-data-dictionary.md)                       | 42           |
-| [Data Dictionary: Tables (§5–§15)](../04a-data-dictionary-tables.md)                                | 44           |
+| [Data Dictionary: Tables (§5–§15)](../04a-data-dictionary-tables.md)                                | 43           |
 | [Order, Payment and Inventory Lifecycles](../05-order-payment-and-inventory-lifecycles.md)          | 1            |
 | [DripNepal API Design](../06-api-design.md)                                                         | 0            |
 | [Deployment and Operations](../11-deployment-and-operations.md)                                     | 1            |
-| Total                                                                                               | 92           |
+| Total                                                                                               | 88           |
 
 ## Fixed with an owner decision (2026-09-29)
 
@@ -52,29 +52,7 @@ Findings located in [00-context-assumptions-and-questions.md](../00-context-assu
 
 Findings located in [02-user-journeys-and-acceptance-criteria.md](../02-user-journeys-and-acceptance-criteria.md).
 
-### A2-002: 02 J-08 contradicts 04a, 01 and 06 on shop-application values: rejection reason length, agreement version format, return-policy minimum and two error codes
-
-- **Where:** J-08 Shop application & approval (steps, Validation and Concurrency rows, AC-J08-02, -05, -07) | J-08 acceptance criteria vs 04a §6.4 shop_agreements (lines at `b81e3f1`: 640, 655, 657, 664, 667, 669 | 02:640, 664; 04a:411, 423)
-- **Category:** cross-doc
-- **Text:** 02:669 'Given a rejection without a reason of at least 10 characters, then `VALIDATION_FAILED (422)`'; 02:664 'Given the current agreement is v3 and the request says v2 ... exactly one `shop_agreements` row exists with version 3'; 02:655 'return policy shorter than 50 characters [Assumption] ... A fourth shop → `VALIDATION_FAILED (422)` with code `max_shops_reached`'; 02:657 'Slug taken ... → `CONFLICT (409)` on `slug`'
-- **Problem:** (a) 04a shop_review_decisions_reason_check, 01 AC-FR-SHOP-002-3 and 06 rejectShopApplication require 20-2000 characters. 02 AC-J08-07 says 10, so a reason of 10-19 characters hits 23514, a 500. (b) 04a shop_agreements_version_check (04a:411, 423) requires the effective date as YYYY-MM-DD, but 02 step 5 and AC-J08-02 (640, 664) use integer versions such as '3', which fail with 23514. (c) The 50-character return-policy minimum exists only in 02: 04a shops_return_policy_check allows 1-5000, and 01 AC-FR-SHOP-003-1 sets only a maximum. That breaks 04 §2.8's rule that the database and the validator apply the same limits. (d) A fourth shop is 409 CONFLICT in 01 AC-FR-SHOP-001-2, 04 §3.1 and 06, not the code that AC-J08-05 gives. (e) A slug taken between the hint and submit is 422 VALIDATION_FAILED in 06 applyForShop and 04 §16.5 (shops_slug_key).
-- **Suggested fix:** 02 J-08: AC-J08-07 'at least 20 characters'. Step 5 and AC-J08-02 use effective-date versions: 'the current agreement is 2026-10-01 and the request says 2026-09-25 ... exactly one shop_agreements row with agreement_version 2026-10-01', and the step 5 label reads 'Seller Agreement of {effective date}'. Validation row: drop 'shorter than 50 characters'. Only if the owner wants a minimum, change 04a to BETWEEN 50 AND 5000 and 01 AC-FR-SHOP-003-1 together. AC-J08-05 and the Validation row: CONFLICT (409). Concurrency row: a slug taken between hint and submit → VALIDATION_FAILED (422) on slug.
-
-### A2-003: 02 J-09 says a re-invited removed member gets a fresh membership row; 04a and 03 reactivate the same row, and UNIQUE (shop_id, user_id) forbids a second one
-
-- **Where:** J-09 Staff invitation, Recovery row (lines at `b81e3f1`: 706)
-- **Category:** cross-doc
-- **Text:** 02:706 'A removed member who is re-invited gets a fresh membership row status `active` again.'
-- **Problem:** 04a owns the table and says the same row is reactivated. `shop_memberships_shop_user_key UNIQUE (shop_id, user_id)` makes a second row impossible, so an implementation that follows 02 and inserts fails with 23505, which 06 §5.3 turns into a 500. 03 §7.6 also says 'insert or reactivate'.
-- **Suggested fix:** 02:706: 'A removed member who is re-invited and accepts gets the same membership row back, set to `active` with the new role, `removed_at` and `removed_by` cleared (04a §6.2).'
-
-### A2-005: 02 J-20 contradicts 04a on the return window and on when return_items.condition_note is written
-
-- **Where:** J-20 (preconditions, step 3) | J-20 Support-mediated return, step 3 (lines at `b81e3f1`: 1280, 1289 | 02:1289; 04a:2106, 04a:2127; 06:807)
-- **Category:** cross-doc
-- **Text:** 1280: 'Shipment `delivered` and `now() ≤ delivered_at + return_window_days`'; 1289: '`createReturnRequest` ⚷ with `{shop_order_number, items: [{order_item_id, quantity, condition_note}], reason_code, customer_note}`'
-- **Problem:** (1) 04a §11.5 stores shipments.return_window_ends_at at delivery and never changes it afterwards, and 05 uses the stored value. The 02 J-20 preconditions (1280) recompute the window from the live setting. (2) 04a (2106, 2127) writes return_items.condition_note once, at receipt (recordReturnReceived or adminRecordReturnReceived). 02 J-20 step 3 (1289) sends condition notes at creation, so the receipt note would either overwrite it or be rejected.
-- **Suggested fix:** 02 J-20 preconditions: 'Shipment delivered and now() ≤ shipments.return_window_ends_at (stored at delivery, 04a §11.5), or an admin override ...'. Step 3 items: [{order_item_id, quantity}]; the customer's description goes in customer_note, and condition notes are recorded at receipt (step 6). 06 createReturnRequest items[] lists only order_item_id and quantity.
+No open entries: the cross-document check of 2026-10-01 and the consistency review resolved the last three.
 
 ## Domain Model and Data Dictionary
 
@@ -591,6 +569,7 @@ Findings located in [04a-data-dictionary-tables.md](../04a-data-dictionary-table
 - User suspension uses 10 characters (07 §3.12).
   A validator written from those documents accepts a 5-character reason. The insert then hits 23514, and 06 §5.3 answers 500 INTERNAL because this CHECK is not allow-listed. 04 §2.8 requires the validator to mirror the database rule. `reinstateShop`'s `reason` (06) has no upper bound in the table.
 - **Suggested fix:** Put the value in the owners. 06 `suspendShop` row: '`reason` (20–2000 characters, shown to the owner)'. 01 AC-FR-SHOP-007-1: 'with a reason of at least 20 characters'. Or, if 10 is preferred to match user suspension, lower the suspended branch of the CHECK to 10–2000. Also cap every other decision: `AND (reason IS NULL OR char_length(reason) <= 2000)`.
+- **Partly fixed (consistency review, 2026-09-30):** 01 AC-FR-SHOP-007-1, 02 J-17 and 06 `suspendShop` now give the suspension reason 20 to 2,000 characters, and the 04a §6.5 CHECK cites AC-FR-SHOP-007-1. Still open: the cap on the `reason` of the other decisions. `reinstateShop` in 06 gives its `reason` no length, and the 04a CHECK bounds only rejections and suspensions, so 04a and 06 must add the cap together.
 
 ### A2-132: shop_addresses.label has a 30-character rule but no CHECK, unlike user_addresses
 
@@ -697,14 +676,6 @@ Findings located in [04a-data-dictionary-tables.md](../04a-data-dictionary-table
 - **Text:** 04a:2266 "`payment_allocations_shop_order_idx (shop_order_id)` serves the refundable amount of a shop order and the payout "held" check." 04:1488 "Allocation of a shop order (refundable amount, payout hold)".
 - **Problem:** The held rule and query (05 §6.8, §7.6) read return_requests, refunds and support_cases by shop_order_id, never payment_allocations. The stated purpose is wrong, and an index review based on it would be misled.
 - **Suggested fix:** 04a §12.2: "`payment_allocations_shop_order_idx (shop_order_id)` serves the refundable amount (the allocations of the paying attempt and of any late-captured attempt) and the order pages." Remove "payout hold" from the 04 §17.2 row at line 1488.
-
-### A2-160: 03 §7.4 records last_error on a refund, a column 04a does not define; 04a never says where a refund's provider error is kept
-
-- **Where:** §12.4 refunds (columns) vs 03 §7.4 (lines at `b81e3f1`: 2335-2357; 03-system-architecture.md:796)
-- **Category:** cross-doc
-- **Text:** 03:796 "K->>DB: record last_error, keep processing, send refunds.verify delayed 1 min". The 04a §12.4 column list has no last_error or failure column.
-- **Problem:** 04a owns the columns, and refunds has no `last_error`. 05 §8.8 moves a refund to `failed` "with the provider message", but 04a does not say where that message lives. The only candidate is `provider_events.error` on the refund call row. An implementer of 03 §7.4 would write a column that does not exist.
-- **Suggested fix:** Add a sentence to 04a §12.4: "A refund's provider errors are stored in the `error` column of its `refund:<refund id>:<attempt>` and `refund_lookup` rows in provider_events (§12.3). The refunds row keeps no error text." 03 §7.4 line 796 then reads "record the provider error on the refund call's provider_events row". If finance must see the reason on the queue without a join, add `last_error text NULL CHECK (last_error IS NULL OR char_length(last_error) <= 2000)` to refunds instead.
 
 ### A2-163: Money rows the docs treat as fixed can still be changed: approved payouts, payout links (owner role), refunds, refund_items and vendor_remittances
 

@@ -3622,7 +3622,9 @@ components:
 #     `total` and `delivery_estimate_days`, and count only the groups that deliver in
 #     `grand_total`; the 06 §14.4 example shows the `{field, code, message}` item. `QuoteShop`,
 #     `CheckoutQuote` and the `quoteCheckout` description and `shopNotDelivering` example
-#     follow, with no [Assumption] left. Still open: the COD "amount due per parcel" of 05 §4.1.
+#     follow, with no [Assumption] left. Done in the consistency review, 2026-09-30, for the COD
+#     "amount due per parcel": 05 §4.1 now says it is the shop group's `total` in the quote, which
+#     has no separate COD field (`placeOrder` returns `cod_amount_due` per shop order).
 # 20. `createRefund.reason_code` accepts the full 04a enum, including the system reasons
 #     `late_capture` and `stock_unavailable_after_payment`; 07 or 05 may restrict staff input.
 #

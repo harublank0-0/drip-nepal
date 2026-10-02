@@ -451,7 +451,7 @@ Staff decisions on a shop: application approval or rejection, suspension and rei
 
 - `shop_review_decisions_pkey PRIMARY KEY (id)`; FKs to `shops (id)` and `users (id)` (`decided_by`), `ON DELETE RESTRICT`.
 - `shop_review_decisions_decision_check CHECK (decision IN ('approved','rejected','suspended','reinstated'))`.
-- `shop_review_decisions_reason_check CHECK (decision NOT IN ('rejected','suspended') OR (reason IS NOT NULL AND char_length(reason) BETWEEN 20 AND 2000))` (AC-FR-SHOP-002-3).
+- `shop_review_decisions_reason_check CHECK (decision NOT IN ('rejected','suspended') OR (reason IS NOT NULL AND char_length(reason) BETWEEN 20 AND 2000))` (AC-FR-SHOP-002-3 for a rejection, AC-FR-SHOP-007-1 for a suspension).
 - `shop_review_decisions_suspension_mode_check CHECK ((decision = 'suspended' AND suspension_mode IS NOT NULL AND suspension_mode IN ('fulfill_existing','frozen')) OR (decision <> 'suspended' AND suspension_mode IS NULL))`.
 - Append-only ([04 §2.12](04-domain-model-and-data-dictionary.md)). Application-enforced: `decided_by` must not be the shop's owner or a member of it, because staff may also sell.
 
@@ -1987,7 +1987,7 @@ CONSTRAINT shipments_delivered_check CHECK ((status = 'delivered') = (delivered_
   AND (delivered_at IS NULL OR delivered_at >= shipped_at)),
 CONSTRAINT shipments_return_window_check CHECK ((delivered_at IS NULL) = (return_window_ends_at IS NULL)
   AND (return_window_ends_at IS NULL OR return_window_ends_at >= delivered_at + interval '7 days')),
-CONSTRAINT shipments_attempt_count_check CHECK (attempt_count BETWEEN 0 AND 3),  -- reattempt limit [Assumption, 05 §6.3]
+CONSTRAINT shipments_attempt_count_check CHECK (attempt_count BETWEEN 0 AND 3),  -- reattempt limit [Assumption A-47, 05 §6.3]
 CONSTRAINT shipments_courier_name_check
   CHECK (courier_name IS NULL OR char_length(courier_name) BETWEEN 2 AND 80),
 CONSTRAINT shipments_tracking_number_check
@@ -2371,7 +2371,7 @@ The handler inserts with `ON CONFLICT (provider, provider_event_key) DO NOTHING`
 
 **Module** `payments` · **Release** R1 (`manual_transfer`); `gateway_api` and `gateway_manual` from R1.1 · **Shop scope** `shop_id` · **Lifecycle** Record · **Sensitivity** Financial; `recipient_details_enc` Sensitive-personal
 
-Money returned to a customer for one shop order, from one payment allocation. Methods (provider facts in [research: nepal-payments](research/nepal-payments.md)): `gateway_api` (Khalti refund API), `gateway_manual` (eSewa, which documents no refund API: an operator refunds in the merchant portal and records the reference), `manual_transfer` (COD and any fallback). Machine: [05 §6.7](05-order-payment-and-inventory-lifecycles.md#67-refund).
+Money returned to a customer for one shop order, from one payment allocation. Methods (provider facts in [research: nepal-payments](research/nepal-payments.md)): `gateway_api` (Khalti refund API), `gateway_manual` (eSewa, which documents no refund API: an operator refunds in the merchant portal and records the reference), `manual_transfer` (COD and any fallback). Machine: [05 §6.7](05-order-payment-and-inventory-lifecycles.md#67-refund). The table has no `last_error` column: each refund call and refund lookup is a `provider_events` row (§12.3, `kind` `refund` or `refund_lookup`), and a provider's error for a refund is kept in that row's `error` ([03 §7.4](03-system-architecture.md#74-refund-with-provider-timeout-and-unknown-outcome-r11-j-14-fr-ret-003)).
 
 | Column                                               | Type        | Null | Default       | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | ---------------------------------------------------- | ----------- | ---- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
