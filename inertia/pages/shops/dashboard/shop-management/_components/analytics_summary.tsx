@@ -1,6 +1,6 @@
 import { BarChart3Icon } from 'lucide-react'
-import { SectionCard } from '../components/section-card'
-import { StatCard } from '../components/stat-card'
+import { SectionCard } from '../components/section_card'
+import { StatCard } from '../components/stat_card'
 import type { AnalyticsMetric } from '../types'
 
 export function AnalyticsSummary({ metrics }: { metrics: AnalyticsMetric[] }) {

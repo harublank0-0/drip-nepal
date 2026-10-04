@@ -1,4 +1,4 @@
-import { Link } from '@inertiajs/react'
+import { Link } from '@adonisjs/inertia/react'
 import { cn } from '~/lib/utils'
 import { Tooltip, TooltipContent, TooltipTrigger } from '~/components/ui/tooltip'
 import { Badge } from '~/components/ui/badge'
@@ -30,7 +30,7 @@ export function SidebarItem({ item, collapsed, isActive }: SidebarItemProps) {
       {!collapsed && (
         <>
           <span className="flex-1 truncate">{item.label}</span>
-          {item.badge != null && (
+          {item.badge !== undefined && (
             <Badge
               variant="secondary"
               className="ml-auto flex size-5 items-center justify-center rounded-full p-0 text-[10px] font-medium leading-none"
@@ -49,7 +49,7 @@ export function SidebarItem({ item, collapsed, isActive }: SidebarItemProps) {
         <TooltipTrigger asChild>{link}</TooltipTrigger>
         <TooltipContent side="right" sideOffset={8} className="text-xs">
           {item.label}
-          {item.badge != null && ` (${item.badge})`}
+          {item.badge !== undefined && ` (${item.badge})`}
         </TooltipContent>
       </Tooltip>
     )

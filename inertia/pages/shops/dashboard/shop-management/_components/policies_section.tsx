@@ -5,9 +5,9 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '~/components/ui/accordion'
-import { SectionCard } from '../components/section-card'
-import { AutoSaveIndicator } from '../components/auto-save-indicator'
-import { PolicyEditor } from '../components/policy-editor'
+import { SectionCard } from '../components/section_card'
+import { AutoSaveIndicator } from '../components/auto_save_indicator'
+import { PolicyEditor } from '../components/policy_editor'
 import { policyKeys, type PolicyKey, type StorePolicies } from '../types'
 
 type PoliciesSectionProps = {

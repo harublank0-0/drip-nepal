@@ -1,7 +1,7 @@
 import RootLayout from '~/layouts/root_layout'
-import { useShopManagementContext } from '../../shop-management-provider'
+import { useShopManagementContext } from '../../shop_management_provider'
 import { ShopManagementLayout } from '../../layout'
-import { PaymentSettings } from '../../_components/payment-settings'
+import { PaymentSettings } from '../../_components/payment_settings'
 
 export default function PaymentsPage() {
   const { draft, setSection } = useShopManagementContext()

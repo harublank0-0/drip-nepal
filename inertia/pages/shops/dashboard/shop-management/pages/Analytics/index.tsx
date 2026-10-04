@@ -1,8 +1,8 @@
 import RootLayout from '~/layouts/root_layout'
-import { useShopManagementContext } from '../../shop-management-provider'
+import { useShopManagementContext } from '../../shop_management_provider'
 import { ShopManagementLayout } from '../../layout'
-import { AnalyticsSummary } from '../../_components/analytics-summary'
-import { PerformanceInsights } from '../../_components/performance-insights'
+import { AnalyticsSummary } from '../../_components/analytics_summary'
+import { PerformanceInsights } from '../../_components/performance_insights'
 
 export default function AnalyticsPage() {
   const { draft } = useShopManagementContext()

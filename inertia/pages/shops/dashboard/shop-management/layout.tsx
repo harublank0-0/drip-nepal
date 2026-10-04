@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react'
-import { PageHeader } from './components/page-header'
-import { ShopSidebar, MobileShopNav } from './components/shop-sidebar'
-import { StickySaveBar } from './components/sticky-save-bar'
-import { ShopManagementProvider, useShopManagementContext } from './shop-management-provider'
+import { PageHeader } from './components/page_header'
+import { ShopSidebar, MobileShopNav } from './components/shop_sidebar'
+import { StickySaveBar } from './components/sticky_save_bar'
+import { ShopManagementProvider, useShopManagementContext } from './shop_management_provider'
 
 function ShopManagementInner({ children }: { children: ReactNode }) {
   const { draft, isDirty, isSaving, discard, save } = useShopManagementContext()

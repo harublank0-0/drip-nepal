@@ -1,7 +1,7 @@
 import RootLayout from '~/layouts/root_layout'
-import { useShopManagementContext } from '../../shop-management-provider'
+import { useShopManagementContext } from '../../shop_management_provider'
 import { ShopManagementLayout } from '../../layout'
-import { SeoSettings } from '../../_components/seo-settings'
+import { SeoSettings } from '../../_components/seo_settings'
 
 export default function SEOPage() {
   const { draft, setSection } = useShopManagementContext()
