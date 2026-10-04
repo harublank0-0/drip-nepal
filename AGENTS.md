@@ -31,6 +31,10 @@ Each rule names its owner; read it there before relying on the summary.
 - **Files and names.** snake_case file names on the server and in `inertia/` (shadcn copies in `inertia/components/ui/` keep their names). Generated files are never edited by hand ([09 §1.4](docs/09-code-structure-and-engineering-standards.md#14-generated-artefacts)).
 - **Tests.** Every behaviour you add cites a test ID from [10 §6](docs/10-testing-and-quality-gates.md#6-test-id-registry); a new test gets its ID registered there first. Concurrency, triggers and grants are tested on real PostgreSQL ([10 §3](docs/10-testing-and-quality-gates.md#3-test-layers-and-tooling)).
 
+## Issues and pull requests
+
+Work is tracked in GitHub Issues: one GitHub milestone per milestone of [docs/12](docs/12-roadmap-and-backlog.md), epics as issues with sub-issues. Name a branch after its issue (`<issue number>-<short-kebab-summary>`, as `gh issue develop` creates it), close the issue from the pull request with `Closes #NN`, and follow the commit and merge rules of [docs/09 §11](docs/09-code-structure-and-engineering-standards.md#11-lint-format-typecheck-and-review). Report a security problem through a private security advisory, never a public issue.
+
 ## When the code and the documents disagree
 
 The documents describe the target. If the code differs, the code is wrong unless the document is. If the document is wrong or incomplete, fix the owning document in the same pull request, then the documents that restate it, and record the change in its Consistency notes ([docs/README.md §4](docs/README.md#4-changing-a-document)). An Accepted ADR is changed only by a dated "Edited YYYY-MM-DD" note before the first production release, and by a superseding ADR after it. A new open decision goes to the [risks register](docs/risks-and-open-decisions.md), a new assumption to [00 §6](docs/00-context-assumptions-and-questions.md#6-proposed-defaults-and-assumptions-register).
