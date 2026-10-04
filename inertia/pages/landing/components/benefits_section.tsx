@@ -36,9 +36,9 @@ export function BenefitsSection() {
               </div>
               <div className="space-y-3">
                 {[
-                  { label: 'Store 1 - Fashion Hub', revenue: '+24%', color: '#10B981' },
-                  { label: 'Store 2 - Tech Gear', revenue: '+18%', color: '#6366F1' },
-                  { label: 'Store 3 - Home Decor', revenue: '+32%', color: '#22D3EE' },
+                  { label: 'Store 1 - Fashion Hub', revenue: '+24%', color: '#10B981', width: 72 },
+                  { label: 'Store 2 - Tech Gear', revenue: '+18%', color: '#6366F1', width: 58 },
+                  { label: 'Store 3 - Home Decor', revenue: '+32%', color: '#22D3EE', width: 85 },
                 ].map((store) => (
                   <motion.div
                     key={store.label}
@@ -57,7 +57,7 @@ export function BenefitsSection() {
                         className="h-full rounded-full"
                         style={{ background: store.color }}
                         initial={{ width: 0 }}
-                        whileInView={{ width: `${Math.random() * 60 + 30}%` }}
+                        whileInView={{ width: `${store.width}%` }}
                         viewport={{ once: true }}
                         transition={{ duration: 0.8, delay: 0.2 }}
                       />

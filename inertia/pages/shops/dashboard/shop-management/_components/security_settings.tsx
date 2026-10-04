@@ -14,7 +14,7 @@ import { Button } from '~/components/ui/button'
 import { Switch } from '~/components/ui/switch'
 import { Separator } from '~/components/ui/separator'
 import { Tooltip, TooltipContent, TooltipTrigger } from '~/components/ui/tooltip'
-import { SectionCard } from '../components/section-card'
+import { SectionCard } from '../components/section_card'
 import { formatDateTime } from '../format'
 import type { SecuritySettingsState } from '../types'
 

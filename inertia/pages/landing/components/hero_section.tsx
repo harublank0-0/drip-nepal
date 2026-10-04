@@ -1,7 +1,7 @@
 import { useRef } from 'react'
 import { motion } from 'framer-motion'
 import { ArrowRight, Play } from 'lucide-react'
-import { DashboardMockup } from './DashboardMockup'
+import { DashboardMockup } from './dashboard_mockup'
 
 const containerVariants = {
   hidden: { opacity: 0 },

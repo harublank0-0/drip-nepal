@@ -23,7 +23,7 @@ import { VisuallyHidden } from 'radix-ui'
 import { motion, AnimatePresence } from 'framer-motion'
 import { SearchModal } from '~/components/search/search_modal'
 import { useCart } from '~/hooks/use_cart'
-import { Data } from '@generated/data'
+import type { Data } from '@generated/data'
 import { Show } from '~/components/ui/show'
 import { Typography } from '~/components/ui/typography'
 import { Avatar, AvatarFallback, AvatarImage } from '~/components/ui/avatar'
@@ -303,6 +303,7 @@ export const NavBar = () => {
                     </Typography.Strong>
                     {shops.map((shop) => (
                       <Link
+                        key={shop.id}
                         route="shop.shop_dashboard.create"
                         routeParams={{ shopSlug: shop.slug }}
                         className="flex items-center gap-3 text-sm text-white/70 hover:text-white transition-colors mb-3"

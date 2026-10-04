@@ -1,7 +1,7 @@
 import RootLayout from '~/layouts/root_layout'
-import { useShopManagementContext } from '../../shop-management-provider'
+import { useShopManagementContext } from '../../shop_management_provider'
 import { ShopManagementLayout } from '../../layout'
-import { PoliciesSection } from '../../_components/policies-section'
+import { PoliciesSection } from '../../_components/policies_section'
 
 export default function PoliciesPage() {
   const { draft, setSection } = useShopManagementContext()

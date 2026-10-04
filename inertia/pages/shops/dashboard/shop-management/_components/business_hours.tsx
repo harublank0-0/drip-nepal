@@ -5,7 +5,7 @@ import { Separator } from '~/components/ui/separator'
 import { Alert, AlertDescription, AlertTitle } from '~/components/ui/alert'
 import { Show } from '~/components/ui/show'
 import { cn } from '~/lib/utils'
-import { SectionCard } from '../components/section-card'
+import { SectionCard } from '../components/section_card'
 import { WeekDays, type BusinessHours as BusinessHoursType, type WeekDay } from '../types'
 
 type BusinessHoursProps = {

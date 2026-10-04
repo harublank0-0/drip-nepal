@@ -11,9 +11,9 @@ import {
 } from '~/components/ui/select'
 import { Separator } from '~/components/ui/separator'
 import { dripSlugify } from '~/lib/utils'
-import { SectionCard } from '../components/section-card'
-import { AutoSaveIndicator } from '../components/auto-save-indicator'
-import { useSectionForm } from '../hooks/use-section-form'
+import { SectionCard } from '../components/section_card'
+import { AutoSaveIndicator } from '../components/auto_save_indicator'
+import { useSectionForm } from '../hooks/use_section_form'
 import { shopInformationSchema, type ShopInformation } from '../types'
 import {
   businessCategoryOptions,

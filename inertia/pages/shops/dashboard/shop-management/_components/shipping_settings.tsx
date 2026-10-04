@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '~/components/ui/select'
-import { SectionCard } from '../components/section-card'
+import { SectionCard } from '../components/section_card'
 import { courierOptions, processingTimeOptions } from '../constants'
 import type { ShippingSettings as ShippingSettingsType } from '../types'
 
