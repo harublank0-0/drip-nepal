@@ -1,7 +1,7 @@
 import RootLayout from '~/layouts/root_layout'
-import { useShopManagementContext } from '../../shop-management-provider'
+import { useShopManagementContext } from '../../shop_management_provider'
 import { ShopManagementLayout } from '../../layout'
-import { ShopInformationForm } from '../../_components/shop-information-form'
+import { ShopInformationForm } from '../../_components/shop_information_form'
 
 export default function GeneralPage() {
   const { draft, setSection } = useShopManagementContext()

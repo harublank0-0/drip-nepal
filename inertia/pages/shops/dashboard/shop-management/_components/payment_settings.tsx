@@ -11,7 +11,7 @@ import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
 import { Show } from '~/components/ui/show'
 import { cn } from '~/lib/utils'
-import { SectionCard } from '../components/section-card'
+import { SectionCard } from '../components/section_card'
 import type { PaymentMethodKey, PaymentSettingsState } from '../types'
 
 type PaymentSettingsProps = {
