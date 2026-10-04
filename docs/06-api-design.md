@@ -2,7 +2,7 @@
 
 Status: Draft v1 (2026-09-26)
 
-Reviewed: 2026-09-26 · consistency review 2026-09-30 to 2026-10-01
+Reviewed: 2026-09-26 · consistency review 2026-09-30 to 2026-10-04
 
 This document is the contract for every HTTP interface DripNepal exposes: the JSON API under `/api/v1`, how it relates to Inertia page routes, and the provider return and webhook routes. It owns the API conventions (casing, envelopes, errors, pagination, idempotency, concurrency, limits, versioning, request IDs) and the endpoint catalogue. The machine-readable contract is [openapi.yaml](openapi.yaml); where the two differ, this document states intent and `openapi.yaml` must be corrected in the same PR. `openapi.yaml` starts as a foundation [Confirmed, product owner 2026-09-26]: all shared components (security, problem responses and the full code enum, money, pagination meta, headers, state enums) plus the operations of the §14 worked examples, listed in its `x-foundation-scope`. Every other operation in §13 is listed in `x-pending-operations` and is added to `openapi.yaml` in the PR that implements it; T-API-001 fails for any `/api/v1` response whose operation is not yet specified.
 

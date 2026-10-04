@@ -2,7 +2,7 @@
 
 Status: Draft v1 (2026-09-25)
 
-Reviewed: 2026-09-25 · consistency review 2026-09-30 to 2026-10-01
+Reviewed: 2026-09-25 · consistency review 2026-09-30 to 2026-10-04
 
 This is the entry document of the DripNepal documentation set. It records what we know and how we know it: the product owner's answers, what the repository actually contains (with file and line evidence), what was checked against official sources, and which parts are still assumptions or open decisions. The other documents build on it. When a statement elsewhere cites a repository finding (RF-xx), an assumption (A-xx) or the research log, the definition is here.
 

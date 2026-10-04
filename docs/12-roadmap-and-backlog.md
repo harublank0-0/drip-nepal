@@ -2,7 +2,7 @@
 
 Status: Draft v1 (lite, 2026-09-30)
 
-Reviewed: 2026-09-30 · consistency review 2026-09-30 to 2026-10-01
+Reviewed: 2026-09-30 · consistency review 2026-09-30 to 2026-10-04
 
 This document turns the reviewed documentation set into a delivery plan for a team of one or two developers [Confirmed Q1]. It defines the milestones M0 to M9 (ID, name, release, goal, scope, order and exit criteria), the order in which they depend on each other, the R2 and R3 backlog, and where the items other documents handed to planning land. It does not restate rules: every scope line points to the section that specifies the behaviour, and every exit criterion names test IDs from the [10 §6](10-testing-and-quality-gates.md#6-test-id-registry) registry. Capacity is unknown, so there are no calendar dates; effort is given in relative sizes.
 

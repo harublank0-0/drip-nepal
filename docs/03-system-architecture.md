@@ -2,7 +2,7 @@
 
 Status: Draft v1 (2026-09-25)
 
-Reviewed: 2026-09-25 · consistency review 2026-09-30 to 2026-10-01
+Reviewed: 2026-09-25 · consistency review 2026-09-30 to 2026-10-04
 
 Owner: tech lead (one of the 1–2 developers). Reviewers: product owner (for drivers and trade-offs), whoever operates production (for sections 3, 5, 9–12).
 

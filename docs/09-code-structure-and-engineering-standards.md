@@ -2,7 +2,7 @@
 
 Status: Draft v1 (2026-09-26)
 
-Reviewed: 2026-09-26 · consistency review 2026-09-30 to 2026-10-01
+Reviewed: 2026-09-26 · consistency review 2026-09-30 to 2026-10-04
 
 This document is the standard the DripNepal codebase must meet: where code lives, which module may depend on which, what each layer of a request may and may not do, and (in later sections) how errors, configuration, logging, migrations, dependencies, reviews and the frontend are handled. It describes the **target state**. Files in the repository today are evidence of what exists and are cited as [Verified-repo]; a file is kept only where it already meets the standard, and each "Current code → target" table says whether it is kept, fixed, rewritten or deleted (product owner, 2026-09-26: "rewrite is fine where needed").
 

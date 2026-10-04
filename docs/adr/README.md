@@ -2,7 +2,7 @@
 
 Status: Draft v1 (2026-09-25)
 
-Reviewed: 2026-09-25 · consistency review 2026-09-30 to 2026-10-01
+Reviewed: 2026-09-25 · consistency review 2026-09-30 to 2026-10-04
 
 This folder records the architecture decisions for DripNepal: one file per decision, with the context, the choice, the alternatives rejected, and how the decision is verified. The specification documents (`docs/00`–`docs/12`) hold the detail. An ADR records _why_, and links to them.
 
