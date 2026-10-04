@@ -11,7 +11,7 @@ import {
 import type { LucideIcon } from 'lucide-react'
 import { Switch } from '~/components/ui/switch'
 import { Separator } from '~/components/ui/separator'
-import { SectionCard } from '../components/section-card'
+import { SectionCard } from '../components/section_card'
 import type { NotificationChannels, NotificationPreferences } from '../types'
 
 type NotificationSettingsProps = {

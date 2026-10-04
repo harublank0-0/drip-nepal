@@ -1,7 +1,7 @@
 import RootLayout from '~/layouts/root_layout'
-import { useShopManagementContext } from '../../shop-management-provider'
+import { useShopManagementContext } from '../../shop_management_provider'
 import { ShopManagementLayout } from '../../layout'
-import { SecuritySettings } from '../../_components/security-settings'
+import { SecuritySettings } from '../../_components/security_settings'
 
 export default function SecurityPage() {
   const { draft, setSection } = useShopManagementContext()

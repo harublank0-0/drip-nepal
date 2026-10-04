@@ -5,9 +5,9 @@ import { Input } from '~/components/ui/input'
 import { Textarea } from '~/components/ui/textarea'
 import { Progress } from '~/components/ui/progress'
 import { cn } from '~/lib/utils'
-import { SectionCard } from '../components/section-card'
-import { ImageUpload } from '../components/image-upload'
-import { useSectionForm } from '../hooks/use-section-form'
+import { SectionCard } from '../components/section_card'
+import { ImageUpload } from '../components/image_upload'
+import { useSectionForm } from '../hooks/use_section_form'
 import { seoSettingsSchema, type SeoSettings as SeoSettingsType } from '../types'
 
 type SeoSettingsProps = {
