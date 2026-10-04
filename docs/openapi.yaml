@@ -6,7 +6,7 @@ info:
   description: |
     Status: Draft v1 (2026-09-26)
 
-    Reviewed: critic pass B2 (2026-09-26)
+    Reviewed: 2026-09-26 · consistency review 2026-09-30 to 2026-10-01
 
     This is the FOUNDATION contract chosen by the product owner on 2026-09-26 (option B):
     the shared contract is complete now, and the remaining endpoints are added in the PR
@@ -203,9 +203,9 @@ x-pending-operations:
   - listShopSupportCases
   - replyToShopSupportCase
   # Admin (06 §13.6)
-  - listShopApplications
-  - approveShopApplication
-  - rejectShopApplication
+  - listShopApplications # each item carries `version` for the decision's If-Match (06 §8, §13.6; note 42)
+  - approveShopApplication # x-if-match true when specified: ⟳ on shops.version (06 §8; note 42)
+  - rejectShopApplication # x-if-match true when specified: ⟳ on shops.version (06 §8; note 42)
   - listShops
   - suspendShop
   - reinstateShop
@@ -551,7 +551,9 @@ paths:
         `NOT_FOUND` (T-SEC-001 case (c), as `replaceProductMedia` answers).
         Status gate: a product in `pending_review`, `archived` or `blocked` is 409
         `INVALID_STATE_TRANSITION`, as `updateProduct` answers (06 §13.5; cross-doc check
-        decision, 2026-10-01).
+        decision, 2026-10-01). A `rejected` product moves back to `draft` in the same
+        transaction (status CAS `rejected → draft`), as `updateProduct` does, so a vendor who
+        fixes only the variants can resubmit it (05 §6.10, AC-FR-CAT-006-2; 06 §13.5).
         Whole-set replacement (PUT): variants carrying an `id` are updated, variants without
         one are created with an `inventory_items` row at 0, and variants left out are archived
         (or deleted if never stocked or ordered, 04a §7.9), such as the default variant
@@ -3700,6 +3702,8 @@ components:
 #     after the cross-doc check (2026-10-01; same CLI and rules): 0 errors and the same 10
 #     warnings. Re-run after the stage B follow-up of note 41 (same CLI and rules): 0 errors and
 #     the same 10 warnings; the new `shopNotDelivering` example validates against `QuoteShop`.
+#     Re-run after the changes of note 42 (same CLI and rules): 0 errors and the same 10
+#     warnings.
 #
 # Added in the consistency review (2026-09-30):
 # 33. `SERVICE_BUSY` (503, proposed with the catalog-read cap of 07 TM-24; 06 §5.2, §5.3, note 29)
@@ -3744,7 +3748,7 @@ components:
 #     `{ kind, cart_item_id, previous_unit_price, available }` with the kinds `price_changed`,
 #     `insufficient_stock`, `out_of_stock`, `unavailable`, `merge_capped` and `quantity_capped`
 #     (proposed, below the 06 §13.4 table); `updateCartItem` reading `unit_price_minor_at_add`
-#     again, so the unchanged quantity accepts a `price_changed` notice [Assumption];
+#     again, so the unchanged quantity accepts a `price_changed` notice (04a §10.2, 06 note 39);
 #     `listMyOrders` items with `number`, `placed_at` and `grand_total` (Money); `getProduct`
 #     variants with `option_values` (axis code → value code, never `option_signature`),
 #     `in_stock` and `available_capped` (proposed, capped at 10); `updateProduct` returning a
@@ -3773,16 +3777,37 @@ components:
 #     `rejectReturnAfterInspection`; `closeReturnRequest` with no line amounts
 #     (`refund.amount_minor` is the total, as on `createRefund`, and a total below the
 #     server-computed item amounts is 422 `REFUND_EXCEEDS_REFUNDABLE`, not `VALIDATION_FAILED`);
-#     the `setPlatformStaffRole` 409 `CONFLICT` for the last active admin; `retryRefund`
-#     sending `refunds.execute` with the new `attempts` value; the `createPayout` and
-#     `approvePayout` 409 `CONFLICT` `shop_frozen` (proposed); the `adminRecordCodCollection`
-#     audit actions of 05 §6.5; and no `Location` on the 201s of `createPayout`,
-#     `createReturnRequest`, `createLedgerAdjustment`, `recordVendorRemittance` and `inviteMember`, which no read operation serves (06 §3.7).
+#     the `setPlatformStaffRole` 409 `CONFLICT` for the last active admin; `retryRefund`:
+#     lookup first (`gateway_api` only); in the request transaction the CAS
+#     `failed → processing`, `attempts + 1`, `verification_attempts` reset, `refunds.verify`,
+#     and, for `gateway_api`, `refunds.execute` carrying the new `attempts` value (05 §6.7);
+#     the `createPayout` and `approvePayout` 409 `CONFLICT` `shop_frozen` (proposed); the
+#     `adminRecordCodCollection` audit actions of 05 §6.5; and no `Location` on the 201s of
+#     `createPayout`, `createReturnRequest`, `createLedgerAdjustment`, `recordVendorRemittance`
+#     and `inviteMember`, which no read operation serves (06 §3.7).
 #     Added in the cross-doc check, stage B follow-up (2026-10-01), from the 06 rows it changed
 #     (06 note 38): `listMyOrders` at R1·M5, because the checkout recovery of 08 §11.4 reads it
 #     (its pending entry says so; it has no `x-release` until its path is specified); the
 #     `inviteMember` 409 `CONFLICT` also for the owner's own email; the `closeReturnRequest`
 #     total rule above; and `revealUserContact` (proposed, note 41).
+#     Added in the final review of the consistency review (2026-09-30, with the decisions of
+#     2026-10-04), from the 06 rows it changed (06 note 40): `approveShopApplication` and
+#     `rejectShopApplication` ⟳ on `shops.version` and `listShopApplications` items with
+#     `version` (note 42); the `resubmitShopApplication` reason (accepting only a `rejected`
+#     application keeps a resubmission from restarting a review in progress, and an owner edit
+#     during review is caught by that version check); `replaceProductMedia` returning a
+#     `rejected` product to `draft`, as `updateProduct` and `replaceProductVariants` do (05
+#     §6.10, AC-FR-CAT-006-2); the shop row locked first (05 §4.4 level 0) in
+#     `replacePayoutAccount`, `inviteMember`, `acceptShopInvitation` and
+#     `recordVendorRemittance`, and the shop row, then the payout row, in `markPayoutPaid` and
+#     `markPayoutFailed`; `setPlatformStaffRole` emailing a single-use `mfa_enrollment` token
+#     (proposed, 24 h; 07 §3.8, §3.9, 04a §5.2) to an account without `mfa_enabled_at`, without
+#     which the new staff member cannot call `startTotpEnrollment`, and raising the
+#     `staff_privilege_change` alert (11 §9.7) with its audit row; `revokePlatformStaff`
+#     raising `staff_privilege_change` too, with its audit row; and the pages that host
+#     `approveLedgerAdjustment` and `cancelLedgerAdjustment` (`/admin/ledger`, whose props list
+#     the open `ledger_adjustment_requests`, with no list operation) and `cancelPayout`
+#     (`/admin/payouts`, R1.1), below the 06 §13.8 table (08 §2.6 owns the pages).
 # 38. `x-pending-operations` adds the eight 06 §13.8 operations proposed in the consistency review:
 #     `acceptSellerAgreement`, `viewKycDocument`, `revealPayoutAccountForVerification`,
 #     `revealRefundRecipient`, `approveLedgerAdjustment`, `cancelLedgerAdjustment`, `cancelPayout`
@@ -3857,3 +3882,26 @@ components:
 #     the `Location` description (06 §3.7, §7.5) and no `Location` on the `createRefund` 201,
 #     the `Retry-After` text, `ListingCard.brand`, `RefundItemInput`, the `createProduct` 201,
 #     the `replaceProductVariants` status gate, `getMyOrder` at R1·M5 and `shop_frozen`.
+#
+# Added in the final review of the consistency review (2026-09-30, with the decisions of 2026-10-04):
+# 42. Applied here, following the 06 pass of the same run (06 note 40). `approveShopApplication`
+#     and `rejectShopApplication` are ⟳ on `shops.version` (product owner and tech lead
+#     decision, 2026-10-04; 06 §8 and the §13.6 rows). They are pending, so this file records
+#     the rule in this note and in their `x-pending-operations` entries, and the PR that
+#     specifies them takes it from the 06 rows: `listShopApplications` returns each
+#     application's `version`, and the decision sends `If-Match: "<version>"`
+#     (`x-if-match: true`). A missing header, `*` or a list is 428 `PRECONDITION_REQUIRED`.
+#     On a zero-row compare-and-set (04a §6.1) the action re-reads: a status no longer
+#     `pending_review` is 409 `INVALID_STATE_TRANSITION`, so two reviewers deciding at once
+#     still get one success and one 409 (AC-FR-SHOP-002-5); the same status with a changed
+#     version (an owner edit to the profile, shipping, logo or banner since the reviewer
+#     loaded the application) is 412 `VERSION_CONFLICT` with `current`, the application as
+#     `listShopApplications` shows it, and the reviewer reviews again (05 §6.10; T-SHOP-110).
+#     The `replaceProductVariants` description returns a `rejected` product to `draft`, as
+#     `updateProduct` does (05 §6.10, AC-FR-CAT-006-2). Note 37 lists the same change for the
+#     pending `replaceProductMedia` and the other 06 rows this pass changed, limits its
+#     `retryRefund` lookup and `refunds.execute` to `gateway_api` (05 §6.7), and cites 04a
+#     §10.2 and 06 note 39 for the `updateCartItem` price re-read, with no [Assumption] left.
+#     `info.description` carries the one plain review line that 06 uses. No schema, response
+#     or example changes: `VERSION_CONFLICT`, `PRECONDITION_REQUIRED` and the shared 412 and
+#     428 responses already cover the new cases.

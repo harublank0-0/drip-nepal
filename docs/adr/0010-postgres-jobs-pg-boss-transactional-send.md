@@ -6,7 +6,7 @@ Reviewed: 2026-09-25 · consistency review 2026-09-30 to 2026-10-01
 
 ## Status
 
-- **Decision status:** Accepted. Handing a Lucid transaction to pg-boss is proven by the M0 spike T-ARCH-004 (proposed). If the spike fails, the defined outbox fallback applies without changing this decision.
+- **Decision status:** Accepted. Handing a Lucid transaction to pg-boss is to be confirmed by the M0 spike T-ARCH-004 (proposed). If the spike fails, the defined outbox fallback applies without changing this decision.
 - **Date:** 2026-09-25
 - **Deciders:** lead developer
 - **Supersedes / superseded by:** — / —
@@ -57,6 +57,9 @@ Edited 2026-09-30 (consistency review): the T-ARCH-004 exit criterion in decisio
    - a unique key (`notification_deliveries.dedupe_key`, `ledger_entries.dedupe_key`, `provider_events (provider, provider_event_key)`, `payout_entries.ledger_entry_id`);
    - a compare-and-set transition (`UPDATE … WHERE status = :from`);
    - recomputation from source (listing refresh, drift checks).
+
+   Edited 2026-10-04 (final review): one effect is guarded differently. The `refunds.execute` job sent by `retryRefund` is protected by `retryLimit: 0`: it runs once, and its dead letter is discarded, never redriven, because no unique key or compare-and-set stops a second provider call for the same attempt ([03 §9](../03-system-architecture.md#9-asynchronous-work), [11 §8.3](../11-deployment-and-operations.md#83-redrive-procedure)).
+
 4. **Queues.** Names use underscores. [03 §9](../03-system-architecture.md#9-asynchronous-work) owns the catalogue, retries and dead-letter queues (`dlq.<queue>`). [05 §9.4](../05-order-payment-and-inventory-lifecycles.md#94-reconciliation-schedule) owns the order, payment, refund, inventory and ledger schedules. Examples:
    - `notifications.dispatch` writes one `notification_deliveries` row per recipient, then `notifications.send_email` sends each one.
    - `payments.verify` runs a lookup per attempt: every 1 min to 30 min, every 5 min to 2 h, every 30 min to 24 h, then `needs_review`. `payments.reconcile_sweeper` (every 5 min) re-sends lost verify jobs.

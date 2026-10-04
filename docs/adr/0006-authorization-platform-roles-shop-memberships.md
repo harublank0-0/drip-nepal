@@ -89,7 +89,7 @@ flowchart TD
 - _A seller endpoint registered outside the `seller_context` group._ Mitigation: T-SEC-001 is generated from the route list, so every `/api/v1/seller` route is exercised with another shop's credentials.
 - _Status-gate gaps_ (a suspended shop still publishing). Mitigation: a table-driven gate function with unit tests per status × permission.
 
-  Edited 2026-10-01 (cross-doc check decision): the gate is keyed by operation, not by permission, because a permission alone cannot express the exceptions of [07 §4.8](../07-security-threat-model-and-permissions.md#48-how-policies-are-implemented); its tests cover every shop status and suspension mode × `operationId` (T-SEC-031, proposed). The rest of the risk is unchanged.
+  Edited 2026-10-01 (cross-doc check): the gate is keyed by operation, not by permission, because a permission alone cannot express the exceptions of [07 §4.8](../07-security-threat-model-and-permissions.md#48-how-policies-are-implemented); its tests cover every shop status and suspension mode × `operationId` (T-SEC-031, proposed). The rest of the risk is unchanged.
 
 ## When to revisit
 

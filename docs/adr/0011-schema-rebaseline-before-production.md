@@ -75,6 +75,8 @@ Fixing these incrementally would take dozens of ALTER migrations that convert or
    - CHECK-list and `NOT NULL` changes go through `NOT VALID` then `VALIDATE CONSTRAINT`.
 6. **Cut-over.** Developers run `node ace migration:fresh --seed`, commit the regenerated `database/schema.ts` unedited, and rebase open branches.
 
+   Edited 2026-10-04 (consistency review): because every pg-boss instance starts with its migration disabled (the 2026-10-01 note on decision 2), developers run `node ace migration:fresh`, then the pg-boss schema step, then `node ace db:seed`, so the dev seeders, which send jobs through the real actions, find the `pgboss` schema ([11 §4.4](../11-deployment-and-operations.md#44-local-setup-in-five-commands), [04 §20.2.3](../04-domain-model-and-data-dictionary.md#2023-steps)). The rest of the decision is unchanged.
+
 ## Alternatives considered
 
 | Alternative                                  | Why rejected                                                                                                 |
