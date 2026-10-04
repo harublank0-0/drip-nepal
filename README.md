@@ -1,299 +1,104 @@
-![AdonisJS 7](https://img.shields.io/badge/AdonisJS_7-5A45FF?style=for-the-badge&logo=adonisjs&logoColor=white) ![React 19](https://img.shields.io/badge/React_19-61DAFB?style=for-the-badge&logo=react&logoColor=black) ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white) ![Tailwind CSS v4](https://img.shields.io/badge/Tailwind_CSS_v4-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=for-the-badge&logo=postgresql&logoColor=white) ![Inertia.js](https://img.shields.io/badge/Inertia.js-9552EA?style=for-the-badge&logo=inertia&logoColor=white)
+![AdonisJS 7](https://img.shields.io/badge/AdonisJS_7-5A45FF?style=for-the-badge&logo=adonisjs&logoColor=white) ![React 19](https://img.shields.io/badge/React_19-61DAFB?style=for-the-badge&logo=react&logoColor=black) ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white) ![Tailwind CSS v4](https://img.shields.io/badge/Tailwind_CSS_v4-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white) ![PostgreSQL 18](https://img.shields.io/badge/PostgreSQL_18-4169E1?style=for-the-badge&logo=postgresql&logoColor=white) ![Inertia.js](https://img.shields.io/badge/Inertia.js-9552EA?style=for-the-badge&logo=inertia&logoColor=white)
 
-![Node >=22.8](https://img.shields.io/badge/Node-%3E%3D22.8-339933?style=for-the-badge&logo=node.js&logoColor=white) ![pnpm](https://img.shields.io/badge/pnpm-F69220?style=for-the-badge&logo=pnpm&logoColor=white) ![MIT License](https://img.shields.io/badge/license-MIT-blue.svg?style=for-the-badge)
+![Node >=24](https://img.shields.io/badge/Node-%3E%3D24-339933?style=for-the-badge&logo=node.js&logoColor=white) ![pnpm 11](https://img.shields.io/badge/pnpm_11-F69220?style=for-the-badge&logo=pnpm&logoColor=white) ![MIT License](https://img.shields.io/badge/license-MIT-blue.svg?style=for-the-badge)
 
 # Drip Nepal 🇳🇵
 
-**Modern Multi-Vendor Ecommerce Platform for Nepal**
+**A multi-vendor fashion marketplace for Nepal.**
 
-Drip Nepal is a full-stack marketplace that lets customers discover products from local shops while giving vendors powerful tools to manage their stores, products, orders, and analytics — all built with modern TypeScript from front to back.
+Customers browse clothing, shoes and accessories from many local shops and buy from several of them in one checkout, paying cash on delivery. Vendors apply to open a shop, list products with sizes, colours and stock, and accept, ship and track their orders from a seller dashboard. Platform staff review shops and products, handle support and refunds, and settle what vendors owe or are owed through a ledger. It is built and run by a team of one or two developers.
 
----
+## Project status
 
-## Features
+**Planning is complete; building starts with milestone M0.**
 
-| 🛒 Customer                    | 🏪 Shop (Vendor)                 | ⚙️ Admin                       |
-| ------------------------------ | -------------------------------- | ------------------------------ |
-| • Session-based authentication | • Shop registration & onboarding | • User management              |
-| • Product browsing & search    | • Product CRUD & media uploads   | • Shop approval & moderation   |
-| • Category & filter navigation | • Order management dashboard     | • Product moderation           |
-| • Shopping cart                | • Inventory & variant tracking   | • Platform-wide analytics      |
-| • Checkout flow                | • Sales analytics                | • Role & permission management |
-| • Order history                | • Staff role management          | • —                            |
-| • Saved addresses              | • —                              | • —                            |
-| • Wishlist _(planned)_         | • —                              | • —                            |
-
----
-
-## Screenshots
-
-> 📸 Screenshots coming soon.
->
-> See the [`/screenshots`](./screenshots) directory for future assets.
-
----
-
-## Architecture
-
-Drip Nepal follows a **monolithic (but modular)** architecture powered by Inertia.js, which keeps the frontend and backend in a single codebase without sacrificing the developer experience of a modern SPA.
-
-```
-          ┌─────────────────────────┐
-          │       Browser           │
-          │  (React + Inertia.js)   │
-          └───────────┬─────────────┘
-                      │  HTTP (same-origin)
-                      │  Inertia requests
-                      ▼
-          ┌─────────────────────────┐
-          │    AdonisJS 7 Server    │  ◀── SSR on first load
-          │                         │
-          │  ┌───────────────────┐  │
-          │  │   Routes / Ctrl   │  │
-          │  │   Lucid ORM       │  │
-          │  │   Session Auth    │  │
-          │  │   Tuyau API       │  │
-          │  └───────────────────┘  │
-          └───────────┬─────────────┘
-                      │
-          ┌───────────┴─────────────┐
-          │        PostgreSQL       │
-          │        + Redis          │
-          │        + Mailpit        │
-          └─────────────────────────┘
-```
-
-| Layer               | Technology                                                                                |
-| ------------------- | ----------------------------------------------------------------------------------------- |
-| **Frontend**        | React 19, TypeScript, Tailwind CSS v4, shadcn/ui, Framer Motion, TanStack Table / Virtual |
-| **Backend**         | AdonisJS 7, TypeScript, Lucid ORM, VineJS validation                                      |
-| **Auth**            | Session-based (cookie driver)                                                             |
-| **Database**        | PostgreSQL (primary), SQLite (testing)                                                    |
-| **Cache / Session** | Redis                                                                                     |
-| **Infrastructure**  | Docker Compose (PostgreSQL + Redis + Mailpit)                                             |
-
----
-
-## Project Structure
-
-```
-drip-nepal/
-├── app/                      # Backend (AdonisJS)
-│   ├── controllers/          # Route handlers
-│   ├── middleware/           # Auth, guest, inertia, silent auth
-│   ├── models/               # Lucid ORM models (18 models)
-│   ├── validators/           # VineJS validation schemas
-│   ├── transformers/         # Response transformers
-│   ├── constants/            # Enums and constants
-│   └── exceptions/           # Error handler
-├── inertia/                  # Frontend (React + Inertia)
-│   ├── components/           # Reusable UI and commerce components
-│   ├── pages/                # Page components (route-driven)
-│   ├── layouts/              # Layout wrappers
-│   ├── hooks/                # Custom React hooks
-│   ├── lib/                  # Utilities, mock data
-│   ├── css/                  # Tailwind entry and global styles
-│   └── assets/               # Images, fonts
-├── config/                   # AdonisJS configuration (13 files)
-├── database/
-│   ├── migrations/           # 23 database migrations
-│   ├── seeders/              # 5 seeders (roles, categories, shops, etc.)
-│   └── factories/            # Model factories for testing
-├── start/                    # Routes, kernel, env schema
-├── providers/                # Custom service providers
-├── resources/views/          # Edge templates (root layout)
-├── tests/                    # Japa test suites
-├── screenshots/              # 📸 Future screenshots
-├── docker-compose.yml        # PostgreSQL + Redis + Mailpit
-├── adonisrc.ts               # AdonisJS configuration
-├── vite.config.ts            # Vite build configuration
-├── tsconfig.json             # TypeScript config
-├── eslint.config.js          # ESLint flat config
-└── package.json
-```
-
----
-
-## Getting Started
-
-### Prerequisites
-
-- **Node.js** >= 22.8
-- **pnpm** (recommended) or npm
-- **PostgreSQL** 16+ (or use Docker Compose below)
-- **Redis** (optional, for session store)
-
-### Quick Start with Docker Compose
-
-The easiest way to spin up the required infrastructure:
-
-```bash
-docker compose up -d
-```
-
-This starts **PostgreSQL 18**, **Redis 8**, and **Mailpit** (SMTP testing UI at `http://localhost:8025`).
-
-### Manual Installation
-
-```bash
-# 1. Clone the repository
-git clone https://github.com/your-username/drip-nepal.git
-cd drip-nepal
-
-# 2. Install dependencies
-pnpm install
-
-# 3. Copy environment file and generate app key
-cp .env.example .env
-node ace generate:key
-
-# 4. Configure your .env file
-#     Edit .env with your database credentials
-
-# 5. Run database migrations
-node ace migration:run
-
-# 6. Seed the database (optional, but recommended)
-node ace db:seed
-
-# 7. Start the development server
-pnpm dev
-```
-
-Open **http://localhost:3333** in your browser.
-
-> **Note:** If you're using Docker Compose, the default `.env` values match the compose file. Just update `DB_HOST` to `localhost` and you're good to go.
-
----
-
-## Environment Variables
-
-| Variable         | Description                | Default                                              |
-| ---------------- | -------------------------- | ---------------------------------------------------- |
-| `APP_KEY`        | Application encryption key | **Required** — generate with `node ace generate:key` |
-| `PORT`           | HTTP server port           | `3333`                                               |
-| `HOST`           | Server host                | `localhost`                                          |
-| `NODE_ENV`       | Environment mode           | `development`                                        |
-| `LOG_LEVEL`      | Logging level              | `info`                                               |
-| `APP_URL`        | Public application URL     | `http://localhost:3333`                              |
-| `SESSION_DRIVER` | Session storage driver     | `cookie`                                             |
-| `DB_HOST`        | PostgreSQL host            | `localhost`                                          |
-| `DB_PORT`        | PostgreSQL port            | `5432`                                               |
-| `DB_USER`        | Database user              | `dripnepal`                                          |
-| `DB_PASSWORD`    | Database password          | `secret`                                             |
-| `DB_DATABASE`    | Database name              | `dripnepal`                                          |
-| `VITE_APP_NAME`  | Application display name   | `Drip Nepal`                                         |
-
----
-
-## Development Scripts
-
-| Script           | Description                          |
-| ---------------- | ------------------------------------ |
-| `pnpm dev`       | Start development server with HMR    |
-| `pnpm build`     | Build for production                 |
-| `pnpm start`     | Start production server              |
-| `pnpm test`      | Run test suite (Japa)                |
-| `pnpm lint`      | Lint all files with ESLint           |
-| `pnpm format`    | Format code with Prettier            |
-| `pnpm typecheck` | Type-check both backend and frontend |
-
----
-
-## Database
-
-Migrations are managed via **Lucid ORM** (AdonisJS's built-in query builder and ORM).
-
-```bash
-# Run all pending migrations
-node ace migration:run
-
-# Rollback last batch
-node ace migration:rollback
-
-# Run seeders
-node ace db:seed
-```
-
-### Migrations
-
-The project includes **23 migrations** covering four domain areas:
-
-1. **Identity & Authorization** — users, global roles, permissions, role-permission assignments
-2. **Vendor / Shop System** — shops, shop roles, staff assignments
-3. **Product Catalog** — categories, products, variants, attributes, media
-4. **Commerce System** — addresses, carts, cart items, orders, order items, payments
-
-### Seeders
-
-There are **5 seeders** for development and testing:
-
-- `global_role_seeder` — admin, customer, vendor roles
-- `permission_seeder` — granular permissions
-- `category_seeder` — product categories
-- `shop_seeder` — sample shops
-- `customer_seeder` — test customer accounts
-
-> 📖 Detailed database documentation is available at [`database/README.md`](./database/README.md).
-
----
+- The [documentation](docs/README.md) describes the target system: requirements, journeys, architecture, data model, lifecycles, API, security, UI, code standards, tests, operations and the roadmap. It is the source of truth.
+- The code in this repository is an **exploratory prototype**. Its known defects are listed as RF-01 to RF-47 in [docs/00 §4.6](docs/00-context-assumptions-and-questions.md#46-consolidated-repository-findings-rf-01--rf-47). It is not ready for real orders.
+- **Next: M0 Foundation hardening** ([docs/12 §4](docs/12-roadmap-and-backlog.md#4-m0-foundation-hardening-r0-ready-to-start)): a CI gate, the test harness, the error contract, session revocation, a re-baselined schema and a safe production bootstrap, before any feature work.
 
 ## Roadmap
 
-- [x] Customer authentication (signup, login, logout)
-- [x] Product browsing & category navigation
-- [x] Shopping cart
-- [x] Checkout flow
-- [ ] Vendor onboarding & shop registration
-- [ ] Order management dashboard
-- [ ] Inventory management
-- [ ] Vendor analytics dashboard
-- [ ] Admin panel (user, shop, product moderation)
-- [ ] Payment gateway integration
-- [ ] Wishlist
-- [ ] Mobile application
+| Milestone | Name                                     | Release   | Goal                                                                                          |
+| --------- | ---------------------------------------- | --------- | --------------------------------------------------------------------------------------------- |
+| M0        | Foundation hardening                     | R0        | Every high repository finding closed or guarded; CI gate; schema re-baseline; safe bootstrap  |
+| M1        | Identity & accounts                      | R1        | Sign-up, verification, login, recovery, addresses; staff TOTP; user suspension                |
+| M2        | Shop onboarding & membership             | R1        | Users apply, admins review, approved shops set up profile, delivery, staff and payout account |
+| M3        | Catalog authoring & media                | R1        | Products with variants, images, disclosures and stock; moderation                             |
+| M4        | Storefront discovery                     | R1        | Server-rendered listings, search, product and shop pages within budgets                       |
+| M5        | Cart & COD checkout                      | R1        | Server cart and one idempotent multi-shop COD order without oversell                          |
+| M6        | Order processing & fulfillment           | R1        | Accept, ship, deliver, collect, return to origin; tracking; support cases and returns         |
+| M7        | Ledger, admin ops & launch readiness     | R1 (gate) | Ledger, remittances, refunds, admin operations; the R1 launch gate                            |
+| M8        | Gateway payments                         | R1.1      | One wallet gateway, gateway refunds, reconciliation, vendor payouts                           |
+| M9        | Returns, reviews, wishlist, coupons, SMS | R2        | Self-serve returns, reviews, wishlist, platform coupons, SMS and phone OTP                    |
 
----
+R1 is cash on delivery only, in English, with vendors shipping their own parcels. Scope, exit criteria and the decisions each milestone needs are in [docs/12](docs/12-roadmap-and-backlog.md) and [docs/01 §5](docs/01-product-requirements.md#51-release-phases).
+
+## Architecture (target)
+
+A modular monolith on AdonisJS 7 ([ADR-0002](docs/adr/0002-modular-monolith-adonisjs.md)), in two processes built from one image:
+
+- **`web`**: the HTTP server. Inertia React pages, server-rendered for the storefront and rendered in the browser for the seller and admin dashboards ([ADR-0003](docs/adr/0003-inertia-ssr-storefront-csr-dashboards.md)). Pages read through Inertia props and write through the JSON API under `/api/v1` ([ADR-0004](docs/adr/0004-inertia-reads-json-api-writes.md)).
+- **`worker`**: background jobs on pg-boss, in the same PostgreSQL database, sent in the same transaction as the change that causes them ([ADR-0010](docs/adr/0010-postgres-jobs-pg-boss-transactional-send.md)).
+
+PostgreSQL 18 holds all durable state, including sessions, jobs and the listing read model used for search ([ADR-0014](docs/adr/0014-postgres-search-and-listing-read-model.md)). Images and KYC files live in S3-compatible object storage. Money is stored as integer paisa ([ADR-0007](docs/adr/0007-money-integer-minor-units.md)). Hosting is a single region near Nepal behind Cloudflare, kept portable ([ADR-0016](docs/adr/0016-hosting-single-region-portable.md), still Proposed). See [docs/03](docs/03-system-architecture.md) for the full architecture and the [ADR index](docs/adr/README.md) for every decision.
+
+| Area     | Technology                                                                           |
+| -------- | ------------------------------------------------------------------------------------ |
+| Frontend | React 19, Inertia, TypeScript, Tailwind CSS v4, shadcn/ui on Radix, lucide icons     |
+| Backend  | AdonisJS 7, Lucid ORM, VineJS validation, session authentication, Tuyau typed routes |
+| Data     | PostgreSQL 18; pg-boss for jobs; S3-compatible object storage                        |
+| Tests    | Japa (unit, functional, browser suites)                                              |
+| Tooling  | Node 24, pnpm 11, Vite, ESLint, Prettier, Husky                                      |
+
+Exact versions are in [docs/00 §4.2](docs/00-context-assumptions-and-questions.md#42-stack-and-exact-versions).
+
+## Documentation
+
+Start at [docs/README.md](docs/README.md): it lists every document, what it owns and a reading order for each role. Coding agents and contributors should also read [AGENTS.md](AGENTS.md).
+
+## Running the prototype
+
+The steps below run the current prototype. M0 replaces them with the target setup of [docs/11 §4.4](docs/11-deployment-and-operations.md#44-local-setup-in-five-commands).
+
+Prerequisites: Node.js 24 or later, pnpm 11 (enforced by `packageManager`), Docker.
+
+```bash
+git clone https://github.com/harublank0-0/drip-nepal.git
+cd drip-nepal
+pnpm install
+
+cp .env.example .env
+node ace generate:key
+# add the database settings to .env, matching docker-compose.yml:
+# DB_HOST=localhost DB_PORT=5432 DB_USER=dripnepal DB_PASSWORD=secret DB_DATABASE=dripnepal
+
+docker compose up -d     # PostgreSQL 18, Redis and Mailpit (the app uses only PostgreSQL)
+node ace migration:run
+node ace db:seed
+pnpm dev                 # http://localhost:3333
+```
+
+| Script           | What it does                                    |
+| ---------------- | ----------------------------------------------- |
+| `pnpm dev`       | Development server with hot module replacement  |
+| `pnpm build`     | Production build                                |
+| `pnpm start`     | Start the production build                      |
+| `pnpm test`      | Japa test suites                                |
+| `pnpm lint`      | ESLint                                          |
+| `pnpm typecheck` | TypeScript checks for the server and `inertia/` |
+| `pnpm format`    | Prettier                                        |
 
 ## Contributing
 
-Contributions are welcome! Here's how to get started:
-
-1. **Fork** the repository
-2. **Create a branch** — `git checkout -b feat/my-feature`
-3. **Make your changes** — write code, add tests, update docs
-4. **Run the tests** — `pnpm test` and `pnpm lint`
-5. **Submit a pull request** — describe what you changed and why
-
-Please make sure your code passes the linting and type-checking steps before opening a PR.
-
----
-
-## Code Style
-
-This project enforces consistent code quality through automation:
-
-- **TypeScript** — strict mode with full type safety
-- **ESLint** — flat config (`eslint.config.js`) with `@adonisjs/eslint-config`
-- **Prettier** — automatic formatting with `@adonisjs/prettier-config`
-- **Import aliases** — clean imports via `#models/*`, `#controllers/*`, `~/components/*`, etc.
-
----
+1. Read [AGENTS.md](AGENTS.md) and the documents that own what you are changing ([docs/README.md §3](docs/README.md#3-where-to-find)).
+2. Build what the current milestone of [docs/12](docs/12-roadmap-and-backlog.md) schedules, to the rules of [docs/09](docs/09-code-structure-and-engineering-standards.md).
+3. When the code needs a rule to change, change the owning document in the same pull request ([docs/README.md §4](docs/README.md#4-changing-a-document)).
+4. Run `pnpm lint`, `pnpm typecheck` and `pnpm test` before opening a pull request. From M0, CI blocks on the gates of [docs/10 §5](docs/10-testing-and-quality-gates.md#5-ci-quality-gates).
 
 ## License
 
-This project is open source under the **MIT License**. See the [LICENSE](./LICENSE) file for details.
-
----
+MIT. See [LICENSE](LICENSE).
 
 ## Author
 
-**Haru Blank**
-
-- Website: _Coming soon_
-- Twitter / X: _Coming soon_
-- GitHub: [@your-username](https://github.com/your-username)
-
----
-
-Built with ❤️ for Nepal's local businesses.
+**Haru Blank**. Built for Nepal's local businesses.
