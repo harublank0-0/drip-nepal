@@ -51,7 +51,7 @@ The [decision log](../risks-and-open-decisions.md#23-decision-log) of the risks 
 | Check                                                                                      | Result                                                                                                       |
 | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
 | References to planning notes, local paths or earlier research summaries                    | None. The research files describe their own sources; that is expected.                                       |
-| Links and anchors between documents                                                        | All resolve except `docs/README.md`, the documentation index, which comes next                               |
+| Links and anchors between documents                                                        | All resolve; the documentation index [docs/README.md](../README.md) was added right after the review         |
 | Test IDs, OD and VX numbers cited                                                          | All registered: 274 test IDs, 54 ODs, 15 VX items                                                            |
 | 06 §13 operations against openapi.yaml                                                     | Equal: 158 operations, 13 specified with full schemas and 145 pending                                        |
 | Operation names, error codes, permission slugs and table columns used outside their owners | None undefined; the names a script flags are helper functions, library calls or descriptions of today's code |
@@ -69,6 +69,6 @@ The [decision log](../risks-and-open-decisions.md#23-decision-log) of the risks 
 
 ## 7. Next steps
 
-1. Write `docs/README.md`, the index of this documentation set.
+1. Done: [docs/README.md](../README.md), the index of this documentation set, with [AGENTS.md](../../AGENTS.md) for coding agents.
 2. Start M0 ([12 §4](../12-roadmap-and-backlog.md#4-m0-foundation-hardening-r0-ready-to-start)). Decide OD-24 and OD-50 before M1 code starts.
 3. When a document changes, keep the conventions of section 4 and update the owner first.
