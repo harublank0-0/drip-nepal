@@ -24,3 +24,11 @@ yarn-error.log
 
 # Platform specific
 .DS_Store
+
+# TypeScript incremental build info
+*.tsbuildinfo
+
+# Third-party agent skills: restore locally from skills-lock.json.
+# The project's own skill stays tracked.
+.agents/skills/*
+!.agents/skills/dripnepal-docs/

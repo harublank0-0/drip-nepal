@@ -20,8 +20,5 @@
     "ui": "~/components/ui",
     "lib": "~/lib",
     "hooks": "~/hooks"
-  },
-  "registries": {
-    "@commercn": "https://commercn.com/r/{name}.json"
   }
 }
