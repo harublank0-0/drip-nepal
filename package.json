@@ -89,8 +89,6 @@
     "@tanstack/react-form": "^1.33.0",
     "@tuyau/core": "^1.2.2",
     "@vinejs/vine": "^4.4.0",
-    "D": "^1.0.0",
-    "better-sqlite3": "^12.10.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
