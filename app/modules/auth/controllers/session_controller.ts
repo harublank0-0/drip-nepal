@@ -1,6 +1,14 @@
 import User from '#models/user'
 import { userLoginValidator } from '#modules/auth/validators/user'
 import { canSignIn, signIn } from '#modules/auth/account_access'
+import {
+  clientNetwork,
+  consumeOrReject,
+  limiterKey,
+  loginAccountLimiter,
+  loginNetworkLimiter,
+  tooManyAttempts,
+} from '#modules/auth/rate_limits'
 import { errors as authErrors } from '@adonisjs/auth'
 import { errors as vineErrors } from '@vinejs/vine'
 
@@ -25,10 +33,20 @@ export default class SessionController {
    */
   async store(ctx: HttpContext) {
     const { email, password } = await ctx.request.validateUsing(userLoginValidator)
+    const network = clientNetwork(ctx.request.ip())
+
+    // Per network, before any password work; then per account and network,
+    // counting failures only (docs/07 §3.6).
+    await consumeOrReject(loginNetworkLimiter(), limiterKey('login:ip', network), 'email')
+    const accountKey = limiterKey('login:acct_ip', email.toLowerCase(), network)
 
     let user: User
     try {
-      user = await User.verifyCredentials(email, password)
+      const [throttled, found] = await loginAccountLimiter().penalize(accountKey, () =>
+        User.verifyCredentials(email, password)
+      )
+      if (throttled) tooManyAttempts('email', throttled.response.availableIn)
+      user = found
     } catch (error) {
       if (error instanceof authErrors.E_INVALID_CREDENTIALS) {
         throw new vineErrors.E_VALIDATION_ERROR([{ field: 'email', message: LOGIN_FAILED }])

@@ -6,6 +6,12 @@ import { ShopAddressTypes } from '#constants/shop_address_type'
 import type { HttpContext } from '@adonisjs/core/http'
 import db from '@adonisjs/lucid/services/db'
 import { signIn } from '#modules/auth/account_access'
+import {
+  clientNetwork,
+  consumeOrReject,
+  limiterKey,
+  signupNetworkLimiter,
+} from '#modules/auth/rate_limits'
 import { ShopStatus } from '#constants/shop_status'
 
 export default class ShopRegistrationController {
@@ -28,6 +34,11 @@ export default class ShopRegistrationController {
    */
   async store(ctx: HttpContext) {
     const { request, response } = ctx
+    await consumeOrReject(
+      signupNetworkLimiter(),
+      limiterKey('signup:ip', clientNetwork(request.ip())),
+      'email'
+    )
     const data = await request.validateUsing(shopSignupValidator)
     const registration = await db.transaction(async (trx) => {
       const newUser = await User.create(

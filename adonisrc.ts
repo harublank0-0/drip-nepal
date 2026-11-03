@@ -60,6 +60,7 @@ export default defineConfig({
     () => import('@adonisjs/auth/auth_provider'),
     () => import('#providers/api_provider'),
     () => import('@adonisjs/drive/drive_provider'),
+    () => import('@adonisjs/limiter/limiter_provider'),
   ],
 
   /*
