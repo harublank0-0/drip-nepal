@@ -1,263 +1,249 @@
-import { useState, useRef, useEffect } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { Carousel, CarouselContent, CarouselItem } from '~/components/ui/carousel'
-import { Dialog, DialogContent, DialogTitle } from '~/components/ui/dialog'
+import { useEffect, useRef, useState } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import { VisuallyHidden } from 'radix-ui'
+import { ChevronLeft, ChevronRight, ImageIcon, X, ZoomIn } from 'lucide-react'
+import type { Data } from '@generated/data'
+import { Dialog, DialogContent, DialogTitle } from '~/components/ui/dialog'
 import { cn } from '~/lib/utils'
-import type { ProductImage } from '../mock'
 
-const zoomImage = (
-  e: React.MouseEvent<HTMLDivElement>,
-  container: HTMLDivElement | null,
-  img: HTMLImageElement | null
-) => {
-  if (!container || !img) return
-  const rect = container.getBoundingClientRect()
-  const x = ((e.clientX - rect.left) / rect.width) * 100
-  const y = ((e.clientY - rect.top) / rect.height) * 100
-  img.style.transformOrigin = `${x}% ${y}%`
+type GalleryImage = {
+  id: string
+  src: string
+  thumbnail: string
+  alt: string
 }
 
 type ProductGalleryProps = {
-  images: ProductImage[]
+  media: Data.ProductMedia[] | undefined
+  productName: string
 }
 
-export function ProductGallery({ images }: ProductGalleryProps) {
+const SWIPE_THRESHOLD = 40
+
+function toGalleryImages(media: Data.ProductMedia[], productName: string): GalleryImage[] {
+  return [...media]
+    .sort((a, b) => (a.sortOrder ?? Infinity) - (b.sortOrder ?? Infinity))
+    .map((item, index) => ({
+      id: item.id,
+      src: item.url,
+      thumbnail: item.thumbnailUrl ?? item.url,
+      alt: item.altText || `${productName}, photo ${index + 1}`,
+    }))
+}
+
+function zoomAt(event: React.MouseEvent<HTMLDivElement>, img: HTMLImageElement | null) {
+  if (!img || !window.matchMedia('(hover: hover) and (min-width: 768px)').matches) return
+  const rect = event.currentTarget.getBoundingClientRect()
+  const x = ((event.clientX - rect.left) / rect.width) * 100
+  const y = ((event.clientY - rect.top) / rect.height) * 100
+  img.style.transformOrigin = `${x}% ${y}%`
+  img.style.transform = 'scale(1.8)'
+}
+
+function resetZoom(img: HTMLImageElement | null) {
+  if (!img) return
+  img.style.transform = 'scale(1)'
+  img.style.transformOrigin = '50% 50%'
+}
+
+export function ProductGallery({ media, productName }: ProductGalleryProps) {
+  const images = toGalleryImages(media ?? [], productName)
   const [activeIndex, setActiveIndex] = useState(0)
   const [showFullscreen, setShowFullscreen] = useState(false)
-  const containerRef = useRef<HTMLDivElement>(null)
   const imgRef = useRef<HTMLImageElement>(null)
+  const touchStartX = useRef<number | null>(null)
+
+  const hasMany = images.length > 1
+  const showPrevious = () => setActiveIndex((i) => (i === 0 ? images.length - 1 : i - 1))
+  const showNext = () => setActiveIndex((i) => (i === images.length - 1 ? 0 : i + 1))
 
   useEffect(() => {
-    if (!showFullscreen) return
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowLeft') {
-        setActiveIndex((prev) => (prev === 0 ? images.length - 1 : prev - 1))
-      } else if (e.key === 'ArrowRight') {
-        setActiveIndex((prev) => (prev === images.length - 1 ? 0 : prev + 1))
+    if (!showFullscreen || images.length < 2) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'ArrowLeft') {
+        setActiveIndex((i) => (i === 0 ? images.length - 1 : i - 1))
+      } else if (event.key === 'ArrowRight') {
+        setActiveIndex((i) => (i === images.length - 1 ? 0 : i + 1))
       }
     }
-    window.addEventListener('keydown', handleKey)
-    return () => window.removeEventListener('keydown', handleKey)
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
   }, [showFullscreen, images.length])
+
+  if (images.length === 0) {
+    return (
+      <div className="flex aspect-[4/5] w-full flex-col items-center justify-center gap-3 rounded-2xl bg-muted text-muted-foreground">
+        <ImageIcon className="size-10 opacity-50" aria-hidden="true" />
+        <p className="text-sm">No photos yet</p>
+      </div>
+    )
+  }
+
+  const active = images[Math.min(activeIndex, images.length - 1)]
 
   return (
     <>
-      <div className="flex flex-col-reverse md:flex-row gap-3 md:gap-4">
-        {/* Thumbnails — horizontal on mobile, vertical on desktop */}
-        <div className="flex md:flex-col gap-2 overflow-x-auto md:overflow-y-auto md:max-h-[600px] scrollbar-thin">
-          {images.map((img, i) => (
-            <button
-              key={img.id}
-              onClick={() => setActiveIndex(i)}
-              className={cn(
-                'flex-shrink-0 w-16 md:w-20 h-16 md:h-20 rounded-lg overflow-hidden ring-1 transition-all duration-200',
-                activeIndex === i
-                  ? 'ring-2 ring-primary ring-offset-2 ring-offset-background'
-                  : 'ring-foreground/10 hover:ring-foreground/30'
-              )}
-              aria-label={`View ${img.alt}`}
-            >
-              <img
-                src={img.src}
-                alt={img.alt}
-                className="w-full h-full object-cover"
-                loading={i === 0 ? 'eager' : 'lazy'}
-              />
-            </button>
-          ))}
-        </div>
+      <div className="flex flex-col-reverse gap-3 md:flex-row md:gap-4">
+        {hasMany && (
+          <div className="flex gap-2 overflow-x-auto p-1 md:max-h-[640px] md:flex-col md:overflow-x-hidden md:overflow-y-auto">
+            {images.map((image, index) => (
+              <button
+                key={image.id}
+                type="button"
+                onClick={() => setActiveIndex(index)}
+                className={cn(
+                  'size-16 shrink-0 overflow-hidden rounded-lg ring-1 transition-all duration-200 md:size-20',
+                  active.id === image.id
+                    ? 'ring-2 ring-primary ring-offset-2 ring-offset-background'
+                    : 'ring-foreground/10 hover:ring-foreground/30'
+                )}
+                aria-label={`Show photo ${index + 1} of ${images.length}`}
+                aria-current={active.id === image.id}
+              >
+                <img
+                  src={image.thumbnail}
+                  alt=""
+                  className="size-full object-cover"
+                  loading={index === 0 ? 'eager' : 'lazy'}
+                />
+              </button>
+            ))}
+          </div>
+        )}
 
-        {/* Main Image with zoom */}
         <div
-          ref={containerRef}
-          className="flex-1 relative overflow-hidden rounded-2xl bg-muted aspect-[4/5] md:aspect-auto md:min-h-[600px] cursor-crosshair group"
-          onMouseMove={(e) => {
-            if (window.innerWidth >= 768) zoomImage(e, containerRef.current, imgRef.current)
-            if (window.innerWidth >= 768) {
-              const img = imgRef.current
-              if (img) img.style.transform = 'scale(1.8)'
-            }
+          className="group relative aspect-[4/5] flex-1 cursor-zoom-in overflow-hidden rounded-2xl bg-muted"
+          onMouseMove={(event) => zoomAt(event, imgRef.current)}
+          onMouseLeave={() => resetZoom(imgRef.current)}
+          onTouchStart={(event) => {
+            touchStartX.current = event.touches[0].clientX
           }}
-          onMouseLeave={() => {
-            const img = imgRef.current
-            if (img) {
-              img.style.transform = 'scale(1)'
-              img.style.transformOrigin = '50% 50%'
-            }
+          onTouchEnd={(event) => {
+            if (!hasMany || touchStartX.current === null) return
+            const deltaX = event.changedTouches[0].clientX - touchStartX.current
+            touchStartX.current = null
+            if (deltaX > SWIPE_THRESHOLD) showPrevious()
+            else if (deltaX < -SWIPE_THRESHOLD) showNext()
           }}
           onClick={() => setShowFullscreen(true)}
           role="button"
           tabIndex={0}
-          aria-label="Open fullscreen image"
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') setShowFullscreen(true)
+          aria-label="Open photo in fullscreen"
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault()
+              setShowFullscreen(true)
+            }
           }}
         >
-          <AnimatePresence mode="wait">
+          <AnimatePresence mode="wait" initial={false}>
             <motion.img
-              key={activeIndex}
-              src={images[activeIndex].src}
-              alt={images[activeIndex].alt}
+              key={active.id}
               ref={imgRef}
+              src={active.src}
+              alt={active.alt}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.3 }}
-              className="w-full h-full object-cover transition-transform duration-200 ease-out will-change-transform"
+              transition={{ duration: 0.25 }}
+              className="size-full object-cover transition-transform duration-200 ease-out will-change-transform"
               loading="eager"
+              draggable={false}
             />
           </AnimatePresence>
 
-          <div className="absolute top-4 right-4 bg-background/80 backdrop-blur-sm rounded-full px-3 py-1.5 text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity duration-200 md:flex hidden items-center gap-1">
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <circle cx="11" cy="11" r="8" />
-              <path d="m21 21-4.35-4.35" />
-              <path d="M11 8v6" />
-              <path d="M8 11h6" />
-            </svg>
+          <span className="pointer-events-none absolute top-4 right-4 hidden items-center gap-1 rounded-full bg-background/80 px-3 py-1.5 text-xs font-medium opacity-0 backdrop-blur-sm transition-opacity duration-200 group-hover:opacity-100 md:flex">
+            <ZoomIn className="size-3.5" aria-hidden="true" />
             Zoom
-          </div>
+          </span>
         </div>
       </div>
 
-      {/* Fullscreen Dialog */}
       <Dialog open={showFullscreen} onOpenChange={setShowFullscreen}>
         <DialogContent
           showCloseButton={false}
-          className="sm:max-w-none w-screen h-screen max-h-screen rounded-none p-0 bg-black/95"
+          aria-describedby={undefined}
+          className="h-dvh max-h-dvh w-screen max-w-none rounded-none bg-black/95 p-0 sm:max-w-none"
         >
-          <VisuallyHidden.VisuallyHidden asChild>
-            <DialogTitle>Product Image</DialogTitle>
-          </VisuallyHidden.VisuallyHidden>
+          <VisuallyHidden.Root asChild>
+            <DialogTitle>{productName} photos</DialogTitle>
+          </VisuallyHidden.Root>
 
           <button
+            type="button"
             onClick={() => setShowFullscreen(false)}
-            className="absolute top-6 right-6 z-20 size-10 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center text-white hover:bg-white/20 transition-colors"
+            className="absolute top-4 right-4 z-20 flex size-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur-sm transition-colors hover:bg-white/20 md:top-6 md:right-6"
             aria-label="Close fullscreen"
           >
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M18 6 6 18" />
-              <path d="m6 6 12 12" />
-            </svg>
+            <X className="size-5" />
           </button>
 
-          <div className="flex h-full items-center gap-6 px-6 md:px-12">
-            {/* Thumbnails — left column, desktop only */}
-            <div className="hidden md:flex flex-col gap-2 overflow-y-auto max-h-[70vh] flex-shrink-0 scrollbar-thin">
-              {images.map((img, i) => (
+          <div className="flex h-full items-center gap-6 px-4 md:px-12">
+            {hasMany && (
+              <div className="hidden max-h-[70vh] shrink-0 flex-col gap-2 overflow-y-auto p-1 md:flex">
+                {images.map((image, index) => (
+                  <button
+                    key={image.id}
+                    type="button"
+                    onClick={() => setActiveIndex(index)}
+                    className={cn(
+                      'h-20 w-16 shrink-0 overflow-hidden rounded-lg ring-1 transition-all duration-200',
+                      active.id === image.id
+                        ? 'ring-2 ring-white ring-offset-2 ring-offset-black'
+                        : 'ring-white/20 hover:ring-white/50'
+                    )}
+                    aria-label={`Show photo ${index + 1} of ${images.length}`}
+                    aria-current={active.id === image.id}
+                  >
+                    <img src={image.thumbnail} alt="" className="size-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className="flex min-w-0 flex-1 items-center justify-center gap-2 md:gap-4">
+              {hasMany && (
                 <button
-                  key={img.id}
-                  onClick={() => setActiveIndex(i)}
-                  className={cn(
-                    'flex-shrink-0 w-16 h-20 rounded-lg overflow-hidden ring-1 transition-all duration-200',
-                    activeIndex === i
-                      ? 'ring-2 ring-white ring-offset-2 ring-offset-black/95'
-                      : 'ring-white/20 hover:ring-white/50'
-                  )}
-                  aria-label={`View ${img.alt}`}
+                  type="button"
+                  onClick={showPrevious}
+                  className="flex size-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur-sm transition-colors hover:bg-white/20 md:size-12"
+                  aria-label="Previous photo"
                 >
-                  <img
-                    src={img.src}
-                    alt={img.alt}
-                    className="w-full h-full object-cover"
-                    loading={i === 0 ? 'eager' : 'lazy'}
-                  />
+                  <ChevronLeft className="size-5" />
                 </button>
-              ))}
-            </div>
+              )}
 
-            {/* Main image area */}
-            <div className="flex items-center gap-4 flex-1 min-w-0 justify-center">
-              <button
-                onClick={() =>
-                  setActiveIndex((prev) => (prev === 0 ? images.length - 1 : prev - 1))
-                }
-                className="size-12 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center text-white hover:bg-white/20 transition-colors flex-shrink-0"
-                aria-label="Previous image"
-              >
-                <svg
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="m15 18-6-6 6-6" />
-                </svg>
-              </button>
-
-              <AnimatePresence mode="wait">
+              <AnimatePresence mode="wait" initial={false}>
                 <motion.img
-                  key={activeIndex}
-                  src={images[activeIndex].src}
-                  alt={images[activeIndex].alt}
-                  initial={{ opacity: 0, scale: 0.95 }}
+                  key={active.id}
+                  src={active.src}
+                  alt={active.alt}
+                  initial={{ opacity: 0, scale: 0.97 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  transition={{ duration: 0.3 }}
-                  className="max-h-[80vh] max-w-full object-contain rounded-lg"
+                  exit={{ opacity: 0, scale: 0.97 }}
+                  transition={{ duration: 0.25 }}
+                  className="max-h-[80vh] min-w-0 max-w-full rounded-lg object-contain"
                 />
               </AnimatePresence>
 
-              <button
-                onClick={() =>
-                  setActiveIndex((prev) => (prev === images.length - 1 ? 0 : prev + 1))
-                }
-                className="size-12 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center text-white hover:bg-white/20 transition-colors flex-shrink-0"
-                aria-label="Next image"
-              >
-                <svg
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+              {hasMany && (
+                <button
+                  type="button"
+                  onClick={showNext}
+                  className="flex size-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur-sm transition-colors hover:bg-white/20 md:size-12"
+                  aria-label="Next photo"
                 >
-                  <path d="m9 18 6-6-6-6" />
-                </svg>
-              </button>
+                  <ChevronRight className="size-5" />
+                </button>
+              )}
             </div>
           </div>
 
-          {/* Dots — mobile only */}
-          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2 md:hidden">
-            {images.map((_, i) => (
-              <button
-                key={i}
-                onClick={() => setActiveIndex(i)}
-                className={cn(
-                  'size-2 rounded-full transition-all duration-200',
-                  i === activeIndex ? 'bg-white w-6' : 'bg-white/40 hover:bg-white/60'
-                )}
-                aria-label={`Go to image ${i + 1}`}
-              />
-            ))}
-          </div>
+          {hasMany && (
+            <p className="absolute bottom-6 left-1/2 -translate-x-1/2 text-sm text-white/70">
+              {Math.min(activeIndex, images.length - 1) + 1} / {images.length}
+            </p>
+          )}
         </DialogContent>
       </Dialog>
     </>

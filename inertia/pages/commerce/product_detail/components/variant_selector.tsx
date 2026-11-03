@@ -1,132 +1,158 @@
-import { useState } from 'react'
-import { motion } from 'framer-motion'
 import { cn } from '~/lib/utils'
-import type { ProductColor, ProductSize } from '../mock'
+import type { OptionValue, VariantOption } from '../hooks/use_variant_selection'
 
-type VariantSelectorProps = {
-  colors: ProductColor[]
-  sizes: ProductSize[]
+/*
+ * Swatches for the color names shops use. Unknown names render as a plain
+ * text chip.
+ */
+const SWATCHES: Record<string, string> = {
+  beige: '#d9c8a9',
+  black: '#111111',
+  blue: '#2563eb',
+  brown: '#7c4a2d',
+  charcoal: '#36454f',
+  cream: '#f3ead3',
+  emerald: '#10b981',
+  gold: '#d4af37',
+  green: '#2f7d32',
+  grey: '#8a8a8a',
+  gray: '#8a8a8a',
+  indigo: '#3f51b5',
+  khaki: '#c3b091',
+  maroon: '#800000',
+  mustard: '#d4a017',
+  navy: '#1f2a44',
+  olive: '#708238',
+  orange: '#f97316',
+  pink: '#ec4899',
+  purple: '#7e22ce',
+  red: '#dc2626',
+  sage: '#9caf88',
+  sky: '#7dd3fc',
+  teal: '#0d9488',
+  white: '#ffffff',
+  yellow: '#facc15',
 }
 
-export function VariantSelector({ colors, sizes }: VariantSelectorProps) {
-  const [selectedColor, setSelectedColor] = useState<string | null>(null)
-  const [selectedSize, setSelectedSize] = useState<string | null>(null)
+type VariantSelectorProps = {
+  sizes: OptionValue[]
+  colors: OptionValue[]
+  selectedSize: string | null
+  selectedColor: string | null
+  onSelect: (option: VariantOption, value: string) => void
+}
+
+export function VariantSelector({
+  sizes,
+  colors,
+  selectedSize,
+  selectedColor,
+  onSelect,
+}: VariantSelectorProps) {
+  if (sizes.length === 0 && colors.length === 0) return null
 
   return (
-    <div className="space-y-6">
-      {/* Color Picker */}
-      <fieldset>
-        <legend className="text-sm font-medium mb-3">
-          Color
-          {selectedColor && (
-            <span className="text-muted-foreground font-normal ml-1">
-              — <span className="capitalize">{selectedColor}</span>
-            </span>
+    <div id="product-options" className="scroll-mt-28 space-y-6">
+      {colors.length > 0 && (
+        <OptionGroup
+          label="Color"
+          values={colors}
+          selected={selectedColor}
+          otherSelected={selectedSize}
+          onSelect={(value) => onSelect('color', value)}
+          renderValue={(value) => (
+            <>
+              {SWATCHES[value.toLowerCase()] && (
+                <span
+                  className="size-4 shrink-0 rounded-full ring-1 ring-foreground/20"
+                  style={{ backgroundColor: SWATCHES[value.toLowerCase()] }}
+                  aria-hidden="true"
+                />
+              )}
+              {value}
+            </>
           )}
-        </legend>
-        <div className="flex flex-wrap gap-3" role="radiogroup" aria-label="Select color">
-          {colors.map((color) => {
-            const isSelected = selectedColor === color.name
-            return (
-              <button
-                key={color.name}
-                onClick={() => setSelectedColor(color.name)}
-                className={cn(
-                  'relative size-10 rounded-full transition-all duration-200 focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2',
-                  isSelected &&
-                    'ring-2 ring-foreground ring-offset-2 ring-offset-background scale-110'
-                )}
-                style={{ backgroundColor: color.value }}
-                aria-label={`Color: ${color.name}`}
-                aria-checked={isSelected}
-                role="radio"
-              >
-                {isSelected && (
-                  <motion.span
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    className="absolute inset-0 flex items-center justify-center"
-                  >
-                    <svg
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke={isLightColor(color.value) ? '#000' : '#fff'}
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M20 6 9 17l-5-5" />
-                    </svg>
-                  </motion.span>
-                )}
-              </button>
-            )
-          })}
-        </div>
-      </fieldset>
+        />
+      )}
 
-      {/* Size Picker */}
-      <fieldset>
-        <legend className="text-sm font-medium mb-3">
-          Size
-          {selectedSize && (
-            <span className="text-muted-foreground font-normal ml-1">— {selectedSize}</span>
-          )}
-        </legend>
-        <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Select size">
-          {sizes.map((size) => {
-            const isSelected = selectedSize === size.label
-            return (
-              <motion.button
-                key={size.label}
-                onClick={() => size.available && setSelectedSize(size.label)}
-                whileTap={size.available ? { scale: 0.95 } : undefined}
-                disabled={!size.available}
-                className={cn(
-                  'relative min-w-[48px] h-10 px-4 rounded-lg text-sm font-medium transition-all duration-200 focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2',
-                  isSelected
-                    ? 'bg-foreground text-background scale-105'
-                    : size.available
-                      ? 'bg-muted hover:bg-muted/80 text-foreground'
-                      : 'bg-muted/30 text-muted-foreground/40 cursor-not-allowed'
-                )}
-                aria-label={`Size: ${size.label}${!size.available ? ' — unavailable' : ''}`}
-                aria-checked={isSelected}
-                role="radio"
-              >
-                {size.label}
-                {!size.available && (
-                  <span
-                    className="absolute inset-0 flex items-center justify-center pointer-events-none"
-                    aria-hidden="true"
-                  >
-                    <svg width="100%" height="1" className="absolute text-muted-foreground/30">
-                      <line
-                        x1="0"
-                        y1="50%"
-                        x2="100%"
-                        y2="50%"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                      />
-                    </svg>
-                  </span>
-                )}
-              </motion.button>
-            )
-          })}
-        </div>
-      </fieldset>
+      {sizes.length > 0 && (
+        <OptionGroup
+          label="Size"
+          values={sizes}
+          selected={selectedSize}
+          otherSelected={selectedColor}
+          onSelect={(value) => onSelect('size', value)}
+          renderValue={(value) => value}
+        />
+      )}
     </div>
   )
 }
 
-function isLightColor(hex: string) {
-  const c = hex.replace('#', '')
-  const r = Number.parseInt(c.substring(0, 2), 16)
-  const g = Number.parseInt(c.substring(2, 4), 16)
-  const b = Number.parseInt(c.substring(4, 6), 16)
-  return (r * 299 + g * 587 + b * 114) / 1000 > 155
+type OptionGroupProps = {
+  label: string
+  values: OptionValue[]
+  selected: string | null
+  otherSelected: string | null
+  onSelect: (value: string) => void
+  renderValue: (value: string) => React.ReactNode
+}
+
+function OptionGroup({
+  label,
+  values,
+  selected,
+  otherSelected,
+  onSelect,
+  renderValue,
+}: OptionGroupProps) {
+  return (
+    <div role="group" aria-labelledby={`option-${label}`}>
+      <p id={`option-${label}`} className="mb-3 text-sm font-medium">
+        {label}
+        {selected ? (
+          <span className="ml-1 font-normal text-muted-foreground">: {selected}</span>
+        ) : (
+          <span className="ml-1 font-normal text-muted-foreground">
+            : select a {label.toLowerCase()}
+          </span>
+        )}
+      </p>
+
+      <div className="flex flex-wrap gap-2">
+        {values.map((option) => {
+          const isSelected = option.value === selected
+          const isAvailable = option.exists && option.inStock
+          const reason = !option.exists
+            ? `not available in ${otherSelected}`
+            : !option.inStock
+              ? 'out of stock'
+              : null
+
+          return (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => onSelect(option.value)}
+              disabled={!isAvailable && !isSelected}
+              aria-pressed={isSelected}
+              aria-label={reason ? `${option.value}, ${reason}` : option.value}
+              title={reason ? `${option.value}: ${reason}` : undefined}
+              className={cn(
+                'inline-flex h-10 min-w-12 items-center justify-center gap-2 rounded-lg border px-3.5 text-sm font-medium transition-colors duration-150 outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
+                isSelected
+                  ? 'border-foreground bg-foreground text-background'
+                  : 'border-border bg-background hover:border-foreground/50',
+                !isAvailable &&
+                  !isSelected &&
+                  'cursor-not-allowed border-dashed text-muted-foreground/60 line-through hover:border-border'
+              )}
+            >
+              {renderValue(option.value)}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
 }

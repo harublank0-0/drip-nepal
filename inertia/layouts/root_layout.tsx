@@ -1,16 +1,11 @@
 import { type Data } from '@generated/data'
 import { toast, Toaster } from 'sonner'
-import { usePage } from '@inertiajs/react'
+import { Head, usePage } from '@inertiajs/react'
 import { type ReactElement, useEffect } from 'react'
 import { ThemeProvider } from '~/components/providers/theme_provider'
 import { TooltipProvider } from '~/components/ui/tooltip'
 
-export default function RootLayout({
-  children,
-  ...rest
-}: {
-  children: ReactElement<Data.SharedProps>
-}) {
+export default function RootLayout({ children }: { children: ReactElement<Data.SharedProps> }) {
   const { url } = usePage()
   useEffect(() => {
     toast.dismiss()
@@ -25,9 +20,10 @@ export default function RootLayout({
     }
   })
 
-  console.info({ pageProps: rest })
   return (
     <>
+      {/* Default title; a page's own <Head title> overrides it. */}
+      <Head title="" />
       <ThemeProvider defaultTheme="dark">
         <TooltipProvider>
           {children}

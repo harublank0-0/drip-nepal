@@ -1,8 +1,9 @@
 import { motion } from 'framer-motion'
 import { ArrowRight } from 'lucide-react'
 import { Link } from '@adonisjs/inertia/react'
+import type { Data } from '@generated/data'
 import { Button } from '~/components/ui/button'
-import { DripProductCard } from '~/components/commerce/drip_product_card'
+import { CatalogProductCard } from '~/components/commerce/catalog_product_card'
 import {
   Carousel,
   CarouselContent,
@@ -10,116 +11,47 @@ import {
   CarouselNext,
   CarouselPrevious,
 } from '~/components/ui/carousel'
-import ManImage from '~/assets/hero-image/man.png'
-import WomanImage from '~/assets/hero-image/woman.png'
-import ShoesImage from '~/assets/men/shoes.jpg'
-import MaleModel from '~/assets/men/male-model.jpg'
 
-const mockProducts = [
-  {
-    name: 'Oversized Hoodie',
-    description: 'Heavyweight cotton fleece',
-    price: 89.99,
-    image: ManImage,
-    hoverImage: MaleModel,
-    isBestSeller: true,
-    isFavorited: false,
-  },
-  {
-    name: 'Cargo Pants',
-    description: 'Relaxed fit with taper',
-    price: 74.99,
-    image: WomanImage,
-    hoverImage: ShoesImage,
-    isBestSeller: false,
-    isFavorited: true,
-  },
-  {
-    name: 'Varsity Jacket',
-    description: 'Wool blend with leather sleeves',
-    price: 149.99,
-    image: ShoesImage,
-    hoverImage: ManImage,
-    isBestSeller: true,
-    isFavorited: false,
-  },
-  {
-    name: 'Graphic Tee',
-    description: 'Limited edition print',
-    price: 39.99,
-    image: MaleModel,
-    hoverImage: WomanImage,
-    isBestSeller: false,
-    isFavorited: false,
-  },
-  {
-    name: 'Track Pants',
-    description: 'French terry jogger',
-    price: 64.99,
-    image: ManImage,
-    hoverImage: ShoesImage,
-    isBestSeller: false,
-    isFavorited: false,
-  },
-  {
-    name: 'Denim Jacket',
-    description: 'Classic trucker fit',
-    price: 119.99,
-    image: WomanImage,
-    hoverImage: MaleModel,
-    isBestSeller: false,
-    isFavorited: true,
-  },
-]
+type FeaturedProductsProps = {
+  products: Data.ProductCard[]
+}
 
-export function FeaturedProducts() {
+export function FeaturedProducts({ products }: FeaturedProductsProps) {
   return (
     <section
-      aria-label="Featured Products"
+      aria-labelledby="new-arrivals-heading"
       className="py-16 md:py-24 px-6 md:px-8 max-w-7xl mx-auto"
     >
       <motion.div
-        className="flex items-center justify-between mb-10"
+        className="flex items-end justify-between gap-4 mb-10"
         initial={{ opacity: 0, y: 20 }}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true, margin: '-100px' }}
         transition={{ duration: 0.6 }}
       >
         <div>
-          <h2 className="text-3xl md:text-4xl font-heading font-bold tracking-tight">
-            Featured Drops
+          <h2
+            id="new-arrivals-heading"
+            className="text-3xl md:text-4xl font-heading font-bold tracking-tight"
+          >
+            New Arrivals
           </h2>
-          <p className="text-muted-foreground text-sm mt-2">Curated picks from this season</p>
+          <p className="text-muted-foreground text-sm mt-2">
+            The latest pieces from shops across Nepal
+          </p>
         </div>
-        <Button variant="ghost" className="hidden md:inline-flex gap-2" asChild>
-          <Link route="men">
-            Shop All <ArrowRight className="size-4" />
+        <Button variant="ghost" className="gap-2" asChild>
+          <Link route="search">
+            Shop all <ArrowRight className="size-4" />
           </Link>
         </Button>
       </motion.div>
 
-      <Carousel
-        opts={{
-          align: 'start',
-          loop: true,
-        }}
-        className="w-full"
-      >
+      <Carousel opts={{ align: 'start' }} className="w-full">
         <CarouselContent>
-          {mockProducts.map((product) => (
-            <CarouselItem
-              key={product.name}
-              className="basis-full sm:basis-1/2 lg:basis-1/3 xl:basis-1/4"
-            >
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.5 }}
-                className="h-full"
-              >
-                <DripProductCard {...product} />
-              </motion.div>
+          {products.map((product) => (
+            <CarouselItem key={product.id} className="basis-1/2 md:basis-1/3 xl:basis-1/4">
+              <CatalogProductCard product={product} className="h-full" />
             </CarouselItem>
           ))}
         </CarouselContent>

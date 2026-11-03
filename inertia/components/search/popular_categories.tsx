@@ -1,47 +1,51 @@
-import { motion } from 'framer-motion'
 import { Link } from '@adonisjs/inertia/react'
-import { routes } from '@generated/registry'
-import type { CategoryResult } from './types'
+
+/*
+ * A fixed shortcut list of storefront categories (slugs from the category
+ * seed). Pages for categories without products show an empty state.
+ */
+const CATEGORIES = [
+  { name: 'Streetwear', slug: 'streetwear' },
+  { name: 'T-Shirts', slug: 't-shirts' },
+  { name: 'Hoodies', slug: 'hoodies' },
+  { name: 'Sneakers', slug: 'sneakers' },
+  { name: 'Jackets', slug: 'jackets' },
+  { name: 'Cargo Pants', slug: 'cargo-pants' },
+  { name: 'Watches', slug: 'watches' },
+  { name: 'Bags', slug: 'bags' },
+  { name: 'Accessories', slug: 'accessories' },
+  { name: 'Traditional Wear', slug: 'traditional-wear' },
+  { name: 'Kurtas', slug: 'kurtas' },
+  { name: 'Sarees', slug: 'sarees' },
+]
 
 type PopularCategoriesProps = {
-  categories: CategoryResult[]
+  onNavigate: () => void
 }
 
-export function PopularCategories({ categories }: PopularCategoriesProps) {
+export function PopularCategories({ onNavigate }: PopularCategoriesProps) {
   return (
-    <div>
-      <h3 className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wider">
-        Popular Categories
+    <section aria-labelledby="search-categories-heading">
+      <h3
+        id="search-categories-heading"
+        className="px-2 py-1.5 text-xs font-medium tracking-wider text-muted-foreground uppercase"
+      >
+        Browse categories
       </h3>
-      <div className="mt-2 grid grid-cols-2 gap-3">
-        {categories.map((cat, i) => (
-          <motion.div
-            key={cat.id}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.05, duration: 0.3 }}
-          >
+      <ul className="mt-1 flex flex-wrap gap-2 px-2">
+        {CATEGORIES.map((category) => (
+          <li key={category.slug}>
             <Link
-              route="men"
-              className="group relative block overflow-hidden rounded-xl aspect-[4/3] bg-muted"
-              aria-label={`Browse ${cat.name} category`}
+              route="categories.show"
+              routeParams={{ slug: category.slug }}
+              onClick={onNavigate}
+              className="inline-flex items-center rounded-full bg-muted/50 px-3 py-1.5 text-sm text-muted-foreground transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
             >
-              {cat.image && (
-                <img
-                  src={cat.image}
-                  alt={cat.name}
-                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                />
-              )}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
-              <div className="absolute bottom-0 left-0 right-0 p-3">
-                <p className="text-sm font-semibold text-white">{cat.name}</p>
-                <p className="text-xs text-white/60">{cat.productCount} products</p>
-              </div>
+              {category.name}
             </Link>
-          </motion.div>
+          </li>
         ))}
-      </div>
-    </div>
+      </ul>
+    </section>
   )
 }

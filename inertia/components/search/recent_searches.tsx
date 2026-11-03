@@ -1,47 +1,57 @@
-import { Search, Clock, X } from 'lucide-react'
+import { Clock, X } from 'lucide-react'
 
 type RecentSearchesProps = {
   items: string[]
   onSearch: (query: string) => void
   onRemove: (item: string) => void
+  onClear: () => void
 }
 
-export function RecentSearches({ items, onSearch, onRemove }: RecentSearchesProps) {
+/*
+ * Terms this browser searched for recently (localStorage only).
+ */
+export function RecentSearches({ items, onSearch, onRemove, onClear }: RecentSearchesProps) {
   if (items.length === 0) return null
 
   return (
-    <div>
-      <h3 className="px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wider">
-        Recent Searches
-      </h3>
-      <div className="mt-1 space-y-0.5">
-        {items.map((item) => (
-          <div
-            key={item}
-            className="group flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
-            onClick={() => onSearch(item)}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') onSearch(item)
-            }}
-            aria-label={`Search for ${item}`}
-          >
-            <Clock className="size-4 text-muted-foreground/50" />
-            <span className="flex-1 text-sm">{item}</span>
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                onRemove(item)
-              }}
-              className="opacity-0 group-hover:opacity-100 size-6 flex items-center justify-center rounded-full hover:bg-muted transition-all"
-              aria-label={`Remove ${item} from recent searches`}
-            >
-              <X className="size-3.5 text-muted-foreground/50" />
-            </button>
-          </div>
-        ))}
+    <section aria-labelledby="recent-searches-heading">
+      <div className="flex items-center justify-between px-2 py-1.5">
+        <h3
+          id="recent-searches-heading"
+          className="text-xs font-medium tracking-wider text-muted-foreground uppercase"
+        >
+          Recent searches
+        </h3>
+        <button
+          type="button"
+          onClick={onClear}
+          className="rounded text-xs text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+        >
+          Clear
+        </button>
       </div>
-    </div>
+      <ul className="mt-1 space-y-0.5">
+        {items.map((item) => (
+          <li key={item} className="group flex items-center rounded-lg hover:bg-muted/50">
+            <button
+              type="button"
+              onClick={() => onSearch(item)}
+              className="flex min-w-0 flex-1 items-center gap-3 rounded-lg px-2 py-2 text-left text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+            >
+              <Clock aria-hidden="true" className="size-4 shrink-0 text-muted-foreground/60" />
+              <span className="truncate">{item}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onRemove(item)}
+              aria-label={`Remove “${item}” from recent searches`}
+              className="mr-1 flex size-7 shrink-0 items-center justify-center rounded-full text-muted-foreground/60 transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
+            >
+              <X aria-hidden="true" className="size-3.5" />
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
   )
 }

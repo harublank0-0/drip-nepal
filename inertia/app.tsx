@@ -14,7 +14,7 @@ import { formDevtoolsPlugin } from '@tanstack/react-form-devtools'
 import { Show } from '~/components/ui/show'
 import { isBrowser } from '~/lib/utils'
 
-const appName = import.meta.env.VITE_APP_NAME || 'AdonisJS'
+const appName = import.meta.env.VITE_APP_NAME || 'Drip Nepal'
 const isDevMode = import.meta.env.DEV
 
 createInertiaApp({

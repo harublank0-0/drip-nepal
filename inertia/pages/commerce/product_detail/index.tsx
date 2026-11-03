@@ -1,58 +1,90 @@
+import { useRef } from 'react'
+import { Head } from '@inertiajs/react'
+import type { Data } from '@generated/data'
 import type { InertiaProps } from '~/types'
+import CustomersLayout from '~/layouts/customers_layout'
+import RootLayout from '~/layouts/root_layout'
 import { Separator } from '~/components/ui/separator'
+import { MobileAddToCartBar } from './components/mobile_add_to_cart_bar'
+import { ProductDescription } from './components/product_description'
 import { ProductGallery } from './components/product_gallery'
 import { ProductInfo } from './components/product_info'
-import { ProductDescription } from './components/product_description'
-import { ReviewSection } from './components/review_section'
 import { RelatedProducts } from './components/related_products'
-import { RecentlyViewed } from './components/recently_viewed'
-import { mockProduct } from './mock'
+import { useAddToCart } from './hooks/use_add_to_cart'
+import { useVariantSelection, type VariantOption } from './hooks/use_variant_selection'
 
-type PageProps = InertiaProps<{}>
+type PageProps = InertiaProps<{
+  product: Data.Product
+  related: Data.ProductCard[]
+}>
 
-export default function Index({}: PageProps) {
-  const product = mockProduct
+export default function ProductDetailPage({ product, related }: PageProps) {
+  const selection = useVariantSelection(product.variants)
+  const cart = useAddToCart()
+  const ctaRef = useRef<HTMLDivElement>(null)
+  const endRef = useRef<HTMLDivElement>(null)
+
+  const onSelect = (option: VariantOption, value: string) => {
+    cart.dismissError()
+    selection.select(option, value)
+  }
+
+  const onQuantityChange = (quantity: number) => {
+    cart.dismissError()
+    selection.changeQuantity(quantity)
+  }
+
+  const onAddToCart = () => {
+    if (selection.state !== 'ready' || !selection.selectedVariant) return
+    cart.addToCart(selection.selectedVariant.id, selection.quantity)
+  }
 
   return (
-    <div className="min-h-screen">
-      {/* Main content */}
-      <div className="max-w-7xl mx-auto px-4 md:px-8 pt-20 md:pt-24">
-        <div className="flex flex-col lg:flex-row lg:gap-10 xl:gap-16">
-          {/* Gallery — 60% on desktop */}
-          <div className="w-full lg:w-[60%] lg:flex-shrink-0">
-            <ProductGallery images={product.images} />
+    <>
+      <Head title={product.name} />
+
+      <div className="mx-auto max-w-7xl px-4 pt-6 pb-8 md:px-8 md:pt-10 md:pb-16">
+        <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:gap-12 xl:gap-16">
+          <div className="w-full lg:w-[58%] lg:shrink-0">
+            <ProductGallery media={product.media} productName={product.name} />
           </div>
 
-          {/* Product Info — 40% on desktop, sticky */}
-          <div className="w-full lg:w-[40%] mt-8 lg:mt-0">
-            <div className="lg:sticky lg:top-28 lg:self-start">
-              <ProductInfo product={product} />
-            </div>
+          <div className="w-full min-w-0 lg:sticky lg:top-24 lg:flex-1">
+            <ProductInfo
+              product={product}
+              selection={selection}
+              onSelect={onSelect}
+              onQuantityChange={onQuantityChange}
+              onAddToCart={onAddToCart}
+              processing={cart.processing}
+              error={cart.error}
+              ctaRef={ctaRef}
+            />
           </div>
         </div>
 
-        <Separator className="my-4 md:my-8" />
+        <Separator className="mt-10 md:mt-14" />
+        <ProductDescription product={product} selectedVariant={selection.selectedVariant} />
 
-        {/* Description tabs */}
-        <ProductDescription product={product} />
+        {related.length > 0 && (
+          <>
+            <Separator />
+            <RelatedProducts products={related} categoryName={product.category?.name} />
+          </>
+        )}
 
-        <Separator className="my-4 md:my-8" />
-
-        {/* Reviews */}
-        <ReviewSection
-          reviews={product.reviews}
-          rating={product.rating}
-          reviewCount={product.reviewCount}
-        />
-
-        <Separator className="my-4 md:my-8" />
-
-        {/* Related Products */}
-        <RelatedProducts products={product.relatedProducts} />
-
-        {/* Recently Viewed */}
-        <RecentlyViewed products={product.relatedProducts.slice(0, 4)} />
+        <div ref={endRef} aria-hidden="true" />
       </div>
-    </div>
+
+      <MobileAddToCartBar
+        selection={selection}
+        processing={cart.processing}
+        onAddToCart={onAddToCart}
+        ctaRef={ctaRef}
+        endRef={endRef}
+      />
+    </>
   )
 }
+
+ProductDetailPage.layout = [RootLayout, CustomersLayout]

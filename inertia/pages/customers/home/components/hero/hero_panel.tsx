@@ -1,9 +1,8 @@
 import { useState } from 'react'
 import { Link } from '@adonisjs/inertia/react'
 import type { routes } from '@generated/registry'
-import { motion } from 'framer-motion'
+import { motion, type Variants } from 'framer-motion'
 import { Button } from '~/components/ui/button'
-import { Typography } from '~/components/ui/typography'
 
 export type HeroPanelProps = {
   image: {
@@ -17,7 +16,7 @@ export type HeroPanelProps = {
   }
 }
 
-const textVariants = {
+const textVariants: Variants = {
   hidden: { y: 40, opacity: 0 },
   visible: {
     y: 0,
@@ -26,7 +25,7 @@ const textVariants = {
   },
 }
 
-const buttonVariants = {
+const buttonVariants: Variants = {
   hidden: { y: 30, opacity: 0 },
   visible: {
     y: 0,

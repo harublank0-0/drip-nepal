@@ -1,40 +1,27 @@
-export type ProductResult = {
+import type { Data } from '@generated/data'
+
+/*
+ * `data` of GET /api/v1/search/suggestions.
+ */
+export type SearchSuggestions = {
+  products: Data.ProductCard[]
+  stores: Data.StoreCard[]
+}
+
+/*
+ * A row the keyboard can move to in the search modal.
+ */
+export type SearchOption =
+  | { type: 'product'; id: string; href: string; product: Data.ProductCard }
+  | { type: 'store'; id: string; href: string; store: Data.StoreCard }
+  | { type: 'all'; id: string; href: string }
+
+/*
+ * What every option row needs from the modal.
+ */
+export type OptionRowProps = {
   id: string
-  name: string
-  storeName: string
-  price: number
-  compareAt: number | null
-  image: string
-  rating: number
-  reviewCount: number
-}
-
-export type StoreResult = {
-  id: string
-  name: string
-  logo: string
-  rating: number
-  followerCount: number
-  productCount: number
-}
-
-export type CategoryResult = {
-  id: string
-  name: string
-  productCount: number
-  image?: string
-}
-
-export type SearchSuggestion = {
-  text: string
-  type: 'product' | 'store' | 'category'
-}
-
-export type SearchState = 'empty' | 'loading' | 'results' | 'no-results'
-
-export type SearchResults = {
-  products: ProductResult[]
-  stores: StoreResult[]
-  categories: CategoryResult[]
-  suggestions: SearchSuggestion[]
+  isActive: boolean
+  onHover: () => void
+  onSelect: () => void
 }

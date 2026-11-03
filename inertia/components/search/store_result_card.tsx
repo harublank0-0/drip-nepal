@@ -1,42 +1,50 @@
+import { Link } from '@adonisjs/inertia/react'
+import type { Data } from '@generated/data'
+import { ArrowUpRight } from 'lucide-react'
 import { cn } from '~/lib/utils'
-import type { StoreResult } from './types'
+import type { OptionRowProps } from './types'
 
-type StoreResultCardProps = {
-  store: StoreResult
-  isSelected?: boolean
+type StoreResultCardProps = OptionRowProps & {
+  store: Data.StoreCard
 }
 
-export function StoreResultCard({ store, isSelected }: StoreResultCardProps) {
+export function StoreResultCard({ store, id, isActive, onHover, onSelect }: StoreResultCardProps) {
   return (
-    <div
+    <Link
+      route="stores.show"
+      routeParams={{ slug: store.slug }}
+      id={id}
+      role="option"
+      aria-selected={isActive}
+      tabIndex={-1}
+      onMouseMove={onHover}
+      onClick={onSelect}
       className={cn(
-        'flex items-center gap-3 px-2 py-2.5 rounded-lg transition-colors cursor-pointer',
-        isSelected ? 'bg-muted' : 'hover:bg-muted/50'
+        'flex items-center gap-3 rounded-lg px-2 py-2 transition-colors',
+        isActive ? 'bg-muted' : 'hover:bg-muted/50'
       )}
     >
-      <img
-        src={store.logo}
-        alt={store.name}
-        className="size-10 rounded-full object-cover ring-1 ring-foreground/10"
-      />
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium truncate">{store.name}</p>
+      {store.logo ? (
+        <img
+          src={store.logo}
+          alt=""
+          className="size-10 shrink-0 rounded-full object-cover ring-1 ring-foreground/10"
+        />
+      ) : (
+        <span
+          aria-hidden="true"
+          className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary font-heading font-bold text-primary-foreground"
+        >
+          {store.name.charAt(0).toUpperCase()}
+        </span>
+      )}
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium">{store.name}</p>
         <p className="text-xs text-muted-foreground">
-          {(store.followerCount / 1000).toFixed(1)}K followers
+          {store.productCount} {store.productCount === 1 ? 'product' : 'products'}
         </p>
       </div>
-      <div className="flex items-center gap-1 text-xs text-muted-foreground">
-        <svg
-          width="10"
-          height="10"
-          viewBox="0 0 24 24"
-          fill="currentColor"
-          className="text-amber-500"
-        >
-          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-        </svg>
-        {store.rating}
-      </div>
-    </div>
+      <ArrowUpRight aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
+    </Link>
   )
 }

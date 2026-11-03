@@ -1,31 +1,33 @@
 import { Link } from '@adonisjs/inertia/react'
-import { motion } from 'framer-motion'
+import { motion, type Variants } from 'framer-motion'
 import { ArrowRight } from 'lucide-react'
 import { Button } from '~/components/ui/button'
 import ManImage from '~/assets/hero-image/man.png'
 import WomanImage from '~/assets/hero-image/woman.png'
 import ShoesImage from '~/assets/men/shoes.jpg'
+import { urlFor } from '~/client'
+import { cn } from '~/lib/utils'
 
 const categories = [
   {
-    title: 'New Arrivals',
-    description: 'The latest drops from top brands',
+    title: 'Jackets',
+    description: 'Parkas, shells and layers for the cold months',
     image: ManImage,
-    route: 'men' as const,
-    span: 'md:col-span-2 md:row-span-2',
+    href: urlFor('categories.show', { slug: 'jackets' }),
+    span: 'md:col-span-2 md:row-span-2 md:h-auto',
   },
   {
-    title: 'Best Sellers',
-    description: 'Most popular this season',
+    title: 'Women',
+    description: 'Coats, kurtas and everyday fits',
     image: WomanImage,
-    route: 'women' as const,
+    href: urlFor('women'),
     span: '',
   },
   {
-    title: 'Sale',
-    description: 'Up to 40% off select styles',
+    title: 'Sneakers',
+    description: 'Fresh pairs from local shops',
     image: ShoesImage,
-    route: 'men' as const,
+    href: urlFor('categories.show', { slug: 'sneakers' }),
     span: '',
   },
 ]
@@ -38,7 +40,7 @@ const containerVariants = {
   },
 }
 
-const cardVariants = {
+const cardVariants: Variants = {
   hidden: { opacity: 0, y: 40 },
   visible: {
     opacity: 1,
@@ -64,7 +66,7 @@ export function CategoryCards() {
           Shop by Category
         </h2>
         <Button variant="ghost" className="hidden md:inline-flex gap-2" asChild>
-          <Link route="men">
+          <Link route="search">
             View All <ArrowRight className="size-4" />
           </Link>
         </Button>
@@ -81,7 +83,10 @@ export function CategoryCards() {
           <motion.div
             key={cat.title}
             variants={cardVariants}
-            className={`group relative overflow-hidden rounded-2xl h-[300px] md:h-[400px] ${cat.span}`}
+            className={cn(
+              'group relative overflow-hidden rounded-2xl h-[300px] md:h-[400px]',
+              cat.span
+            )}
           >
             <div
               className="absolute inset-0 bg-cover bg-center transition-transform duration-700 ease-out group-hover:scale-105"
@@ -99,7 +104,7 @@ export function CategoryCards() {
                 className="bg-transparent border-white/20 text-white hover:bg-white hover:text-black group/btn"
                 asChild
               >
-                <Link route={cat.route}>
+                <Link href={cat.href}>
                   Shop Now{' '}
                   <ArrowRight className="size-3 ml-1 transition-transform group-hover/btn:translate-x-0.5" />
                 </Link>
