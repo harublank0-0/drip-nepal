@@ -1,6 +1,6 @@
 import app from '@adonisjs/core/services/app'
 import { type HttpContext, ExceptionHandler } from '@adonisjs/core/http'
-import type { StatusPageRange, StatusPageRenderer } from '@adonisjs/core/types/http'
+import type { HttpError, StatusPageRange, StatusPageRenderer } from '@adonisjs/core/types/http'
 
 export default class HttpExceptionHandler extends ExceptionHandler {
   /**
@@ -31,6 +31,19 @@ export default class HttpExceptionHandler extends ExceptionHandler {
    */
   async handle(error: unknown, ctx: HttpContext) {
     return super.handle(error, ctx)
+  }
+
+  /*
+   * Without debug, the base handler still sends error.message as JSON. For an
+   * unexpected error that can be a database or library message, so only
+   * expected errors (4xx) keep their message (RF-36).
+   */
+  async renderErrorAsJSON(error: HttpError, ctx: HttpContext) {
+    if (!this.debug && error.status >= 500) {
+      ctx.response.status(error.status).send({ message: 'Something went wrong. Please try again.' })
+      return
+    }
+    return super.renderErrorAsJSON(error, ctx)
   }
 
   /**
