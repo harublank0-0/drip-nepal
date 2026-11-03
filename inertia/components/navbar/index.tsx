@@ -8,10 +8,11 @@ import {
   LucideMenu,
   LucideX,
   LucideLogOut,
-  LucideSettings,
+  LucideShieldCheck,
   LucideUserCircle,
   LucideArrowRight,
   LucideStore,
+  LucidePackage,
 } from 'lucide-react'
 import { NavLink } from './nav_link'
 import { Link } from '@adonisjs/inertia/react'
@@ -22,8 +23,7 @@ import { Dialog, DialogContent, DialogTitle } from '~/components/ui/dialog'
 import { VisuallyHidden } from 'radix-ui'
 import { motion, AnimatePresence } from 'framer-motion'
 import { SearchModal } from '~/components/search/search_modal'
-import { useCart } from '~/hooks/use_cart'
-import { Data } from '@generated/data'
+import type { Data } from '@generated/data'
 import { Show } from '~/components/ui/show'
 import { Typography } from '~/components/ui/typography'
 import { Avatar, AvatarFallback, AvatarImage } from '~/components/ui/avatar'
@@ -31,7 +31,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '~/components/ui/avatar'
 export const NavBar = () => {
   const {
     url,
-    props: { user, shops },
+    props: { user, shops, cartCount, isAdmin },
   } = usePage<Data.SharedProps>()
   const isHomePage = routes.home.pattern === url
   const [scrolled, setScrolled] = useState(false)
@@ -40,7 +40,10 @@ export const NavBar = () => {
   const [profileOpen, setProfileOpen] = useState(false)
   const router = useRouter()
 
-  const { openDrawer, itemCount } = useCart()
+  const itemCount = user ? cartCount : 0
+  const cartLabel = user
+    ? `Shopping bag${itemCount > 0 ? `, ${itemCount} ${itemCount === 1 ? 'item' : 'items'}` : ''}`
+    : 'Shopping bag (sign in to view)'
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 80)
@@ -127,20 +130,25 @@ export const NavBar = () => {
               </Button>
             </li>
 
-            {/* Cart */}
-            <li className="hidden sm:block">
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={`Shopping bag${itemCount > 0 ? `, ${itemCount} items` : ''}`}
-                onClick={openDrawer}
-                className="relative cursor-pointer"
-              >
-                <LucideShoppingBag className="size-5" />
-                {itemCount > 0 && (
-                  <span className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
-                    {itemCount > 9 ? '9+' : itemCount}
-                  </span>
+            {/* Cart: logged-out shoppers go to the login page instead */}
+            <li>
+              <Button variant="ghost" size="icon-sm" className="relative" asChild>
+                {user ? (
+                  <Link route="cart.show" aria-label={cartLabel}>
+                    <LucideShoppingBag className="size-5" aria-hidden="true" />
+                    {itemCount > 0 && (
+                      <span
+                        className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground"
+                        aria-hidden="true"
+                      >
+                        {itemCount > 9 ? '9+' : itemCount}
+                      </span>
+                    )}
+                  </Link>
+                ) : (
+                  <Link route="ui.auth.user_session.create" aria-label={cartLabel}>
+                    <LucideShoppingBag className="size-5" aria-hidden="true" />
+                  </Link>
                 )}
               </Button>
             </li>
@@ -182,20 +190,24 @@ export const NavBar = () => {
                           <p className="text-xs text-white/50 truncate mt-0.5">{user.email}</p>
                         </div>
                         <div className="py-1">
-                          <button
+                          <Link
+                            route="account.orders.index"
                             onClick={() => setProfileOpen(false)}
                             className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-colors"
                           >
-                            <LucideUserCircle className="size-4" />
-                            Profile
-                          </button>
-                          <button
-                            onClick={() => setProfileOpen(false)}
-                            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-colors"
-                          >
-                            <LucideSettings className="size-4" />
-                            Settings
-                          </button>
+                            <LucidePackage className="size-4" />
+                            My orders
+                          </Link>
+                          <Show when={isAdmin}>
+                            <Link
+                              route="admin.shops.index"
+                              onClick={() => setProfileOpen(false)}
+                              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-colors"
+                            >
+                              <LucideShieldCheck className="size-4" />
+                              Admin
+                            </Link>
+                          </Show>
 
                           <Show when={shops.length > 0}>
                             <Typography.Strong className="px-4 py-2.5 text-xs text-white/50 flex gap-2">
@@ -205,7 +217,7 @@ export const NavBar = () => {
                             {shops.map((shop) => (
                               <Link
                                 key={shop.id}
-                                route="shop.shop_dashboard.create"
+                                route="ui.shops.shop_dashboard.create"
                                 routeParams={{
                                   shopSlug: shop.slug,
                                 }}
@@ -235,7 +247,7 @@ export const NavBar = () => {
                     ) : (
                       <div className="py-2">
                         <Link
-                          route="ui.auth.session.create"
+                          route="ui.auth.user_session.create"
                           className="flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-colors"
                           onClick={() => setProfileOpen(false)}
                         >
@@ -243,12 +255,20 @@ export const NavBar = () => {
                           Sign In
                         </Link>
                         <Link
-                          route="ui.auth.registration.create"
+                          route="ui.auth.user_registration.create"
                           className="flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-colors"
                           onClick={() => setProfileOpen(false)}
                         >
                           <LucideUserCircle className="size-4" />
                           Create Account
+                        </Link>
+                        <Link
+                          route="ui.auth.shop.shop_registration.create"
+                          className="flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-colors border-t border-white/10 mt-1 pt-3"
+                          onClick={() => setProfileOpen(false)}
+                        >
+                          <LucideStore className="size-4" />
+                          Sell on Drip Nepal
                         </Link>
                       </div>
                     )}
@@ -301,6 +321,14 @@ export const NavBar = () => {
                     </span>
                     <span className="text-sm text-white/70">{user.fullName}</span>
                   </div>
+                  <Link
+                    route="account.orders.index"
+                    className="flex items-center gap-2 text-sm text-white/70 hover:text-white transition-colors mb-3"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    <LucidePackage className="size-4" />
+                    My orders
+                  </Link>
                   <Show when={shops.length > 0}>
                     <Typography.Strong className="px-4 py-2.5 text-xs text-white/50 flex gap-2">
                       <LucideStore className="size-4" />
@@ -308,7 +336,8 @@ export const NavBar = () => {
                     </Typography.Strong>
                     {shops.map((shop) => (
                       <Link
-                        route="shop.shop_dashboard.create"
+                        key={shop.id}
+                        route="ui.shops.shop_dashboard.create"
                         routeParams={{ shopSlug: shop.slug }}
                         className="flex items-center gap-3 text-sm text-white/70 hover:text-white transition-colors mb-3"
                         onClick={() => setMobileMenuOpen(false)}
@@ -337,14 +366,14 @@ export const NavBar = () => {
               ) : (
                 <div className="border-t border-white/10 px-6 py-4 flex items-center gap-6 text-sm font-medium">
                   <Link
-                    route="ui.auth.registration.create"
+                    route="ui.auth.user_session.create"
                     className="text-white/70 hover:text-white transition-colors"
                     onClick={() => setMobileMenuOpen(false)}
                   >
                     Sign In
                   </Link>
                   <Link
-                    route="ui.auth.session.create"
+                    route="ui.auth.user_registration.create"
                     className="text-white/70 hover:text-white transition-colors"
                     onClick={() => setMobileMenuOpen(false)}
                   >

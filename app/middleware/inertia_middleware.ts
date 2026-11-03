@@ -3,6 +3,7 @@ import type { NextFn } from '@adonisjs/core/types/http'
 import UserTransformer from '#transformers/user_transformer'
 import BaseInertiaMiddleware from '@adonisjs/inertia/inertia_middleware'
 import ShopTransformer from '#transformers/shop_transformer'
+import CartService from '#modules/orders/services/cart_service'
 
 export default class InertiaMiddleware extends BaseInertiaMiddleware {
   async share(ctx: HttpContext) {
@@ -39,6 +40,23 @@ export default class InertiaMiddleware extends BaseInertiaMiddleware {
         auth?.user?.related('shops') ? UserTransformer.transform(auth.user) : undefined
       ),
       shops,
+      /*
+       * Number of items in the cart, for the navbar badge.
+       */
+      cartCount: auth?.user ? await new CartService().count(auth.user) : 0,
+      /*
+       * Shows the admin link in the navbar.
+       */
+      isAdmin: auth?.user ? await auth.user.isAdmin() : false,
+      /*
+       * The shop whose dashboard is open. Only set on routes that use the
+       * `shopAccess` middleware.
+       */
+      currentShop: ctx.inertia.always(
+        (ctx as Partial<HttpContext>).shop
+          ? ShopTransformer.transform((ctx as HttpContext).shop)
+          : undefined
+      ),
     }
   }
 

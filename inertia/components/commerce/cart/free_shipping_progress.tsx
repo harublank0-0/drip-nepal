@@ -1,32 +1,45 @@
-import { motion } from 'framer-motion'
-import { Truck } from 'lucide-react'
-import { FREE_SHIPPING_THRESHOLD } from '~/lib/mock-data/cart'
+import { TruckIcon } from 'lucide-react'
+import { formatPrice } from '~/lib/format'
+import { FREE_SHIPPING_THRESHOLD } from '~/lib/order'
 
 type FreeShippingProgressProps = {
+  shopName: string
   subtotal: number
-  remaining: number
+  shipping: number
 }
 
-export function FreeShippingProgress({ subtotal, remaining }: FreeShippingProgressProps) {
+/*
+ * Delivery is charged per shop, free once that shop's part of the cart
+ * reaches the threshold.
+ */
+export function FreeShippingProgress({ shopName, subtotal, shipping }: FreeShippingProgressProps) {
+  if (subtotal <= 0) return null
+
+  if (shipping === 0) {
+    return (
+      <p className="flex items-center gap-2 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+        <TruckIcon className="size-3.5 shrink-0" aria-hidden="true" />
+        Free delivery from {shopName}
+      </p>
+    )
+  }
+
+  const remaining = Math.max(FREE_SHIPPING_THRESHOLD - subtotal, 0)
   const progress = Math.min((subtotal / FREE_SHIPPING_THRESHOLD) * 100, 100)
-  const isFree = remaining === 0
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2 text-[11px] font-medium tracking-wide uppercase text-muted-foreground">
-        <Truck className="size-3.5" />
+    <div className="space-y-1.5">
+      <p className="flex items-center gap-2 text-xs text-muted-foreground">
+        <TruckIcon className="size-3.5 shrink-0" aria-hidden="true" />
         <span>
-          {isFree
-            ? 'Free shipping unlocked!'
-            : `You're Rs. ${remaining.toLocaleString('ne-NP')} away from free shipping`}
+          Add <span className="font-medium text-foreground">{formatPrice(remaining)}</span> more
+          from {shopName} for free delivery
         </span>
-      </div>
-      <div className="relative h-[3px] w-full overflow-hidden rounded-full bg-muted">
-        <motion.div
-          className="absolute inset-y-0 left-0 rounded-full bg-foreground"
-          initial={{ width: 0 }}
-          animate={{ width: `${progress}%` }}
-          transition={{ duration: 0.6, ease: [0.32, 0.72, 0, 1] }}
+      </p>
+      <div className="h-1 w-full overflow-hidden rounded-full bg-muted" aria-hidden="true">
+        <div
+          className="h-full rounded-full bg-primary transition-[width] duration-500"
+          style={{ width: `${progress}%` }}
         />
       </div>
     </div>

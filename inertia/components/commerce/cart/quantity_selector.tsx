@@ -1,59 +1,54 @@
-import { motion } from 'framer-motion'
-import { Minus, Plus } from 'lucide-react'
+import { MinusIcon, PlusIcon } from 'lucide-react'
 import { Button } from '~/components/ui/button'
 
 type QuantitySelectorProps = {
   quantity: number
-  onIncrease: () => void
-  onDecrease: () => void
-  isLoading?: boolean
   min?: number
-  max?: number
+  max: number
+  disabled?: boolean
+  /* What is being counted, for screen readers. */
+  label: string
+  onChange: (quantity: number) => void
 }
 
 export function QuantitySelector({
   quantity,
-  onIncrease,
-  onDecrease,
-  isLoading = false,
   min = 1,
-  max = 99,
+  max,
+  disabled = false,
+  label,
+  onChange,
 }: QuantitySelectorProps) {
-  const isAtMin = quantity <= min
-  const isAtMax = quantity >= max
-
   return (
-    <div className="inline-flex items-center gap-0.5 rounded-lg border border-border bg-background p-0.5">
+    <div
+      role="group"
+      aria-label={`Quantity of ${label}`}
+      className="inline-flex items-center rounded-lg border border-border bg-background"
+    >
       <Button
+        type="button"
         variant="ghost"
-        size="icon-xs"
-        disabled={isAtMin || isLoading}
-        onClick={onDecrease}
+        size="icon"
+        className="size-9 rounded-r-none sm:size-8"
+        disabled={disabled || quantity <= min}
+        onClick={() => onChange(quantity - 1)}
         aria-label="Decrease quantity"
-        className="size-6 rounded-md"
       >
-        <Minus className="size-3" />
+        <MinusIcon className="size-3.5" />
       </Button>
-      <div className="flex items-center justify-center w-8 h-6">
-        <motion.span
-          key={quantity}
-          initial={{ opacity: 0, y: -6, scale: 0.8 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ duration: 0.15, ease: [0.32, 0.72, 0, 1] }}
-          className="text-xs font-medium tabular-nums"
-        >
-          {quantity}
-        </motion.span>
-      </div>
+      <output aria-live="polite" className="w-9 text-center text-sm font-medium tabular-nums">
+        {quantity}
+      </output>
       <Button
+        type="button"
         variant="ghost"
-        size="icon-xs"
-        disabled={isAtMax || isLoading}
-        onClick={onIncrease}
+        size="icon"
+        className="size-9 rounded-l-none sm:size-8"
+        disabled={disabled || quantity >= max}
+        onClick={() => onChange(quantity + 1)}
         aria-label="Increase quantity"
-        className="size-6 rounded-md"
       >
-        <Plus className="size-3" />
+        <PlusIcon className="size-3.5" />
       </Button>
     </div>
   )
