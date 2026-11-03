@@ -22,6 +22,9 @@ export default await Env.create(new URL('../', import.meta.url), {
   APP_KEY: Env.schema.secret(),
   APP_URL: Env.schema.string({ format: 'url', tld: false }),
 
+  // Lets anyone register a shop (v1 has one seller, so it defaults to closed)
+  SHOP_REGISTRATION_OPEN: Env.schema.boolean.optional(),
+
   // The running release, shown by /health/live (for example the git commit)
   APP_RELEASE: Env.schema.string.optional(),
 

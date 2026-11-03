@@ -13,6 +13,8 @@ import {
   signupNetworkLimiter,
 } from '#modules/auth/rate_limits'
 import { ShopStatus } from '#constants/shop_status'
+import { shopRegistrationOpen } from '#config/marketplace'
+import { errors as lucidErrors } from '@adonisjs/lucid'
 
 export default class ShopRegistrationController {
   /*
@@ -21,6 +23,8 @@ export default class ShopRegistrationController {
    * screen; any other logged-in visit goes home.
    */
   async create({ inertia, auth, request, response }: HttpContext) {
+    if (!shopRegistrationOpen) throw new lucidErrors.E_ROW_NOT_FOUND()
+
     if (auth.isAuthenticated && request.qs().success !== '1') {
       return response.redirect().toRoute('home')
     }
@@ -34,6 +38,8 @@ export default class ShopRegistrationController {
    */
   async store(ctx: HttpContext) {
     const { request, response } = ctx
+    if (!shopRegistrationOpen) throw new lucidErrors.E_ROW_NOT_FOUND()
+
     await consumeOrReject(
       signupNetworkLimiter(),
       limiterKey('signup:ip', clientNetwork(request.ip())),

@@ -4,6 +4,7 @@ import UserTransformer from '#transformers/user_transformer'
 import BaseInertiaMiddleware from '@adonisjs/inertia/inertia_middleware'
 import ShopTransformer from '#transformers/shop_transformer'
 import CartService from '#modules/orders/services/cart_service'
+import { shopRegistrationOpen } from '#config/marketplace'
 
 export default class InertiaMiddleware extends BaseInertiaMiddleware {
   async share(ctx: HttpContext) {
@@ -48,6 +49,10 @@ export default class InertiaMiddleware extends BaseInertiaMiddleware {
        * Shows the admin link in the navbar.
        */
       isAdmin: auth?.user ? await auth.user.isAdmin() : false,
+      /*
+       * Whether the storefront shows "open a shop" links (config/marketplace.ts).
+       */
+      shopRegistrationOpen,
       /*
        * The shop whose dashboard is open. Only set on routes that use the
        * `shopAccess` middleware.

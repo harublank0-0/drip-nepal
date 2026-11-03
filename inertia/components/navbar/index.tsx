@@ -31,7 +31,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '~/components/ui/avatar'
 export const NavBar = () => {
   const {
     url,
-    props: { user, shops, cartCount, isAdmin },
+    props: { user, shops, cartCount, isAdmin, shopRegistrationOpen },
   } = usePage<Data.SharedProps>()
   const isHomePage = routes.home.pattern === url
   const [scrolled, setScrolled] = useState(false)
@@ -262,14 +262,16 @@ export const NavBar = () => {
                           <LucideUserCircle className="size-4" />
                           Create Account
                         </Link>
-                        <Link
-                          route="ui.auth.shop.shop_registration.create"
-                          className="flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-colors border-t border-white/10 mt-1 pt-3"
-                          onClick={() => setProfileOpen(false)}
-                        >
-                          <LucideStore className="size-4" />
-                          Sell on Drip Nepal
-                        </Link>
+                        <Show when={shopRegistrationOpen}>
+                          <Link
+                            route="ui.auth.shop.shop_registration.create"
+                            className="flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-colors border-t border-white/10 mt-1 pt-3"
+                            onClick={() => setProfileOpen(false)}
+                          >
+                            <LucideStore className="size-4" />
+                            Sell on Drip Nepal
+                          </Link>
+                        </Show>
                       </div>
                     )}
                   </motion.div>

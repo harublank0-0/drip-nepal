@@ -1,10 +1,14 @@
+import { usePage } from '@inertiajs/react'
 import { Link } from '@adonisjs/inertia/react'
+import type { Data } from '@generated/data'
 import { Separator } from '~/components/ui/separator'
 
 const linkClass =
   'text-sm text-muted-foreground hover:text-foreground transition-colors duration-200'
 
 export function Footer() {
+  const { shopRegistrationOpen } = usePage<Data.SharedProps>().props
+
   return (
     <footer role="contentinfo" className="bg-card border-t border-border/50">
       <div className="max-w-7xl mx-auto px-6 md:px-8 py-12 md:py-16">
@@ -61,11 +65,13 @@ export function Footer() {
           <div>
             <h3 className="text-sm font-semibold uppercase tracking-wider mb-4">Sell</h3>
             <ul className="space-y-3">
-              <li>
-                <Link route="ui.auth.shop.shop_registration.create" className={linkClass}>
-                  Open a shop on Drip Nepal
-                </Link>
-              </li>
+              {shopRegistrationOpen && (
+                <li>
+                  <Link route="ui.auth.shop.shop_registration.create" className={linkClass}>
+                    Open a shop on Drip Nepal
+                  </Link>
+                </li>
+              )}
               <li>
                 <Link route="ui.auth.user_session.create" className={linkClass}>
                   Seller login

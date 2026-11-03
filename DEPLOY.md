@@ -57,17 +57,29 @@ docker compose -f docker-compose.prod.yml --env-file .env.production exec app \
 
 The demo catalog seeder only runs in development and test, so it never touches production.
 
-## 4. Create the admin
+## 4. Set up your shop and the admin
 
-Sign up on the site with the admin's email, then grant the admin role:
+v1 has one seller, so shop registration is closed by default. Open it once to register your own shop.
 
-```bash
-docker compose -f docker-compose.prod.yml --env-file .env.production exec \
-  -e ADMIN_EMAIL=you@example.com app \
-  node ace db:seed --files=database/seeders/admin_seeder.js
-```
+1. In `.env.production`, set `SHOP_REGISTRATION_OPEN=true`. Then restart the app:
 
-The admin approves new shops at `/admin/shops`. A shop's products appear on the storefront only after it's approved.
+   ```bash
+   docker compose -f docker-compose.prod.yml --env-file .env.production up -d
+   ```
+
+2. Open `https://<your domain>/auth/shop/register` and register your shop. This creates your account and the shop, which starts as pending.
+
+3. Give your account the admin role:
+
+   ```bash
+   docker compose -f docker-compose.prod.yml --env-file .env.production exec \
+     -e ADMIN_EMAIL=you@example.com app \
+     node ace db:seed --files=database/seeders/admin_seeder.js
+   ```
+
+4. Log in, open `/admin/shops` and approve your shop. Its products appear on the storefront only once it's approved.
+
+5. Set `SHOP_REGISTRATION_OPEN=false` (or remove the line) and run the `up -d` command again. The register page and API now answer 404, and the storefront hides the "open a shop" links.
 
 ## Updating
 
