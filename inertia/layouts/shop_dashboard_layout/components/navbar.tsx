@@ -24,7 +24,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '~/components/ui/dropdown_menu'
+} from '~/components/ui/dropdown-menu'
 import { useDashboard } from './dashboard_context'
 import { useTheme } from '~/components/providers/theme_provider'
 
