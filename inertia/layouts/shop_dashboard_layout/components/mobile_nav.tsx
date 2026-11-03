@@ -5,7 +5,7 @@ import { Sheet, SheetContent, SheetTitle, SheetClose } from '~/components/ui/she
 import { VisuallyHidden } from 'radix-ui'
 import { Button } from '~/components/ui/button'
 import { useDashboard } from './dashboard_context'
-import { DASHBOARD_NAV } from './navigation'
+import { useDashboardNav } from './navigation'
 import { SidebarItem } from './sidebar_item'
 
 function isActivePath(path: string | undefined, url: string): boolean {
@@ -18,6 +18,7 @@ function isActivePath(path: string | undefined, url: string): boolean {
 export function MobileNav() {
   const { mobileNavOpen, setMobileNavOpen } = useDashboard()
   const { url } = usePage()
+  const nav = useDashboardNav()
 
   useEffect(() => {
     setMobileNavOpen(false)
@@ -43,7 +44,7 @@ export function MobileNav() {
         </div>
 
         <nav className="overflow-y-auto p-3">
-          {DASHBOARD_NAV.map((section) => (
+          {nav.map((section) => (
             <div key={section.id} className="mb-4">
               <div className="mb-1 flex items-center gap-2 px-2 py-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 <section.icon className="size-3.5" />

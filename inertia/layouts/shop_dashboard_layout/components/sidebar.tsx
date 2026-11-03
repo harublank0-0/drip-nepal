@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { cn } from '~/lib/utils'
 import { SidebarSection } from './sidebar_section'
-import { DASHBOARD_NAV } from './navigation'
+import { useDashboardNav } from './navigation'
 import { useDashboard } from './dashboard_context'
 
 export function Sidebar() {
   const { sidebarCollapsed } = useDashboard()
+  const nav = useDashboardNav()
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['dashboard']))
 
   const toggleSection = (sectionId: string) => {
@@ -45,7 +46,7 @@ export function Sidebar() {
 
       <div className="flex-1 overflow-y-auto p-2">
         <nav className="space-y-1">
-          {DASHBOARD_NAV.map((section) => (
+          {nav.map((section) => (
             <SidebarSection
               key={section.id}
               section={section}
