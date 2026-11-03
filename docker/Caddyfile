@@ -5,5 +5,9 @@
 	request_body {
 		max_size 50MB
 	}
+	# Readiness is for Compose only (docs/11 §7.1).
+	@ready path /health/ready
+	respond @ready 404
+
 	reverse_proxy app:3333
 }
