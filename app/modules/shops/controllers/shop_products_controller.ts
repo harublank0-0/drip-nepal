@@ -2,6 +2,7 @@ import { inject } from '@adonisjs/core'
 import type { HttpContext } from '@adonisjs/core/http'
 import Category from '#models/category'
 import ProductService from '#modules/products/services/product_service'
+import { processUploads, removeLeftoverUploads } from '#modules/products/uploads'
 import { productValidator } from '#modules/shops/validators/product'
 import { ProductStatusValues, type ProductStatus } from '#constants/product'
 import CategoryTransformer from '#transformers/category_transformer'
@@ -45,8 +46,13 @@ export default class ShopProductsController {
   }
 
   async store({ request, response, session, shop }: HttpContext) {
-    const payload = await request.validateUsing(productValidator)
-    await this.productService.create(shop, payload)
+    try {
+      await processUploads(request)
+      const payload = await request.validateUsing(productValidator)
+      await this.productService.create(shop, payload)
+    } finally {
+      await removeLeftoverUploads(request)
+    }
 
     session.flash('success', 'Product created')
     return response.redirect().toRoute('ui.shops.shop_products.index', { shopSlug: shop.slug })
@@ -63,8 +69,13 @@ export default class ShopProductsController {
 
   async update({ request, response, params, session, shop }: HttpContext) {
     const product = await this.productService.findForShop(shop, params.id)
-    const payload = await request.validateUsing(productValidator)
-    await this.productService.update(shop, product, payload)
+    try {
+      await processUploads(request)
+      const payload = await request.validateUsing(productValidator)
+      await this.productService.update(shop, product, payload)
+    } finally {
+      await removeLeftoverUploads(request)
+    }
 
     session.flash('success', 'Product saved')
     return response.redirect().toRoute('ui.shops.shop_products.index', { shopSlug: shop.slug })
