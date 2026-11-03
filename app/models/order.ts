@@ -5,6 +5,7 @@ import type { BelongsTo, HasMany } from '@adonisjs/lucid/types/relations'
 import UserAddress from './user_address.js'
 import OrderItem from './order_item.js'
 import Payment from './payment.js'
+import Shop from './shop.js'
 
 export default class Order extends OrderSchema {
   @belongsTo(() => User)
@@ -18,4 +19,7 @@ export default class Order extends OrderSchema {
 
   @hasMany(() => Payment)
   declare payments: HasMany<typeof Payment>
+
+  @belongsTo(() => Shop)
+  declare shop: BelongsTo<typeof Shop>
 }

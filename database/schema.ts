@@ -196,6 +196,7 @@ export class OrderItemSchema extends BaseModel {
 
 export class OrderSchema extends BaseModel {
   static $columns = [
+    'checkoutId',
     'createdAt',
     'discountTotal',
     'grandTotal',
@@ -204,7 +205,9 @@ export class OrderSchema extends BaseModel {
     'orderNumber',
     'paymentStatus',
     'placedAt',
+    'shippingAddress',
     'shippingTotal',
+    'shopId',
     'status',
     'subtotal',
     'updatedAt',
@@ -212,6 +215,8 @@ export class OrderSchema extends BaseModel {
     'userId',
   ] as const
   $columns = OrderSchema.$columns
+  @column()
+  declare checkoutId: string | null
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
   @column()
@@ -229,7 +234,11 @@ export class OrderSchema extends BaseModel {
   @column.dateTime()
   declare placedAt: DateTime | null
   @column()
+  declare shippingAddress: any | null
+  @column()
   declare shippingTotal: string
+  @column()
+  declare shopId: string | null
   @column()
   declare status: string
   @column()
@@ -323,7 +332,7 @@ export class ProductMediaSchema extends BaseModel {
   @column()
   declare provider: string | null
   @column()
-  declare sortOrder: string | null
+  declare sortOrder: number | null
   @column()
   declare thumbnailUrl: string | null
   @column()
@@ -386,6 +395,7 @@ export class ProductSchema extends BaseModel {
     'createdAt',
     'deletedAt',
     'description',
+    'gender',
     'id',
     'isFeatured',
     'name',
@@ -406,6 +416,8 @@ export class ProductSchema extends BaseModel {
   declare deletedAt: DateTime | null
   @column()
   declare description: string | null
+  @column()
+  declare gender: string
   @column({ isPrimary: true })
   declare id: string
   @column()
