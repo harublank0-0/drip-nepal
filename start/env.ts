@@ -22,6 +22,9 @@ export default await Env.create(new URL('../', import.meta.url), {
   APP_KEY: Env.schema.secret(),
   APP_URL: Env.schema.string({ format: 'url', tld: false }),
 
+  // Proxies allowed to set X-Forwarded-For: comma-separated CIDRs (docs/11 §3.4)
+  TRUSTED_PROXY_CIDRS: Env.schema.string.optional(),
+
   // Session
   SESSION_DRIVER: Env.schema.enum(['cookie', 'memory', 'database'] as const),
 

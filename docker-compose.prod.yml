@@ -51,6 +51,14 @@ services:
     depends_on:
       - app
 
+# Caddy and the app share this subnet; the app trusts X-Forwarded-For only
+# from it (TRUSTED_PROXY_CIDRS, docs/11 §3.4).
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+
 volumes:
   pgdata:
   uploads:
