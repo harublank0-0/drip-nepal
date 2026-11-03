@@ -11,7 +11,7 @@ import {
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { Field, FieldError, FieldLabel } from '~/components/ui/field'
-import { InputGroup, InputGroupAddon, InputGroupInput } from '~/components/ui/input_group'
+import { InputGroup, InputGroupAddon, InputGroupInput } from '~/components/ui/input-group'
 import { SectionCard } from '../components/section_card'
 import { useSectionForm } from '../hooks/use_section_form'
 import {
