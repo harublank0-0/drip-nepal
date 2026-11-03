@@ -1,0 +1,12 @@
+node_modules
+build
+tmp
+storage
+.git
+.env
+.env.*
+!.env.example
+*.tsbuildinfo
+screenshots
+.agents
+.adonisjs/server/*.d.ts.map

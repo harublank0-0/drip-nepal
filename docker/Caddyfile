@@ -1,0 +1,9 @@
+# Caddy gets and renews the TLS certificate for $DOMAIN automatically.
+# Point the domain's A record at the server before the first start.
+{$DOMAIN} {
+	encode zstd gzip
+	request_body {
+		max_size 50MB
+	}
+	reverse_proxy app:3333
+}

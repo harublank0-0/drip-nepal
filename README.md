@@ -153,7 +153,7 @@ node ace generate:key
 # 5. Run database migrations
 node ace migration:run
 
-# 6. Seed the database (optional, but recommended)
+# 6. Seed the database: categories, sizes/colors, roles, and a demo catalog
 node ace db:seed
 
 # 7. Start the development server
@@ -161,6 +161,13 @@ pnpm dev
 ```
 
 Open **http://localhost:3333** in your browser.
+
+The demo seeder (development only) creates three approved shops with 24 products and two accounts:
+
+| Account                           | Email                 | Password    |
+| --------------------------------- | --------------------- | ----------- |
+| Shop owner (all three demo shops) | `demo@dripnepal.com`  | `dripnepal` |
+| Platform admin (`/admin/shops`)   | `admin@dripnepal.com` | `dripnepal` |
 
 > **Note:** If you're using Docker Compose, the default `.env` values match the compose file. Just update `DB_HOST` to `localhost` and you're good to go.
 
@@ -226,13 +233,12 @@ The project includes **23 migrations** covering four domain areas:
 
 ### Seeders
 
-There are **5 seeders** for development and testing:
-
-- `global_role_seeder` — admin, customer, vendor roles
-- `permission_seeder` — granular permissions
 - `category_seeder` — product categories
-- `shop_seeder` — sample shops
-- `customer_seeder` — test customer accounts
+- `shop_category_seeder` — shop categories used at registration
+- `attribute_seeder` — the Size and Color variant attributes
+- `global_role_seeder` / `permission_seeder` — platform roles and permissions
+- `demo_catalog_seeder` — demo shops, products and accounts (development and test only)
+- `admin_seeder` — grants the admin role: `ADMIN_EMAIL=you@example.com node ace db:seed --files=database/seeders/admin_seeder.ts`
 
 > 📖 Detailed database documentation is available at [`database/README.md`](./database/README.md).
 
@@ -241,16 +247,19 @@ There are **5 seeders** for development and testing:
 ## Roadmap
 
 - [x] Customer authentication (signup, login, logout)
-- [x] Product browsing & category navigation
-- [x] Shopping cart
-- [x] Checkout flow
-- [ ] Vendor onboarding & shop registration
-- [ ] Order management dashboard
-- [ ] Inventory management
-- [ ] Vendor analytics dashboard
-- [ ] Admin panel (user, shop, product moderation)
-- [ ] Payment gateway integration
+- [x] Shop registration, admin approval, and shop dashboard
+- [x] Product management for shops (photos, sizes, colors, stock, drafts)
+- [x] Storefront on real data (home, men, women, categories, search, store pages, product pages)
+- [x] Cart and checkout with Cash on Delivery (one order per shop)
+- [x] Order management for shops and order history for customers
+- [x] Admin panel: approve and suspend shops
+- [x] Docker deployment (see [DEPLOY.md](./DEPLOY.md))
+- [ ] Online payments (eSewa, Khalti)
+- [ ] Shop settings (branding, policies, shipping zones)
+- [ ] Reviews and ratings
 - [ ] Wishlist
+- [ ] Staff roles inside a shop
+- [ ] Sales analytics
 - [ ] Mobile application
 
 ---

@@ -3,11 +3,4 @@
  * DO NOT EDIT manually
  */
 
-export const controllers = {
-  shops: {
-    dashboard: {
-      ShopDashboard: () => import('#controllers/shops/dashboard/shop_dashboard_controller'),
-      ShopSettings: () => import('#controllers/shops/dashboard/shop_settings_controller'),
-    },
-  },
-}
+export const controllers = {}
