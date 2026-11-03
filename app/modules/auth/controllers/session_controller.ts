@@ -1,8 +1,16 @@
 import User from '#models/user'
 import { userLoginValidator } from '#modules/auth/validators/user'
-import { errors } from '@adonisjs/auth'
+import { canSignIn, signIn } from '#modules/auth/account_access'
+import { errors as authErrors } from '@adonisjs/auth'
+import { errors as vineErrors } from '@vinejs/vine'
 
 import type { HttpContext } from '@adonisjs/core/http'
+
+/*
+ * One message for a wrong password, an unknown email and a blocked account,
+ * so the form does not reveal which emails exist or are suspended.
+ */
+const LOGIN_FAILED = 'The email or password is incorrect'
 
 export default class SessionController {
   /*
@@ -12,29 +20,35 @@ export default class SessionController {
     return inertia.render('auth/login', {})
   }
 
-  /* Endpoint to login user
+  /*
+   * Endpoint to login user
    */
-  async store({ request, auth, response, inertia }: HttpContext) {
-    const { email, password } = await request.validateUsing(userLoginValidator)
+  async store(ctx: HttpContext) {
+    const { email, password } = await ctx.request.validateUsing(userLoginValidator)
 
+    let user: User
     try {
-      const user = await User.verifyCredentials(email, password)
-      await auth.use('web').login(user)
-
-      response.redirect().toRoute('home')
-    } catch (e) {
-      if (e instanceof errors.E_INVALID_CREDENTIALS) {
-        return inertia.render('auth/login', { error: e.message })
+      user = await User.verifyCredentials(email, password)
+    } catch (error) {
+      if (error instanceof authErrors.E_INVALID_CREDENTIALS) {
+        throw new vineErrors.E_VALIDATION_ERROR([{ field: 'email', message: LOGIN_FAILED }])
       }
+      throw error
     }
+
+    if (!canSignIn(user)) {
+      throw new vineErrors.E_VALIDATION_ERROR([{ field: 'email', message: LOGIN_FAILED }])
+    }
+
+    await signIn(ctx, user)
+    return ctx.response.redirect().toRoute('home')
   }
 
   /*
    * Endpoint to logout the logged in user
    */
   async destroy({ auth, response }: HttpContext) {
-    console.log('delete user. i mean logout user.')
     await auth.use('web').logout()
-    response.redirect().toRoute('home')
+    return response.redirect().toRoute('home')
   }
 }

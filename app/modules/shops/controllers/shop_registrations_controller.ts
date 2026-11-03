@@ -5,6 +5,7 @@ import { shopSignupValidator } from '#modules/shops/validators/shop'
 import { ShopAddressTypes } from '#constants/shop_address_type'
 import type { HttpContext } from '@adonisjs/core/http'
 import db from '@adonisjs/lucid/services/db'
+import { signIn } from '#modules/auth/account_access'
 import { ShopStatus } from '#constants/shop_status'
 
 export default class ShopRegistrationController {
@@ -25,7 +26,8 @@ export default class ShopRegistrationController {
    * Creates the owner account, the shop and its address in one transaction,
    * then logs the owner in.
    */
-  async store({ request, response, auth }: HttpContext) {
+  async store(ctx: HttpContext) {
+    const { request, response } = ctx
     const data = await request.validateUsing(shopSignupValidator)
     const registration = await db.transaction(async (trx) => {
       const newUser = await User.create(
@@ -73,7 +75,7 @@ export default class ShopRegistrationController {
       return { user: newUser, shop }
     })
 
-    await auth.use('web').login(registration.user)
+    await signIn(ctx, registration.user)
 
     return response.redirect().toRoute('ui.auth.shop.shop_registration.create', [], {
       qs: { success: 1, shop: registration.shop.slug },

@@ -436,6 +436,19 @@ export class ProductSchema extends BaseModel {
   declare updatedAt: DateTime | null
 }
 
+export class SessionSchema extends BaseModel {
+  static $columns = ['data', 'expiresAt', 'id', 'userId'] as const
+  $columns = SessionSchema.$columns
+  @column()
+  declare data: string
+  @column.dateTime()
+  declare expiresAt: DateTime
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare userId: string | null
+}
+
 export class ShopAddressSchema extends BaseModel {
   static $columns = [
     'address',

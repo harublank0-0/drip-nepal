@@ -1,6 +1,7 @@
 import { userSignupValidator } from '#modules/auth/validators/user'
 import { UserService } from '#modules/users/index'
 import { inject } from '@adonisjs/core'
+import { signIn } from '#modules/auth/account_access'
 
 import type { HttpContext } from '@adonisjs/core/http'
 
@@ -24,11 +25,11 @@ export default class NewAccountController {
   /*
    * Registers a new user and logins
    */
-  async store({ request, response, auth }: HttpContext) {
-    const payload = await request.validateUsing(userSignupValidator)
+  async store(ctx: HttpContext) {
+    const payload = await ctx.request.validateUsing(userSignupValidator)
     const user = await this.userService.create(payload)
 
-    await auth.use('web').login(user)
-    response.redirect().toRoute('home')
+    await signIn(ctx, user)
+    return ctx.response.redirect().toRoute('home')
   }
 }
