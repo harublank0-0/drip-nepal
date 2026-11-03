@@ -1,15 +1,15 @@
 import { middleware } from '#start/kernel'
 import router from '@adonisjs/core/services/router'
 
-const RegistrationController = () => import('#modules/auth/controllers/registration_controller')
+const UserRegistrationController = () => import('#modules/auth/controllers/registration_controller')
 
-const SessionController = () => import('#modules/auth/controllers/session_controller')
+const UserSessionController = () => import('#modules/auth/controllers/session_controller')
 
 router
   .group(() => {
-    router.get('signup', [RegistrationController, 'create'])
+    router.get('signup', [UserRegistrationController, 'create'])
 
-    router.get('login', [SessionController, 'create'])
+    router.get('login', [UserSessionController, 'create'])
   })
   .as('ui.auth')
   .prefix('auth')
@@ -17,16 +17,16 @@ router
 
 router
   .group(() => {
-    router.post('signup', [RegistrationController, 'store'])
+    router.post('signup', [UserRegistrationController, 'store'])
 
-    router.post('login', [SessionController, 'store'])
+    router.post('login', [UserSessionController, 'store'])
   })
   .as('api.auth')
   .prefix('api/v1')
   .use(middleware.guest())
 
 router
-  .post('logout', [SessionController, 'destroy'])
+  .post('logout', [UserSessionController, 'destroy'])
   .as('api.auth.logout')
   .prefix('api/v1')
   .use(middleware.auth())

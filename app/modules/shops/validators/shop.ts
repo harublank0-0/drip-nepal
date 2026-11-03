@@ -5,7 +5,12 @@ export const shopSignupValidator = vine.create({
   // user data
   fullName: vine.string().trim().minLength(1).maxLength(100),
   email: email().unique({ table: 'users', column: 'email' }),
-  phone: vine.string().trim().minLength(7).maxLength(15),
+  phone: vine
+    .string()
+    .trim()
+    .minLength(7)
+    .maxLength(15)
+    .unique({ table: 'users', column: 'phone' }),
   password: password().confirmed({
     confirmationField: 'confirmPassword',
   }),

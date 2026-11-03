@@ -62,7 +62,7 @@ export default function Signup() {
               <div className="h-px flex-1 bg-border" />
             </div>
 
-            <Form route="api.auth.registration.store">
+            <Form route="api.auth.user_registration.store">
               {({ errors, processing }) => (
                 <div className="flex flex-col gap-4">
                   <Field>
@@ -213,7 +213,7 @@ export default function Signup() {
             <p className="mt-6 text-center text-sm text-muted-foreground">
               Already have an account?{' '}
               <Link
-                route="ui.auth.session.create"
+                route="ui.auth.user_session.create"
                 className="font-semibold text-foreground underline-offset-2 hover:underline"
               >
                 Sign In

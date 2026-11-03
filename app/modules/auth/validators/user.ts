@@ -1,11 +1,11 @@
 import { email, password } from '#validators/shared'
 import vine from '@vinejs/vine'
-import { Infer } from '@vinejs/vine/types'
+import type { Infer } from '@vinejs/vine/types'
 
 export const userSignupObject = vine.object({
   fullName: vine.string(),
   email: email().unique({ table: 'users', column: 'email' }),
-  phone: vine.string().optional(),
+  phone: vine.string().trim().maxLength(15).unique({ table: 'users', column: 'phone' }).optional(),
   password: password().confirmed({
     confirmationField: 'passwordConfirmation',
   }),

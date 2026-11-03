@@ -1,20 +1,33 @@
 import User from '#models/user'
 import Shop from '#models/shop'
 import ShopAddress from '#models/shop_address'
-import { shopSignupValidator } from '#validators/auth/shop'
+import { shopSignupValidator } from '#modules/shops/validators/shop'
 import { ShopAddressTypes } from '#constants/shop_address_type'
 import type { HttpContext } from '@adonisjs/core/http'
 import db from '@adonisjs/lucid/services/db'
 import { ShopStatus } from '#constants/shop_status'
 
 export default class ShopRegistrationController {
-  async create({ inertia }: HttpContext) {
+  /*
+   * Renders the shop registration form. The owner is logged in after
+   * registering and lands back here with `?success=1` to see the success
+   * screen; any other logged-in visit goes home.
+   */
+  async create({ inertia, auth, request, response }: HttpContext) {
+    if (auth.isAuthenticated && request.qs().success !== '1') {
+      return response.redirect().toRoute('home')
+    }
+
     return inertia.render('shops/register/index', {})
   }
 
+  /*
+   * Creates the owner account, the shop and its address in one transaction,
+   * then logs the owner in.
+   */
   async store({ request, response, auth }: HttpContext) {
     const data = await request.validateUsing(shopSignupValidator)
-    const user = await db.transaction(async (trx) => {
+    const registration = await db.transaction(async (trx) => {
       const newUser = await User.create(
         {
           fullName: data.fullName,
@@ -57,9 +70,13 @@ export default class ShopRegistrationController {
         { client: trx }
       )
 
-      return newUser
+      return { user: newUser, shop }
     })
 
-    await auth.use('web').login(user)
+    await auth.use('web').login(registration.user)
+
+    return response.redirect().toRoute('ui.auth.shop.shop_registration.create', [], {
+      qs: { success: 1, shop: registration.shop.slug },
+    })
   }
 }

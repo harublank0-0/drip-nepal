@@ -82,7 +82,7 @@ export default function Login() {
               <div className="h-px flex-1 bg-border" />
             </div>
 
-            <Form route="api.auth.session.store">
+            <Form route="api.auth.user_session.store">
               {({ errors, processing }) => (
                 <div className="flex flex-col gap-4">
                   <Field>
@@ -178,7 +178,7 @@ export default function Login() {
             <p className="mt-6 text-center text-sm text-muted-foreground">
               Don&apos;t have an account?{' '}
               <Link
-                route="ui.auth.registration.create"
+                route="ui.auth.user_registration.create"
                 className="font-semibold text-foreground underline-offset-2 hover:underline"
               >
                 Create account
