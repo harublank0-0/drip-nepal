@@ -1,5 +1,5 @@
 import { type ReactNode } from 'react'
-import { motion } from 'framer-motion'
+import { motion, type Variants } from 'framer-motion'
 import { LucideCircleCheck } from 'lucide-react'
 import DripNepalLogo from '~/assets/logo/drip-nepal.png'
 import { Typography } from '~/components/ui/typography'
@@ -17,7 +17,7 @@ const defaultBenefits = [
   'Easy order tracking',
 ]
 
-const containerVariants = {
+const containerVariants: Variants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
@@ -25,7 +25,7 @@ const containerVariants = {
   },
 }
 
-const itemVariants = {
+const itemVariants: Variants = {
   hidden: { opacity: 0, y: 30 },
   visible: {
     opacity: 1,

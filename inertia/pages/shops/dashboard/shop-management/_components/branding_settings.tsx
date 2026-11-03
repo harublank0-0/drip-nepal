@@ -8,12 +8,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '~/components/ui/select'
-import { ToggleGroup, ToggleGroupItem } from '~/components/ui/toggle-group'
+import { ToggleGroup, ToggleGroupItem } from '~/components/ui/toggle_group'
 import { Separator } from '~/components/ui/separator'
 import { cn } from '~/lib/utils'
-import { SectionCard } from '../components/section-card'
-import { ImageUpload } from '../components/image-upload'
-import { ColorInput } from '../components/color-input'
+import { SectionCard } from '../components/section_card'
+import { ImageUpload } from '../components/image_upload'
+import { ColorInput } from '../components/color_input'
 import { fontPairingOptions } from '../constants'
 import type { Branding } from '../types'
 

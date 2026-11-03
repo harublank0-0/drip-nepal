@@ -3,7 +3,7 @@ import { SparklesIcon } from 'lucide-react'
 import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
 import { cn } from '~/lib/utils'
-import { SectionCard } from '../components/section-card'
+import { SectionCard } from '../components/section_card'
 import type { InsightPriorityLevel, PerformanceInsight } from '../types'
 
 const priorityStyles: Record<InsightPriorityLevel, string> = {

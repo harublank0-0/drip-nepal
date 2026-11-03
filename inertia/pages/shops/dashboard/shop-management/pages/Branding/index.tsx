@@ -1,7 +1,7 @@
 import RootLayout from '~/layouts/root_layout'
-import { useShopManagementContext } from '../../shop-management-provider'
+import { useShopManagementContext } from '../../shop_management_provider'
 import { ShopManagementLayout } from '../../layout'
-import { BrandingSettings } from '../../_components/branding-settings'
+import { BrandingSettings } from '../../_components/branding_settings'
 
 export default function BrandingPage() {
   const { draft, setSection } = useShopManagementContext()

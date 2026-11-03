@@ -1,7 +1,7 @@
 import { PlusIcon, TruckIcon, Trash2Icon } from 'lucide-react'
 import { Field, FieldDescription, FieldGroup, FieldLabel } from '~/components/ui/field'
 import { Input } from '~/components/ui/input'
-import { InputGroup, InputGroupAddon, InputGroupInput } from '~/components/ui/input-group'
+import { InputGroup, InputGroupAddon, InputGroupInput } from '~/components/ui/input_group'
 import { Textarea } from '~/components/ui/textarea'
 import { Switch } from '~/components/ui/switch'
 import { Button } from '~/components/ui/button'
@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '~/components/ui/select'
-import { SectionCard } from '../components/section-card'
+import { SectionCard } from '../components/section_card'
 import { courierOptions, processingTimeOptions } from '../constants'
 import type { ShippingSettings as ShippingSettingsType } from '../types'
 

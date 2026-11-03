@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Check, Clock, BarChart3, Package2, Zap, Shield, Layers } from 'lucide-react'
 
@@ -10,7 +11,15 @@ const benefits = [
   { icon: Layers, text: 'Multiple store support from one dashboard' },
 ]
 
+const storeStats = [
+  { label: 'Store 1 - Fashion Hub', revenue: '+24%', color: '#10B981' },
+  { label: 'Store 2 - Tech Gear', revenue: '+18%', color: '#6366F1' },
+  { label: 'Store 3 - Home Decor', revenue: '+32%', color: '#22D3EE' },
+]
+
 export function BenefitsSection() {
+  const [barWidths] = useState(() => storeStats.map(() => Math.random() * 60 + 30))
+
   return (
     <section className="relative z-10 py-24 md:py-32">
       <div className="mx-auto max-w-7xl px-4 md:px-8 lg:px-16">
@@ -35,11 +44,7 @@ export function BenefitsSection() {
                 </div>
               </div>
               <div className="space-y-3">
-                {[
-                  { label: 'Store 1 - Fashion Hub', revenue: '+24%', color: '#10B981' },
-                  { label: 'Store 2 - Tech Gear', revenue: '+18%', color: '#6366F1' },
-                  { label: 'Store 3 - Home Decor', revenue: '+32%', color: '#22D3EE' },
-                ].map((store) => (
+                {storeStats.map((store, index) => (
                   <motion.div
                     key={store.label}
                     className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-4"
@@ -57,7 +62,7 @@ export function BenefitsSection() {
                         className="h-full rounded-full"
                         style={{ background: store.color }}
                         initial={{ width: 0 }}
-                        whileInView={{ width: `${Math.random() * 60 + 30}%` }}
+                        whileInView={{ width: `${barWidths[index]}%` }}
                         viewport={{ once: true }}
                         transition={{ duration: 0.8, delay: 0.2 }}
                       />

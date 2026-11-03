@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { AnimatedCounter } from './AnimatedCounter'
+import { AnimatedCounter } from './animated_counter'
 
 const stats = [
   { value: 120, suffix: 'K+', label: 'Products Managed' },

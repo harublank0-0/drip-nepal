@@ -5,7 +5,7 @@ import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
 import { Field, FieldLabel } from '~/components/ui/field'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '~/components/ui/card'
-import { ConfirmDialog } from '../components/confirm-dialog'
+import { ConfirmDialog } from '../components/confirm_dialog'
 
 type DangerZoneProps = {
   storeName: string
