@@ -1,6 +1,6 @@
+import { readFile } from 'node:fs/promises'
 import { DateTime } from 'luxon'
 import string from '@adonisjs/core/helpers/string'
-import drive from '@adonisjs/drive/services/main'
 import db from '@adonisjs/lucid/services/db'
 import { errors as vineErrors } from '@vinejs/vine'
 import type { MultipartFile } from '@adonisjs/core/bodyparser'
@@ -20,8 +20,24 @@ import {
   VariantStatus,
 } from '#constants/product'
 import type { ProductPayload } from '#modules/shops/validators/product'
+import { PhotoRejected } from '#modules/products/photos'
+import {
+  deletePhotoFiles,
+  storeProductPhoto,
+  type StoredPhotoFiles,
+} from '#modules/products/services/photo_storage'
 
 type VariantInput = ProductPayload['variants'][number]
+
+type StoredPhoto = StoredPhotoFiles & { name: string }
+
+/*
+ * Every file a media row owns. Rows from before photos were resized have
+ * only `key`, the original upload.
+ */
+function mediaFileKeys(media: ProductMedia): string[] {
+  return [media.metadata?.key, media.metadata?.thumbnailKey].filter(Boolean)
+}
 
 /*
  * Throws the same error VineJS throws, so Inertia shows the message under
@@ -74,7 +90,7 @@ export default class ProductService {
         return product
       })
     } catch (error) {
-      await this.#deleteFiles(uploaded.map((image) => image.key))
+      await this.#deleteFiles(uploaded.flatMap((photo) => [photo.key, photo.thumbnailKey]))
       throw error
     }
   }
@@ -116,11 +132,11 @@ export default class ProductService {
         }
       })
     } catch (error) {
-      await this.#deleteFiles(uploaded.map((image) => image.key))
+      await this.#deleteFiles(uploaded.flatMap((photo) => [photo.key, photo.thumbnailKey]))
       throw error
     }
 
-    await this.#deleteFiles(removedMedia.map((media) => media.metadata?.key).filter(Boolean))
+    await this.#deleteFiles(removedMedia.flatMap(mediaFileKeys))
     return product
   }
 
@@ -289,7 +305,7 @@ export default class ProductService {
   async #syncMedia(
     product: Product,
     keepMediaIds: string[],
-    uploaded: { key: string; url: string; name: string }[],
+    uploaded: StoredPhoto[],
     trx: TransactionClientContract
   ) {
     for (const [index, id] of keepMediaIds.entries()) {
@@ -303,8 +319,15 @@ export default class ProductService {
           type: 'image',
           provider: 'drive',
           url: image.url,
+          thumbnailUrl: image.thumbnailUrl,
           altText: product.name.slice(0, 100),
-          metadata: { key: image.key, originalName: image.name },
+          metadata: {
+            key: image.key,
+            thumbnailKey: image.thumbnailKey,
+            originalName: image.name,
+            width: image.width,
+            height: image.height,
+          },
           sortOrder: keepMediaIds.length + offset,
         },
         { client: trx }
@@ -312,17 +335,25 @@ export default class ProductService {
     }
   }
 
+  /*
+   * Resizes and stores every photo before the database is touched. A photo
+   * that can't be used refuses the whole save, with the message under that
+   * photo, and the files already written are deleted.
+   */
   async #uploadImages(shop: Shop, images: MultipartFile[]) {
-    const uploaded: { key: string; url: string; name: string }[] = []
+    const uploaded: StoredPhoto[] = []
 
     try {
-      for (const image of images) {
-        const key = `shops/${shop.id}/products/${randomCode(20)}.${image.extname}`
-        await image.moveToDisk(key)
-        uploaded.push({ key, url: await drive.use().getUrl(key), name: image.clientName })
+      for (const [index, image] of images.entries()) {
+        const input = await readFile(image.tmpPath!)
+        const files = await storeProductPhoto(`shops/${shop.id}/products`, input).catch((error) => {
+          if (error instanceof PhotoRejected) fieldError(`images.${index}`, error.message)
+          throw error
+        })
+        uploaded.push({ ...files, name: image.clientName })
       }
     } catch (error) {
-      await this.#deleteFiles(uploaded.map((image) => image.key))
+      await this.#deleteFiles(uploaded.flatMap((photo) => [photo.key, photo.thumbnailKey]))
       throw error
     }
 
@@ -330,11 +361,6 @@ export default class ProductService {
   }
 
   async #deleteFiles(keys: string[]) {
-    for (const key of keys) {
-      await drive
-        .use()
-        .delete(key)
-        .catch(() => {})
-    }
+    await deletePhotoFiles(keys)
   }
 }
