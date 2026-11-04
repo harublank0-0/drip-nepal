@@ -140,7 +140,7 @@ export default function ShopDashboardPage({ stats, lowStock, recentOrders }: Pag
         />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <section className="rounded-xl border lg:col-span-2">
           <div className="flex items-center justify-between border-b px-4 py-3">
             <h2 className="font-medium">Recent orders</h2>
