@@ -115,6 +115,42 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#modules/catalog/controllers/catalog_controller').default['suggestions']>>>
     }
   }
+  'legal.returns': {
+    methods: ["GET","HEAD"]
+    pattern: '/returns'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: unknown
+      errorResponse: unknown
+    }
+  }
+  'legal.terms': {
+    methods: ["GET","HEAD"]
+    pattern: '/terms'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: unknown
+      errorResponse: unknown
+    }
+  }
+  'legal.privacy': {
+    methods: ["GET","HEAD"]
+    pattern: '/privacy'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: unknown
+      errorResponse: unknown
+    }
+  }
   'ui.auth.user_registration.create': {
     methods: ["GET","HEAD"]
     pattern: '/auth/signup'

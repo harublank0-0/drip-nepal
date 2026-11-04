@@ -69,6 +69,11 @@ export interface ApiDefinition {
       }
     }
   }
+  legal: {
+    returns: typeof routes['legal.returns']
+    terms: typeof routes['legal.terms']
+    privacy: typeof routes['legal.privacy']
+  }
   ui: {
     auth: {
       userRegistration: {

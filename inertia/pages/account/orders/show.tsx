@@ -33,6 +33,7 @@ import {
   DialogTitle,
 } from '~/components/ui/dialog'
 import { Spinner } from '~/components/ui/spinner'
+import { ContactOptions, hasContact, useSupport } from '~/components/support/contact_options'
 import { formatDate, formatPrice } from '~/lib/format'
 import { cancelOrderUrl, pluralize } from '~/lib/order'
 import type { InertiaProps } from '~/types'
@@ -70,6 +71,7 @@ function paymentMessage(order: Data.Order) {
 
 export default function AccountOrderPage({ order }: PageProps) {
   const { errors } = usePage<Data.SharedProps>().props
+  const support = useSupport()
   const [confirming, setConfirming] = useState(false)
   const [cancelling, setCancelling] = useState(false)
   const [attempted, setAttempted] = useState(false)
@@ -222,6 +224,19 @@ export default function AccountOrderPage({ order }: PageProps) {
                   Your note
                 </h2>
                 <p className="text-sm whitespace-pre-line">{order.notes}</p>
+              </section>
+            )}
+
+            {hasContact(support) && (
+              <section className="rounded-xl border border-border/60 bg-card p-4">
+                <h2 className="text-sm font-semibold">Need help with this order?</h2>
+                <p className="mt-0.5 mb-3 text-sm text-muted-foreground">
+                  Message or call us with your order number.
+                </p>
+                <ContactOptions
+                  className="sm:grid-cols-1"
+                  message={`Hi, I have a question about order ${order.orderNumber}.`}
+                />
               </section>
             )}
           </div>

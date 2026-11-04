@@ -39,16 +39,18 @@ declare module '@adonisjs/inertia/types' {
     'commerce/product_detail/components/product_info': ExtractProps<(typeof import('../../inertia/pages/commerce/product_detail/components/product_info.tsx'))['default']>
     'commerce/product_detail/components/quantity_stepper': ExtractProps<(typeof import('../../inertia/pages/commerce/product_detail/components/quantity_stepper.tsx'))['default']>
     'commerce/product_detail/components/related_products': ExtractProps<(typeof import('../../inertia/pages/commerce/product_detail/components/related_products.tsx'))['default']>
+    'commerce/product_detail/components/share_button': ExtractProps<(typeof import('../../inertia/pages/commerce/product_detail/components/share_button.tsx'))['default']>
     'commerce/product_detail/components/store_card': ExtractProps<(typeof import('../../inertia/pages/commerce/product_detail/components/store_card.tsx'))['default']>
     'commerce/product_detail/components/variant_selector': ExtractProps<(typeof import('../../inertia/pages/commerce/product_detail/components/variant_selector.tsx'))['default']>
     'commerce/product_detail/hooks/use_add_to_cart': ExtractProps<(typeof import('../../inertia/pages/commerce/product_detail/hooks/use_add_to_cart.ts'))['default']>
     'commerce/product_detail/hooks/use_variant_selection': ExtractProps<(typeof import('../../inertia/pages/commerce/product_detail/hooks/use_variant_selection.ts'))['default']>
     'commerce/product_detail/index': ExtractProps<(typeof import('../../inertia/pages/commerce/product_detail/index.tsx'))['default']>
-    'customers/home/components/categories/category_cards': ExtractProps<(typeof import('../../inertia/pages/customers/home/components/categories/category_cards.tsx'))['default']>
+    'customers/home/components/categories/category_row': ExtractProps<(typeof import('../../inertia/pages/customers/home/components/categories/category_row.tsx'))['default']>
     'customers/home/components/featured/featured_products': ExtractProps<(typeof import('../../inertia/pages/customers/home/components/featured/featured_products.tsx'))['default']>
     'customers/home/components/featured/featured_stores': ExtractProps<(typeof import('../../inertia/pages/customers/home/components/featured/featured_stores.tsx'))['default']>
     'customers/home/components/hero/hero_panel': ExtractProps<(typeof import('../../inertia/pages/customers/home/components/hero/hero_panel.tsx'))['default']>
     'customers/home/components/hero/index': ExtractProps<(typeof import('../../inertia/pages/customers/home/components/hero/index.tsx'))['default']>
+    'customers/home/components/ordering_info': ExtractProps<(typeof import('../../inertia/pages/customers/home/components/ordering_info.tsx'))['default']>
     'customers/home/index': ExtractProps<(typeof import('../../inertia/pages/customers/home/index.tsx'))['default']>
     'design_system/color_card': ExtractProps<(typeof import('../../inertia/pages/design_system/color_card.tsx'))['default']>
     'design_system/colors': ExtractProps<(typeof import('../../inertia/pages/design_system/colors.ts'))['default']>
@@ -75,6 +77,9 @@ declare module '@adonisjs/inertia/types' {
     'landing/components/statistics_section': ExtractProps<(typeof import('../../inertia/pages/landing/components/statistics_section.tsx'))['default']>
     'landing/components/testimonials': ExtractProps<(typeof import('../../inertia/pages/landing/components/testimonials.tsx'))['default']>
     'landing/components/trusted_by': ExtractProps<(typeof import('../../inertia/pages/landing/components/trusted_by.tsx'))['default']>
+    'legal/privacy': ExtractProps<(typeof import('../../inertia/pages/legal/privacy.tsx'))['default']>
+    'legal/returns': ExtractProps<(typeof import('../../inertia/pages/legal/returns.tsx'))['default']>
+    'legal/terms': ExtractProps<(typeof import('../../inertia/pages/legal/terms.tsx'))['default']>
     'shops/dashboard/index': ExtractProps<(typeof import('../../inertia/pages/shops/dashboard/index.tsx'))['default']>
     'shops/dashboard/orders/index': ExtractProps<(typeof import('../../inertia/pages/shops/dashboard/orders/index.tsx'))['default']>
     'shops/dashboard/orders/show': ExtractProps<(typeof import('../../inertia/pages/shops/dashboard/orders/show.tsx'))['default']>

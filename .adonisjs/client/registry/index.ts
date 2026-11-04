@@ -60,6 +60,24 @@ const routes = {
     tokens: [{"old":"/api/v1/search/suggestions","type":0,"val":"api","end":""},{"old":"/api/v1/search/suggestions","type":0,"val":"v1","end":""},{"old":"/api/v1/search/suggestions","type":0,"val":"search","end":""},{"old":"/api/v1/search/suggestions","type":0,"val":"suggestions","end":""}],
     types: placeholder as Registry['api.search.suggestions']['types'],
   },
+  'legal.returns': {
+    methods: ["GET","HEAD"],
+    pattern: '/returns',
+    tokens: [{"old":"/returns","type":0,"val":"returns","end":""}],
+    types: placeholder as Registry['legal.returns']['types'],
+  },
+  'legal.terms': {
+    methods: ["GET","HEAD"],
+    pattern: '/terms',
+    tokens: [{"old":"/terms","type":0,"val":"terms","end":""}],
+    types: placeholder as Registry['legal.terms']['types'],
+  },
+  'legal.privacy': {
+    methods: ["GET","HEAD"],
+    pattern: '/privacy',
+    tokens: [{"old":"/privacy","type":0,"val":"privacy","end":""}],
+    types: placeholder as Registry['legal.privacy']['types'],
+  },
   'ui.auth.user_registration.create': {
     methods: ["GET","HEAD"],
     pattern: '/auth/signup',

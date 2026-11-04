@@ -10,3 +10,4 @@
 /// <reference path="../../config/limiter.ts" />
 /// <reference path="../../config/logger.ts" />
 /// <reference path="../../config/marketplace.ts" />
+/// <reference path="../../config/storefront.ts" />

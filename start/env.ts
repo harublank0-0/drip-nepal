@@ -25,6 +25,14 @@ export default await Env.create(new URL('../', import.meta.url), {
   // Lets anyone register a shop (v1 has one seller, so it defaults to closed)
   SHOP_REGISTRATION_OPEN: Env.schema.boolean.optional(),
 
+  // How customers reach the store, shown in the footer and on order pages
+  // (config/storefront.ts). Each is optional; unset ones are hidden.
+  SUPPORT_PHONE: Env.schema.string.optional(),
+  SUPPORT_EMAIL: Env.schema.string.optional({ format: 'email' }),
+  INSTAGRAM_URL: Env.schema.string.optional({ format: 'url' }),
+  FACEBOOK_URL: Env.schema.string.optional({ format: 'url' }),
+  TIKTOK_URL: Env.schema.string.optional({ format: 'url' }),
+
   // The running release, shown by /health/live (for example the git commit)
   APP_RELEASE: Env.schema.string.optional(),
 

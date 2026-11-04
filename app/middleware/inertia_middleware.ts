@@ -5,6 +5,7 @@ import BaseInertiaMiddleware from '@adonisjs/inertia/inertia_middleware'
 import ShopTransformer from '#transformers/shop_transformer'
 import CartService from '#modules/orders/services/cart_service'
 import { shopRegistrationOpen } from '#config/marketplace'
+import { appUrl, support } from '#config/storefront'
 
 export default class InertiaMiddleware extends BaseInertiaMiddleware {
   async share(ctx: HttpContext) {
@@ -53,6 +54,12 @@ export default class InertiaMiddleware extends BaseInertiaMiddleware {
        * Whether the storefront shows "open a shop" links (config/marketplace.ts).
        */
       shopRegistrationOpen,
+      /*
+       * How customers reach the store, and the site's public address for
+       * social previews (config/storefront.ts).
+       */
+      support,
+      appUrl,
       /*
        * The shop whose dashboard is open. Only set on routes that use the
        * `shopAccess` middleware.
