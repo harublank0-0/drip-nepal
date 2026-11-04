@@ -153,4 +153,4 @@ pnpm typecheck
 pnpm test
 ```
 
-These are the checks CI runs on pull requests into `main` and `v1`, with the suites on `postgres:18.4`.
+These are the checks CI runs on pull requests into `main`, with the suites on `postgres:18.4`.

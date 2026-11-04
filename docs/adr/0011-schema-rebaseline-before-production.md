@@ -14,6 +14,8 @@ Reviewed: 2026-09-25 · consistency review 2026-09-30 to 2026-10-04
 
 Edited 2026-11-03: the product owner decided to sell from a single-seller v1 deployed from the prototype line before M0 ([risks §2.3](../risks-and-open-decisions.md#23-decision-log)). Once v1 holds real data, Assumption A-01 no longer holds and the first trigger under "When to revisit" fires. OD-55 decides whether this ADR is kept with a one-off import of the v1 data or superseded; the decision is otherwise unchanged.
 
+Edited 2026-11-04: PR #142 merged the `v1` branch into `main`, and production now deploys release tags cut from `main` ([risks §2.3](../risks-and-open-decisions.md#23-decision-log)). The baseline merge is therefore also the cutover of the live store: it lands together with the OD-55 data import, in one planned release. The decision is otherwise unchanged.
+
 ## Context
 
 **Repository** [Verified-repo, RF-41]:
