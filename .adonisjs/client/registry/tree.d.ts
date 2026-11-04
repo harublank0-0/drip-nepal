@@ -58,6 +58,12 @@ export interface ApiDefinition {
     checkout: {
       store: typeof routes['api.checkout.store']
     }
+    orders: {
+      track: {
+        lookup: typeof routes['api.orders.track.lookup']
+        cancel: typeof routes['api.orders.track.cancel']
+      }
+    }
     account: {
       orders: {
         cancel: typeof routes['api.account.orders.cancel']
@@ -68,6 +74,11 @@ export interface ApiDefinition {
         status: typeof routes['api.admin.shops.status']
       }
     }
+  }
+  legal: {
+    returns: typeof routes['legal.returns']
+    terms: typeof routes['legal.terms']
+    privacy: typeof routes['legal.privacy']
   }
   ui: {
     auth: {
@@ -104,6 +115,11 @@ export interface ApiDefinition {
   checkout: {
     show: typeof routes['checkout.show']
     success: typeof routes['checkout.success']
+  }
+  orders: {
+    track: typeof routes['orders.track'] & {
+      show: typeof routes['orders.track.show']
+    }
   }
   account: {
     orders: {

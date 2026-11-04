@@ -24,7 +24,12 @@ export default class SessionController {
   /*
    * A user login page
    */
-  async create({ inertia }: HttpContext) {
+  async create({ inertia, request, session }: HttpContext) {
+    // "Log in" links can say where to come back to, e.g. ?next=/checkout.
+    const next = request.input('next')
+    if (typeof next === 'string' && /^\/(?!\/)/.test(next) && !next.startsWith('/api/')) {
+      session.setIntendedUrl(next)
+    }
     return inertia.render('auth/login', {})
   }
 
@@ -59,7 +64,7 @@ export default class SessionController {
     }
 
     await signIn(ctx, user)
-    return ctx.response.redirect().toRoute('home')
+    return ctx.response.redirect().toIntendedRoute('home')
   }
 
   /*

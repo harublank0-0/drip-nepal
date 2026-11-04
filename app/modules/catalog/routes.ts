@@ -16,3 +16,10 @@ router.get('/products/:slug', [CatalogController, 'product']).as('products.show'
 router
   .get('/api/v1/search/suggestions', [CatalogController, 'suggestions'])
   .as('api.search.suggestions')
+
+/*
+ * Store policies.
+ */
+router.on('/returns').renderInertia('legal/returns', {}).as('legal.returns')
+router.on('/terms').renderInertia('legal/terms', {}).as('legal.terms')
+router.on('/privacy').renderInertia('legal/privacy', {}).as('legal.privacy')

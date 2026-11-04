@@ -1,10 +1,13 @@
 import { Link } from '@adonisjs/inertia/react'
-import { Banknote } from 'lucide-react'
+import { Banknote, RotateCcw, Truck } from 'lucide-react'
 import type { Data } from '@generated/data'
 import { Button } from '~/components/ui/button'
 import { Separator } from '~/components/ui/separator'
 import { Spinner } from '~/components/ui/spinner'
 import { cn } from '~/lib/utils'
+import { formatPrice } from '~/lib/format'
+import { FREE_SHIPPING_THRESHOLD, SHIPPING_FEE_PER_SHOP } from '~/lib/order'
+import { RETURN_DAYS } from '~/lib/policies'
 import {
   LOW_STOCK_THRESHOLD,
   purchaseLabel,
@@ -12,6 +15,7 @@ import {
   type VariantSelection,
 } from '../hooks/use_variant_selection'
 import { PriceTag } from './price_tag'
+import { ShareButton } from './share_button'
 import { QuantityStepper } from './quantity_stepper'
 import { StoreCard } from './store_card'
 import { VariantSelector } from './variant_selector'
@@ -80,9 +84,12 @@ export function ProductInfo({
             {shop.name}
           </Link>
         )}
-        <h1 className="font-heading text-2xl leading-tight font-bold tracking-tight md:text-3xl lg:text-4xl">
-          {product.name}
-        </h1>
+        <div className="flex items-start justify-between gap-3">
+          <h1 className="font-heading text-2xl leading-tight font-bold tracking-tight md:text-3xl lg:text-4xl">
+            {product.name}
+          </h1>
+          <ShareButton title={product.name} />
+        </div>
         {product.brand && (
           <p className="mt-2 text-sm text-muted-foreground">
             Brand: <span className="text-foreground">{product.brand}</span>
@@ -140,13 +147,57 @@ export function ProductInfo({
         )}
       </div>
 
-      <p className="flex items-center gap-3 rounded-xl bg-muted/50 p-3 text-sm ring-1 ring-foreground/5">
-        <Banknote className="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
-        Cash on delivery across Nepal
-      </p>
+      <DeliveryInfo />
 
       {shop && <StoreCard shop={shop} />}
     </div>
+  )
+}
+
+/*
+ * Payment, delivery cost and returns, next to the button, so nobody has
+ * to reach checkout to find out.
+ */
+function DeliveryInfo() {
+  const rows = [
+    {
+      icon: Banknote,
+      title: 'Cash on delivery',
+      text: 'Pay when your order arrives.',
+    },
+    {
+      icon: Truck,
+      title: `Delivery ${formatPrice(SHIPPING_FEE_PER_SHOP)}`,
+      text: `Free when your order from this shop is ${formatPrice(FREE_SHIPPING_THRESHOLD)} or more.`,
+    },
+    {
+      icon: RotateCcw,
+      title: `${RETURN_DAYS}-day returns`,
+      text: 'On unworn items with tags.',
+      link: true,
+    },
+  ]
+
+  return (
+    <ul className="divide-y divide-border/50 rounded-xl text-sm ring-1 ring-foreground/10">
+      {rows.map((row) => (
+        <li key={row.title} className="flex items-start gap-3 p-3">
+          <row.icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <p>
+            <span className="font-medium">{row.title}.</span>{' '}
+            <span className="text-muted-foreground">{row.text}</span>
+            {row.link && (
+              <>
+                {' '}
+                <Link route="legal.returns" className="underline underline-offset-2">
+                  Returns policy
+                </Link>
+              </>
+            )}
+          </p>
+        </li>
+      ))}
+    </ul>
   )
 }
 

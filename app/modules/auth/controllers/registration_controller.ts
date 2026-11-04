@@ -18,14 +18,7 @@ export default class NewAccountController {
    * Renders the signup page to register new user
    */
   async create({ inertia }: HttpContext) {
-    return inertia.render(
-      'auth/signup',
-      {},
-      {
-        title: 'Sign Up',
-        description: 'Create a new account',
-      }
-    )
+    return inertia.render('auth/signup', {})
   }
 
   /*
@@ -41,6 +34,6 @@ export default class NewAccountController {
     const user = await this.userService.create(payload)
 
     await signIn(ctx, user)
-    return ctx.response.redirect().toRoute('home')
+    return ctx.response.redirect().toIntendedRoute('home')
   }
 }

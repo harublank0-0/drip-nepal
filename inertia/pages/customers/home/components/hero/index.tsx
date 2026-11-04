@@ -13,7 +13,7 @@ const manPanel: HeroPanelProps = {
   title: 'men',
   cta: {
     route: 'men',
-    label: 'shop for men',
+    label: 'shop men',
   },
 }
 
@@ -25,7 +25,7 @@ const womanPanel: HeroPanelProps = {
   title: 'women',
   cta: {
     route: 'women',
-    label: 'shop for women',
+    label: 'shop women',
   },
 }
 
@@ -33,7 +33,7 @@ export const Hero = () => {
   return (
     <section
       aria-label="Featured collections"
-      className="flex flex-col md:flex-row h-screen bg-black relative overflow-hidden"
+      className="flex flex-row h-[62svh] min-h-[420px] md:h-screen bg-black relative overflow-hidden"
     >
       <HeroPanel {...manPanel}>
         <div className="absolute top-1/2 left-0 rotate-90 -translate-x-1/3 hidden md:block">
@@ -44,7 +44,7 @@ export const Hero = () => {
       </HeroPanel>
 
       <HeroPanel {...womanPanel}>
-        <div className="absolute top-4 md:top-8 right-4 md:right-8">
+        <div className="absolute top-4 md:top-8 right-4 md:right-8 hidden md:block">
           <Typography.Muted className="uppercase tracking-widest text-xs md:text-sm">
             KTM 27.7172&deg;N, 85.3240&deg;E
           </Typography.Muted>
@@ -52,7 +52,7 @@ export const Hero = () => {
       </HeroPanel>
 
       <motion.div
-        className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10"
+        className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10 hidden md:block"
         animate={{ y: [0, 8, 0] }}
         transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
         aria-hidden="true"

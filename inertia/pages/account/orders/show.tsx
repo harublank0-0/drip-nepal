@@ -33,12 +33,15 @@ import {
   DialogTitle,
 } from '~/components/ui/dialog'
 import { Spinner } from '~/components/ui/spinner'
+import { ContactOptions, hasContact, useSupport } from '~/components/support/contact_options'
 import { formatDate, formatPrice } from '~/lib/format'
-import { cancelOrderUrl, pluralize } from '~/lib/order'
+import { cancelOrderUrl, pluralize, trackCancelUrl } from '~/lib/order'
 import type { InertiaProps } from '~/types'
 
 type PageProps = InertiaProps<{
   order: Data.Order
+  /* Opened from order tracking, without an account. */
+  guest?: boolean
 }>
 
 function statusMessage(order: Data.Order) {
@@ -68,8 +71,9 @@ function paymentMessage(order: Data.Order) {
   }
 }
 
-export default function AccountOrderPage({ order }: PageProps) {
+export default function AccountOrderPage({ order, guest = false }: PageProps) {
   const { errors } = usePage<Data.SharedProps>().props
+  const support = useSupport()
   const [confirming, setConfirming] = useState(false)
   const [cancelling, setCancelling] = useState(false)
   const [attempted, setAttempted] = useState(false)
@@ -81,7 +85,7 @@ export default function AccountOrderPage({ order }: PageProps) {
 
   const cancelOrder = () => {
     router.post(
-      cancelOrderUrl(order.orderNumber),
+      guest ? trackCancelUrl(order.orderNumber) : cancelOrderUrl(order.orderNumber),
       {},
       {
         preserveScroll: true,
@@ -103,11 +107,11 @@ export default function AccountOrderPage({ order }: PageProps) {
       <Head title={`Order ${order.orderNumber}`} />
       <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
         <Link
-          route="account.orders.index"
+          route={guest ? 'orders.track' : 'account.orders.index'}
           className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
         >
           <ArrowLeftIcon className="size-4" aria-hidden="true" />
-          My orders
+          {guest ? 'Track order' : 'My orders'}
         </Link>
 
         <header className="mt-4 mb-6 flex flex-wrap items-start justify-between gap-4">
@@ -222,6 +226,19 @@ export default function AccountOrderPage({ order }: PageProps) {
                   Your note
                 </h2>
                 <p className="text-sm whitespace-pre-line">{order.notes}</p>
+              </section>
+            )}
+
+            {hasContact(support) && (
+              <section className="rounded-xl border border-border/60 bg-card p-4">
+                <h2 className="text-sm font-semibold">Need help with this order?</h2>
+                <p className="mt-0.5 mb-3 text-sm text-muted-foreground">
+                  Message or call us with your order number.
+                </p>
+                <ContactOptions
+                  className="sm:grid-cols-1"
+                  message={`Hi, I have a question about order ${order.orderNumber}.`}
+                />
               </section>
             )}
           </div>

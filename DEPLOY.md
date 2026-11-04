@@ -32,6 +32,8 @@ Edit `.env.production`:
 - `DOMAIN` and `APP_URL`: your domain, with `https://` in `APP_URL`.
 - `DB_PASSWORD`: a long random password. `openssl rand -base64 32` makes one.
 - `APP_KEY`: generate it once the image is built (step 3).
+- `SUPPORT_PHONE`, `SUPPORT_EMAIL`: how customers reach you. The phone number also becomes a WhatsApp link. They appear in the footer, on order pages, on the policy pages and behind "Forgot password?" on the login page, which is how customers get a password reset until email is added. Each is optional, but set at least one.
+- `INSTAGRAM_URL`, `FACEBOOK_URL`, `TIKTOK_URL`: optional links shown in the footer.
 
 ## 3. Build and start
 

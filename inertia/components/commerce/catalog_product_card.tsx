@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { Link } from '@adonisjs/inertia/react'
 import { ImageIcon } from 'lucide-react'
 import type { Data } from '@generated/data'
-import { Badge } from '~/components/ui/badge'
 import { cn, getDiscountPercentage } from '~/lib/utils'
 import { formatPrice } from '~/lib/format'
 
@@ -51,9 +50,9 @@ export function CatalogProductCard({ product, className }: CatalogProductCardPro
         )}
 
         {discount > 0 && (
-          <Badge variant="destructive" className="pointer-events-none absolute top-3 left-3">
+          <span className="pointer-events-none absolute top-2 left-2 rounded-md bg-primary px-1.5 py-0.5 text-xs font-semibold text-primary-foreground md:top-3 md:left-3">
             -{discount}%
-          </Badge>
+          </span>
         )}
       </div>
 

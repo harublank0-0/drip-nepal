@@ -30,14 +30,14 @@ function StoreMark({ store }: { store: Data.StoreCard }) {
       <img
         src={store.logo}
         alt=""
-        className="size-14 rounded-full object-cover ring-1 ring-foreground/10 mb-4"
+        className="size-11 md:size-14 rounded-full object-cover ring-1 ring-foreground/10 mb-3 md:mb-4"
       />
     )
   }
   return (
     <div
       aria-hidden="true"
-      className="size-14 rounded-full bg-gradient-to-br from-primary to-primary/50 flex items-center justify-center mb-4"
+      className="size-11 md:size-14 rounded-full bg-gradient-to-br from-primary to-primary/50 flex items-center justify-center mb-3 md:mb-4"
     >
       <span className="text-primary-foreground font-heading font-bold text-xl">
         {store.name.charAt(0).toUpperCase()}
@@ -50,10 +50,10 @@ export function FeaturedStores({ stores }: FeaturedStoresProps) {
   return (
     <section
       aria-labelledby="featured-stores-heading"
-      className="py-16 md:py-24 px-6 md:px-8 max-w-7xl mx-auto"
+      className="py-10 md:py-20 px-5 md:px-8 max-w-7xl mx-auto"
     >
       <motion.div
-        className="mb-10"
+        className="mb-5 md:mb-8"
         initial={{ opacity: 0, y: 20 }}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true, margin: '-100px' }}
@@ -61,17 +61,14 @@ export function FeaturedStores({ stores }: FeaturedStoresProps) {
       >
         <h2
           id="featured-stores-heading"
-          className="text-3xl md:text-4xl font-heading font-bold tracking-tight"
+          className="text-2xl md:text-4xl font-heading font-bold tracking-tight"
         >
-          Featured Stores
+          Shops on Drip Nepal
         </h2>
-        <p className="text-muted-foreground text-sm mt-2">
-          Independent shops selling on Drip Nepal
-        </p>
       </motion.div>
 
       <motion.ul
-        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6"
+        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-6"
         variants={containerVariants}
         initial="hidden"
         whileInView="visible"
@@ -87,7 +84,7 @@ export function FeaturedStores({ stores }: FeaturedStoresProps) {
             <Link
               route="stores.show"
               routeParams={{ slug: store.slug }}
-              className="group block relative overflow-hidden rounded-2xl bg-card ring-1 ring-foreground/10 p-6 md:p-8 h-full outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="group block relative overflow-hidden rounded-2xl bg-card ring-1 ring-foreground/10 p-5 md:p-8 h-full outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
             >
               {store.banner && (
                 <img

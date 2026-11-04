@@ -47,7 +47,7 @@ export function PriceTag({ price, size = 'lg', className }: PriceTagProps) {
             {formatPrice(comparePrice)}
           </span>
           {discount > 0 && size === 'lg' && (
-            <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-sm font-semibold text-primary">
+            <span className="rounded-md bg-primary px-2 py-0.5 text-sm font-semibold text-primary-foreground">
               {discount}% off
             </span>
           )}

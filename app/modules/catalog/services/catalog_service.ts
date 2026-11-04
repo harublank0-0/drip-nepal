@@ -211,6 +211,46 @@ export default class CatalogService {
     }
   }
 
+  /*
+   * Categories that have listed products, biggest first, for the home page.
+   * The picture is the newest product's first photo, so it shows what the
+   * shop actually sells; the category's own image is the fallback.
+   */
+  async homeCategories(limit = 8) {
+    const listed = await this.listedProducts().select('products.id')
+    const productIds = listed.map((product) => product.id)
+    if (productIds.length === 0) return []
+
+    const rows = await db
+      .from('categories as c')
+      .join('products as p', 'p.category_id', 'c.id')
+      .whereIn('p.id', productIds)
+      .where('c.is_active', true)
+      .groupBy('c.id', 'c.name', 'c.slug', 'c.image')
+      .select('c.name', 'c.slug', 'c.image')
+      .select(
+        db.raw(
+          `(select pm.url from product_media pm
+              join products cp on cp.id = pm.product_id
+             where cp.category_id = c.id and cp.id = any(?)
+             order by cp.created_at desc, pm.sort_order asc nulls last
+             limit 1) as cover`,
+          [productIds]
+        )
+      )
+      .count('p.id as productCount')
+      .orderBy('productCount', 'desc')
+      .orderBy('c.name', 'asc')
+      .limit(limit)
+
+    return rows.map((row) => ({
+      name: row.name as string,
+      slug: row.slug as string,
+      image: (row.cover ?? row.image ?? null) as string | null,
+      productCount: Number(row.productCount),
+    }))
+  }
+
   async newArrivals(limit = 8) {
     return this.withCardRelations(this.listedProducts())
       .orderBy('products.created_at', 'desc')

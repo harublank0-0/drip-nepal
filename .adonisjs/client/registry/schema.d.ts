@@ -115,6 +115,42 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#modules/catalog/controllers/catalog_controller').default['suggestions']>>>
     }
   }
+  'legal.returns': {
+    methods: ["GET","HEAD"]
+    pattern: '/returns'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: unknown
+      errorResponse: unknown
+    }
+  }
+  'legal.terms': {
+    methods: ["GET","HEAD"]
+    pattern: '/terms'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: unknown
+      errorResponse: unknown
+    }
+  }
+  'legal.privacy': {
+    methods: ["GET","HEAD"]
+    pattern: '/privacy'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: unknown
+      errorResponse: unknown
+    }
+  }
   'ui.auth.user_registration.create': {
     methods: ["GET","HEAD"]
     pattern: '/auth/signup'
@@ -355,30 +391,6 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#modules/orders/controllers/checkout_controller').default['success']>>>
     }
   }
-  'account.orders.index': {
-    methods: ["GET","HEAD"]
-    pattern: '/account/orders'
-    types: {
-      body: {}
-      paramsTuple: []
-      params: {}
-      query: {}
-      response: ExtractResponse<Awaited<ReturnType<import('#modules/orders/controllers/account_orders_controller').default['index']>>>
-      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#modules/orders/controllers/account_orders_controller').default['index']>>>
-    }
-  }
-  'account.orders.show': {
-    methods: ["GET","HEAD"]
-    pattern: '/account/orders/:orderNumber'
-    types: {
-      body: {}
-      paramsTuple: [ParamValue]
-      params: { orderNumber: ParamValue }
-      query: {}
-      response: ExtractResponse<Awaited<ReturnType<import('#modules/orders/controllers/account_orders_controller').default['show']>>>
-      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#modules/orders/controllers/account_orders_controller').default['show']>>>
-    }
-  }
   'api.cart.items.store': {
     methods: ["POST"]
     pattern: '/api/v1/cart/items'
@@ -425,6 +437,78 @@ export interface Registry {
       query: ExtractQuery<InferInput<(typeof import('#modules/orders/validators/checkout').checkoutValidator)>>
       response: ExtractResponse<Awaited<ReturnType<import('#modules/orders/controllers/checkout_controller').default['store']>>>
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#modules/orders/controllers/checkout_controller').default['store']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
+  'orders.track': {
+    methods: ["GET","HEAD"]
+    pattern: '/track-order'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#modules/orders/controllers/track_orders_controller').default['index']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#modules/orders/controllers/track_orders_controller').default['index']>>>
+    }
+  }
+  'orders.track.show': {
+    methods: ["GET","HEAD"]
+    pattern: '/track-order/:orderNumber'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { orderNumber: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#modules/orders/controllers/track_orders_controller').default['show']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#modules/orders/controllers/track_orders_controller').default['show']>>>
+    }
+  }
+  'api.orders.track.lookup': {
+    methods: ["POST"]
+    pattern: '/api/v1/track-order'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#modules/orders/validators/track').trackOrderValidator)>>
+      paramsTuple: []
+      params: {}
+      query: ExtractQuery<InferInput<(typeof import('#modules/orders/validators/track').trackOrderValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#modules/orders/controllers/track_orders_controller').default['lookup']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#modules/orders/controllers/track_orders_controller').default['lookup']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
+  'api.orders.track.cancel': {
+    methods: ["POST"]
+    pattern: '/api/v1/track-order/:orderNumber/cancel'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { orderNumber: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#modules/orders/controllers/track_orders_controller').default['cancel']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#modules/orders/controllers/track_orders_controller').default['cancel']>>>
+    }
+  }
+  'account.orders.index': {
+    methods: ["GET","HEAD"]
+    pattern: '/account/orders'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#modules/orders/controllers/account_orders_controller').default['index']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#modules/orders/controllers/account_orders_controller').default['index']>>>
+    }
+  }
+  'account.orders.show': {
+    methods: ["GET","HEAD"]
+    pattern: '/account/orders/:orderNumber'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { orderNumber: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#modules/orders/controllers/account_orders_controller').default['show']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#modules/orders/controllers/account_orders_controller').default['show']>>>
     }
   }
   'api.account.orders.cancel': {

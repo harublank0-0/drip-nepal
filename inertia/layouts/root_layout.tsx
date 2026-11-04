@@ -4,6 +4,7 @@ import { Head, usePage } from '@inertiajs/react'
 import { type ReactElement, useEffect } from 'react'
 import { ThemeProvider } from '~/components/providers/theme_provider'
 import { TooltipProvider } from '~/components/ui/tooltip'
+import { SocialMeta } from '~/components/seo/social_meta'
 
 export default function RootLayout({ children }: { children: ReactElement<Data.SharedProps> }) {
   const { url } = usePage()
@@ -24,6 +25,7 @@ export default function RootLayout({ children }: { children: ReactElement<Data.S
     <>
       {/* Default title; a page's own <Head title> overrides it. */}
       <Head title="" />
+      <SocialMeta />
       <ThemeProvider defaultTheme="dark">
         <TooltipProvider>
           {children}

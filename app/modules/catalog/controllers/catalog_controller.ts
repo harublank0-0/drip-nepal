@@ -34,14 +34,16 @@ export default class CatalogController {
   constructor(protected catalog: CatalogService) {}
 
   async home({ inertia }: HttpContext) {
-    const [newArrivals, featuredStores] = await Promise.all([
+    const [newArrivals, featuredStores, categories] = await Promise.all([
       this.catalog.newArrivals(8),
       this.catalog.featuredShops(6),
+      this.catalog.homeCategories(8),
     ])
 
     return inertia.render('customers/home/index', {
       newArrivals: ProductCardTransformer.transform(newArrivals),
       featuredStores: StoreCardTransformer.transform(featuredStores),
+      categories,
     })
   }
 

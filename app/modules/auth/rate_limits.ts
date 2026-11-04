@@ -16,6 +16,16 @@ export const loginAccountLimiter = () => limiter.use({ requests: 5, duration: '1
 export const signupNetworkLimiter = () => limiter.use({ requests: 20, duration: '1 hour' })
 
 /*
+ * Guest checkout and order tracking. Guests can place 10 orders an hour per
+ * network, against floods of fake cash-on-delivery orders. Tracking allows
+ * 10 failed lookups per 15 minutes per network, so order numbers can't be
+ * guessed against a phone number.
+ */
+export const guestCheckoutLimiter = () => limiter.use({ requests: 10, duration: '1 hour' })
+export const orderLookupLimiter = () =>
+  limiter.use({ requests: 10, duration: '15 minutes', blockDuration: '15 minutes' })
+
+/*
  * The part of an address a limiter keys on (docs/07 §3.6): IPv4 as is, an
  * IPv4-mapped IPv6 address as its IPv4 address, any other IPv6 address as
  * its /64, so one host cannot get a fresh bucket per address.

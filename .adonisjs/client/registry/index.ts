@@ -60,6 +60,24 @@ const routes = {
     tokens: [{"old":"/api/v1/search/suggestions","type":0,"val":"api","end":""},{"old":"/api/v1/search/suggestions","type":0,"val":"v1","end":""},{"old":"/api/v1/search/suggestions","type":0,"val":"search","end":""},{"old":"/api/v1/search/suggestions","type":0,"val":"suggestions","end":""}],
     types: placeholder as Registry['api.search.suggestions']['types'],
   },
+  'legal.returns': {
+    methods: ["GET","HEAD"],
+    pattern: '/returns',
+    tokens: [{"old":"/returns","type":0,"val":"returns","end":""}],
+    types: placeholder as Registry['legal.returns']['types'],
+  },
+  'legal.terms': {
+    methods: ["GET","HEAD"],
+    pattern: '/terms',
+    tokens: [{"old":"/terms","type":0,"val":"terms","end":""}],
+    types: placeholder as Registry['legal.terms']['types'],
+  },
+  'legal.privacy': {
+    methods: ["GET","HEAD"],
+    pattern: '/privacy',
+    tokens: [{"old":"/privacy","type":0,"val":"privacy","end":""}],
+    types: placeholder as Registry['legal.privacy']['types'],
+  },
   'ui.auth.user_registration.create': {
     methods: ["GET","HEAD"],
     pattern: '/auth/signup',
@@ -180,18 +198,6 @@ const routes = {
     tokens: [{"old":"/checkout/success/:checkoutId","type":0,"val":"checkout","end":""},{"old":"/checkout/success/:checkoutId","type":0,"val":"success","end":""},{"old":"/checkout/success/:checkoutId","type":1,"val":"checkoutId","end":""}],
     types: placeholder as Registry['checkout.success']['types'],
   },
-  'account.orders.index': {
-    methods: ["GET","HEAD"],
-    pattern: '/account/orders',
-    tokens: [{"old":"/account/orders","type":0,"val":"account","end":""},{"old":"/account/orders","type":0,"val":"orders","end":""}],
-    types: placeholder as Registry['account.orders.index']['types'],
-  },
-  'account.orders.show': {
-    methods: ["GET","HEAD"],
-    pattern: '/account/orders/:orderNumber',
-    tokens: [{"old":"/account/orders/:orderNumber","type":0,"val":"account","end":""},{"old":"/account/orders/:orderNumber","type":0,"val":"orders","end":""},{"old":"/account/orders/:orderNumber","type":1,"val":"orderNumber","end":""}],
-    types: placeholder as Registry['account.orders.show']['types'],
-  },
   'api.cart.items.store': {
     methods: ["POST"],
     pattern: '/api/v1/cart/items',
@@ -215,6 +221,42 @@ const routes = {
     pattern: '/api/v1/checkout',
     tokens: [{"old":"/api/v1/checkout","type":0,"val":"api","end":""},{"old":"/api/v1/checkout","type":0,"val":"v1","end":""},{"old":"/api/v1/checkout","type":0,"val":"checkout","end":""}],
     types: placeholder as Registry['api.checkout.store']['types'],
+  },
+  'orders.track': {
+    methods: ["GET","HEAD"],
+    pattern: '/track-order',
+    tokens: [{"old":"/track-order","type":0,"val":"track-order","end":""}],
+    types: placeholder as Registry['orders.track']['types'],
+  },
+  'orders.track.show': {
+    methods: ["GET","HEAD"],
+    pattern: '/track-order/:orderNumber',
+    tokens: [{"old":"/track-order/:orderNumber","type":0,"val":"track-order","end":""},{"old":"/track-order/:orderNumber","type":1,"val":"orderNumber","end":""}],
+    types: placeholder as Registry['orders.track.show']['types'],
+  },
+  'api.orders.track.lookup': {
+    methods: ["POST"],
+    pattern: '/api/v1/track-order',
+    tokens: [{"old":"/api/v1/track-order","type":0,"val":"api","end":""},{"old":"/api/v1/track-order","type":0,"val":"v1","end":""},{"old":"/api/v1/track-order","type":0,"val":"track-order","end":""}],
+    types: placeholder as Registry['api.orders.track.lookup']['types'],
+  },
+  'api.orders.track.cancel': {
+    methods: ["POST"],
+    pattern: '/api/v1/track-order/:orderNumber/cancel',
+    tokens: [{"old":"/api/v1/track-order/:orderNumber/cancel","type":0,"val":"api","end":""},{"old":"/api/v1/track-order/:orderNumber/cancel","type":0,"val":"v1","end":""},{"old":"/api/v1/track-order/:orderNumber/cancel","type":0,"val":"track-order","end":""},{"old":"/api/v1/track-order/:orderNumber/cancel","type":1,"val":"orderNumber","end":""},{"old":"/api/v1/track-order/:orderNumber/cancel","type":0,"val":"cancel","end":""}],
+    types: placeholder as Registry['api.orders.track.cancel']['types'],
+  },
+  'account.orders.index': {
+    methods: ["GET","HEAD"],
+    pattern: '/account/orders',
+    tokens: [{"old":"/account/orders","type":0,"val":"account","end":""},{"old":"/account/orders","type":0,"val":"orders","end":""}],
+    types: placeholder as Registry['account.orders.index']['types'],
+  },
+  'account.orders.show': {
+    methods: ["GET","HEAD"],
+    pattern: '/account/orders/:orderNumber',
+    tokens: [{"old":"/account/orders/:orderNumber","type":0,"val":"account","end":""},{"old":"/account/orders/:orderNumber","type":0,"val":"orders","end":""},{"old":"/account/orders/:orderNumber","type":1,"val":"orderNumber","end":""}],
+    types: placeholder as Registry['account.orders.show']['types'],
   },
   'api.account.orders.cancel': {
     methods: ["POST"],

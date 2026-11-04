@@ -38,6 +38,7 @@ function errorText(value: unknown) {
 
 export default function CheckoutPage({ cart, addresses }: PageProps) {
   const { errors, user } = usePage<Data.SharedProps>().props
+  const guest = !user
 
   const [mode, setMode] = useState<AddressMode>(addresses.length > 0 ? 'saved' : 'new')
   const [addressId, setAddressId] = useState(addresses[0]?.id ?? '')
@@ -136,6 +137,16 @@ export default function CheckoutPage({ cart, addresses }: PageProps) {
             </Link>
           </div>
 
+          {guest && (
+            <p className="mb-6 rounded-xl border border-border/60 bg-card px-4 py-3 text-sm text-muted-foreground">
+              Checking out as a guest. No account needed.{' '}
+              <a href="/auth/login?next=/checkout" className="text-foreground underline">
+                Log in
+              </a>{' '}
+              to use your saved addresses.
+            </p>
+          )}
+
           {(cartError || blocked) && (
             <Alert
               ref={problemRef}
@@ -163,12 +174,13 @@ export default function CheckoutPage({ cart, addresses }: PageProps) {
                 step={1}
                 title="Delivery address"
                 description={
-                  addresses.length === 0
+                  addresses.length === 0 && !guest
                     ? 'Where should we deliver? We’ll save it for next time.'
                     : 'Where should we deliver?'
                 }
               >
                 <AddressSection
+                  guest={guest}
                   addresses={addresses}
                   mode={mode}
                   addressId={addressId}
@@ -298,7 +310,7 @@ export default function CheckoutPage({ cart, addresses }: PageProps) {
         </div>
 
         {/* Place order bar for small screens, where the summary sits below the form. */}
-        <div className="sticky bottom-0 z-40 border-t border-border/60 bg-background/95 p-4 backdrop-blur lg:hidden">
+        <div className="sticky bottom-0 z-40 border-t border-border/60 bg-background/95 px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] backdrop-blur lg:hidden">
           <div className="mx-auto flex max-w-lg items-center gap-4">
             <div className="min-w-0 flex-1">
               <p className="text-xs text-muted-foreground">To pay on delivery</p>
