@@ -1,5 +1,5 @@
 import { useRef, useState, type FormEvent } from 'react'
-import { Head, router, usePage, useRemember } from '@inertiajs/react'
+import { Head, router, usePage } from '@inertiajs/react'
 import { Link } from '@adonisjs/inertia/react'
 import { AlertCircleIcon, ArrowLeftIcon, BanknoteIcon, LockIcon } from 'lucide-react'
 import type { Data } from '@generated/data'
@@ -32,6 +32,22 @@ type PageProps = InertiaProps<{
 
 const NOTES_MAX = 500
 
+/*
+ * What the customer entered, kept in this page's browser history entry
+ * when they place the order, so coming back to the page (with Back, or
+ * "Try again" after a failed order) shows it again. Kept once per attempt,
+ * not per keystroke: browsers limit history writes (Safari: 100 per 30 s).
+ * Shared devices: checkout history is encrypted from M0 (RF-34, docs/03
+ * §6.3 and §12.2).
+ */
+const REMEMBERED_FORM = 'checkout.form'
+type RememberedForm = {
+  mode: AddressMode
+  addressId: string
+  address: AddressFields
+  notes: string
+}
+
 function errorText(value: unknown) {
   return typeof value === 'string' ? value : undefined
 }
@@ -40,19 +56,17 @@ export default function CheckoutPage({ cart, addresses }: PageProps) {
   const { errors, user } = usePage<Data.SharedProps>().props
   const guest = !user
 
-  // Kept in this page's browser history entry, so a customer who comes
-  // back to it (with Back, or "Try again" after a failed order) finds what
-  // they typed.
-  const [mode, setMode] = useRemember<AddressMode>(
-    addresses.length > 0 ? 'saved' : 'new',
-    'checkout.mode'
+  // Nothing on the server or on a first visit; the last attempt's entries
+  // when the customer comes back to this history entry.
+  const [remembered] = useState(() => router.restore(REMEMBERED_FORM) as RememberedForm | undefined)
+  const [mode, setMode] = useState<AddressMode>(
+    remembered?.mode ?? (addresses.length > 0 ? 'saved' : 'new')
   )
-  const [addressId, setAddressId] = useRemember(addresses[0]?.id ?? '', 'checkout.addressId')
-  const [address, setAddress] = useRemember<AddressFields>(
-    emptyAddress(user?.fullName ?? ''),
-    'checkout.address'
+  const [addressId, setAddressId] = useState(remembered?.addressId ?? addresses[0]?.id ?? '')
+  const [address, setAddress] = useState<AddressFields>(
+    () => remembered?.address ?? emptyAddress(user?.fullName ?? '')
   )
-  const [notes, setNotes] = useRemember('', 'checkout.notes')
+  const [notes, setNotes] = useState(remembered?.notes ?? '')
   const [processing, setProcessing] = useState(false)
   /* Fields changed since the last attempt: their old errors no longer apply. */
   const [edited, setEdited] = useState<string[]>([])
@@ -100,6 +114,10 @@ export default function CheckoutPage({ cart, addresses }: PageProps) {
         preserveScroll: 'errors',
         preserveState: 'errors',
         onStart: () => {
+          router.remember(
+            { mode, addressId, address, notes } satisfies RememberedForm,
+            REMEMBERED_FORM
+          )
           setProcessing(true)
           setEdited([])
         },
