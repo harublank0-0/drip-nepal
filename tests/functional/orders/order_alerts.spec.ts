@@ -208,6 +208,34 @@ test.group('Order alerts: the email [v1]', (group) => {
 test.group('Order alerts: when sending fails [v1]', (group) => {
   group.tap((t) => t.tags(['@v1']))
 
+  test("one shop's failing email does not hold up the other shops' emails", async ({ assert }) => {
+    const { buyer } = await twoShopCheckout()
+    const { orderNumbers } = await new CheckoutService(
+      new CartService(),
+      recordingAlerts().alerts
+    ).placeOrders(buyer, { address: addressPayload() })
+    const [failing] = orderNumbers
+    const started = Date.now()
+    const deliveredAfter = new Map<string, number>()
+    const mailer = {
+      async send(alert: NewOrderAlert) {
+        if (alert.orderNumber === failing) throw new Error('SMTP refused this address')
+        deliveredAfter.set(alert.orderNumber, Date.now() - started)
+      },
+    }
+
+    await new OrderAlerts({ enabled: true, mailer, retryDelaysMs: [300, 300] }).sendNewOrderAlerts(
+      orderNumbers
+    )
+
+    const other = orderNumbers.find((number) => number !== failing)!
+    assert.isBelow(
+      deliveredAfter.get(other)!,
+      250,
+      'sent at once, not after the failing email has used its 600 ms of retries'
+    )
+  })
+
   test('a failed send is retried, and given up after three attempts without throwing', async ({
     assert,
   }) => {

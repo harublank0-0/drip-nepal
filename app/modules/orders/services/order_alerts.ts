@@ -57,9 +57,9 @@ export default class OrderAlerts {
         .preload('items')
         .preload('shop', (shop) => shop.preload('owner'))
 
-      for (const order of orders) {
-        await this.#sendWithRetries(order)
-      }
+      // In parallel: one shop's failing email (and its retries) must not
+      // hold up the other shops' emails from the same checkout.
+      await Promise.all(orders.map((order) => this.#sendWithRetries(order)))
     } catch (error) {
       logger.error(
         { orderNumbers, err: (error as Error).name },
