@@ -1,0 +1,80 @@
+# Production stack for a single VPS: app + Postgres + Caddy (automatic HTTPS).
+#
+#   cp .env.production.example .env.production   # fill it in
+#   docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+#
+# See DEPLOY.md.
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env.production
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - uploads:/app/storage
+    expose:
+      - '3333'
+    # docs/11 §7.1: readiness checks the database; the image has no curl.
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3333/health/ready').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+
+  postgres:
+    image: docker.io/postgres:18.4
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_DATABASE}
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${DB_USER} -d ${DB_DATABASE}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  caddy:
+    image: docker.io/caddy:2
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN}
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+
+# Caddy and the app share this subnet; the app trusts X-Forwarded-For only
+# from it (TRUSTED_PROXY_CIDRS, docs/11 §3.4).
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+
+volumes:
+  pgdata:
+  uploads:
+  caddy_data:
+  caddy_config:

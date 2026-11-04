@@ -46,7 +46,6 @@ export function FormBuilder<TData, TForm extends AnyFormApi>(
       >
         <>
           {formFields.map((formField) => {
-            const { type } = formField
             return (
               <form.Field
                 key={formField.name}

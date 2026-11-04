@@ -23,6 +23,12 @@ function getInitialSuccess(): boolean {
   return params.get('success') === '1'
 }
 
+function getRegisteredShopSlug(): string | null {
+  if (typeof window === 'undefined') return null
+
+  return new URLSearchParams(window.location.search).get('shop')
+}
+
 export default function ShopSignupPage() {
   const [step, setStep] = useState(1)
   const [isSuccess] = useState(getInitialSuccess)
@@ -39,7 +45,7 @@ export default function ShopSignupPage() {
       setIsSubmitting(true)
       router.visit(
         {
-          route: 'shops.shop_registrations.store',
+          route: 'api.auth.shop.shop_registration.store',
         },
         {
           method: 'post',
@@ -82,6 +88,22 @@ export default function ShopSignupPage() {
   const handleBack = useCallback(() => {
     setStep(1)
   }, [])
+
+  const goToDashboard = useCallback(() => {
+    const shopSlug = getRegisteredShopSlug()
+
+    if (!shopSlug) {
+      router.visit({ route: 'home' })
+      return
+    }
+
+    router.visit({ route: 'ui.shops.shop_dashboard.create', routeParams: { shopSlug } })
+  }, [router])
+
+  const goToNewProduct = useCallback(() => {
+    const shopSlug = getRegisteredShopSlug()
+    router.visit(shopSlug ? { href: `/shops/${shopSlug}/products/create` } : { route: 'home' })
+  }, [router])
 
   return (
     <div className="flex min-h-screen w-screen flex-col lg:flex-row">
@@ -153,16 +175,8 @@ export default function ShopSignupPage() {
                   transition={{ duration: 0.4 }}
                 >
                   <SuccessScreen
-                    onGoToDashboard={() =>
-                      router.visit({
-                        route: 'home',
-                      })
-                    }
-                    onAddFirstProduct={() =>
-                      router.visit({
-                        route: 'home',
-                      })
-                    }
+                    onGoToDashboard={goToDashboard}
+                    onAddFirstProduct={goToNewProduct}
                   />
                 </motion.div>
               </Show>

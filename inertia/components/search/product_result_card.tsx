@@ -1,46 +1,57 @@
+import { Link } from '@adonisjs/inertia/react'
+import type { Data } from '@generated/data'
+import { ImageIcon } from 'lucide-react'
+import { formatPrice } from '~/lib/format'
 import { cn } from '~/lib/utils'
-import type { ProductResult } from './types'
+import type { OptionRowProps } from './types'
 
-type ProductResultCardProps = {
-  product: ProductResult
-  isSelected?: boolean
+type ProductResultCardProps = OptionRowProps & {
+  product: Data.ProductCard
 }
 
-export function ProductResultCard({ product, isSelected }: ProductResultCardProps) {
-  const discount = product.compareAt
-    ? Math.round(((product.compareAt - product.price) / product.compareAt) * 100)
-    : null
+export function ProductResultCard({
+  product,
+  id,
+  isActive,
+  onHover,
+  onSelect,
+}: ProductResultCardProps) {
+  const meta = [product.shop?.name, product.category?.name].filter(Boolean).join(' · ')
 
   return (
-    <div
+    <Link
+      route="products.show"
+      routeParams={{ slug: product.slug }}
+      id={id}
+      role="option"
+      aria-selected={isActive}
+      tabIndex={-1}
+      onMouseMove={onHover}
+      onClick={onSelect}
       className={cn(
-        'flex items-center gap-3 px-2 py-2.5 rounded-lg transition-colors cursor-pointer',
-        isSelected ? 'bg-muted' : 'hover:bg-muted/50'
+        'flex items-center gap-3 rounded-lg px-2 py-2 transition-colors',
+        isActive ? 'bg-muted' : 'hover:bg-muted/50'
       )}
     >
-      <div className="size-14 rounded-lg overflow-hidden bg-muted flex-shrink-0">
-        <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
+      <div className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted">
+        {product.image ? (
+          <img src={product.image} alt="" loading="lazy" className="size-full object-cover" />
+        ) : (
+          <ImageIcon aria-hidden="true" className="size-4 text-muted-foreground/50" />
+        )}
       </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium truncate">{product.name}</p>
-        <p className="text-xs text-muted-foreground truncate">{product.storeName}</p>
-        <div className="flex items-center gap-2 mt-0.5">
-          <span className="text-sm font-semibold">Rs. {product.price.toLocaleString()}</span>
-          {discount && <span className="text-xs text-primary font-medium">{discount}% off</span>}
-        </div>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium">{product.name}</p>
+        {meta && <p className="truncate text-xs text-muted-foreground">{meta}</p>}
       </div>
-      <div className="flex items-center gap-1 text-xs text-muted-foreground">
-        <svg
-          width="10"
-          height="10"
-          viewBox="0 0 24 24"
-          fill="currentColor"
-          className="text-amber-500"
-        >
-          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-        </svg>
-        {product.rating}
+      <div className="shrink-0 text-right">
+        <p className="text-sm font-semibold">{formatPrice(product.price)}</p>
+        {product.comparePrice && (
+          <p className="text-xs text-muted-foreground line-through">
+            {formatPrice(product.comparePrice)}
+          </p>
+        )}
       </div>
-    </div>
+    </Link>
   )
 }

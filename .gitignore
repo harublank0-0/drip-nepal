@@ -25,6 +25,13 @@ yarn-error.log
 # Platform specific
 .DS_Store
 
+# Uploaded files (local drive disk)
+storage
+
+# Production env (lives only on the server)
+.env.production
+!.env.production.example
+
 # TypeScript incremental build info
 *.tsbuildinfo
 

@@ -4,19 +4,12 @@ import { StrictMode, type ReactElement } from 'react'
 import { client } from './client'
 import RootLayout from '~/layouts/root_layout'
 import { type Data } from '@generated/data'
-import { createRoot } from 'react-dom/client'
+import { createRoot, hydrateRoot } from 'react-dom/client'
 import { createInertiaApp } from '@inertiajs/react'
 import { TuyauProvider } from '@adonisjs/inertia/react'
 import { resolvePageComponent } from '@adonisjs/inertia/helpers'
 
-import { TanStackDevtools } from '@tanstack/react-devtools'
-import { formDevtoolsPlugin } from '@tanstack/react-form-devtools'
-import { Show } from '~/components/ui/show'
-import { isBrowser } from '~/lib/utils'
-
-const appName = import.meta.env.VITE_APP_NAME || 'AdonisJS'
-const isDevMode = import.meta.env.DEV
-
+const appName = import.meta.env.VITE_APP_NAME || 'Drip Nepal'
 createInertiaApp({
   title: (title) => (title ? `${title} - ${appName}` : appName),
   resolve: (name) => {
@@ -27,16 +20,32 @@ createInertiaApp({
     )
   },
   setup({ el, App, props }) {
-    createRoot(el).render(
+    // Must match the tree of inertia/ssr.tsx exactly: an extra element, even
+    // one rendering nothing, changes React's generated ids (useId).
+    const app = (
       <StrictMode>
         <TuyauProvider client={client}>
-          <Show when={isDevMode && isBrowser}>
-            <TanStackDevtools plugins={[formDevtoolsPlugin()]} />
-          </Show>
           <App {...props} />
         </TuyauProvider>
       </StrictMode>
     )
+
+    // The server renders every page (config/inertia.ts), so React adopts
+    // that HTML instead of throwing it away and painting again (RF-08).
+    if (el.hasChildNodes()) {
+      hydrateRoot(el, app)
+    } else {
+      createRoot(el).render(app)
+    }
+
+    // Devtools get their own root, in development only, so they never touch
+    // the hydrated tree and are not in the production bundle (RF-30).
+    if (import.meta.env.DEV) {
+      const container = document.body.appendChild(document.createElement('div'))
+      void import('./devtools').then(({ default: Devtools }) =>
+        createRoot(container).render(<Devtools />)
+      )
+    }
   },
   progress: {
     color: '#4B5563',

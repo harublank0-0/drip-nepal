@@ -1,336 +1,331 @@
-import { useState } from 'react'
-import { motion } from 'framer-motion'
+import { ProvincesWithDistricts } from '@shared/constants/provinces_with_districts'
+import { Field, FieldDescription, FieldError, FieldLabel } from '~/components/ui/field'
 import { Input } from '~/components/ui/input'
-import { Label } from '~/components/ui/label'
-import { Checkbox } from '~/components/ui/checkbox'
-import { Button } from '~/components/ui/button'
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '~/components/ui/select'
-import { MOCK_PROVINCES, MOCK_DISTRICTS } from '~/lib/mock-data/checkout'
-import type { AddressFormData } from '~/types/checkout'
+
+export type AddressFields = {
+  label: string
+  recipientName: string
+  recipientPhone: string
+  province: string
+  district: string
+  municipality: string
+  city: string
+  area: string
+  streetAddress: string
+}
+
+export type AddressField = keyof AddressFields
+
+export function emptyAddress(recipientName = ''): AddressFields {
+  return {
+    label: '',
+    recipientName,
+    recipientPhone: '',
+    province: '',
+    district: '',
+    municipality: '',
+    city: '',
+    area: '',
+    streetAddress: '',
+  }
+}
+
+/*
+ * The checkout payload's `address`: optional fields left out when blank,
+ * spaces and dashes taken out of the phone number.
+ */
+export function addressPayload(address: AddressFields) {
+  const optional = (value: string) => value.trim() || undefined
+  return {
+    label: optional(address.label),
+    recipientName: address.recipientName.trim(),
+    recipientPhone: address.recipientPhone.replace(/[\s-]/g, ''),
+    province: address.province,
+    district: address.district,
+    municipality: optional(address.municipality),
+    city: address.city.trim(),
+    area: optional(address.area),
+    streetAddress: address.streetAddress.trim(),
+  }
+}
+
+/* Field order on screen, for focusing the first invalid one. */
+export const ADDRESS_FIELDS: AddressField[] = [
+  'recipientName',
+  'recipientPhone',
+  'province',
+  'district',
+  'municipality',
+  'city',
+  'area',
+  'streetAddress',
+  'label',
+]
+
+export function addressFieldId(field: AddressField) {
+  return `address-${field}`
+}
+
+const FIELD_LABELS: Record<AddressField, string> = {
+  label: 'Label',
+  recipientName: 'Full name',
+  recipientPhone: 'Mobile number',
+  province: 'Province',
+  district: 'District',
+  municipality: 'Municipality',
+  city: 'City / town',
+  area: 'Area / tole',
+  streetAddress: 'Street address',
+}
+
+/*
+ * The server sends VineJS's default messages ("The recipientPhone field
+ * format is invalid"); reword them for people.
+ */
+export function addressError(errors: Record<string, unknown> | undefined, field: AddressField) {
+  const message = errors?.[`address.${field}`]
+  if (typeof message !== 'string') return undefined
+
+  const label = FIELD_LABELS[field]
+  if (field === 'recipientPhone' && message.includes('format is invalid')) {
+    return 'Enter a Nepali mobile number, e.g. 9841234567'
+  }
+  if (message.includes('must be defined')) return `${label} is required`
+  if (message.startsWith('The selected')) return `Choose a ${label.toLowerCase()}`
+  return message.replace(new RegExp(`^The ${field} field`), label)
+}
+
+type MunicipalityLists = Record<string, Record<string, Record<string, string[]>>>
+
+const PROVINCES = Object.keys(ProvincesWithDistricts)
+
+const MUNICIPALITY_KINDS = [
+  { key: 'Ma.Na.Pa.', label: 'Metropolitan cities' },
+  { key: 'Upa.Ma.', label: 'Sub-metropolitan cities' },
+  { key: 'Na.Pa.', label: 'Municipalities' },
+  { key: 'Ga.Pa.', label: 'Rural municipalities' },
+]
+
+function districtsOf(province: string) {
+  const districts = (ProvincesWithDistricts as unknown as MunicipalityLists)[province]
+  return districts ? Object.keys(districts) : []
+}
+
+function municipalitiesOf(province: string, district: string) {
+  const lists = (ProvincesWithDistricts as unknown as MunicipalityLists)[province]?.[district]
+  if (!lists) return []
+  return MUNICIPALITY_KINDS.map((kind) => ({ ...kind, names: lists[kind.key] ?? [] })).filter(
+    (kind) => kind.names.length > 0
+  )
+}
 
 type AddressFormProps = {
-  onSubmit: (data: AddressFormData) => void
-  onCancel: () => void
-  initialData?: Partial<AddressFormData>
+  value: AddressFields
+  onChange: (patch: Partial<AddressFields>) => void
+  errors?: Record<string, unknown>
+  disabled?: boolean
+  /* A guest's address is used for this order only, so there is no label. */
+  guest?: boolean
 }
 
-const initialForm: AddressFormData = {
-  fullName: '',
-  phoneNumber: '',
-  province: '',
-  district: '',
-  city: '',
-  area: '',
-  landmark: '',
-  postalCode: '',
-  label: 'Home',
-  isDefault: false,
-  saveAddress: true,
-}
+/*
+ * A new delivery address. Province, district and municipality come from
+ * the shared list so the server's "district belongs to province" check
+ * passes.
+ */
+export function AddressForm({ value, onChange, errors, disabled, guest }: AddressFormProps) {
+  const districts = districtsOf(value.province)
+  const municipalities = municipalitiesOf(value.province, value.district)
 
-type FormErrors = Partial<Record<keyof AddressFormData, string>>
-
-const labelOptions = ['Home', 'Office', 'Other']
-
-export function AddressForm({ onSubmit, onCancel, initialData }: AddressFormProps) {
-  const [form, setForm] = useState<AddressFormData>({ ...initialForm, ...initialData })
-  const [errors, setErrors] = useState<FormErrors>({})
-  const [touched, setTouched] = useState<Partial<Record<keyof AddressFormData, boolean>>>({})
-
-  const districts = form.province ? MOCK_DISTRICTS[form.province] || [] : []
-
-  const validate = (): FormErrors => {
-    const errs: FormErrors = {}
-    if (!form.fullName.trim()) errs.fullName = 'Full name is required'
-    if (!form.phoneNumber.trim()) errs.phoneNumber = 'Phone number is required'
-    else if (!/^(98|97)\d{8}$/.test(form.phoneNumber.replace(/\s/g, '')))
-      errs.phoneNumber = 'Enter a valid Nepali phone number'
-    if (!form.province) errs.province = 'Select a province'
-    if (!form.district) errs.district = 'Select a district'
-    if (!form.city.trim()) errs.city = 'City is required'
-    if (!form.area.trim()) errs.area = 'Area / Street is required'
-    return errs
-  }
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    const errs = validate()
-    setErrors(errs)
-    setTouched({
-      fullName: true,
-      phoneNumber: true,
-      province: true,
-      district: true,
-      city: true,
-      area: true,
-    })
-    if (Object.keys(errs).length === 0) {
-      onSubmit(form)
+  const fieldProps = (field: AddressField) => {
+    const error = addressError(errors, field)
+    return {
+      'id': addressFieldId(field),
+      'aria-invalid': error ? true : undefined,
+      'aria-describedby': error ? `${addressFieldId(field)}-error` : undefined,
+      disabled,
     }
   }
 
-  const set = <K extends keyof AddressFormData>(field: K, value: AddressFormData[K]) => {
-    setForm((prev) => ({ ...prev, [field]: value }))
-    if (touched[field]) {
-      const newErrors = { ...errors }
-      delete newErrors[field]
-      setErrors(newErrors)
-    }
+  const errorFor = (field: AddressField) => {
+    const error = addressError(errors, field)
+    return error ? <FieldError id={`${addressFieldId(field)}-error`}>{error}</FieldError> : null
   }
 
-  const blur = (field: keyof AddressFormData) => {
-    setTouched((prev) => ({ ...prev, [field]: true }))
-    const errs = validate()
-    if (errs[field]) {
-      setErrors((prev) => ({ ...prev, [field]: errs[field] }))
-    }
-  }
+  const text = (field: AddressField) => ({
+    ...fieldProps(field),
+    value: value[field],
+    onChange: (event: React.ChangeEvent<HTMLInputElement>) =>
+      onChange({ [field]: event.target.value }),
+    className: 'h-10',
+  })
 
   return (
-    <motion.form
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25, ease: [0.32, 0.72, 0, 1] }}
-      onSubmit={handleSubmit}
-      className="space-y-4"
-    >
-      {/* Full Name & Phone */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="space-y-1.5">
-          <Label htmlFor="fullName">Full Name</Label>
-          <Input
-            id="fullName"
-            placeholder="Aarav Sharma"
-            value={form.fullName}
-            onChange={(e) => set('fullName', e.target.value)}
-            onBlur={() => blur('fullName')}
-            aria-invalid={!!errors.fullName}
-            aria-describedby={errors.fullName ? 'fullName-error' : undefined}
-          />
-          {errors.fullName && (
-            <p id="fullName-error" className="text-xs text-destructive">
-              {errors.fullName}
-            </p>
-          )}
-        </div>
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <Field data-invalid={!!addressError(errors, 'recipientName')}>
+        <FieldLabel htmlFor={addressFieldId('recipientName')}>Full name</FieldLabel>
+        <Input {...text('recipientName')} autoComplete="name" maxLength={100} />
+        {errorFor('recipientName')}
+      </Field>
 
-        <div className="space-y-1.5">
-          <Label htmlFor="phoneNumber">Phone Number</Label>
-          <Input
-            id="phoneNumber"
-            type="tel"
-            placeholder="9841234567"
-            value={form.phoneNumber}
-            onChange={(e) => set('phoneNumber', e.target.value)}
-            onBlur={() => blur('phoneNumber')}
-            aria-invalid={!!errors.phoneNumber}
-            aria-describedby={errors.phoneNumber ? 'phoneNumber-error' : undefined}
-          />
-          {errors.phoneNumber && (
-            <p id="phoneNumber-error" className="text-xs text-destructive">
-              {errors.phoneNumber}
-            </p>
-          )}
-        </div>
-      </div>
-
-      {/* Province & District */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="space-y-1.5">
-          <Label htmlFor="province">Province</Label>
-          <Select
-            value={form.province}
-            onValueChange={(value) => {
-              set('province', value)
-              set('district', '')
-            }}
-          >
-            <SelectTrigger
-              id="province"
-              aria-invalid={!!errors.province}
-              aria-describedby={errors.province ? 'province-error' : undefined}
-            >
-              <SelectValue placeholder="Select province" />
-            </SelectTrigger>
-            <SelectContent>
-              {MOCK_PROVINCES.map((p) => (
-                <SelectItem key={p} value={p}>
-                  {p}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {errors.province && (
-            <p id="province-error" className="text-xs text-destructive">
-              {errors.province}
-            </p>
-          )}
-        </div>
-
-        <div className="space-y-1.5">
-          <Label htmlFor="district">District</Label>
-          <Select
-            value={form.district}
-            onValueChange={(value) => set('district', value)}
-            disabled={!form.province}
-          >
-            <SelectTrigger
-              id="district"
-              aria-invalid={!!errors.district}
-              aria-describedby={errors.district ? 'district-error' : undefined}
-            >
-              <SelectValue
-                placeholder={form.province ? 'Select district' : 'Select province first'}
-              />
-            </SelectTrigger>
-            <SelectContent>
-              {districts.map((d) => (
-                <SelectItem key={d} value={d}>
-                  {d}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {errors.district && (
-            <p id="district-error" className="text-xs text-destructive">
-              {errors.district}
-            </p>
-          )}
-        </div>
-      </div>
-
-      {/* City */}
-      <div className="space-y-1.5">
-        <Label htmlFor="city">City / Municipality</Label>
+      <Field data-invalid={!!addressError(errors, 'recipientPhone')}>
+        <FieldLabel htmlFor={addressFieldId('recipientPhone')}>Mobile number</FieldLabel>
         <Input
-          id="city"
-          placeholder="Kathmandu"
-          value={form.city}
-          onChange={(e) => set('city', e.target.value)}
-          onBlur={() => blur('city')}
-          aria-invalid={!!errors.city}
-          aria-describedby={errors.city ? 'city-error' : undefined}
+          {...text('recipientPhone')}
+          type="tel"
+          inputMode="tel"
+          autoComplete="tel"
+          placeholder="98XXXXXXXX"
+          maxLength={16}
         />
-        {errors.city && (
-          <p id="city-error" className="text-xs text-destructive">
-            {errors.city}
-          </p>
+        {errorFor('recipientPhone') ?? (
+          <FieldDescription className="text-xs">
+            {guest
+              ? 'The shop calls this number to deliver. You also need it to track your order.'
+              : 'The shop calls this number to deliver.'}
+          </FieldDescription>
         )}
-      </div>
+      </Field>
 
-      {/* Area */}
-      <div className="space-y-1.5">
-        <Label htmlFor="area">Area / Street</Label>
+      <Field data-invalid={!!addressError(errors, 'province')}>
+        <FieldLabel htmlFor={addressFieldId('province')}>Province</FieldLabel>
+        <Select
+          value={value.province}
+          onValueChange={(province) => onChange({ province, district: '', municipality: '' })}
+          disabled={disabled}
+        >
+          <SelectTrigger {...fieldProps('province')} className="w-full data-[size=default]:h-10">
+            <SelectValue placeholder="Choose province" />
+          </SelectTrigger>
+          <SelectContent position="popper">
+            {PROVINCES.map((province) => (
+              <SelectItem key={province} value={province}>
+                {province}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {errorFor('province')}
+      </Field>
+
+      <Field data-invalid={!!addressError(errors, 'district')}>
+        <FieldLabel htmlFor={addressFieldId('district')}>District</FieldLabel>
+        <Select
+          value={value.district}
+          onValueChange={(district) => onChange({ district, municipality: '' })}
+          disabled={disabled || districts.length === 0}
+        >
+          <SelectTrigger
+            {...fieldProps('district')}
+            disabled={disabled || districts.length === 0}
+            className="w-full data-[size=default]:h-10"
+          >
+            <SelectValue
+              placeholder={value.province ? 'Choose district' : 'Choose province first'}
+            />
+          </SelectTrigger>
+          <SelectContent position="popper" className="max-h-72">
+            {districts.map((district) => (
+              <SelectItem key={district} value={district}>
+                {district}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {errorFor('district')}
+      </Field>
+
+      <Field data-invalid={!!addressError(errors, 'municipality')}>
+        <FieldLabel htmlFor={addressFieldId('municipality')}>
+          Municipality <span className="font-normal text-muted-foreground">(optional)</span>
+        </FieldLabel>
+        <Select
+          value={value.municipality}
+          onValueChange={(municipality) => onChange({ municipality })}
+          disabled={disabled || municipalities.length === 0}
+        >
+          <SelectTrigger
+            {...fieldProps('municipality')}
+            disabled={disabled || municipalities.length === 0}
+            className="w-full data-[size=default]:h-10"
+          >
+            <SelectValue
+              placeholder={value.district ? 'Choose municipality' : 'Choose district first'}
+            />
+          </SelectTrigger>
+          <SelectContent position="popper" className="max-h-72">
+            {municipalities.map((kind) => (
+              <SelectGroup key={kind.key}>
+                <SelectLabel>{kind.label}</SelectLabel>
+                {kind.names.map((name) => (
+                  <SelectItem key={`${kind.key}-${name}`} value={name}>
+                    {name}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            ))}
+          </SelectContent>
+        </Select>
+        {errorFor('municipality')}
+      </Field>
+
+      <Field data-invalid={!!addressError(errors, 'city')}>
+        <FieldLabel htmlFor={addressFieldId('city')}>City / town</FieldLabel>
         <Input
-          id="area"
-          placeholder="Thamel, Chhetrapati"
-          value={form.area}
-          onChange={(e) => set('area', e.target.value)}
-          onBlur={() => blur('area')}
-          aria-invalid={!!errors.area}
-          aria-describedby={errors.area ? 'area-error' : undefined}
+          {...text('city')}
+          autoComplete="address-level2"
+          placeholder="e.g. Lalitpur"
+          maxLength={50}
         />
-        {errors.area && (
-          <p id="area-error" className="text-xs text-destructive">
-            {errors.area}
-          </p>
-        )}
-      </div>
+        {errorFor('city')}
+      </Field>
 
-      {/* Landmark & Postal Code */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="space-y-1.5">
-          <Label htmlFor="landmark">
-            Landmark <span className="text-muted-foreground">(optional)</span>
-          </Label>
-          <Input
-            id="landmark"
-            placeholder="Near ABC Mall"
-            value={form.landmark}
-            onChange={(e) => set('landmark', e.target.value)}
-          />
-        </div>
+      <Field data-invalid={!!addressError(errors, 'area')}>
+        <FieldLabel htmlFor={addressFieldId('area')}>
+          Area / tole <span className="font-normal text-muted-foreground">(optional)</span>
+        </FieldLabel>
+        <Input
+          {...text('area')}
+          autoComplete="address-level3"
+          placeholder="e.g. Jhamsikhel"
+          maxLength={50}
+        />
+        {errorFor('area')}
+      </Field>
 
-        <div className="space-y-1.5">
-          <Label htmlFor="postalCode">
-            Postal Code <span className="text-muted-foreground">(optional)</span>
-          </Label>
-          <Input
-            id="postalCode"
-            placeholder="44600"
-            value={form.postalCode}
-            onChange={(e) => set('postalCode', e.target.value)}
-          />
-        </div>
-      </div>
+      <Field data-invalid={!!addressError(errors, 'streetAddress')}>
+        <FieldLabel htmlFor={addressFieldId('streetAddress')}>Street address</FieldLabel>
+        <Input
+          {...text('streetAddress')}
+          autoComplete="street-address"
+          placeholder="House no., street, nearby landmark"
+          maxLength={200}
+        />
+        {errorFor('streetAddress')}
+      </Field>
 
-      {/* Label */}
-      <div className="space-y-1.5">
-        <Label>Address Label</Label>
-        <div className="flex gap-2">
-          {labelOptions.map((option) => (
-            <button
-              key={option}
-              type="button"
-              onClick={() => set('label', option)}
-              className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
-                form.label === option
-                  ? 'border-primary bg-primary/10 text-primary'
-                  : 'border-border/50 text-muted-foreground hover:border-border'
-              }`}
-            >
-              {option}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Checkboxes */}
-      <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          <Checkbox
-            id="saveAddress"
-            checked={form.saveAddress}
-            onCheckedChange={(checked) => set('saveAddress', checked === true)}
-          />
-          <Label
-            htmlFor="saveAddress"
-            className="text-xs font-normal text-muted-foreground cursor-pointer"
-          >
-            Save this address to my account
-          </Label>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Checkbox
-            id="isDefault"
-            checked={form.isDefault}
-            onCheckedChange={(checked) => set('isDefault', checked === true)}
-          />
-          <Label
-            htmlFor="isDefault"
-            className="text-xs font-normal text-muted-foreground cursor-pointer"
-          >
-            Set as default address
-          </Label>
-        </div>
-      </div>
-
-      {/* Actions */}
-      <div className="flex items-center gap-3 pt-2">
-        <Button type="submit" size="lg" className="flex-1 rounded-xl">
-          Save & Continue
-        </Button>
-        <Button type="button" variant="ghost" size="lg" onClick={onCancel} className="rounded-xl">
-          Cancel
-        </Button>
-      </div>
-    </motion.form>
+      {!guest && (
+        <Field data-invalid={!!addressError(errors, 'label')} className="sm:col-span-2">
+          <FieldLabel htmlFor={addressFieldId('label')}>
+            Save as <span className="font-normal text-muted-foreground">(optional)</span>
+          </FieldLabel>
+          <Input {...text('label')} placeholder="e.g. Home, Office" maxLength={50} />
+          {errorFor('label') ?? (
+            <FieldDescription className="text-xs">
+              We&apos;ll keep this address for your next order.
+            </FieldDescription>
+          )}
+        </Field>
+      )}
+    </div>
   )
 }

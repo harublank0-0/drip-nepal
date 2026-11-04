@@ -10,6 +10,7 @@ import Cart from './cart.js'
 import Order from './order.js'
 import GlobalRole from './global_role.js'
 import ShopStaffAssignment from './shop_staff_assignment.js'
+import { GlobalRoles } from '#constants/global_roles'
 
 const AuthFinder = withAuthFinder(() => hash.use('scrypt'), {
   uids: ['email'],
@@ -31,7 +32,9 @@ export default class User extends compose(UserSchema, AuthFinder) {
   declare shops: HasMany<typeof Shop>
 
   @manyToMany(() => GlobalRole, {
-    pivotTable: 'user_roles',
+    pivotTable: 'global_user_roles',
+    pivotForeignKey: 'user_id',
+    pivotRelatedForeignKey: 'global_role_id',
   })
   declare roles: ManyToMany<typeof GlobalRole>
 
@@ -46,6 +49,15 @@ export default class User extends compose(UserSchema, AuthFinder) {
 
   @hasMany(() => Order)
   declare orders: HasMany<typeof Order>
+
+  /*
+   * Platform admins approve shops. Granted with `node ace admin:grant <email>`.
+   */
+  async isAdmin() {
+    const user: User = this
+    const role = await user.related('roles').query().where('slug', GlobalRoles.ADMIN.slug).first()
+    return role !== null
+  }
 
   isEmailVerified() {
     return this.emailVerifiedAt !== null

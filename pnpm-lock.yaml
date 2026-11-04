@@ -16,9 +16,15 @@ importers:
       '@adonisjs/cors':
         specifier: ^3.0.0
         version: 3.0.0(@adonisjs/assembler@8.4.0(typescript@6.0.3))(@adonisjs/core@7.3.4(@adonisjs/assembler@8.4.0(typescript@6.0.3))(@vinejs/vine@4.4.0)(edge.js@6.5.1)(pino-pretty@13.1.3)(youch@4.1.1))
+      '@adonisjs/drive':
+        specifier: ^4.0.0
+        version: 4.0.0(@adonisjs/assembler@8.4.0(typescript@6.0.3))(@adonisjs/core@7.3.4(@adonisjs/assembler@8.4.0(typescript@6.0.3))(@vinejs/vine@4.4.0)(edge.js@6.5.1)(pino-pretty@13.1.3)(youch@4.1.1))(edge.js@6.5.1)
       '@adonisjs/inertia':
         specifier: ^4.2.0
         version: 4.2.0(4010fc8eaa2851e47ffbfc6c19775ad4)
+      '@adonisjs/limiter':
+        specifier: 3.0.1
+        version: 3.0.1(@adonisjs/assembler@8.4.0(typescript@6.0.3))(@adonisjs/core@7.3.4(@adonisjs/assembler@8.4.0(typescript@6.0.3))(@vinejs/vine@4.4.0)(edge.js@6.5.1)(pino-pretty@13.1.3)(youch@4.1.1))(@adonisjs/lucid@22.4.2(@adonisjs/assembler@8.4.0(typescript@6.0.3))(@adonisjs/core@7.3.4(@adonisjs/assembler@8.4.0(typescript@6.0.3))(@vinejs/vine@4.4.0)(edge.js@6.5.1)(pino-pretty@13.1.3)(youch@4.1.1))(@vinejs/vine@4.4.0)(luxon@3.7.2)(pg@8.22.0))
       '@adonisjs/lucid':
         specifier: ^22.4.2
         version: 22.4.2(@adonisjs/assembler@8.4.0(typescript@6.0.3))(@adonisjs/core@7.3.4(@adonisjs/assembler@8.4.0(typescript@6.0.3))(@vinejs/vine@4.4.0)(edge.js@6.5.1)(pino-pretty@13.1.3)(youch@4.1.1))(@vinejs/vine@4.4.0)(luxon@3.7.2)(pg@8.22.0)
@@ -94,6 +100,9 @@ importers:
       pg:
         specifier: ^8.21.0
         version: 8.22.0
+      proxy-addr:
+        specifier: 2.0.7
+        version: 2.0.7
       radix-ui:
         specifier: ^1.4.3
         version: 1.6.0(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -167,6 +176,9 @@ importers:
       '@types/node':
         specifier: ~25.9.1
         version: 25.9.4
+      '@types/proxy-addr':
+        specifier: ^2.0.3
+        version: 2.0.3
       '@types/react':
         specifier: ^19.2.15
         version: 19.2.17
@@ -334,6 +346,31 @@ packages:
       '@adonisjs/assembler':
         optional: true
 
+  '@adonisjs/drive@4.0.0':
+    resolution:
+      {
+        integrity: sha512-dJPmTKmYba05/e6x807VjL9m5JT56bZKqAgFknkS96kUSH52i9M+InsZTwUQ87cW9UQ1tED8ts++LgsyE3EkEQ==,
+      }
+    engines: { node: '>=24.0.0' }
+    peerDependencies:
+      '@adonisjs/assembler': ^8.0.0-next.7 || ^8.0.0
+      '@adonisjs/core': ^7.0.0-next.0 || ^7.0.0
+      '@aws-sdk/client-s3': ^3.884.0
+      '@aws-sdk/s3-request-presigner': ^3.884.0
+      '@google-cloud/storage': ^7.17.0
+      edge.js: ^6.4.0
+    peerDependenciesMeta:
+      '@adonisjs/assembler':
+        optional: true
+      '@aws-sdk/client-s3':
+        optional: true
+      '@aws-sdk/s3-request-presigner':
+        optional: true
+      '@google-cloud/storage':
+        optional: true
+      edge.js:
+        optional: true
+
   '@adonisjs/env@7.0.0':
     resolution:
       {
@@ -469,6 +506,27 @@ packages:
       react:
         optional: true
       vue:
+        optional: true
+
+  '@adonisjs/limiter@3.0.1':
+    resolution:
+      {
+        integrity: sha512-U7drt/FPlB5PV84dnxQQSFGk75fDxgEHSkfT/eGwx/+Z4re7XlkVU4oros/VGefD72JTgXp7Kz97tS1XW7eEXA==,
+      }
+    peerDependencies:
+      '@adonisjs/assembler': ^8.0.0-next.9 || ^8.0.0
+      '@adonisjs/core': ^7.0.0-next.1 || ^7.0.0
+      '@adonisjs/i18n': ^3.0.0-next.0 || ^3.0.0
+      '@adonisjs/lucid': ^22.0.0-next.0 || ^22.0.0
+      '@adonisjs/redis': ^10.0.0-next.1 || ^10.0.0
+    peerDependenciesMeta:
+      '@adonisjs/assembler':
+        optional: true
+      '@adonisjs/i18n':
+        optional: true
+      '@adonisjs/lucid':
+        optional: true
+      '@adonisjs/redis':
         optional: true
 
   '@adonisjs/logger@7.1.1':
@@ -1665,6 +1723,12 @@ packages:
     resolution:
       {
         integrity: sha512-mveSvLI2YPC114mK5HCuSYfUtjpClf1wHG1VCqZJCp4U2ypPhIt62Iku5urh0kPAFvnvCVHx2bXBSH14qMTOlQ==,
+      }
+
+  '@poppinss/utils@7.1.2':
+    resolution:
+      {
+        integrity: sha512-fliKjqqbgEWa4yqHV2Vj7mgNmsARtJ6QeYy5/l0fDWrJ+gHZ3pmwiOqixuejZDsF+h2gdn8MMA+oAy2GfvqDVQ==,
       }
 
   '@poppinss/validator-lite@2.1.2':
@@ -3442,6 +3506,12 @@ packages:
         integrity: sha512-JOqsl+ZoCpP4e8TDke9W79FDcSgPAR0l6pixx2JHkhnRjvShyYiAYw2LVsnA7K08Y6DeOnaU6ujmENO4os/cYg==,
       }
 
+  '@types/proxy-addr@2.0.3':
+    resolution:
+      {
+        integrity: sha512-TgAHHO4tNG3HgLTUhB+hM4iwW6JUNeQHCLnF1DjaDA9c69PN+IasoFu2MYDhubFc+ZIw5c5t9DMtjvrD6R3Egg==,
+      }
+
   '@types/react-dom@19.2.3':
     resolution:
       {
@@ -5124,6 +5194,24 @@ packages:
         integrity: sha512-9UbaD6XdAL97+k/n+N7JwX46K/M6Zc6KcFYskrYL8wbBV/Uyk0CTAMY0VT+qiK5PM7AIc9aTWYtq65U7T+aCNQ==,
       }
     engines: { node: '>=8' }
+
+  flydrive@2.2.0:
+    resolution:
+      {
+        integrity: sha512-e4xYe+I1J0O0jufOS38jKPxdxzxcRzX+1GM4IP0xRcJtvwBizbJ3r5z1uGghfx1+FQLbQxD0LxHLQU6UbpegMg==,
+      }
+    engines: { node: '>=24.0.0' }
+    peerDependencies:
+      '@aws-sdk/client-s3': ^3.577.0 || ^3.1147.0
+      '@aws-sdk/s3-request-presigner': ^3.577.0 || ^3.1147.0
+      '@google-cloud/storage': ^7.10.2 || ^8.2.0
+    peerDependenciesMeta:
+      '@aws-sdk/client-s3':
+        optional: true
+      '@aws-sdk/s3-request-presigner':
+        optional: true
+      '@google-cloud/storage':
+        optional: true
 
   follow-redirects@1.16.0:
     resolution:
@@ -7287,6 +7375,12 @@ packages:
       }
     engines: { node: '>= 0.6' }
 
+  rate-limiter-flexible@9.1.1:
+    resolution:
+      {
+        integrity: sha512-imxFjzPCmvDLMe7d2tsgiSQvs5EI2fI9SNymmslAfOqznZhsZ+PqbIjIYKpuSbd3pKovR1aMG47qfCLIO/adVg==,
+      }
+
   raw-body@3.0.2:
     resolution:
       {
@@ -8801,6 +8895,14 @@ snapshots:
     optionalDependencies:
       '@adonisjs/assembler': 8.4.0(typescript@6.0.3)
 
+  '@adonisjs/drive@4.0.0(@adonisjs/assembler@8.4.0(typescript@6.0.3))(@adonisjs/core@7.3.4(@adonisjs/assembler@8.4.0(typescript@6.0.3))(@vinejs/vine@4.4.0)(edge.js@6.5.1)(pino-pretty@13.1.3)(youch@4.1.1))(edge.js@6.5.1)':
+    dependencies:
+      '@adonisjs/core': 7.3.4(@adonisjs/assembler@8.4.0(typescript@6.0.3))(@vinejs/vine@4.4.0)(edge.js@6.5.1)(pino-pretty@13.1.3)(youch@4.1.1)
+      flydrive: 2.2.0
+    optionalDependencies:
+      '@adonisjs/assembler': 8.4.0(typescript@6.0.3)
+      edge.js: 6.5.1
+
   '@adonisjs/env@7.0.0':
     dependencies:
       '@poppinss/utils': 7.0.1
@@ -8907,6 +9009,14 @@ snapshots:
       '@japa/plugin-adonisjs': 5.2.0(@adonisjs/core@7.3.4(@adonisjs/assembler@8.4.0(typescript@6.0.3))(@vinejs/vine@4.4.0)(edge.js@6.5.1)(pino-pretty@13.1.3)(youch@4.1.1))(@japa/browser-client@2.3.0(@japa/assert@4.2.0(@japa/runner@5.3.0))(@japa/runner@5.3.0)(playwright@1.61.1))(@japa/runner@5.3.0)(playwright@1.61.1)
       '@tuyau/core': 1.2.2(@adonisjs/assembler@8.4.0(typescript@6.0.3))(@adonisjs/core@7.3.4(@adonisjs/assembler@8.4.0(typescript@6.0.3))(@vinejs/vine@4.4.0)(edge.js@6.5.1)(pino-pretty@13.1.3)(youch@4.1.1))
       react: 19.2.7
+
+  '@adonisjs/limiter@3.0.1(@adonisjs/assembler@8.4.0(typescript@6.0.3))(@adonisjs/core@7.3.4(@adonisjs/assembler@8.4.0(typescript@6.0.3))(@vinejs/vine@4.4.0)(edge.js@6.5.1)(pino-pretty@13.1.3)(youch@4.1.1))(@adonisjs/lucid@22.4.2(@adonisjs/assembler@8.4.0(typescript@6.0.3))(@adonisjs/core@7.3.4(@adonisjs/assembler@8.4.0(typescript@6.0.3))(@vinejs/vine@4.4.0)(edge.js@6.5.1)(pino-pretty@13.1.3)(youch@4.1.1))(@vinejs/vine@4.4.0)(luxon@3.7.2)(pg@8.22.0))':
+    dependencies:
+      '@adonisjs/core': 7.3.4(@adonisjs/assembler@8.4.0(typescript@6.0.3))(@vinejs/vine@4.4.0)(edge.js@6.5.1)(pino-pretty@13.1.3)(youch@4.1.1)
+      rate-limiter-flexible: 9.1.1
+    optionalDependencies:
+      '@adonisjs/assembler': 8.4.0(typescript@6.0.3)
+      '@adonisjs/lucid': 22.4.2(@adonisjs/assembler@8.4.0(typescript@6.0.3))(@adonisjs/core@7.3.4(@adonisjs/assembler@8.4.0(typescript@6.0.3))(@vinejs/vine@4.4.0)(edge.js@6.5.1)(pino-pretty@13.1.3)(youch@4.1.1))(@vinejs/vine@4.4.0)(luxon@3.7.2)(pg@8.22.0)
 
   '@adonisjs/logger@7.1.1(pino-pretty@13.1.3)':
     dependencies:
@@ -9648,6 +9758,14 @@ snapshots:
   '@poppinss/types@1.2.1': {}
 
   '@poppinss/utils@7.0.1':
+    dependencies:
+      '@poppinss/exception': 1.2.3
+      '@poppinss/object-builder': 1.1.0
+      '@poppinss/string': 1.7.2
+      '@poppinss/types': 1.2.1
+      flattie: 1.1.1
+
+  '@poppinss/utils@7.1.2':
     dependencies:
       '@poppinss/exception': 1.2.3
       '@poppinss/object-builder': 1.1.0
@@ -10873,6 +10991,10 @@ snapshots:
 
   '@types/pluralize@0.0.33': {}
 
+  '@types/proxy-addr@2.0.3':
+    dependencies:
+      '@types/node': 25.9.4
+
   '@types/react-dom@19.2.3(@types/react@19.2.17)':
     dependencies:
       '@types/react': 19.2.17
@@ -12035,6 +12157,13 @@ snapshots:
   flatted@3.4.2: {}
 
   flattie@1.1.1: {}
+
+  flydrive@2.2.0:
+    dependencies:
+      '@humanwhocodes/retry': 0.4.3
+      '@poppinss/utils': 7.1.2
+      etag: 1.8.1
+      mime-types: 3.0.2
 
   follow-redirects@1.16.0: {}
 
@@ -13233,6 +13362,8 @@ snapshots:
   random-bytes@1.0.0: {}
 
   range-parser@1.2.1: {}
+
+  rate-limiter-flexible@9.1.1: {}
 
   raw-body@3.0.2:
     dependencies:

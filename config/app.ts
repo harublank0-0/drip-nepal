@@ -1,6 +1,7 @@
 import env from '#start/env'
 import app from '@adonisjs/core/services/app'
 import { defineConfig } from '@adonisjs/core/http'
+import proxyAddr from 'proxy-addr'
 
 /**
  * The app URL can be used in various places where you want to create absolute
@@ -9,10 +10,24 @@ import { defineConfig } from '@adonisjs/core/http'
  */
 export const appUrl = env.get('APP_URL')
 
+/*
+ * Behind Caddy, request.ip() must be the browser's address, because the login
+ * and signup limiters key on it (RF-31, docs/11 §3.4). Only loopback and the
+ * ranges in TRUSTED_PROXY_CIDRS (the Compose network, plus Cloudflare's ranges
+ * if it sits in front) may set X-Forwarded-For. The function form is needed:
+ * proxy-addr does not split a comma-separated string.
+ */
+const trustedProxies = (env.get('TRUSTED_PROXY_CIDRS') ?? '')
+  .split(',')
+  .map((cidr) => cidr.trim())
+  .filter(Boolean)
+
 /**
  * The configuration settings used by the HTTP server
  */
 export const http = defineConfig({
+  trustProxy: proxyAddr.compile(['loopback', ...trustedProxies]),
+
   /**
    * Generate a unique request id for each incoming request.
    * Useful to correlate logs and debug a request flow.

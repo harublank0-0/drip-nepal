@@ -51,7 +51,7 @@ const bodyParserConfig = defineConfig({
     /**
      * Automatically process uploaded files into the system tmp directory.
      */
-    autoProcess: true,
+    autoProcess: false,
 
     /**
      * Normalize empty string values to null.
@@ -66,7 +66,7 @@ const bodyParserConfig = defineConfig({
     /**
      * Maximum accepted payload size for multipart requests.
      */
-    limit: '20mb',
+    limit: '45mb',
 
     /**
      * Content types handled by the multipart parser.

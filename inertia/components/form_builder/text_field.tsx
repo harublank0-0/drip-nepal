@@ -1,6 +1,4 @@
-import { TextField } from '~/components/form_builder/forms.types'
-
-type TextFieldProps = {
+export type TextFieldProps = {
   name: string
   label: string
   description?: string

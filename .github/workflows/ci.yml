@@ -1,0 +1,53 @@
+# CI for the v1 store (the single-seller launch line). Runs on pushes to v1
+# and on pull requests into it. Actions are pinned by commit SHA; the release
+# tag is in the comment. No secrets are used.
+name: ci-v1
+
+on:
+  push:
+    branches: [v1]
+  pull_request:
+    branches: [v1]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-v1-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  checks:
+    name: Format, lint, typecheck, build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+      - name: Prettier
+        run: pnpm exec prettier --check .
+      - name: ESLint, zero warnings
+        run: pnpm lint --max-warnings 0
+      - name: Typecheck (server and inertia)
+        run: pnpm typecheck
+      # Compiles the server and builds the client and SSR bundles, so a
+      # missing SSR bundle (every page would answer 500) fails here.
+      - name: Production build
+        run: |
+          node ace build
+          test -f build/ssr/ssr.js
+
+  image:
+    name: Docker image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Build the production image (not pushed)
+        run: docker build --tag dripnepal:ci .

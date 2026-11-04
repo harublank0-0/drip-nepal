@@ -24,6 +24,7 @@ server.errorHandler(() => import('#exceptions/handler'))
  */
 server.use([
   () => import('#middleware/container_bindings_middleware'),
+  () => import('#middleware/health_middleware'),
   () => import('@adonisjs/static/static_middleware'),
   () => import('@adonisjs/cors/cors_middleware'),
   () => import('@adonisjs/vite/vite_middleware'),
@@ -49,4 +50,6 @@ router.use([
 export const middleware = router.named({
   guest: () => import('#middleware/guest_middleware'),
   auth: () => import('#middleware/auth_middleware'),
+  shopAccess: () => import('#modules/shops/middleware/shop_access_middleware'),
+  admin: () => import('#modules/admin/middleware/admin_middleware'),
 })

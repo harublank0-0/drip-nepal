@@ -1,9 +1,8 @@
 import { useState } from 'react'
 import { Link } from '@adonisjs/inertia/react'
 import type { routes } from '@generated/registry'
-import { motion } from 'framer-motion'
+import { motion, type Variants } from 'framer-motion'
 import { Button } from '~/components/ui/button'
-import { Typography } from '~/components/ui/typography'
 
 export type HeroPanelProps = {
   image: {
@@ -17,7 +16,7 @@ export type HeroPanelProps = {
   }
 }
 
-const textVariants = {
+const textVariants: Variants = {
   hidden: { y: 40, opacity: 0 },
   visible: {
     y: 0,
@@ -26,7 +25,7 @@ const textVariants = {
   },
 }
 
-const buttonVariants = {
+const buttonVariants: Variants = {
   hidden: { y: 30, opacity: 0 },
   visible: {
     y: 0,
@@ -66,7 +65,7 @@ export const HeroPanel = (props: HeroPanelProps & { children: React.ReactNode })
 
         <div className="absolute inset-0 flex flex-col items-center justify-center text-white text-center">
           <motion.h2
-            className="text-6xl md:text-8xl lg:text-9xl font-heading font-bold uppercase tracking-wider mb-6"
+            className="text-4xl sm:text-6xl md:text-8xl lg:text-9xl font-heading font-bold uppercase tracking-wider mb-4 md:mb-6"
             variants={textVariants}
             initial="hidden"
             whileInView="visible"
@@ -84,7 +83,7 @@ export const HeroPanel = (props: HeroPanelProps & { children: React.ReactNode })
             <Button
               asChild
               variant="outline"
-              className="bg-transparent text-white capitalize cursor-pointer rounded-none text-sm md:text-lg px-6 md:px-8 py-5 md:py-6 border-2 border-white/30 hover:bg-primary hover:border-primary transition-colors duration-300"
+              className="bg-black/20 text-white capitalize cursor-pointer rounded-none text-sm md:text-lg h-11 px-4 md:px-8 md:py-6 border-2 border-white/40 hover:bg-primary hover:border-primary transition-colors duration-300"
             >
               <Link route={cta.route}>{cta.label}</Link>
             </Button>

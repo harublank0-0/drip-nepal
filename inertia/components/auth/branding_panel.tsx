@@ -1,5 +1,5 @@
 import { type ReactNode } from 'react'
-import { motion } from 'framer-motion'
+import { motion, type Variants } from 'framer-motion'
 import { LucideCircleCheck } from 'lucide-react'
 import DripNepalLogo from '~/assets/logo/drip-nepal.png'
 import { Typography } from '~/components/ui/typography'
@@ -11,13 +11,12 @@ type BrandingPanelProps = {
 }
 
 const defaultBenefits = [
-  'Fast delivery',
-  'Secure checkout',
-  'Trusted local sellers',
-  'Easy order tracking',
+  'Pay cash when your order arrives',
+  'Delivery across Nepal',
+  'All your orders in one place',
 ]
 
-const containerVariants = {
+const containerVariants: Variants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
@@ -25,7 +24,7 @@ const containerVariants = {
   },
 }
 
-const itemVariants = {
+const itemVariants: Variants = {
   hidden: { opacity: 0, y: 30 },
   visible: {
     opacity: 1,
@@ -76,13 +75,12 @@ export function BrandingPanel({
             </Typography.H1>
           ) : (
             <Typography.H1 className="!mt-0 text-left text-4xl leading-tight lg:text-5xl">
-              Discover amazing products
-              <br />
-              <span className="text-primary">from local shops.</span>
+              Fashion from local shops, delivered.
             </Typography.H1>
           )}
           <Typography.P className="!mt-0 max-w-md text-base text-muted-foreground lg:text-lg">
-            {subheading ?? 'Join thousands of customers shopping across Nepal.'}
+            {subheading ??
+              'An account keeps your addresses and orders in one place. You can also order as a guest.'}
           </Typography.P>
         </motion.div>
 

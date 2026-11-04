@@ -6,10 +6,17 @@ import User from './user.js'
 
 export default class GlobalRole extends GlobalRoleSchema {
   @manyToMany(() => User, {
-    pivotTable: 'user_roles',
+    pivotTable: 'global_user_roles',
+    pivotForeignKey: 'global_role_id',
+    pivotRelatedForeignKey: 'user_id',
   })
   declare users: ManyToMany<typeof User>
 
-  @manyToMany(() => Permission)
+  @manyToMany(() => Permission, {
+    pivotTable: 'global_role_permissions',
+    pivotForeignKey: 'global_role_id',
+    pivotRelatedForeignKey: 'permission_id',
+    pivotTimestamps: true,
+  })
   declare permissions: ManyToMany<typeof Permission>
 }

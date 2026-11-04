@@ -9,7 +9,11 @@ export default class ShopRole extends ShopRoleSchema {
   @belongsTo(() => Shop)
   declare shop: BelongsTo<typeof Shop>
 
-  @manyToMany(() => Permission)
+  @manyToMany(() => Permission, {
+    pivotTable: 'shop_role_permissions',
+    pivotForeignKey: 'shop_role_id',
+    pivotRelatedForeignKey: 'permission_id',
+  })
   declare permissions: ManyToMany<typeof Permission>
 
   @hasMany(() => ShopStaffAssignment)

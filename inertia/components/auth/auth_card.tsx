@@ -1,7 +1,7 @@
-import { motion, useReducedMotion } from 'framer-motion'
+import { motion, useReducedMotion, type Variants } from 'framer-motion'
 import React from 'react'
 
-const containerVariants = {
+const containerVariants: Variants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
@@ -12,7 +12,7 @@ const containerVariants = {
   },
 }
 
-const itemVariants = {
+const itemVariants: Variants = {
   hidden: { opacity: 0, y: 24 },
   visible: {
     opacity: 1,
@@ -27,11 +27,11 @@ const itemVariants = {
 export function AuthCard({ children }: { children: React.ReactNode }) {
   const prefersReducedMotion = useReducedMotion()
 
-  const variants = prefersReducedMotion
+  const variants: Variants = prefersReducedMotion
     ? { hidden: { opacity: 1 }, visible: { opacity: 1 } }
     : containerVariants
 
-  const childVariants = prefersReducedMotion
+  const childVariants: Variants = prefersReducedMotion
     ? { hidden: { opacity: 1 }, visible: { opacity: 1 } }
     : itemVariants
 

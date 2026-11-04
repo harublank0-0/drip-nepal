@@ -23,6 +23,23 @@ const env = await Env.create(new URL('../', import.meta.url), {
   APP_KEY: Env.schema.secret(),
   APP_URL: Env.schema.string({ format: 'url', tld: false }),
 
+  // Lets anyone register a shop (v1 has one seller, so it defaults to closed)
+  SHOP_REGISTRATION_OPEN: Env.schema.boolean.optional(),
+
+  // How customers reach the store, shown in the footer and on order pages
+  // (config/storefront.ts). Each is optional; unset ones are hidden.
+  SUPPORT_PHONE: Env.schema.string.optional(),
+  SUPPORT_EMAIL: Env.schema.string.optional({ format: 'email' }),
+  INSTAGRAM_URL: Env.schema.string.optional({ format: 'url' }),
+  FACEBOOK_URL: Env.schema.string.optional({ format: 'url' }),
+  TIKTOK_URL: Env.schema.string.optional({ format: 'url' }),
+
+  // The running release, shown by /health/live (for example the git commit)
+  APP_RELEASE: Env.schema.string.optional(),
+
+  // Proxies allowed to set X-Forwarded-For: comma-separated CIDRs (docs/11 §3.4)
+  TRUSTED_PROXY_CIDRS: Env.schema.string.optional(),
+
   // Session
   SESSION_DRIVER: Env.schema.enum(['cookie', 'memory', 'database'] as const),
 
@@ -32,6 +49,20 @@ const env = await Env.create(new URL('../', import.meta.url), {
   DB_USER: Env.schema.string(),
   DB_PASSWORD: Env.schema.string(),
   DB_DATABASE: Env.schema.string(),
+
+  /*
+  |----------------------------------------------------------
+  | Variables for configuring the drive package
+  |----------------------------------------------------------
+  */
+  DRIVE_DISK: Env.schema.enum(['fs'] as const),
+
+  /*
+  |----------------------------------------------------------
+  | Variables for configuring the limiter package
+  |----------------------------------------------------------
+  */
+  LIMITER_STORE: Env.schema.enum(['database', 'memory'] as const),
 })
 
 /*

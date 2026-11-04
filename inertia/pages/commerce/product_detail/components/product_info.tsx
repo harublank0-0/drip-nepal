@@ -1,252 +1,240 @@
-import { useState } from 'react'
 import { Link } from '@adonisjs/inertia/react'
-import { motion } from 'framer-motion'
-import { Heart, Share2, Minus, Plus, Truck, ShieldCheck, RotateCcw, Banknote } from 'lucide-react'
+import { Banknote, RotateCcw, Truck } from 'lucide-react'
+import type { Data } from '@generated/data'
 import { Button } from '~/components/ui/button'
 import { Separator } from '~/components/ui/separator'
+import { Spinner } from '~/components/ui/spinner'
 import { cn } from '~/lib/utils'
-import { getDiscountPercentage } from '~/lib/utils'
-import { VariantSelector } from './variant_selector'
+import { formatPrice } from '~/lib/format'
+import { FREE_SHIPPING_THRESHOLD, SHIPPING_FEE_PER_SHOP } from '~/lib/order'
+import { RETURN_DAYS } from '~/lib/policies'
+import {
+  LOW_STOCK_THRESHOLD,
+  purchaseLabel,
+  type VariantOption,
+  type VariantSelection,
+} from '../hooks/use_variant_selection'
+import { PriceTag } from './price_tag'
+import { ShareButton } from './share_button'
+import { QuantityStepper } from './quantity_stepper'
 import { StoreCard } from './store_card'
-import type { ProductData } from '../mock'
+import { VariantSelector } from './variant_selector'
 
 type ProductInfoProps = {
-  product: ProductData
+  product: Data.Product
+  selection: VariantSelection
+  onSelect: (option: VariantOption, value: string) => void
+  onQuantityChange: (quantity: number) => void
+  onAddToCart: () => void
+  processing: boolean
+  error?: string
+  ctaRef?: React.Ref<HTMLDivElement>
 }
 
-function StarRating({ rating, size = 'sm' }: { rating: number; size?: 'sm' | 'lg' }) {
-  const stars = []
-  const full = Math.floor(rating)
-  const hasHalf = rating % 1 >= 0.5
-  for (let i = 0; i < 5; i++) {
-    if (i < full) stars.push('full')
-    else if (i === full && hasHalf) stars.push('half')
-    else stars.push('empty')
-  }
-  return (
-    <span
-      className={cn('flex gap-0.5', size === 'lg' ? 'text-lg' : 'text-sm')}
-      aria-label={`${rating} out of 5 stars`}
-    >
-      {stars.map((s, i) => (
-        <svg
-          key={i}
-          width={size === 'lg' ? 18 : 14}
-          height={size === 'lg' ? 18 : 14}
-          viewBox="0 0 24 24"
-          fill={s === 'empty' ? 'none' : 'currentColor'}
-          stroke="currentColor"
-          strokeWidth="1.5"
-          className={
-            s === 'empty'
-              ? 'text-muted-foreground/30'
-              : s === 'half'
-                ? 'text-amber-500'
-                : 'text-amber-500'
-          }
-        >
-          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-        </svg>
-      ))}
-    </span>
-  )
-}
-
-function QuantitySelector() {
-  const [qty, setQty] = useState(1)
-  return (
-    <div className="flex items-center gap-0">
-      <button
-        onClick={() => setQty(Math.max(1, qty - 1))}
-        className="size-10 flex items-center justify-center border border-border rounded-l-lg hover:bg-muted transition-colors"
-        aria-label="Decrease quantity"
-      >
-        <Minus className="size-4" />
-      </button>
-      <span
-        className="size-10 flex items-center justify-center border-t border-b border-border text-sm font-medium"
-        aria-live="polite"
-      >
-        {qty}
-      </span>
-      <button
-        onClick={() => setQty(Math.min(99, qty + 1))}
-        className="size-10 flex items-center justify-center border border-border rounded-r-lg hover:bg-muted transition-colors"
-        aria-label="Increase quantity"
-      >
-        <Plus className="size-4" />
-      </button>
-    </div>
-  )
-}
-
-export function ProductInfo({ product }: ProductInfoProps) {
-  const discount = product.compareAt
-    ? getDiscountPercentage(product.compareAt, product.price)
-    : null
-
-  const deliveryCards = [
-    { icon: Banknote, label: 'Cash on Delivery', desc: 'Pay when you receive' },
-    { icon: Truck, label: 'Estimated Delivery', desc: '3-5 business days' },
-    { icon: RotateCcw, label: 'Easy Returns', desc: '14-day return policy' },
-    { icon: ShieldCheck, label: 'Secure Payment', desc: '256-bit SSL encrypted' },
-  ]
-
-  const [isFavorited, setIsFavorited] = useState(false)
+export function ProductInfo({
+  product,
+  selection,
+  onSelect,
+  onQuantityChange,
+  onAddToCart,
+  processing,
+  error,
+  ctaRef,
+}: ProductInfoProps) {
+  const { category, shop } = product
+  const canAdd = selection.state === 'ready' && !processing
 
   return (
-    <div className="space-y-8">
-      {/* Breadcrumb */}
-      <nav
-        aria-label="Breadcrumb"
-        className="flex items-center gap-2 text-xs md:text-sm text-muted-foreground"
-      >
-        <Link route="home" className="hover:text-foreground transition-colors">
-          Home
-        </Link>
-        <span aria-hidden="true">/</span>
-        <Link route="men" className="hover:text-foreground transition-colors">
-          Men
-        </Link>
-        <span aria-hidden="true">/</span>
-        <span className="text-foreground font-medium">Hoodies</span>
-        <span aria-hidden="true">/</span>
-        <span className="text-foreground truncate max-w-[120px] md:max-w-[200px]">
-          {product.title}
-        </span>
+    <div className="space-y-6">
+      <nav aria-label="Breadcrumb">
+        <ol className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground md:text-sm">
+          <li className="shrink-0">
+            <Link route="home" className="transition-colors hover:text-foreground">
+              Home
+            </Link>
+          </li>
+          {category && (
+            <>
+              <li aria-hidden="true">/</li>
+              <li className="shrink-0">
+                <Link
+                  route="categories.show"
+                  routeParams={{ slug: category.slug }}
+                  className="transition-colors hover:text-foreground"
+                >
+                  {category.name}
+                </Link>
+              </li>
+            </>
+          )}
+          <li aria-hidden="true">/</li>
+          <li className="min-w-0 truncate text-foreground" aria-current="page">
+            {product.name}
+          </li>
+        </ol>
       </nav>
 
-      {/* Store Name */}
       <div>
-        <p className="text-xs uppercase tracking-widest text-muted-foreground mb-1">
-          {product.store.name}
-        </p>
-
-        {/* Title */}
-        <h1 className="text-2xl md:text-3xl lg:text-4xl font-heading font-bold tracking-tight leading-tight">
-          {product.title}
-        </h1>
-
-        {/* Rating */}
-        <div className="flex items-center gap-2 mt-3">
-          <StarRating rating={product.rating} />
-          <span className="text-sm font-medium">{product.rating}</span>
-          <span className="text-sm text-muted-foreground">({product.reviewCount} reviews)</span>
+        {shop && (
+          <Link
+            route="stores.show"
+            routeParams={{ slug: shop.slug }}
+            className="mb-1.5 inline-block text-xs tracking-widest text-muted-foreground uppercase transition-colors hover:text-foreground"
+          >
+            {shop.name}
+          </Link>
+        )}
+        <div className="flex items-start justify-between gap-3">
+          <h1 className="font-heading text-2xl leading-tight font-bold tracking-tight md:text-3xl lg:text-4xl">
+            {product.name}
+          </h1>
+          <ShareButton title={product.name} />
         </div>
-      </div>
-
-      {/* Price */}
-      <div className="flex items-baseline gap-3">
-        <span className="text-3xl md:text-4xl font-bold">
-          {product.currency} {product.price.toLocaleString()}
-        </span>
-        {product.compareAt && (
-          <>
-            <span className="text-lg text-muted-foreground line-through">
-              {product.currency} {product.compareAt.toLocaleString()}
-            </span>
-            {discount && (
-              <span className="text-sm font-semibold text-primary bg-primary/10 px-2.5 py-0.5 rounded-full">
-                {discount}% OFF
-              </span>
-            )}
-          </>
+        {product.brand && (
+          <p className="mt-2 text-sm text-muted-foreground">
+            Brand: <span className="text-foreground">{product.brand}</span>
+          </p>
         )}
       </div>
 
-      {/* Stock Status */}
-      <p className="text-sm font-medium text-emerald-500 flex items-center gap-1.5">
-        <span className="size-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
-        {product.status}
-      </p>
+      <div className="space-y-2">
+        <PriceTag price={selection.price} />
+        <StockStatus selection={selection} />
+      </div>
 
       <Separator />
 
-      {/* Variants */}
-      <VariantSelector colors={product.colors} sizes={product.sizes} />
+      <VariantSelector
+        sizes={selection.sizes}
+        colors={selection.colors}
+        selectedSize={selection.selectedSize}
+        selectedColor={selection.selectedColor}
+        onSelect={onSelect}
+      />
 
-      {/* Quantity + Actions */}
-      <div className="space-y-4">
-        <div className="flex items-center gap-4">
+      <div ref={ctaRef} className="space-y-4">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <span className="text-sm font-medium">Quantity</span>
-          <QuantitySelector />
+          <QuantityStepper
+            value={selection.quantity}
+            max={selection.maxQuantity}
+            disabled={selection.state !== 'ready' || processing}
+            onChange={onQuantityChange}
+          />
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-3">
-          <Button size="lg" className="flex-1 h-12 text-base font-semibold cursor-pointer">
-            Add to Cart
-          </Button>
-          <Button
-            variant="outline"
-            size="lg"
-            className="flex-1 h-12 text-base font-semibold cursor-pointer"
-          >
-            Buy Now
-          </Button>
-        </div>
-
-        <div className="flex gap-3">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="gap-2 text-muted-foreground hover:text-foreground cursor-pointer"
-            onClick={() => setIsFavorited(!isFavorited)}
-            aria-label={isFavorited ? 'Remove from wishlist' : 'Add to wishlist'}
-          >
-            <Heart
-              className={cn('size-4 transition-colors', isFavorited && 'fill-primary text-primary')}
-            />
-            Wishlist
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="gap-2 text-muted-foreground hover:text-foreground cursor-pointer"
-            aria-label="Share product"
-          >
-            <Share2 className="size-4" />
-            Share
-          </Button>
-        </div>
-      </div>
-
-      <Separator />
-
-      {/* Mobile sticky CTA bar */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 bg-background border-t border-border p-4 flex gap-3 md:hidden">
-        <Button className="flex-1 h-12 text-base font-semibold cursor-pointer">Add to Cart</Button>
         <Button
-          variant="outline"
-          size="icon"
-          className="size-12 flex-shrink-0 cursor-pointer"
-          onClick={() => setIsFavorited(!isFavorited)}
-          aria-label={isFavorited ? 'Remove from wishlist' : 'Add to wishlist'}
+          type="button"
+          size="lg"
+          className="h-12 w-full text-base font-semibold"
+          disabled={!canAdd}
+          onClick={onAddToCart}
         >
-          <Heart className={cn('size-5', isFavorited && 'fill-primary text-primary')} />
+          {processing ? (
+            <>
+              <Spinner />
+              Adding…
+            </>
+          ) : (
+            purchaseLabel(selection)
+          )}
         </Button>
+
+        {error && (
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+        )}
       </div>
 
-      {/* Delivery Info */}
-      <div className="grid grid-cols-2 gap-3">
-        {deliveryCards.map((card) => (
-          <div
-            key={card.label}
-            className="flex items-start gap-3 p-3 rounded-xl bg-muted/50 ring-1 ring-foreground/5"
-          >
-            <card.icon className="size-5 text-muted-foreground mt-0.5 flex-shrink-0" />
-            <div>
-              <p className="text-sm font-medium">{card.label}</p>
-              <p className="text-xs text-muted-foreground">{card.desc}</p>
-            </div>
-          </div>
-        ))}
-      </div>
+      <DeliveryInfo />
 
-      {/* Store Card */}
-      <StoreCard store={product.store} />
-
-      {/* Padding for mobile sticky bar */}
-      <div className="h-20 md:hidden" aria-hidden="true" />
+      {shop && <StoreCard shop={shop} />}
     </div>
+  )
+}
+
+/*
+ * Payment, delivery cost and returns, next to the button, so nobody has
+ * to reach checkout to find out.
+ */
+function DeliveryInfo() {
+  const rows = [
+    {
+      icon: Banknote,
+      title: 'Cash on delivery',
+      text: 'Pay when your order arrives.',
+    },
+    {
+      icon: Truck,
+      title: `Delivery ${formatPrice(SHIPPING_FEE_PER_SHOP)}`,
+      text: `Free when your order from this shop is ${formatPrice(FREE_SHIPPING_THRESHOLD)} or more.`,
+    },
+    {
+      icon: RotateCcw,
+      title: `${RETURN_DAYS}-day returns`,
+      text: 'On unworn items with tags.',
+      link: true,
+    },
+  ]
+
+  return (
+    <ul className="divide-y divide-border/50 rounded-xl text-sm ring-1 ring-foreground/10">
+      {rows.map((row) => (
+        <li key={row.title} className="flex items-start gap-3 p-3">
+          <row.icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <p>
+            <span className="font-medium">{row.title}.</span>{' '}
+            <span className="text-muted-foreground">{row.text}</span>
+            {row.link && (
+              <>
+                {' '}
+                <Link route="legal.returns" className="underline underline-offset-2">
+                  Returns policy
+                </Link>
+              </>
+            )}
+          </p>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+function StockStatus({ selection }: { selection: VariantSelection }) {
+  const { state, selectedVariant } = selection
+
+  let tone: 'ok' | 'low' | 'none' | 'muted' | null = null
+  let text = ''
+
+  if (state === 'unavailable') {
+    tone = 'muted'
+    text = 'Currently unavailable'
+  } else if (state === 'sold_out' || state === 'out_of_stock') {
+    tone = 'none'
+    text = 'Out of stock'
+  } else if (selectedVariant && selectedVariant.quantity <= LOW_STOCK_THRESHOLD) {
+    tone = 'low'
+    text = `Only ${selectedVariant.quantity} left`
+  } else if (selectedVariant) {
+    tone = 'ok'
+    text = 'In stock'
+  }
+
+  if (!tone) return null
+
+  return (
+    <p
+      className={cn(
+        'flex items-center gap-1.5 text-sm font-medium',
+        tone === 'ok' && 'text-emerald-600 dark:text-emerald-400',
+        tone === 'low' && 'text-amber-600 dark:text-amber-400',
+        tone === 'none' && 'text-destructive',
+        tone === 'muted' && 'text-muted-foreground'
+      )}
+    >
+      <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
+      {text}
+    </p>
   )
 }

@@ -1,137 +1,153 @@
+import { usePage } from '@inertiajs/react'
 import { Link } from '@adonisjs/inertia/react'
-import { type routes } from '@generated/registry'
-import { Input } from '~/components/ui/input'
-import { Button } from '~/components/ui/button'
+import type { Data } from '@generated/data'
 import { Separator } from '~/components/ui/separator'
-import { Globe } from 'lucide-react'
 
-const shopLinks: { label: string; route: keyof typeof routes }[] = [
-  { label: 'Men', route: 'men' },
-  { label: 'Women', route: 'women' },
-]
+const linkClass =
+  'inline-flex min-h-9 items-center text-sm text-muted-foreground hover:text-foreground transition-colors duration-200'
 
-const helpLinks = [
-  { label: 'FAQ', href: '#' },
-  { label: 'Shipping', href: '#' },
-  { label: 'Returns', href: '#' },
-  { label: 'Size Guide', href: '#' },
-]
-
-const aboutLinks = [
-  { label: 'Our Story', href: '#' },
-  { label: 'Careers', href: '#' },
-  { label: 'Sustainability', href: '#' },
-  { label: 'Press', href: '#' },
-]
+const headingClass = 'mb-2 text-sm font-semibold'
 
 export function Footer() {
+  const { shopRegistrationOpen, support } = usePage<Data.SharedProps>().props
+  const socials = [
+    { label: 'Instagram', href: support.instagram },
+    { label: 'Facebook', href: support.facebook },
+    { label: 'TikTok', href: support.tiktok },
+  ].filter((social): social is { label: string; href: string } => Boolean(social.href))
+  const hasContact = Boolean(support.phone || support.email)
+
   return (
     <footer role="contentinfo" className="bg-card border-t border-border/50">
-      <div className="max-w-7xl mx-auto px-6 md:px-8 py-12 md:py-16">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-8 lg:gap-12">
-          <div className="lg:col-span-2">
+      <div className="max-w-7xl mx-auto px-6 md:px-8 py-10 md:py-16">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-x-6 gap-y-8 lg:gap-12">
+          <div className="col-span-2">
             <Link route="home" aria-label="Drip Nepal home">
-              <div className="uppercase text-3xl md:text-4xl font-bold tracking-tight mb-4">
+              <div className="uppercase text-3xl md:text-4xl font-bold tracking-tight mb-3">
                 <span className="text-white">drip</span>
                 <span className="text-primary">nepal</span>
               </div>
             </Link>
             <p className="text-sm text-muted-foreground max-w-xs leading-relaxed">
-              Himalayan streetwear curated for the bold. Premium drops from the world&apos;s most
-              sought-after brands, delivered to your doorstep.
+              Fashion from local shops across Nepal. Order online and pay cash on delivery.
             </p>
-
-            <div className="flex gap-3 mt-6">
-              {[
-                { icon: Globe, label: 'Website' },
-                { icon: Globe, label: 'Instagram' },
-                { icon: Globe, label: 'Twitter' },
-                { icon: Globe, label: 'YouTube' },
-              ].map(({ icon: Icon, label }) => (
-                <a
-                  key={label}
-                  href="#"
-                  aria-label={label}
-                  className="size-9 rounded-full bg-muted flex items-center justify-center text-muted-foreground hover:bg-primary hover:text-primary-foreground transition-colors duration-300"
-                >
-                  <Icon className="size-4" />
-                </a>
-              ))}
-            </div>
+            {socials.length > 0 && (
+              <ul className="mt-4 flex flex-wrap gap-x-5">
+                {socials.map((social) => (
+                  <li key={social.label}>
+                    <a
+                      href={social.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={linkClass}
+                    >
+                      {social.label}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
 
           <div>
-            <h3 className="text-sm font-semibold uppercase tracking-wider mb-4">Shop</h3>
-            <ul className="space-y-3">
-              {shopLinks.map((link) => (
-                <li key={link.label}>
-                  <Link
-                    route={link.route}
-                    className="text-sm text-muted-foreground hover:text-foreground transition-colors duration-200"
-                  >
-                    {link.label}
+            <h3 className={headingClass}>Shop</h3>
+            <ul>
+              <li>
+                <Link route="men" className={linkClass}>
+                  Men
+                </Link>
+              </li>
+              <li>
+                <Link route="women" className={linkClass}>
+                  Women
+                </Link>
+              </li>
+              <li>
+                <Link route="search" className={linkClass}>
+                  All products
+                </Link>
+              </li>
+              {shopRegistrationOpen && (
+                <li>
+                  <Link route="ui.auth.shop.shop_registration.create" className={linkClass}>
+                    Sell on Drip Nepal
                   </Link>
                 </li>
-              ))}
+              )}
             </ul>
           </div>
 
           <div>
-            <h3 className="text-sm font-semibold uppercase tracking-wider mb-4">Help</h3>
-            <ul className="space-y-3">
-              {helpLinks.map((link) => (
-                <li key={link.label}>
-                  <a
-                    href={link.href}
-                    className="text-sm text-muted-foreground hover:text-foreground transition-colors duration-200"
-                  >
-                    {link.label}
-                  </a>
-                </li>
-              ))}
+            <h3 className={headingClass}>Help</h3>
+            <ul>
+              <li>
+                <Link route="orders.track" className={linkClass}>
+                  Track order
+                </Link>
+              </li>
+              <li>
+                <Link route="account.orders.index" className={linkClass}>
+                  My orders
+                </Link>
+              </li>
+              <li>
+                <Link route="legal.returns" className={linkClass}>
+                  Returns and refunds
+                </Link>
+              </li>
+              <li>
+                <Link route="legal.terms" className={linkClass}>
+                  Terms
+                </Link>
+              </li>
+              <li>
+                <Link route="legal.privacy" className={linkClass}>
+                  Privacy
+                </Link>
+              </li>
             </ul>
           </div>
 
-          <div>
-            <h3 className="text-sm font-semibold uppercase tracking-wider mb-4">About</h3>
-            <ul className="space-y-3">
-              {aboutLinks.map((link) => (
-                <li key={link.label}>
-                  <a
-                    href={link.href}
-                    className="text-sm text-muted-foreground hover:text-foreground transition-colors duration-200"
-                  >
-                    {link.label}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
+          {hasContact && (
+            <div className="col-span-2 lg:col-span-1">
+              <h3 className={headingClass}>Contact</h3>
+              <ul>
+                {support.whatsapp && (
+                  <li>
+                    <a
+                      href={support.whatsapp}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={linkClass}
+                    >
+                      WhatsApp
+                    </a>
+                  </li>
+                )}
+                {support.phone && (
+                  <li>
+                    <a href={`tel:${support.phone.replace(/\s/g, '')}`} className={linkClass}>
+                      {support.phone}
+                    </a>
+                  </li>
+                )}
+                {support.email && (
+                  <li>
+                    <a href={`mailto:${support.email}`} className={linkClass}>
+                      {support.email}
+                    </a>
+                  </li>
+                )}
+              </ul>
+            </div>
+          )}
         </div>
 
         <Separator className="my-8" />
 
-        <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-          <p className="text-xs text-muted-foreground">
-            &copy; {new Date().getFullYear()} Drip Nepal. All rights reserved.
-          </p>
-
-          <div className="flex items-center gap-4">
-            <a
-              href="#"
-              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Privacy Policy
-            </a>
-            <span className="text-muted-foreground/30">&middot;</span>
-            <a
-              href="#"
-              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Terms of Service
-            </a>
-          </div>
-        </div>
+        <p className="text-xs text-muted-foreground">
+          &copy; {new Date().getFullYear()} Drip Nepal. Cash on delivery across Nepal.
+        </p>
       </div>
     </footer>
   )
