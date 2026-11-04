@@ -175,6 +175,47 @@ test.group('Order status: the customer cancels [v1]', (group) => {
     assert.equal(message, 'This order is already cancelled.')
     assert.equal(await stockOf(variant), 5)
   })
+
+  /*
+   * Once the customer cancels, the stock is back on the shelf and the COD
+   * payment is voided, so a confirm that got through would revive an order
+   * whose units may already be sold again. The shop's copy is loaded the way
+   * its dashboard loads it: after the cancel, or before it (a page left open).
+   */
+  test("the shop can't confirm an order its customer already cancelled: {when}")
+    .with([
+      {
+        when: 'shop opens the order after the cancel',
+        loadedBeforeCancel: false,
+        refusedWith: "An order that is cancelled can't be marked confirmed",
+      },
+      {
+        when: 'shop page was loaded while it was pending',
+        loadedBeforeCancel: true,
+        refusedWith: 'This order was just updated. Reload and try again.',
+      },
+    ])
+    .run(async ({ assert }, { loadedBeforeCancel, refusedWith }) => {
+      const { customer, shop, variant, order } = await placedOrder(2)
+      const orders = new OrderService()
+      const earlyShopCopy = loadedBeforeCancel
+        ? await orders.findForShop(shop, order.orderNumber)
+        : null
+
+      const customerCopy = await orders.findForCustomer(customer, order.orderNumber)
+      await orders.cancelByCustomer(customerCopy)
+      assert.equal(await stockOf(variant), 5)
+
+      const shopCopy = earlyShopCopy ?? (await orders.findForShop(shop, order.orderNumber))
+      const message = await refusal(orders.transition(shopCopy, OrderStatus.CONFIRMED))
+
+      assert.equal(message, refusedWith)
+      const after = await reload(order)
+      assert.equal(after.status, OrderStatus.CANCELLED)
+      assert.equal(after.paymentStatus, PaymentStatus.VOIDED)
+      assert.equal(after.payments[0].status, PaymentStatus.VOIDED)
+      assert.equal(await stockOf(variant), 5)
+    })
 })
 
 test.group('Order access [v1]', (group) => {
