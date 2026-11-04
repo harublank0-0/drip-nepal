@@ -33,7 +33,7 @@ Each rule names its owner; read it there before relying on the summary.
 
 ## Issues and pull requests
 
-Work is tracked in GitHub Issues: one GitHub milestone per milestone of [docs/12](docs/12-roadmap-and-backlog.md), epics as issues with sub-issues. Name a branch after its issue (`<issue number>-<short-kebab-summary>`, as `gh issue develop` creates it), close the issue from the pull request with `Closes #NN`, and follow the commit and merge rules of [docs/09 §11](docs/09-code-structure-and-engineering-standards.md#11-lint-format-typecheck-and-review). Report a security problem through a private security advisory, never a public issue.
+Work is tracked in GitHub Issues: one GitHub milestone per milestone of [docs/12](docs/12-roadmap-and-backlog.md), epics as issues with sub-issues. Name a branch after its issue (`<issue number>-<short-kebab-summary>`, as `gh issue develop` creates it), close the issue from the pull request with `Closes #NN`, and follow the commit and merge rules of [docs/09 §11](docs/09-code-structure-and-engineering-standards.md#11-lint-format-typecheck-and-review). Before opening a pull request, have a Fable-model reviewer review its final commit, fix what it finds and record the review; a hook in `.claude/settings.json` blocks the pull request otherwise ([docs/09 §11.5](docs/09-code-structure-and-engineering-standards.md#115-pull-request-template-and-review-checklist)). Report a security problem through a private security advisory, never a public issue.
 
 ## When the code and the documents disagree
 
