@@ -7,6 +7,7 @@ import testUtils from '@adonisjs/core/services/test_utils'
 import { browserClient } from '@japa/browser-client'
 import { authBrowserClient } from '@adonisjs/auth/plugins/browser_client'
 import { sessionBrowserClient } from '@adonisjs/session/plugins/browser_client'
+import { prepareTestDatabase } from '#tests/support/database'
 
 /**
  * This file is imported by the "bin/test.ts" entrypoint file
@@ -40,9 +41,26 @@ export const runnerHooks: Required<Pick<Config, 'setup' | 'teardown'>> = {
 /**
  * Configure suites by tapping into the test suite instance.
  * Learn more - https://japa.dev/docs/test-suites#lifecycle-hooks
+ *
+ * Suites that touch the database rebuild it once per run (docs/10 §3.2).
+ * Functional tests each run inside a global transaction that is rolled
+ * back afterwards; the service transactions become savepoints of it. The
+ * concurrency suite commits for real on separate connections, because a
+ * global transaction would serialise its parallel calls on one connection
+ * and hide the races it exists to find (docs/10 §3.3).
  */
 export const configureSuite: Config['configureSuite'] = (suite) => {
-  if (['browser', 'functional', 'e2e'].includes(suite.name)) {
+  if (['functional', 'concurrency', 'browser'].includes(suite.name)) {
+    suite.setup(() => prepareTestDatabase())
+  }
+
+  if (suite.name === 'functional') {
+    const wrap = () => testUtils.db().wrapInGlobalTransaction()
+    suite.onGroup((group) => group.each.setup(wrap))
+    suite.onTest((t) => t.setup(wrap))
+  }
+
+  if (['browser', 'functional', 'concurrency', 'e2e'].includes(suite.name)) {
     return suite.setup(() => testUtils.httpServer().start())
   }
 }

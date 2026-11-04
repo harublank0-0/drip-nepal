@@ -1,19 +1,20 @@
-# CI for the v1 store (the single-seller launch line). Runs on pushes to v1
-# and on pull requests into it. Actions are pinned by commit SHA; the release
-# tag is in the comment. No secrets are used.
-name: ci-v1
+# CI for the store. Runs on pushes to main and v1 and on pull requests into
+# either: v1 was merged into main (#142), so pull requests now target main.
+# Actions are pinned by commit SHA; the release tag is in the comment. No
+# secrets are used.
+name: ci
 
 on:
   push:
-    branches: [v1]
+    branches: [main, v1]
   pull_request:
-    branches: [v1]
+    branches: [main, v1]
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-v1-${{ github.ref }}
+  group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -42,6 +43,56 @@ jobs:
         run: |
           node ace build
           test -f build/ssr/ssr.js
+
+  # The unit, functional and concurrency suites against PostgreSQL 18.4, the
+  # production version (docs/10 §3.2). The test runner rebuilds the
+  # dripnepal_test database at the start of every run.
+  tests:
+    name: Tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: docker.io/postgres:18.4
+        env:
+          POSTGRES_USER: dripnepal
+          POSTGRES_PASSWORD: secret
+          POSTGRES_DB: dripnepal_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U dripnepal -d dripnepal_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      TZ: UTC
+      PORT: 3333
+      HOST: localhost
+      LOG_LEVEL: warn
+      APP_URL: http://localhost:3333
+      SESSION_DRIVER: memory
+      DRIVE_DISK: fs
+      LIMITER_STORE: database
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_USER: dripnepal
+      DB_PASSWORD: secret
+      DB_DATABASE: dripnepal_test
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+      # A throwaway key for this run only; it signs nothing that outlives it.
+      - name: App key for the test run
+        run: echo "APP_KEY=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+      - name: Unit, functional and concurrency suites
+        run: pnpm test
 
   image:
     name: Docker image

@@ -99,6 +99,11 @@ export default defineConfig({
         timeout: 30000,
       },
       {
+        files: ['tests/concurrency/**/*.spec.{ts,js}'],
+        name: 'concurrency',
+        timeout: 30000,
+      },
+      {
         files: ['tests/browser/**/*.spec.{ts,js}'],
         name: 'browser',
         timeout: 300000,

@@ -1259,7 +1259,7 @@ Within 5 working days: timeline, root cause, what detected it and how late, whic
 
 ## 7. Secure development lifecycle hooks
 
-CI itself is owned by [10](10-testing-and-quality-gates.md); there is no CI today (RF-09 [Verified-repo: no `.github` directory]). These are the security gates it must include.
+CI itself is owned by [10](10-testing-and-quality-gates.md); today `ci.yml` runs only the v1 checks that 10 §5 lists. These are the security gates it must include.
 
 ### 7.1 Dependency policy
 
