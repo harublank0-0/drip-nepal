@@ -50,6 +50,32 @@ function recordingAlerts(onCall?: (orderNumbers: string[]) => Promise<void> | vo
   }
 }
 
+/*
+ * A mailer that holds each send until `together` sends are in flight at
+ * once (or 500 ms pass), and counts the most it saw at the same time.
+ * Sending one after another never gets past one; sending in parallel
+ * reaches `together`, whatever order the orders come in.
+ */
+function overlapCountingMailer(together: number) {
+  let inFlight = 0
+  let most = 0
+  let sent = 0
+  let release!: () => void
+  const allIn = new Promise<void>((resolve) => (release = resolve))
+  return {
+    async send() {
+      inFlight++
+      most = Math.max(most, inFlight)
+      if (inFlight >= together) release()
+      await Promise.race([allIn, new Promise((resolve) => setTimeout(resolve, 500))])
+      inFlight--
+      sent++
+    },
+    mostAtOnce: () => most,
+    sent: () => sent,
+  }
+}
+
 test.group('Order alerts: checkout triggers them [v1]', (group) => {
   group.tap((t) => t.tags(['@v1']))
 
@@ -207,6 +233,43 @@ test.group('Order alerts: the email [v1]', (group) => {
 
 test.group('Order alerts: when sending fails [v1]', (group) => {
   group.tap((t) => t.tags(['@v1']))
+
+  test("one shop's email doesn't wait for another's: they are sent together", async ({
+    assert,
+  }) => {
+    const { buyer } = await twoShopCheckout()
+    const { orderNumbers } = await new CheckoutService(
+      new CartService(),
+      recordingAlerts().alerts
+    ).placeOrders(buyer, { address: addressPayload() })
+    const mailer = overlapCountingMailer(2)
+
+    await new OrderAlerts({ enabled: true, mailer, retryDelaysMs: [0, 0] }).sendNewOrderAlerts(
+      orderNumbers
+    )
+
+    assert.equal(mailer.mostAtOnce(), 2, 'both emails were in flight at the same time')
+  })
+
+  test('a checkout with many shops sends at most three emails at once', async ({ assert }) => {
+    const buyer = guestOwner()
+    for (let shop = 0; shop < 5; shop++) {
+      await fillCart(buyer, [{ variant: await createVariant(await createShop()), quantity: 1 }])
+    }
+    const { orderNumbers } = await new CheckoutService(
+      new CartService(),
+      recordingAlerts().alerts
+    ).placeOrders(buyer, { address: addressPayload() })
+    const mailer = overlapCountingMailer(3)
+
+    await new OrderAlerts({ enabled: true, mailer, retryDelaysMs: [0, 0] }).sendNewOrderAlerts(
+      orderNumbers
+    )
+
+    assert.lengthOf(orderNumbers, 5)
+    assert.equal(mailer.sent(), 5)
+    assert.equal(mailer.mostAtOnce(), 3)
+  })
 
   test('a failed send is retried, and given up after three attempts without throwing', async ({
     assert,
