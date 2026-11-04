@@ -45,7 +45,11 @@ export default class ShopDashboardController {
         .select('p.id as productId', 'p.name', 'pv.sku', 'pv.quantity')
         .orderBy('pv.quantity', 'asc')
         .limit(8),
-      this.orders.detailQuery().where('shop_id', shop.id).orderBy('created_at', 'desc').limit(5),
+      this.orders
+        .shopDetailQuery()
+        .where('shop_id', shop.id)
+        .orderBy('created_at', 'desc')
+        .limit(5),
     ])
 
     return inertia.render('shops/dashboard/index', {
@@ -63,7 +67,7 @@ export default class ShopDashboardController {
         sku: row.sku as string,
         quantity: Number(row.quantity),
       })),
-      recentOrders: OrderTransformer.transform(recentOrders),
+      recentOrders: OrderTransformer.transform(recentOrders).useVariant('forShop'),
     })
   }
 }
