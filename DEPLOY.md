@@ -117,6 +117,19 @@ Set `APP_RELEASE` in `.env.production` to the same tag before the `up` command. 
 
 To roll back, check out the previous tag and run the same `up` command. Rolling back the code does not undo a migration, so take a database backup (next section) before deploying a release that adds one.
 
+## One-time steps after a release
+
+Some releases need a command run once after deploying them. Take a backup first (next section).
+
+- **The release that adds photo resizing.** Photos uploaded earlier are still the full-size originals, with any GPS location the phone saved. Convert them to the resized WebP files and delete the originals:
+
+  ```bash
+  docker compose -f docker-compose.prod.yml --env-file .env.production exec app \
+    node ace media:optimize
+  ```
+
+  It prints how many photos it converted and lists any it couldn't, which are left as they were. Running it again is safe: converted photos are skipped. New uploads are resized as they come in, so you never need to run it again.
+
 ## Backups
 
 Back up both the database and the photos. Run this daily, for example from cron:
