@@ -5,6 +5,7 @@ import type { InertiaProps } from '~/types'
 import CustomersLayout from '~/layouts/customers_layout'
 import RootLayout from '~/layouts/root_layout'
 import { Separator } from '~/components/ui/separator'
+import { SocialMeta } from '~/components/seo/social_meta'
 import { MobileAddToCartBar } from './components/mobile_add_to_cart_bar'
 import { ProductDescription } from './components/product_description'
 import { ProductGallery } from './components/product_gallery'
@@ -17,6 +18,11 @@ type PageProps = InertiaProps<{
   product: Data.Product
   related: Data.ProductCard[]
 }>
+
+function lowestPrice(product: Data.Product) {
+  const prices = (product.variants ?? []).map((variant) => variant.price)
+  return prices.length > 0 ? Math.min(...prices) : undefined
+}
 
 export default function ProductDetailPage({ product, related }: PageProps) {
   const selection = useVariantSelection(product.variants)
@@ -42,6 +48,16 @@ export default function ProductDetailPage({ product, related }: PageProps) {
   return (
     <>
       <Head title={product.name} />
+      <SocialMeta
+        type="product"
+        title={product.name}
+        description={
+          product.description ||
+          `${product.name} from ${product.shop?.name ?? 'Drip Nepal'}. Cash on delivery across Nepal.`
+        }
+        image={product.media?.[0]?.url}
+        price={lowestPrice(product)}
+      />
 
       <div className="mx-auto max-w-7xl px-4 pt-6 pb-8 md:px-8 md:pt-10 md:pb-16">
         <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:gap-12 xl:gap-16">
