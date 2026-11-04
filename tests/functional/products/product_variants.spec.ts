@@ -208,6 +208,22 @@ test.group('Product form variants [v1]', (group) => {
     assertFieldError(assert, error, /^variants\.[01]\.sku$/, 'give one a temporary SKU')
   })
 
+  test('giving up a SKU and reusing it in one save is refused, saying how', async ({ assert }) => {
+    const shop = await createShop()
+    const sku = `MOVE-A-${Date.now()}`
+    const product = await new ProductService().create(shop, await payload([{ size: 'M', sku }]))
+    const medium = await variantSized(product, 'M')
+
+    const error = await refusal(
+      save(shop, product, [
+        { ...kept(medium), sku: `MOVE-B-${Date.now()}` },
+        { size: 'L', sku },
+      ])
+    )
+
+    assertFieldError(assert, error, /^variants\.1\.sku$/, 'Save that change first')
+  })
+
   test("the shop's other product's SKU is refused, naming the product", async ({ assert }) => {
     const shop = await createShop()
     const sku = `KURTA-M-${Date.now()}`

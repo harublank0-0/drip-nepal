@@ -41,16 +41,13 @@ export default function ShopSignupPage({ success: isSuccess, shopSlug }: PagePro
       onSubmit: onboardingSchema,
     },
     listeners: {
-      onChange: ({ fieldApi }) => {
-        // A new shop name also makes a new shop URL (step_shop_info.tsx).
-        const changed =
-          fieldApi.name === 'shopName' ? ['shopName', 'shopSlug'] : [String(fieldApi.name)]
+      // Also when the form sets a field: a new shop name sets a new shop URL.
+      onChange: ({ fieldApi }) =>
         setRefusals((current) =>
-          current.some(({ field }) => changed.includes(field))
-            ? current.filter(({ field }) => !changed.includes(field))
+          current.some(({ field }) => field === fieldApi.name)
+            ? current.filter(({ field }) => field !== fieldApi.name)
             : current
-        )
-      },
+        ),
     },
     onSubmit: async ({ value }) => {
       setIsSubmitting(true)

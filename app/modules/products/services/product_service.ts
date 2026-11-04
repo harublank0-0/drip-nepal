@@ -387,22 +387,34 @@ export default class ProductService {
         'products.name',
         'products.deleted_at'
       )
-    const keptIds = new Set(inputs.map((input) => input.id).filter(Boolean))
-
     for (const holder of holders) {
       const index = seenSkus.get(holder.sku)!
       if (holder.id === inputs[index].id || holder.id === restored.get(index)?.id) continue
-      fieldError(`variants.${index}.sku`, this.#skuClash(holder, product, keptIds))
+      // The holder's row in this save, and whether it takes this row's SKU
+      // in return (a swap).
+      const holderRow = inputs.find((input) => input.id === holder.id)
+      const swap =
+        holderRow?.sku !== undefined &&
+        holderRow.sku === existingById.get(inputs[index].id ?? '')?.sku
+      fieldError(`variants.${index}.sku`, this.#skuClash(holder, product, holderRow, swap))
     }
   }
 
-  #skuClash(holder: SkuHolder, product: Product, keptIds: Set<string | undefined>) {
+  #skuClash(
+    holder: SkuHolder,
+    product: Product,
+    holderRow: VariantInput | undefined,
+    swap: boolean
+  ) {
     if (holder.product_id === product.id) {
       if (holder.status === VariantStatus.ARCHIVED) {
         return 'A variant you removed from this product still has this SKU. Use another SKU.'
       }
-      if (keptIds.has(holder.id)) {
-        return "Another variant of this product has this SKU until this save. Two variants can't swap SKUs in one save: give one a temporary SKU and save, then set the final SKUs."
+      if (swap) {
+        return "Two variants can't swap SKUs in one save: give one a temporary SKU and save, then set the final SKUs."
+      }
+      if (holderRow) {
+        return 'Another variant of this product has this SKU until this save. Save that change first, then use the SKU here.'
       }
       return 'A variant you are removing has this SKU. Save the removal first, then add the variant again.'
     }
