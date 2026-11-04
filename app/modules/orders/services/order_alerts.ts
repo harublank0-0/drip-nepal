@@ -6,6 +6,11 @@ import NewOrderAlert from '#modules/orders/mails/new_order_alert'
 
 type AlertMailer = { send(alert: NewOrderAlert): Promise<unknown> }
 
+// Emails sent at once for one checkout. Mail servers limit concurrent
+// connections (each send opens one), so a checkout with many shops sends
+// a few at a time rather than all together.
+const PARALLEL_SENDS = 3
+
 let warnedNotConfigured = false
 
 /*
@@ -21,15 +26,18 @@ let warnedNotConfigured = false
  */
 export default class OrderAlerts {
   #enabled: boolean
+  // Off because mail isn't configured, not because the caller turned it off.
+  #offForLackOfMail: boolean
   #mailer: AlertMailer
   #retryDelaysMs: number[]
 
   constructor({
-    enabled = isMailConfigured(),
+    enabled,
     mailer = { send: (alert: NewOrderAlert) => mail.send(alert) },
     retryDelaysMs = [30_000, 90_000],
   }: { enabled?: boolean; mailer?: AlertMailer; retryDelaysMs?: number[] } = {}) {
-    this.#enabled = enabled
+    this.#enabled = enabled ?? isMailConfigured()
+    this.#offForLackOfMail = enabled === undefined && !this.#enabled
     this.#mailer = mailer
     this.#retryDelaysMs = retryDelaysMs
   }
@@ -44,7 +52,7 @@ export default class OrderAlerts {
    */
   async sendNewOrderAlerts(orderNumbers: string[]) {
     if (!this.#enabled) {
-      if (!warnedNotConfigured) {
+      if (this.#offForLackOfMail && !warnedNotConfigured) {
         warnedNotConfigured = true
         logger.warn('Mail is not configured (SMTP_HOST, MAIL_FROM): new-order emails are off')
       }
@@ -57,9 +65,15 @@ export default class OrderAlerts {
         .preload('items')
         .preload('shop', (shop) => shop.preload('owner'))
 
-      // In parallel: one shop's failing email (and its retries) must not
-      // hold up the other shops' emails from the same checkout.
-      await Promise.all(orders.map((order) => this.#sendWithRetries(order)))
+      // A few at a time, so one shop's failing email (and its retries)
+      // doesn't hold up the other shops' emails from the same checkout.
+      const waiting = [...orders]
+      const sender = async () => {
+        for (let order = waiting.shift(); order; order = waiting.shift()) {
+          await this.#sendWithRetries(order)
+        }
+      }
+      await Promise.all(Array.from({ length: Math.min(PARALLEL_SENDS, waiting.length) }, sender))
     } catch (error) {
       logger.error(
         { orderNumbers, err: (error as Error).name },
