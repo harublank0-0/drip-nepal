@@ -32,6 +32,8 @@ type VariantRow = {
   price: string
   comparePrice: string
   quantity: string
+  // The stock the form showed for an existing variant (docs/05 §5.9).
+  expectedQuantity?: string
 }
 
 type ProductFormData = {
@@ -72,6 +74,7 @@ function toVariantRow(variant: Data.ProductVariant): VariantRow {
     price: String(variant.price),
     comparePrice: variant.comparePrice === null ? '' : String(variant.comparePrice),
     quantity: String(variant.quantity),
+    expectedQuantity: String(variant.quantity),
   }
 }
 
@@ -99,6 +102,41 @@ export default function ShopProductFormPage({ product, categories }: PageProps) 
   })
 
   const errors = form.errors as Record<string, string | undefined>
+
+  /*
+   * Customers can buy while this form is open. When fresh page data comes
+   * back (a save the server refused, for example), a stock number the
+   * seller didn't touch takes the current stock, so the form never sends
+   * an old number back. A number the server refused because the stock
+   * changed keeps what the seller typed, and the stock they were just told
+   * becomes the one the form showed, so saving again applies it. Inertia
+   * sets the errors after the new page data, so this runs on both.
+   */
+  const shownProduct = useRef(product)
+  useEffect(() => {
+    if (!product) return
+    const productChanged = product !== shownProduct.current
+    shownProduct.current = product
+    const current = new Map(
+      (product.variants ?? []).map((variant) => [variant.id, String(variant.quantity)])
+    )
+    let changed = false
+    const variants = form.data.variants.map((row, index) => {
+      const stock = row.id ? current.get(row.id) : undefined
+      if (stock === undefined) return row
+      if (productChanged && row.quantity === row.expectedQuantity && row.quantity !== stock) {
+        changed = true
+        return { ...row, quantity: stock, expectedQuantity: stock }
+      }
+      const refused = errors[`variants.${index}.expectedQuantity`]
+      if (refused && row.expectedQuantity !== stock) {
+        changed = true
+        return { ...row, expectedQuantity: stock }
+      }
+      return row
+    })
+    if (changed) form.setData('variants', variants)
+  }, [product, errors, form])
 
   const keptMedia = useMemo(
     () =>
@@ -367,7 +405,7 @@ export default function ShopProductFormPage({ product, categories }: PageProps) 
                           step="1"
                           value={variant.quantity}
                           onChange={(event) => updateVariant(index, 'quantity', event.target.value)}
-                          aria-invalid={Boolean(error('quantity'))}
+                          aria-invalid={Boolean(error('quantity') || error('expectedQuantity'))}
                         />
                       </div>
                       <div className="space-y-1">
@@ -398,11 +436,18 @@ export default function ShopProductFormPage({ product, categories }: PageProps) 
                         </div>
                       </div>
                     </div>
-                    {['size', 'color', 'price', 'comparePrice', 'quantity', 'sku', 'id'].map(
-                      (field) => (
-                        <FieldMessage key={field} message={error(field)} />
-                      )
-                    )}
+                    {[
+                      'size',
+                      'color',
+                      'price',
+                      'comparePrice',
+                      'quantity',
+                      'expectedQuantity',
+                      'sku',
+                      'id',
+                    ].map((field) => (
+                      <FieldMessage key={field} message={error(field)} />
+                    ))}
                   </div>
                 )
               })}

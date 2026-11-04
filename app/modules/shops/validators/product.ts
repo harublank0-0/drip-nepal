@@ -17,6 +17,8 @@ const variant = vine.object({
   price: money(),
   comparePrice: money().optional().nullable(),
   quantity: vine.number().withoutDecimals().min(0).max(1_000_000),
+  // The stock the form showed for an existing variant (docs/05 §5.9).
+  expectedQuantity: vine.number().withoutDecimals().min(0).max(1_000_000).optional(),
 })
 
 /*
