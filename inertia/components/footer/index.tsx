@@ -24,7 +24,7 @@ export function Footer() {
           <div className="col-span-2">
             <Link route="home" aria-label="Drip Nepal home">
               <div className="uppercase text-3xl md:text-4xl font-bold tracking-tight mb-3">
-                <span className="text-white">drip</span>
+                <span className="text-foreground">drip</span>
                 <span className="text-primary">nepal</span>
               </div>
             </Link>

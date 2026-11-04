@@ -10,7 +10,7 @@ export default function CustomersLayout({
   return (
     <>
       <NavBar />
-      <main id="main-content" className="pt-18">
+      <main id="main-content" className="pt-17 md:pt-18">
         {children}
       </main>
       <Footer />

@@ -1,6 +1,7 @@
 import app from '@adonisjs/core/services/app'
 import { BaseSeeder } from '@adonisjs/lucid/seeders'
 import db from '@adonisjs/lucid/services/db'
+import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
 import Attribute from '#models/attribute'
 import AttributeValue from '#models/attribute_value'
 import Category from '#models/category'
@@ -31,7 +32,7 @@ const PHOTOS = {
   accessories: photo('1512436991641-6745cdb1723f'),
   traditional: photo('1610030469983-98e550d6193c'),
   kurta: photo('1594633312681-425c7b97ccd1'),
-  saree: photo('1610189002636-9f9d8dba2d91'),
+  saree: photo('1617627143750-d86bc21e42bb'),
   women: photo('1496747611176-843222e1e57c'),
   men: photo('1500648767791-00dcc994a43e'),
 }
@@ -313,7 +314,7 @@ const SHOPS: { name: string; slug: string; description: string; products: DemoPr
 /*
  * Demo vendor, three approved shops and 24 products with variants and
  * photos, so the storefront has something to show in development. Also a
- * platform admin for approving shops.
+ * platform admin and one shop waiting for approval.
  *
  * Vendor login: demo@dripnepal.com / dripnepal
  * Admin login:  admin@dripnepal.com / dripnepal
@@ -323,18 +324,11 @@ export default class extends BaseSeeder {
 
   async run() {
     await this.#ensureAdmin()
-    if (await User.findBy('email', 'demo@dripnepal.com')) return
+    await this.#ensurePendingShop()
+    if (await Shop.findBy('slug', SHOPS[0].slug)) return
 
     await db.transaction(async (trx) => {
-      const owner = await User.create(
-        {
-          fullName: 'Demo Vendor',
-          email: 'demo@dripnepal.com',
-          password: 'dripnepal',
-          phone: '9800000001',
-        },
-        { client: trx }
-      )
+      const owner = await this.#ensureVendor(trx)
 
       const allCategories = await Category.all()
       const categories = new Map(allCategories.map((category) => [category.slug, category]))
@@ -456,6 +450,33 @@ export default class extends BaseSeeder {
     if (!app.inTest) {
       console.log('Demo catalog seeded. Vendor login: demo@dripnepal.com / dripnepal')
     }
+  }
+
+  #ensureVendor(trx?: TransactionClientContract) {
+    return User.firstOrCreate(
+      { email: 'demo@dripnepal.com' },
+      {
+        fullName: 'Demo Vendor',
+        password: 'dripnepal',
+        phone: '9800000001',
+      },
+      { client: trx }
+    )
+  }
+
+  async #ensurePendingShop() {
+    const owner = await this.#ensureVendor()
+    await Shop.firstOrCreate(
+      { slug: 'bhaktapur-crafts' },
+      {
+        ownerId: owner.id,
+        name: 'Bhaktapur Crafts',
+        description: 'Hand-printed scarves and lokta paper goods from Bhaktapur.',
+        email: 'hello@bhaktapur-crafts.example',
+        phone: '9800000113',
+        status: ShopStatus.PENDING,
+      }
+    )
   }
 
   async #ensureAdmin() {

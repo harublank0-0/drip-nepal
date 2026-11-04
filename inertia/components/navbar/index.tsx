@@ -134,7 +134,7 @@ export const NavBar = () => {
                 'backdrop-blur-xl',
                 scrolled
                   ? 'bg-black/80 border-b border-white/10 shadow-lg shadow-black/20'
-                  : 'bg-transparent'
+                  : 'bg-black'
               )
             : 'bg-black border-b border-white/10'
         )}
