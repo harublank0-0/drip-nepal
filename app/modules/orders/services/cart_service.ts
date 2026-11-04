@@ -53,11 +53,26 @@ export default class CartService {
     return query.orderBy('created_at', 'asc').first()
   }
 
-  async getOrCreateCart(owner: CartOwner) {
+  /*
+   * Takes the shopper's cart lock for the rest of the transaction. Every
+   * cart write and checkout takes it first, so two requests for one cart
+   * (a double tap, two tabs) run one after the other and the second sees
+   * what the first did: no second cart, no order placed twice. It is a
+   * PostgreSQL advisory lock, so it works before the cart row exists, and
+   * it is released at commit or rollback. Checkout takes it before any
+   * variant lock, and nothing takes it after one, so it can't deadlock.
+   */
+  async lockOwner(owner: CartOwner, trx: TransactionClientContract) {
+    const key = 'userId' in owner ? `cart:user:${owner.userId}` : `cart:guest:${owner.guestToken}`
+    await trx.rawQuery('SELECT pg_advisory_xact_lock(hashtextextended(?, 0))', [key])
+  }
+
+  async getOrCreateCart(owner: CartOwner, trx: TransactionClientContract) {
     return (
-      (await this.findCart(owner)) ??
+      (await this.findCart(owner, trx)) ??
       (await Cart.create(
-        'userId' in owner ? { userId: owner.userId } : { sessionId: owner.guestToken }
+        'userId' in owner ? { userId: owner.userId } : { sessionId: owner.guestToken },
+        { client: trx }
       ))
     )
   }
@@ -96,6 +111,8 @@ export default class CartService {
    */
   async adoptGuestCart(token: string, user: User) {
     await db.transaction(async (trx) => {
+      await this.lockOwner({ userId: user.id }, trx)
+      await this.lockOwner({ guestToken: token }, trx)
       const guestCart = await this.findCart({ guestToken: token }, trx)
       if (!guestCart) return
 
@@ -129,7 +146,19 @@ export default class CartService {
   }
 
   async add(owner: CartOwner, variantId: string, quantity: number) {
-    const variant = await ProductVariant.query()
+    return db.transaction(async (trx) => {
+      await this.lockOwner(owner, trx)
+      return this.#add(owner, variantId, quantity, trx)
+    })
+  }
+
+  async #add(
+    owner: CartOwner,
+    variantId: string,
+    quantity: number,
+    trx: TransactionClientContract
+  ) {
+    const variant = await ProductVariant.query({ client: trx })
       .where('id', variantId)
       .preload('product', (product) => product.preload('shop'))
       .first()
@@ -138,8 +167,8 @@ export default class CartService {
       fieldError('variantId', 'This item is no longer available')
     }
 
-    const cart = await this.getOrCreateCart(owner)
-    const existing = await CartItem.query()
+    const cart = await this.getOrCreateCart(owner, trx)
+    const existing = await CartItem.query({ client: trx })
       .where('cart_id', cart.id)
       .where('product_variant_id', variant.id)
       .first()
@@ -163,39 +192,53 @@ export default class CartService {
       return existing
     }
 
-    return CartItem.create({ cartId: cart.id, productVariantId: variant.id, quantity })
+    return CartItem.create(
+      { cartId: cart.id, productVariantId: variant.id, quantity },
+      { client: trx }
+    )
   }
 
   async update(owner: CartOwner | null, itemId: string, quantity: number) {
-    const item = await this.#findItem(owner, itemId)
-    if (quantity === 0) {
-      await item.delete()
-      return
-    }
+    await db.transaction(async (trx) => {
+      const item = await this.#findItem(owner, itemId, trx)
+      if (quantity === 0) {
+        await item.delete()
+        return
+      }
 
-    await item.load('productVariant')
-    const stock = item.productVariant.quantity
-    if (quantity > stock) {
-      fieldError(
-        'quantity',
-        stock === 0 ? 'This item is out of stock' : `Only ${stock} left in stock`
-      )
-    }
+      await item.load('productVariant')
+      const stock = item.productVariant.quantity
+      if (quantity > stock) {
+        fieldError(
+          'quantity',
+          stock === 0 ? 'This item is out of stock' : `Only ${stock} left in stock`
+        )
+      }
 
-    item.quantity = Math.min(quantity, MAX_QUANTITY_PER_ITEM)
-    await item.save()
+      item.quantity = Math.min(quantity, MAX_QUANTITY_PER_ITEM)
+      await item.save()
+    })
   }
 
   async remove(owner: CartOwner | null, itemId: string) {
-    const item = await this.#findItem(owner, itemId)
-    await item.delete()
+    await db.transaction(async (trx) => {
+      const item = await this.#findItem(owner, itemId, trx)
+      await item.delete()
+    })
   }
 
-  async #findItem(owner: CartOwner | null, itemId: string) {
-    const cart = await this.findCart(owner)
+  /*
+   * One of the shopper's cart items, under their cart lock.
+   */
+  async #findItem(owner: CartOwner | null, itemId: string, trx: TransactionClientContract) {
+    if (owner) await this.lockOwner(owner, trx)
+    const cart = await this.findCart(owner, trx)
     if (!cart) fieldError('item', 'This item is not in your cart')
 
-    const item = await CartItem.query().where('cart_id', cart.id).where('id', itemId).first()
+    const item = await CartItem.query({ client: trx })
+      .where('cart_id', cart.id)
+      .where('id', itemId)
+      .first()
     if (!item) fieldError('item', 'This item is not in your cart')
     return item
   }

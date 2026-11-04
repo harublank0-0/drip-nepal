@@ -79,16 +79,21 @@ export default class CheckoutService {
     const owner = 'user' in buyer ? { userId: buyer.user.id } : { guestToken: buyer.guestToken }
 
     return db.transaction(async (trx) => {
+      // A second submit of the same cart waits here, then finds it empty.
+      await this.cart.lockOwner(owner, trx)
       const items = await this.cart.items(owner, trx)
       if (items.length === 0) {
         checkoutError('cart', 'Your cart is empty')
       }
 
+      // Ascending id, so two checkouts never lock the same variants in
+      // opposite orders (docs/05 §4.4, T-CHK-009).
       const lockedVariants = await ProductVariant.query({ client: trx })
         .whereIn(
           'id',
           items.map((item) => item.productVariantId)
         )
+        .orderBy('id', 'asc')
         .forUpdate()
       const stockById = new Map(lockedVariants.map((variant) => [variant.id, variant]))
 
