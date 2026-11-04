@@ -10,14 +10,19 @@ import RootLayout from '~/layouts/root_layout'
  * keeps the shop's header and footer, where the contact details are, and
  * offers to try again (docs/08 §4.3).
  */
+
 /*
  * After a failed form submit (a POST to /api/v1/…), the address bar shows
- * the API address, which has no page: go back to the form instead of
- * reloading it.
+ * the API address, which has no page: go back to the form, which keeps
+ * what was typed where the page remembers it (checkout). An API address
+ * opened directly has nothing to go back to, so it is reloaded.
  */
 function tryAgain() {
-  if (window.location.pathname.startsWith('/api/')) window.history.back()
-  else window.location.reload()
+  if (window.location.pathname.startsWith('/api/') && window.history.length > 1) {
+    window.history.back()
+  } else {
+    window.location.reload()
+  }
 }
 
 export default function ServerError() {
