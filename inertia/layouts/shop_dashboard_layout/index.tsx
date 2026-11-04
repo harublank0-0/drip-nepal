@@ -14,9 +14,12 @@ function ShopDashboardShell({ children }: { children: ReactNode }) {
     <div className="flex min-h-screen">
       <Sidebar />
       <MobileNav />
+      {/* min-w-0: a flex item can't shrink below its content by default, so a
+          wide table or row would widen the whole page on phones (390px). With
+          it, tables scroll inside their own overflow-x-auto boxes instead. */}
       <div
         className={cn(
-          'flex flex-1 flex-col transition-all duration-200',
+          'flex min-w-0 flex-1 flex-col transition-all duration-200',
           sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-60'
         )}
       >

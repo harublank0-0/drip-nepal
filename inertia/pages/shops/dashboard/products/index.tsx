@@ -144,7 +144,9 @@ export default function ShopProductsPage({ products, filters }: PageProps) {
           )}
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border">
+        <div className="relative overflow-x-auto rounded-xl border">
+          {/* relative: makes this box the containing block of absolutely positioned
+              children such as sr-only labels, so they can't escape it and widen the page */}
           <table className="w-full text-sm">
             <thead className="bg-muted/40 text-left text-xs text-muted-foreground uppercase">
               <tr>
