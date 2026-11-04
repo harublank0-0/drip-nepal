@@ -10,7 +10,9 @@ Reviewed: 2026-09-25 · consistency review 2026-09-30 to 2026-10-04
 - **Date:** 2026-09-25
 - **Deciders:** product owner (OD-01), lead developer
 - **Supersedes / superseded by:** — / — (after the R1 launch the forward-only rule is permanent)
-- **Related open items:** VX-10 (location dataset for reference seeders); OD-01 was decided on 2026-09-30 (re-baseline)
+- **Related open items:** VX-10 (location dataset for reference seeders); OD-01 was decided on 2026-09-30 (re-baseline); OD-55 (v1 data into the baseline)
+
+Edited 2026-11-03: the product owner decided to sell from a single-seller v1 deployed from the prototype line before M0 ([risks §2.3](../risks-and-open-decisions.md#23-decision-log)). Once v1 holds real data, Assumption A-01 no longer holds and the first trigger under "When to revisit" fires. OD-55 decides whether this ADR is kept with a one-off import of the v1 data or superseded; the decision is otherwise unchanged.
 
 ## Context
 
