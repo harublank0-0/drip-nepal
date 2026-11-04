@@ -9,11 +9,10 @@ How to start the app with realistic data and look at it the way a customer or se
 
 ## 1. Database and environment
 
-The app uses the same PostgreSQL as the tests. If `pg_isready -h localhost` doesn't answer, follow steps 1 and 2 of the `dripnepal-testing` skill (Docker on a laptop; the PostgreSQL binaries in a cloud session; then `.env` with an `APP_KEY`). The development database is `dripnepal`, the `DB_DATABASE` in `.env`. Docker Compose creates it; without Docker, create it once:
+The app uses the same PostgreSQL as the tests. If `pg_isready -h localhost` doesn't answer, follow steps 1 and 2 of the `dripnepal-testing` skill (`pnpm install`; Docker on a laptop or the PostgreSQL cluster tools in a cloud session; then `.env` with an `APP_KEY`). The development database is `dripnepal`, the `DB_DATABASE` in `.env`. Docker Compose creates it; without Docker, create it once (an "already exists" error means it is there):
 
 ```bash
-psql -h localhost -U postgres -tc "select 1 from pg_database where datname='dripnepal'" | grep -q 1 \
-  || psql -h localhost -U postgres -c "create database dripnepal owner dripnepal"
+psql -h localhost -U postgres -c "create database dripnepal owner dripnepal encoding 'UTF8' template template0"
 ```
 
 ## 2. Schema and demo data

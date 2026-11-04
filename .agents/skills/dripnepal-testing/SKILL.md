@@ -20,26 +20,26 @@ How to get a test database, run the suites, and write tests that prove something
 
 ## 1. Get a database
 
+A fresh checkout has no `node_modules`: run `pnpm install` first (pnpm 11; `package.json` enforces it).
+
 Check first: `pg_isready -h localhost`. If it answers, skip to step 2.
 
-**With Docker (a developer laptop):** `docker compose up -d`. The init script in `docker/postgres/init/` creates `dripnepal_test` on a fresh volume. On an older volume, create it once: `docker compose exec postgres createdb -U dripnepal dripnepal_test`.
+**With Docker (a developer laptop):** `docker compose up -d`. Check for a running daemon with `docker info`, not `which docker`: a cloud session can have the command without the daemon. The init script in `docker/postgres/init/` creates `dripnepal_test` on a fresh volume. On an older volume, create it once: `docker compose exec postgres createdb -U dripnepal dripnepal_test`.
 
-**Without Docker (a Claude Code cloud session):** there is no Docker daemon, but PostgreSQL server binaries are often installed. Start one as the `postgres` user in a directory that user can reach (it cannot read the session scratchpad):
+**Without Docker (a Claude Code cloud session):** there is no Docker daemon, but the image (Ubuntu) has PostgreSQL server packages with Debian's cluster tools. Run these one at a time; each is safe to repeat:
 
 ```bash
-PGBIN=$(ls -d /usr/lib/postgresql/*/bin | sort -V | tail -1)
-D=/var/lib/postgresql/drip-test-data
-mkdir -p "$D" && chown postgres:postgres "$D"
-[ -f "$D/PG_VERSION" ] || su postgres -c "$PGBIN/initdb -D $D -U postgres --auth=trust"
-su postgres -c "$PGBIN/pg_ctl -D $D status" >/dev/null \
-  || su postgres -c "$PGBIN/pg_ctl -D $D -o '-p 5432 -k /tmp' -l $D/log start"
-psql -h localhost -U postgres -tc "select 1 from pg_roles where rolname='dripnepal'" | grep -q 1 \
-  || psql -h localhost -U postgres -c "create role dripnepal login password 'secret' superuser"
-psql -h localhost -U postgres -tc "select 1 from pg_database where datname='dripnepal_test'" | grep -q 1 \
-  || psql -h localhost -U postgres -c "create database dripnepal_test owner dripnepal"
+pg_lsclusters
+pg_createcluster 16 driptest -p 5432 -e UTF8 --locale C.UTF-8 -- --auth=trust
+pg_ctlcluster 16 driptest start
+psql -h localhost -U postgres -c "create role dripnepal login password 'secret' superuser"
+psql -h localhost -U postgres -c "create database dripnepal_test owner dripnepal encoding 'UTF8' template template0"
 ```
 
-The block is safe to rerun: each step checks before it acts. A restart of the session's worker stops this server; run the block again to bring it back.
+- Use the newest version `pg_lsclusters` or `ls /usr/lib/postgresql` shows in place of `16`. If `pg_lsclusters` already lists `driptest`, skip `pg_createcluster`; "already exists" errors from the two `psql` lines are fine.
+- Spell out UTF8. Without a locale in the environment, the server picks `SQL_ASCII`, which accepts invalid text that CI's UTF8 database rejects, so Nepali product text would behave differently.
+- Another cluster (usually `16/main`, stopped) may also be set to port 5432. Leave it stopped.
+- A restart of the session's worker stops the server; `pg_ctlcluster 16 driptest start` brings it back with its data.
 
 Production and CI run PostgreSQL 18.4. An older local server (16 is common) runs the current migrations, but say which version you ran on when you report results, because CI is the first run on 18.4.
 
@@ -49,7 +49,7 @@ Production and CI run PostgreSQL 18.4. An older local server (16 is common) runs
 
 ```bash
 cp .env.example .env
-sed -i "s|^APP_KEY=.*|APP_KEY=$(openssl rand -base64 32)|" .env
+node ace generate:key
 ```
 
 `.env.test` (committed) switches to `NODE_ENV=test`, `SESSION_DRIVER=memory` and `DB_DATABASE=dripnepal_test`. CI has no `.env`: the "Tests" job in `.github/workflows/ci.yml` sets the same variables in its `env:` block.
@@ -61,9 +61,11 @@ pnpm test                                                   # every suite
 node ace test functional                                    # one suite
 node ace test functional --files=tests/functional/orders/cart.spec.ts
 node ace test --groups="Order access [v1]"                  # one group, by its exact title
-node ace test --tests="cancelling twice is refused the second time"
+node ace test --tests="cancelling twice is refused the second time"   # exact title
 node ace test --tags=@v1                                    # every v1 test
 ```
+
+`--tests` matches a test's title exactly as written in the file. For a test with a dataset, that is the template with its placeholder, such as `--tests="cancelling puts the stock back and voids the COD payment: {from}"`, not the expanded name the runner prints.
 
 Reading the output:
 
@@ -101,8 +103,10 @@ const error = await service.placeOrders(buyer, payload).then(
 assert.instanceOf(error, vineErrors.E_VALIDATION_ERROR)
 assert.match(error.messages[0].message, /just sold out/)
 
-// Pass a function to assert.rejects, never a promise created earlier: a promise
-// that rejects before anything awaits it is an unhandled rejection.
+// assert.rejects takes a function. Don't build a list of promises and await them
+// one by one: one that rejects before it is awaited is an unhandled rejection.
+// Handing a promise straight to a helper that attaches .then() at once, like
+// refusal() in order_status.spec.ts, is fine.
 await assert.rejects(() => orders.findForShop(otherShop, number), lucidErrors.E_ROW_NOT_FOUND)
 
 // `(await x).y` fails @unicorn/no-await-expression-member: assign first.
