@@ -15,7 +15,7 @@
  *   --themes light,dark Themes to render (default light,dark)
  *   --out <dir>         Screenshot folder (default tmp/page-checks, gitignored)
  *   --login email:pass  Log in through /auth/login before visiting the pages
- *   --full              Full-page screenshots instead of the first screen
+ *   --full              Whole-page screenshots (clipped to the screen width) instead of the first screen
  *   --scale 2           Device scale factor (default 1; use 2 for screenshots a person will see)
  *
  * Exits 1 if any page answers 4xx/5xx, throws, logs a console error, or a
@@ -71,6 +71,65 @@ function parseArgs(argv) {
   }
   if (options.paths.length === 0) options.paths = ['/']
   return options
+}
+
+/*
+ * Runs in the page. When the page is wider than the screen, names the
+ * elements that make it so, with the usual fix for each:
+ * - an absolutely positioned element past the edge (often an sr-only label)
+ *   escaping an overflow box that isn't `relative`;
+ * - a flex item with min-width: auto growing to its content (needs min-w-0);
+ * - a grid with an automatic track growing to its content (needs grid-cols-1);
+ * - otherwise the deepest element past the edge outside any scroll box.
+ */
+function findOverflow() {
+  const width = window.innerWidth
+  const scrollWidth = document.documentElement.scrollWidth
+  if (scrollWidth <= width + 1) return null
+
+  const past = (el) => el.getBoundingClientRect().right > width + 1
+  const name = (el) => {
+    const classes = String(el.className).trim().split(/\s+/).slice(0, 6).join('.')
+    const text = (el.innerText || el.textContent || '').trim().slice(0, 30).replace(/\s+/g, ' ')
+    return `<${el.tagName.toLowerCase()}${classes ? '.' + classes : ''}>${text ? ` "${text}"` : ''}`
+  }
+  const inScrollBox = (el) => {
+    for (let a = el.parentElement; a; a = a.parentElement) {
+      if (['auto', 'scroll', 'hidden'].includes(getComputedStyle(a).overflowX)) return true
+    }
+    return false
+  }
+  const causes = []
+  const all = [...document.querySelectorAll('body *')].filter(past)
+
+  for (const el of all) {
+    const style = getComputedStyle(el)
+    if ((style.position === 'absolute' || style.position === 'fixed') && inScrollBox(el)) {
+      causes.push(
+        `${name(el)} is position:${style.position} and escapes its scroll box: make the box \`relative\``
+      )
+    }
+  }
+  for (const el of all) {
+    const parent = el.parentElement
+    if (!parent || past(parent)) continue
+    const style = getComputedStyle(el)
+    const parentStyle = getComputedStyle(parent)
+    if (parentStyle.display.includes('flex') && style.minWidth === 'auto') {
+      causes.push(
+        `${name(el)} is a flex item with min-width:auto, grown to its content: add \`min-w-0\``
+      )
+    } else if (parentStyle.display.includes('grid')) {
+      causes.push(
+        `${name(el)} sits in a grid whose track grew to its content: give the grid \`grid-cols-1\` (minmax(0,1fr))`
+      )
+    }
+  }
+  if (causes.length === 0) {
+    const leaves = all.filter((el) => !inScrollBox(el) && ![...el.children].some(past))
+    for (const el of leaves.slice(0, 3)) causes.push(`${name(el)} passes the right edge`)
+  }
+  return { scrollWidth, causes: [...new Set(causes)].slice(0, 5) }
 }
 
 function slugFor(pagePath) {
@@ -174,11 +233,20 @@ async function main() {
         const status = response ? response.status() : 0
         if (status >= 400 || status === 0) problems.push(`HTTP ${status}`)
         const file = path.join(options.out, `${slugFor(pagePath)}-${width}-${theme}.png`)
-        await page.screenshot({ path: file, fullPage: options.full })
-        const horizontalScroll = await page.evaluate(
-          () => document.documentElement.scrollWidth > window.innerWidth + 1
+        // A full-page capture widens to the page's scroll width, which would show
+        // an overflowing page as a tidy wide layout. Clip it to the screen width,
+        // so the screenshot shows what a phone shows.
+        const pageHeight = await page.evaluate(() => document.documentElement.scrollHeight)
+        await page.screenshot(
+          options.full
+            ? { path: file, fullPage: true, clip: { x: 0, y: 0, width, height: pageHeight } }
+            : { path: file }
         )
-        if (horizontalScroll) problems.push('page scrolls sideways at this width')
+        const overflow = await page.evaluate(findOverflow)
+        if (overflow) {
+          problems.push(`page scrolls sideways at this width (${overflow.scrollWidth}px wide)`)
+          for (const cause of overflow.causes) problems.push(`  wide: ${cause}`)
+        }
         results.push({ pagePath, width, theme, status, file, problems, external })
         await page.close()
       }
