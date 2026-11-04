@@ -9,6 +9,7 @@ import type { CartOwner } from '#modules/orders/customer'
 import { ShopStatus } from '#constants/shop_status'
 import { ProductStatus, VariantAttributes, VariantStatus } from '#constants/product'
 import { MAX_QUANTITY_PER_ITEM, shippingFeeFor } from '#constants/order'
+import { smallPhotoUrl } from '#modules/products/photo_urls'
 
 export type CartSummary = ReturnType<CartService['summarize']>
 
@@ -262,7 +263,7 @@ export default class CartService {
       product: {
         name: product.name,
         slug: product.slug,
-        image: product.media?.[0]?.url ?? null,
+        image: smallPhotoUrl(product.media?.[0]),
       },
       variant: {
         id: variant.id,

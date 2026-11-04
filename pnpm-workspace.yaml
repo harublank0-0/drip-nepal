@@ -4,3 +4,9 @@ allowBuilds:
 minimumReleaseAgeExclude:
   - framer-motion@12.41.0
   - motion-dom@12.41.0
+overrides:
+  # 14.1.0 validates app commands with a schema that has no $id, which
+  # Node 24's URL parser rejects ("Invalid URL"): every `node ace` command
+  # fails to boot while commands/ holds a command. Fixed in 14.1.1. Remove
+  # once @adonisjs/core requires >=14.1.1.
+  '@adonisjs/ace': 14.1.1

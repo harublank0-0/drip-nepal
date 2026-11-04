@@ -217,7 +217,7 @@ export default function ShopProductFormPage({ product, categories }: PageProps) 
                   className="group relative aspect-square overflow-hidden rounded-lg border bg-muted"
                 >
                   <img
-                    src={media.url}
+                    src={media.thumbnailUrl ?? media.url}
                     alt={media.altText ?? ''}
                     className="size-full object-cover"
                   />

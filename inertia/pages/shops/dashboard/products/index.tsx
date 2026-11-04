@@ -172,7 +172,7 @@ export default function ShopProductsPage({ products, filters }: PageProps) {
                         <div className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted">
                           {cover ? (
                             <img
-                              src={cover.url}
+                              src={cover.thumbnailUrl ?? cover.url}
                               alt={cover.altText ?? product.name}
                               className="size-full object-cover"
                             />
