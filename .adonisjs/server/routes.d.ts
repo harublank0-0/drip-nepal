@@ -32,6 +32,7 @@ export type ScannedRoutes = {
     'api.shops.shop_products.store': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'api.shops.shop_products.update': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'id': ParamValue} }
     'api.shops.shop_products.destroy': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'id': ParamValue} }
+    'api.shops.shop_orders.awaiting': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'api.shops.shop_orders.update_status': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'orderNumber': ParamValue} }
     'cart.show': { paramsTuple?: []; params?: {} }
     'checkout.show': { paramsTuple?: []; params?: {} }
@@ -74,6 +75,7 @@ export type ScannedRoutes = {
     'ui.shops.shop_products.edit': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'id': ParamValue} }
     'ui.shops.shop_orders.index': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'ui.shops.shop_orders.show': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'orderNumber': ParamValue} }
+    'api.shops.shop_orders.awaiting': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'cart.show': { paramsTuple?: []; params?: {} }
     'checkout.show': { paramsTuple?: []; params?: {} }
     'checkout.success': { paramsTuple: [ParamValue]; params: {'checkoutId': ParamValue} }
@@ -107,6 +109,7 @@ export type ScannedRoutes = {
     'ui.shops.shop_products.edit': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'id': ParamValue} }
     'ui.shops.shop_orders.index': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'ui.shops.shop_orders.show': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'orderNumber': ParamValue} }
+    'api.shops.shop_orders.awaiting': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'cart.show': { paramsTuple?: []; params?: {} }
     'checkout.show': { paramsTuple?: []; params?: {} }
     'checkout.success': { paramsTuple: [ParamValue]; params: {'checkoutId': ParamValue} }

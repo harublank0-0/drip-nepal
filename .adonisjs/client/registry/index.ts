@@ -174,6 +174,12 @@ const routes = {
     tokens: [{"old":"/api/v1/shops/:shopSlug/products/:id","type":0,"val":"api","end":""},{"old":"/api/v1/shops/:shopSlug/products/:id","type":0,"val":"v1","end":""},{"old":"/api/v1/shops/:shopSlug/products/:id","type":0,"val":"shops","end":""},{"old":"/api/v1/shops/:shopSlug/products/:id","type":1,"val":"shopSlug","end":""},{"old":"/api/v1/shops/:shopSlug/products/:id","type":0,"val":"products","end":""},{"old":"/api/v1/shops/:shopSlug/products/:id","type":1,"val":"id","end":""}],
     types: placeholder as Registry['api.shops.shop_products.destroy']['types'],
   },
+  'api.shops.shop_orders.awaiting': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/v1/shops/:shopSlug/orders/awaiting',
+    tokens: [{"old":"/api/v1/shops/:shopSlug/orders/awaiting","type":0,"val":"api","end":""},{"old":"/api/v1/shops/:shopSlug/orders/awaiting","type":0,"val":"v1","end":""},{"old":"/api/v1/shops/:shopSlug/orders/awaiting","type":0,"val":"shops","end":""},{"old":"/api/v1/shops/:shopSlug/orders/awaiting","type":1,"val":"shopSlug","end":""},{"old":"/api/v1/shops/:shopSlug/orders/awaiting","type":0,"val":"orders","end":""},{"old":"/api/v1/shops/:shopSlug/orders/awaiting","type":0,"val":"awaiting","end":""}],
+    types: placeholder as Registry['api.shops.shop_orders.awaiting']['types'],
+  },
   'api.shops.shop_orders.update_status': {
     methods: ["POST"],
     pattern: '/api/v1/shops/:shopSlug/orders/:orderNumber/status',

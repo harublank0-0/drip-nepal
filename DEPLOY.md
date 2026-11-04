@@ -39,6 +39,7 @@ Edit `.env.production`:
 - `APP_RELEASE`: the tag you checked out, such as `v1.0.0`. `/health/live` reports it, so you can see which release is running.
 - `SUPPORT_PHONE`, `SUPPORT_EMAIL`: how customers reach you. The phone number also becomes a WhatsApp link. They appear in the footer, on order pages, on the policy pages and behind "Forgot password?" on the login page, which is how customers get a password reset until email is added. Each is optional, but set at least one.
 - `INSTAGRAM_URL`, `FACEBOOK_URL`, `TIKTOK_URL`: optional links shown in the footer.
+- `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `MAIL_FROM`: the mail server for new-order emails (see [Email](#email)). Left empty, no email is sent.
 
 ## 3. Build and start
 
@@ -87,6 +88,38 @@ v1 has one seller, so shop registration is closed by default. Open it once to re
 4. Log in, open `/admin/shops` and approve your shop. Its products appear on the storefront only once it's approved.
 
 5. Set `SHOP_REGISTRATION_OPEN=false` (or remove the line) and run the `up -d` command again. The register page and API now answer 404, and the storefront hides the "open a shop" links.
+
+## Email
+
+When an order arrives, the app emails the shop: one email per order, to the shop owner's login email and to the shop's contact email if that is different. It names the order, the items and the total, and links to the order in the dashboard. It leaves out the customer's name, phone and address; those stay in the dashboard.
+
+In the dashboard, the bell in the top bar shows how many orders wait for you to confirm them. Its menu turns on a sound and a desktop notification for new orders in that browser. The bell works without email.
+
+Any SMTP server can send the emails. Fill in these lines of `.env.production` and run the `up -d` command again.
+
+**Gmail, to start.** Turn on 2-Step Verification for the Google account, then create an app password for it. Google's help pages have the current steps.
+
+```dotenv
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=465
+SMTP_USERNAME=you@gmail.com
+SMTP_PASSWORD=the-app-password
+MAIL_FROM="Drip Nepal <you@gmail.com>"
+```
+
+Gmail sends from the account's own address and limits how many emails a day it sends. That is enough for order emails to yourself.
+
+**A mail provider, later.** Which provider to use (Resend, Brevo, Amazon SES or another) is still open (OD-08 in [docs/risks-and-open-decisions.md](docs/risks-and-open-decisions.md)). Each one offers SMTP: copy the host, port, user name and password from the provider's SMTP settings into the same lines. Set `MAIL_FROM` to an address on your own domain once the provider has verified that domain. No code changes.
+
+**Check that it works.** Place a test order on the storefront, then cancel it in the dashboard. The email should arrive within a minute. If it doesn't, look in the logs:
+
+```bash
+docker compose -f docker-compose.prod.yml logs app | grep "New-order email"
+```
+
+Each failed attempt logs the order number and an error code: `EAUTH` means a wrong user name or password, and `ESOCKET`, `ECONNECTION` or `ETIMEDOUT` mean the server couldn't be reached. Some VPS providers block outgoing mail ports on new accounts, so if every attempt is a connection error, ask your provider. The app tries three times over two minutes, then gives up. An email still waiting for a retry is lost if the app restarts in that time. The order is safe either way, and the bell still counts it.
+
+To turn email off, leave `SMTP_HOST` empty. The log then says once that new-order emails are off.
 
 ## Releasing
 

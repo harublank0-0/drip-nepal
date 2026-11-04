@@ -41,6 +41,14 @@ export default class ShopOrdersController {
     })
   }
 
+  /*
+   * JSON for the dashboard's new-order indicator, polled every 60 seconds
+   * while a dashboard tab is visible (FR-NOT-003).
+   */
+  async awaiting({ shop }: HttpContext) {
+    return { pending: await this.orders.awaitingCount(shop) }
+  }
+
   async show({ inertia, params, shop }: HttpContext) {
     const order = await this.orders.findForShop(shop, params.orderNumber)
 

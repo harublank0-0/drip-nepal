@@ -56,6 +56,7 @@ router
     router.post('products/:id', [ShopProductsController, 'update'])
     router.delete('products/:id', [ShopProductsController, 'destroy'])
 
+    router.get('orders/awaiting', [ShopOrdersController, 'awaiting'])
     router.post('orders/:orderNumber/status', [ShopOrdersController, 'updateStatus'])
   })
   .as('api.shops')

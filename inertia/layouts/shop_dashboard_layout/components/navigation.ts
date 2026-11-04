@@ -3,11 +3,12 @@ import { usePage } from '@inertiajs/react'
 import { LayoutDashboardIcon, PackageIcon, ShoppingBagIcon, StoreIcon } from 'lucide-react'
 import type { Data } from '@generated/data'
 import type { NavItem, NavSection } from './types'
+import { useDashboard } from './dashboard_context'
 
 /*
  * Only pages that exist are listed. Add items here as dashboard pages ship.
  */
-export function buildDashboardNav(shopSlug: string): NavSection[] {
+export function buildDashboardNav(shopSlug: string, pendingOrders?: number | null): NavSection[] {
   const base = `/shops/${shopSlug}`
 
   return [
@@ -22,7 +23,14 @@ export function buildDashboardNav(shopSlug: string): NavSection[] {
           path: `${base}/dashboard`,
           icon: LayoutDashboardIcon,
         },
-        { id: 'orders', label: 'Orders', path: `${base}/orders`, icon: PackageIcon },
+        {
+          id: 'orders',
+          label: 'Orders',
+          path: `${base}/orders`,
+          icon: PackageIcon,
+          // Orders waiting for confirmation (FR-NOT-003)
+          badge: pendingOrders ? pendingOrders : undefined,
+        },
         { id: 'products', label: 'Products', path: `${base}/products`, icon: ShoppingBagIcon },
       ],
     },
@@ -41,8 +49,9 @@ export function buildDashboardNav(shopSlug: string): NavSection[] {
 export function useDashboardNav() {
   const { currentShop } = usePage<Data.SharedProps>().props
   const shopSlug = currentShop?.slug ?? ''
+  const pending = useDashboard().orderAlerts.pending
 
-  return useMemo(() => buildDashboardNav(shopSlug), [shopSlug])
+  return useMemo(() => buildDashboardNav(shopSlug, pending), [shopSlug, pending])
 }
 
 export function findNavItemByPath(

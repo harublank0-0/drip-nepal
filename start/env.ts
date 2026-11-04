@@ -59,6 +59,18 @@ const env = await Env.create(new URL('../', import.meta.url), {
 
   /*
   |----------------------------------------------------------
+  | Variables for configuring the mail package (config/mail.ts). All
+  | optional: without SMTP_HOST and MAIL_FROM, order alerts are skipped.
+  |----------------------------------------------------------
+  */
+  SMTP_HOST: Env.schema.string.optional({ format: 'host' }),
+  SMTP_PORT: Env.schema.number.optional(),
+  SMTP_USERNAME: Env.schema.string.optional(),
+  SMTP_PASSWORD: Env.schema.string.optional(),
+  MAIL_FROM: Env.schema.string.optional(),
+
+  /*
+  |----------------------------------------------------------
   | Variables for configuring the limiter package
   |----------------------------------------------------------
   */
