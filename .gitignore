@@ -35,7 +35,10 @@ storage
 # TypeScript incremental build info
 *.tsbuildinfo
 
-# Third-party agent skills: restore locally from skills-lock.json.
-# The project's own skill stays tracked.
+# Agent skills: only the reviewed ones are tracked (docs/09 §1.5). The
+# project's own skills and the vendored copies listed in skills-lock.json are
+# committed; any other skill installed locally stays untracked.
 .agents/skills/*
-!.agents/skills/dripnepal-docs/
+!.agents/skills/dripnepal-*/
+!.agents/skills/shadcn/
+!.agents/skills/vercel-react-best-practices/
