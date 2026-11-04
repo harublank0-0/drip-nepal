@@ -24,14 +24,19 @@ Point your domain's **A record** at the server's IP. Open ports 80 and 443.
 
 ```bash
 git clone <repo-url> drip-nepal && cd drip-nepal
+git tag --sort=-v:refname | head -3    # the newest releases
+git checkout v1.0.0                    # the release to deploy
 cp .env.production.example .env.production
 ```
+
+The server runs a release tag, never the tip of `main`, so a pull request merged but not yet released never reaches customers (see [Releasing](#releasing)).
 
 Edit `.env.production`:
 
 - `DOMAIN` and `APP_URL`: your domain, with `https://` in `APP_URL`.
 - `DB_PASSWORD`: a long random password. `openssl rand -base64 32` makes one.
 - `APP_KEY`: generate it once the image is built (step 3).
+- `APP_RELEASE`: the tag you checked out, such as `v1.0.0`. `/health/live` reports it, so you can see which release is running.
 - `SUPPORT_PHONE`, `SUPPORT_EMAIL`: how customers reach you. The phone number also becomes a WhatsApp link. They appear in the footer, on order pages, on the policy pages and behind "Forgot password?" on the login page, which is how customers get a password reset until email is added. Each is optional, but set at least one.
 - `INSTAGRAM_URL`, `FACEBOOK_URL`, `TIKTOK_URL`: optional links shown in the footer.
 
@@ -83,14 +88,34 @@ v1 has one seller, so shop registration is closed by default. Open it once to re
 
 5. Set `SHOP_REGISTRATION_OPEN=false` (or remove the line) and run the `up -d` command again. The register page and API now answer 404, and the storefront hides the "open a shop" links.
 
+## Releasing
+
+Production deploys from `main`, by release tag (decision of 2026-11-04 in [docs/risks-and-open-decisions.md §2.3](docs/risks-and-open-decisions.md#23-decision-log)).
+
+1. Changes reach `main` only through pull requests with green CI.
+2. When `main` holds what you want to ship, tag that commit and push the tag:
+
+   ```bash
+   git checkout main && git pull
+   git tag -a v1.0.1 -m "Dashboard fits on phones"
+   git push origin v1.0.1
+   ```
+
+   Raise the last number for fixes (`v1.0.1`) and the middle one for new features (`v1.1.0`).
+
+3. Deploy the tag on the server (next section).
+
 ## Updating
 
 ```bash
-git pull
+git fetch --tags
+git checkout v1.0.1
 docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
 ```
 
-Migrations run automatically when the new container starts.
+Set `APP_RELEASE` in `.env.production` to the same tag before the `up` command. Migrations run automatically when the new container starts.
+
+To roll back, check out the previous tag and run the same `up` command. Rolling back the code does not undo a migration, so take a database backup (next section) before deploying a release that adds one.
 
 ## Backups
 

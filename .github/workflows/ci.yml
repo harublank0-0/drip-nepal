@@ -1,14 +1,14 @@
-# CI for the store. Runs on pushes to main and v1 and on pull requests into
-# either: v1 was merged into main (#142), so pull requests now target main.
+# CI for the store. Runs on pushes to main and on pull requests into it:
+# production deploys release tags cut from main (DEPLOY.md, "Releasing").
 # Actions are pinned by commit SHA; the release tag is in the comment. No
 # secrets are used.
 name: ci
 
 on:
   push:
-    branches: [main, v1]
+    branches: [main]
   pull_request:
-    branches: [main, v1]
+    branches: [main]
 
 permissions:
   contents: read

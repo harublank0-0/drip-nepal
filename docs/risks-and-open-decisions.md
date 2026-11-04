@@ -231,6 +231,20 @@ OD-28 to OD-54 register the owner decisions that the three deep audits left open
 Newest first. The entry format is in §1.5. A ruling that is not an OD but changes an owning document or an ADR is logged in the same format, headed "Not an OD".
 
 ```text
+Not an OD — Decided 2026-11-04 by product owner: production deploys from main, by release tag
+Ruling: PR #142 merged the v1 branch into main, so main now carries the single-seller v1 store as well as
+        the documents. Production deploys from main: a release is a commit on main with green CI, tagged
+        vMAJOR.MINOR.PATCH, and the server checks out the tag. M0 continues on main in pull requests that
+        keep the store working; the steps that cannot (the E4 baseline of ADR-0011 with the OD-55 data
+        import) land together at one planned cutover release. The v1 branch is retired. This replaces
+        the branch split of the 2026-11-03 entry below.
+Evidence: #142 merged v1 into main on 2026-11-04; DEPLOY.md already cloned and pulled the default branch.
+ADR: ADR-0011 (dated note, 2026-11-04): its baseline merge is also the live store's cutover.
+Docs updated: DEPLOY.md (Releasing, Updating), .github/workflows/ci.yml, 10 §5 and note 30, ADR-0011
+              Status, the dripnepal-testing skill, risks note 24  |  Status: Decided
+```
+
+```text
 Not an OD — Decided 2026-11-04 by product owner: commit reviewed agent skills and load them in Claude Code
 Ruling: Every tracked skill in .agents/skills/ is symlinked from .claude/skills/, where Claude Code loads
         project skills. New project skills dripnepal-testing and dripnepal-run join dripnepal-docs. Two
@@ -651,3 +665,4 @@ This matrix is authoritative for decision gates. [12 §3](12-roadmap-and-backlog
 21. **Final review of the consistency review (2026-09-30, with the decision of 2026-10-04).** §2.3 logs, as a "Not an OD" entry, the product owner and tech lead decision of 2026-10-04 that `approveShopApplication` and `rejectShopApplication` are ⟳ on `shops.version`, with the documents it changes and the dated note on [ADR-0004](adr/0004-inertia-reads-json-api-writes.md) decision 3. The five ADR notes of 2026-10-01 that align an ADR with its owning document (ADR-0006 Risks, ADR-0012 decisions 5 and 9, ADR-0013 decision 3 and the ADR-0018 503 row) are relabelled "Edited 2026-10-01 (cross-doc check)", because none of them is one of the 17 rulings logged here; they need no entry. Checked, no change needed: the OD-48 row already says that 06 §4.4 and 08 §2.5 carry the rule, labelled (proposed, OD-48), as 06 note 37 asks.
 22. **v1 launch (2026-11-03).** The product owner decided to sell from a single-seller v1 before M0 (§2.3). OD-55 is new and blocks the M0 exit (§5). A-01 in [00 §6](00-context-assumptions-and-questions.md#6-proposed-defaults-and-assumptions-register) and ADR-0011's Status now say that A-01 stops holding when v1 goes live. Still open: OD-55, and whether R1's launch gate (12 §5.7) treats v1 customers as existing users.
 23. **Agent skills (2026-11-04).** §2.3 logs the product owner's decision to commit reviewed agent skills and load them in Claude Code through `.claude/skills/`. It partly reverses the RF-42 removal in [09 §1.5](09-code-structure-and-engineering-standards.md#15-current-code--target-structure), which 09 note 77 records; no OD was open on it.
+24. **Deploying from `main` (2026-11-04).** §2.3 logs that production deploys release tags cut from `main`, after #142 merged `v1` into `main`. The 2026-11-03 entry stays in the log as history; its "main stays the documented system (v2) and M0 continues there" no longer holds, because `main` is also the live store. Still open, for E4 with OD-55: how the breaking M0 steps are staged before the cutover release.
