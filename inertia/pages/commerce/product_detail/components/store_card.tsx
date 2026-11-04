@@ -3,7 +3,7 @@ import { BadgeCheck, ChevronRight } from 'lucide-react'
 import type { Data } from '@generated/data'
 
 type StoreCardProps = {
-  shop: Data.Shop
+  shop: Data.PublicShop
 }
 
 export function StoreCard({ shop }: StoreCardProps) {

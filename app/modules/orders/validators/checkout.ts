@@ -22,7 +22,7 @@ export const addressSchema = vine.object({
   recipientPhone: vine
     .string()
     .trim()
-    .regex(/^(\+977)?9[78]\d{8}$/),
+    .regex(/^(\+977)?9[678]\d{8}$/),
   province: vine.enum(PROVINCES),
   district: vine.string().trim().use(districtInProvince()),
   municipality: vine.string().trim().maxLength(50).optional(),

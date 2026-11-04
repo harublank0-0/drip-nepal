@@ -15,6 +15,7 @@ import type ProductCardTransformer from '#transformers/product_card_transformer'
 import type ProductMediaTransformer from '#transformers/product_media_transformer'
 import type ProductTransformer from '#transformers/product_transformer'
 import type ProductVariantTransformer from '#transformers/product_variant_transformer'
+import type PublicShopTransformer from '#transformers/public_shop_transformer'
 import type ShopTransformer from '#transformers/shop_transformer'
 import type StoreCardTransformer from '#transformers/store_card_transformer'
 import type UserTransformer from '#transformers/user_transformer'
@@ -56,6 +57,10 @@ export namespace Data {
   export type ProductVariant = InferData<ProductVariantTransformer>
   export namespace ProductVariant {
     export type Variants = InferVariants<ProductVariantTransformer>
+  }
+  export type PublicShop = InferData<PublicShopTransformer>
+  export namespace PublicShop {
+    export type Variants = InferVariants<PublicShopTransformer>
   }
   export type Shop = InferData<ShopTransformer>
   export namespace Shop {

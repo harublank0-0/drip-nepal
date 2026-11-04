@@ -248,7 +248,7 @@ export class OrderSchema extends BaseModel {
   @column()
   declare userAddressId: string | null
   @column()
-  declare userId: string
+  declare userId: string | null
 }
 
 export class PaymentSchema extends BaseModel {
@@ -434,6 +434,30 @@ export class ProductSchema extends BaseModel {
   declare status: string
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime | null
+}
+
+export class RateLimitSchema extends BaseModel {
+  static $columns = ['expire', 'key', 'points'] as const
+  $columns = RateLimitSchema.$columns
+  @column()
+  declare expire: bigint | number | null
+  @column({ isPrimary: true })
+  declare key: string
+  @column()
+  declare points: number
+}
+
+export class SessionSchema extends BaseModel {
+  static $columns = ['data', 'expiresAt', 'id', 'userId'] as const
+  $columns = SessionSchema.$columns
+  @column()
+  declare data: string
+  @column.dateTime()
+  declare expiresAt: DateTime
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare userId: string | null
 }
 
 export class ShopAddressSchema extends BaseModel {

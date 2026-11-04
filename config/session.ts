@@ -11,7 +11,7 @@ const sessionConfig = defineConfig({
   /**
    * Cookie name storing the session identifier.
    */
-  cookieName: 'adonis-session',
+  cookieName: 'dripnepal_session',
 
   /**
    * When set to true, the session id cookie will be deleted
@@ -23,7 +23,7 @@ const sessionConfig = defineConfig({
    * Define how long to keep the session data alive without
    * any activity.
    */
-  age: '2h',
+  age: '7d',
 
   /**
    * Configuration for session cookie and the

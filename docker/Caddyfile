@@ -2,8 +2,17 @@
 # Point the domain's A record at the server before the first start.
 {$DOMAIN} {
 	encode zstd gzip
+	header {
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
+		-Server
+	}
 	request_body {
 		max_size 50MB
 	}
+	# Readiness is for Compose only (docs/11 §7.1).
+	@ready path /health/ready
+	respond @ready 404
+
 	reverse_proxy app:3333
 }

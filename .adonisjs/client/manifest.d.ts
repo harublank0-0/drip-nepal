@@ -7,4 +7,7 @@
 /// <reference path="../../config/auth.ts" />
 /// <reference path="../../config/drive.ts" />
 /// <reference path="../../config/hash.ts" />
+/// <reference path="../../config/limiter.ts" />
 /// <reference path="../../config/logger.ts" />
+/// <reference path="../../config/marketplace.ts" />
+/// <reference path="../../config/storefront.ts" />

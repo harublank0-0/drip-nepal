@@ -15,19 +15,36 @@ import { OrderStatus, PaymentProvider, PaymentStatus, shippingFeeFor } from '#co
 import CartService, { isPurchasable } from '#modules/orders/services/cart_service'
 import type { AddressPayload, CheckoutPayload } from '#modules/orders/validators/checkout'
 
+/*
+ * Who is checking out: a logged-in user, or a guest with the cart token
+ * from their session.
+ */
+export type Buyer = { user: User } | { guestToken: string }
+
+type AddressFields = {
+  recipientName: string
+  recipientPhone: string | null
+  province: string
+  district: string
+  municipality?: string | null
+  city: string
+  area?: string | null
+  streetAddress: string
+}
+
 function checkoutError(field: string, message: string): never {
   throw new vineErrors.E_VALIDATION_ERROR([{ field, message, rule: 'checkout' }])
 }
 
-export function addressSnapshot(address: UserAddress) {
+export function addressSnapshot(address: AddressFields) {
   return {
     recipientName: address.recipientName,
     recipientPhone: address.recipientPhone,
     province: address.province,
     district: address.district,
-    municipality: address.municipality,
+    municipality: address.municipality ?? null,
     city: address.city,
-    area: address.area,
+    area: address.area ?? null,
     streetAddress: address.streetAddress,
   }
 }
@@ -38,11 +55,14 @@ export default class CheckoutService {
   /*
    * Turns the cart into one cash-on-delivery order per shop. Stock is
    * re-checked under a row lock so two buyers can't take the last item.
-   * Returns the checkout id that groups the orders.
+   * Returns the checkout id that groups the orders, and their numbers.
    */
-  async placeOrders(user: User, payload: CheckoutPayload) {
+  async placeOrders(buyer: Buyer, payload: CheckoutPayload) {
+    const user = 'user' in buyer ? buyer.user : null
+    const owner = 'user' in buyer ? { userId: buyer.user.id } : { guestToken: buyer.guestToken }
+
     return db.transaction(async (trx) => {
-      const items = await this.cart.items(user, trx)
+      const items = await this.cart.items(owner, trx)
       if (items.length === 0) {
         checkoutError('cart', 'Your cart is empty')
       }
@@ -71,9 +91,9 @@ export default class CheckoutService {
         }
       }
 
-      const address = await this.#resolveAddress(user, payload, trx)
-      const snapshot = addressSnapshot(address)
+      const { snapshot, savedAddressId } = await this.#resolveAddress(user, payload, trx)
       const checkoutId = randomUUID()
+      const orderNumbers: string[] = []
       const summary = this.cart.summarize(items)
 
       for (const group of summary.shops) {
@@ -89,10 +109,10 @@ export default class CheckoutService {
 
         const order = await Order.create(
           {
-            userId: user.id,
+            userId: user?.id ?? null,
             shopId: group.shop.id,
             checkoutId,
-            userAddressId: address.id,
+            userAddressId: savedAddressId,
             shippingAddress: snapshot,
             orderNumber: this.#orderNumber(),
             status: OrderStatus.PENDING,
@@ -106,6 +126,7 @@ export default class CheckoutService {
           },
           { client: trx }
         )
+        orderNumbers.push(order.orderNumber)
 
         for (const item of shopItems) {
           const variant = item.productVariant
@@ -149,21 +170,35 @@ export default class CheckoutService {
         )
         .delete()
 
-      return checkoutId
+      return { checkoutId, orderNumbers }
     })
   }
 
-  async #resolveAddress(user: User, payload: CheckoutPayload, trx: TransactionClientContract) {
+  /*
+   * A saved address, or a new one: saved to a user's address book, or used
+   * only for this order when a guest checks out.
+   */
+  async #resolveAddress(
+    user: User | null,
+    payload: CheckoutPayload,
+    trx: TransactionClientContract
+  ) {
     if (payload.addressId) {
-      const address = await UserAddress.query({ client: trx })
-        .where('id', payload.addressId)
-        .where('user_id', user.id)
-        .first()
+      const address = user
+        ? await UserAddress.query({ client: trx })
+            .where('id', payload.addressId)
+            .where('user_id', user.id)
+            .first()
+        : null
       if (!address) checkoutError('addressId', 'Choose one of your saved addresses')
-      return address
+      return { snapshot: addressSnapshot(address), savedAddressId: address.id }
     }
 
-    return this.saveAddress(user, payload.address!, trx)
+    if (!user) {
+      return { snapshot: addressSnapshot(payload.address!), savedAddressId: null }
+    }
+    const address = await this.saveAddress(user, payload.address!, trx)
+    return { snapshot: addressSnapshot(address), savedAddressId: address.id }
   }
 
   /*

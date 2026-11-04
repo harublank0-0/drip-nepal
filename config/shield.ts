@@ -1,3 +1,4 @@
+import app from '@adonisjs/core/services/app'
 import { defineConfig } from '@adonisjs/shield'
 
 const shieldConfig = defineConfig({
@@ -6,26 +7,32 @@ const shieldConfig = defineConfig({
    * to learn more.
    */
   csp: {
-    /**
-     * Enable the Content-Security-Policy header.
+    /*
+     * Enforced in production only: the dev server injects an inline React
+     * refresh script and a websocket for hot reload (RF-34).
+     *
+     * Scripts: only this origin (the built Vite bundles; no inline scripts).
+     * Styles: inline allowed, because Radix and framer-motion set style
+     * attributes and sonner injects a <style> element (OD-52 option a).
+     * Images: this origin and uploads, data: and blob: for previews in the
+     * product form, and Unsplash for the category and demo images.
      */
-    enabled: false,
-
-    /**
-     * Per-resource CSP directives.
-     */
-    directives: {},
-
-    /**
-     * Report violations without blocking resources.
-     */
+    enabled: app.inProduction,
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", 'data:', 'blob:', 'https://images.unsplash.com'],
+      fontSrc: ["'self'", 'data:'],
+      connectSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+      frameAncestors: ["'none'"],
+    },
     reportOnly: false,
   },
 
-  /**
-   * Configure CSRF protection options. Refer documentation
-   * to learn more.
-   */
   csrf: {
     /**
      * Enable CSRF token verification for state-changing requests.

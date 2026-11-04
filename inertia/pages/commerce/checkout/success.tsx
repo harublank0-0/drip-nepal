@@ -9,15 +9,18 @@ import { OrderItemsList } from '~/components/commerce/orders/order_items_list'
 import { OrderStatusBadge } from '~/components/commerce/orders/order_status_badge'
 import { PriceRows } from '~/components/commerce/price_rows'
 import { Button } from '~/components/ui/button'
+import { OrderIds } from '~/components/commerce/orders/order_ids'
 import { formatPrice } from '~/lib/format'
 import { pluralize } from '~/lib/order'
 import type { InertiaProps } from '~/types'
 
 type PageProps = InertiaProps<{
   orders: Data.Order[]
+  /* Placed without an account: they track it with the order ID. */
+  guest?: boolean
 }>
 
-export default function CheckoutSuccessPage({ orders }: PageProps) {
+export default function CheckoutSuccessPage({ orders, guest = false }: PageProps) {
   const count = orders.length
   const total = orders.reduce((sum, order) => sum + order.grandTotal, 0)
   /* All orders of a checkout go to the same address with the same note. */
@@ -45,9 +48,11 @@ export default function CheckoutSuccessPage({ orders }: PageProps) {
           </p>
         </header>
 
+        <OrderIds orders={orders} guest={guest} />
+
         <section
           aria-label="Payment"
-          className="mt-8 flex gap-3 rounded-xl border border-primary/40 bg-primary/5 p-4"
+          className="mt-4 flex gap-3 rounded-xl border border-primary/40 bg-primary/5 p-4"
         >
           <BanknoteIcon className="mt-0.5 size-5 shrink-0 text-primary" aria-hidden="true" />
           <div className="text-sm">
@@ -130,10 +135,14 @@ export default function CheckoutSuccessPage({ orders }: PageProps) {
         )}
 
         <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-          <Button size="lg" className="h-11 flex-1 rounded-xl" asChild>
-            <Link route="account.orders.index">View my orders</Link>
+          <Button size="lg" className="h-12 rounded-xl sm:flex-1" asChild>
+            {guest ? (
+              <Link route="orders.track">Track my order</Link>
+            ) : (
+              <Link route="account.orders.index">View my orders</Link>
+            )}
           </Button>
-          <Button size="lg" variant="outline" className="h-11 flex-1 rounded-xl" asChild>
+          <Button size="lg" variant="outline" className="h-12 rounded-xl sm:flex-1" asChild>
             <Link route="home">Continue shopping</Link>
           </Button>
         </div>

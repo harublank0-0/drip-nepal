@@ -62,14 +62,14 @@ function StoreMark({ store }: { store: Data.StoreCard }) {
       <img
         src={store.logo}
         alt=""
-        className="size-14 rounded-full object-cover ring-1 ring-foreground/10 md:size-16"
+        className="size-12 rounded-full object-cover ring-1 ring-foreground/10 md:size-16"
       />
     )
   }
   return (
     <div
       aria-hidden="true"
-      className="flex size-14 items-center justify-center rounded-full bg-primary font-heading text-2xl font-bold text-primary-foreground md:size-16"
+      className="flex size-12 items-center justify-center rounded-full bg-primary font-heading text-xl font-bold text-primary-foreground md:size-16 md:text-2xl"
     >
       {store.name.charAt(0).toUpperCase()}
     </div>
@@ -100,10 +100,10 @@ function SearchForm({ initialQuery }: { initialQuery: string }) {
           onChange={(event) => setValue(event.target.value)}
           placeholder="Search products, brands and stores"
           aria-label="Search products, brands and stores"
-          className="h-10 pl-9"
+          className="h-11 pl-9"
         />
       </div>
-      <Button type="submit" className="h-10 px-4">
+      <Button type="submit" className="h-11 px-4">
         Search
       </Button>
     </form>
@@ -122,7 +122,10 @@ export function ListingHeader({ context, total, hasFilters }: ListingHeaderProps
 
   return (
     <>
-      <nav aria-label="Breadcrumb" className="mb-4 text-xs text-muted-foreground md:text-sm">
+      <nav
+        aria-label="Breadcrumb"
+        className="mb-3 text-xs text-muted-foreground md:mb-4 md:text-sm"
+      >
         <ol className="flex min-w-0 items-center gap-1.5">
           <li>
             <Link route="home" className="transition-colors hover:text-foreground">
@@ -144,12 +147,12 @@ export function ListingHeader({ context, total, hasFilters }: ListingHeaderProps
           image && 'md:grid-cols-[minmax(0,1fr)_minmax(0,20rem)] lg:grid-cols-[minmax(0,1fr)_24rem]'
         )}
       >
-        <div className="flex min-w-0 flex-col justify-end gap-3 p-6 md:p-10">
+        <div className="flex min-w-0 flex-col justify-end gap-2 p-5 md:gap-3 md:p-10">
           {context.kind === 'store' && context.store && <StoreMark store={context.store} />}
-          <p className="text-xs font-medium tracking-[0.2em] text-muted-foreground uppercase">
+          <p className="hidden text-xs font-medium tracking-[0.2em] text-muted-foreground uppercase md:block">
             {EYEBROW[context.kind]}
           </p>
-          <h1 className="font-heading text-3xl font-bold tracking-tight text-balance break-words md:text-5xl">
+          <h1 className="font-heading text-2xl font-bold tracking-tight text-balance break-words md:text-5xl">
             {context.title}
           </h1>
           {context.description && (
@@ -166,7 +169,7 @@ export function ListingHeader({ context, total, hasFilters }: ListingHeaderProps
         </div>
 
         {image && (
-          <div className="relative order-first h-40 md:order-none md:h-auto md:min-h-72">
+          <div className="relative hidden md:block md:h-auto md:min-h-72">
             <img
               src={image}
               alt=""

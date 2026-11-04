@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useState, useSyncExternalStore } from 'react'
 import { isBrowser } from '~/lib/utils'
 
 type Theme = 'dark' | 'light' | 'system'
@@ -21,15 +21,27 @@ const initialState: ThemeProviderState = {
 
 const ThemeProviderContext = createContext<ThemeProviderState>(initialState)
 
+function subscribeToStorage(onChange: () => void) {
+  window.addEventListener('storage', onChange)
+  return () => window.removeEventListener('storage', onChange)
+}
+
 export function ThemeProvider({
   children,
   defaultTheme = 'dark',
   storageKey = 'drip-ui-theme',
   ...props
 }: ThemeProviderProps) {
-  const [theme, setTheme] = useState<Theme>(
-    () => (isBrowser && (localStorage.getItem(storageKey) as Theme)) || defaultTheme
+  // The server has no saved theme, so hydration renders the default; React
+  // then switches to the saved one without a mismatch (useSyncExternalStore
+  // uses getServerSnapshot while hydrating).
+  const savedTheme = useSyncExternalStore(
+    subscribeToStorage,
+    () => localStorage.getItem(storageKey) as Theme | null,
+    () => null
   )
+  const [chosenTheme, setTheme] = useState<Theme | null>(null)
+  const theme = chosenTheme ?? savedTheme ?? defaultTheme
 
   useEffect(() => {
     if (!isBrowser) return

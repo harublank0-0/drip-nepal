@@ -1,9 +1,11 @@
 import { errors as vineErrors } from '@vinejs/vine'
+import db from '@adonisjs/lucid/services/db'
 import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
 import Cart from '#models/cart'
 import CartItem from '#models/cart_item'
 import ProductVariant from '#models/product_variant'
 import type User from '#models/user'
+import type { CartOwner } from '#modules/orders/customer'
 import { ShopStatus } from '#constants/shop_status'
 import { ProductStatus, VariantAttributes, VariantStatus } from '#constants/product'
 import { MAX_QUANTITY_PER_ITEM, shippingFeeFor } from '#constants/order'
@@ -38,22 +40,32 @@ function optionLabel(variant: ProductVariant) {
 }
 
 export default class CartService {
-  async findCart(user: User, trx?: TransactionClientContract) {
-    return Cart.query({ client: trx })
-      .where('user_id', user.id)
-      .orderBy('created_at', 'asc')
-      .first()
+  async findCart(owner: CartOwner | null, trx?: TransactionClientContract) {
+    if (!owner) return null
+
+    const query = Cart.query({ client: trx })
+    if ('userId' in owner) {
+      query.where('user_id', owner.userId)
+    } else {
+      query.where('session_id', owner.guestToken).whereNull('user_id')
+    }
+    return query.orderBy('created_at', 'asc').first()
   }
 
-  async getOrCreateCart(user: User) {
-    return (await this.findCart(user)) ?? (await Cart.create({ userId: user.id }))
+  async getOrCreateCart(owner: CartOwner) {
+    return (
+      (await this.findCart(owner)) ??
+      (await Cart.create(
+        'userId' in owner ? { userId: owner.userId } : { sessionId: owner.guestToken }
+      ))
+    )
   }
 
   /*
    * Cart items with everything needed to show and price them.
    */
-  async items(user: User, trx?: TransactionClientContract) {
-    const cart = await this.findCart(user, trx)
+  async items(owner: CartOwner | null, trx?: TransactionClientContract) {
+    const cart = await this.findCart(owner, trx)
     if (!cart) return []
 
     return CartItem.query({ client: trx })
@@ -68,15 +80,54 @@ export default class CartService {
       )
   }
 
-  async count(user: User) {
-    const cart = await this.findCart(user)
+  async count(owner: CartOwner | null) {
+    const cart = await this.findCart(owner)
     if (!cart) return 0
 
     const result = await CartItem.query().where('cart_id', cart.id).sum('quantity as total').first()
     return Number(result?.$extras.total ?? 0)
   }
 
-  async add(user: User, variantId: string, quantity: number) {
+  /*
+   * A guest who logs in keeps what they put in the cart: the guest cart
+   * becomes theirs, or its items join the cart they already had (the same
+   * item adds up, to the per-item maximum).
+   */
+  async adoptGuestCart(token: string, user: User) {
+    await db.transaction(async (trx) => {
+      const guestCart = await this.findCart({ guestToken: token }, trx)
+      if (!guestCart) return
+
+      const userCart = await this.findCart({ userId: user.id }, trx)
+      if (!userCart) {
+        guestCart.useTransaction(trx)
+        guestCart.merge({ userId: user.id, sessionId: null })
+        await guestCart.save()
+        return
+      }
+
+      const guestItems = await CartItem.query({ client: trx }).where('cart_id', guestCart.id)
+      for (const item of guestItems) {
+        const existing = await CartItem.query({ client: trx })
+          .where('cart_id', userCart.id)
+          .where('product_variant_id', item.productVariantId)
+          .first()
+        if (existing) {
+          existing.useTransaction(trx)
+          existing.quantity = Math.min(existing.quantity + item.quantity, MAX_QUANTITY_PER_ITEM)
+          await existing.save()
+          await item.useTransaction(trx).delete()
+        } else {
+          item.useTransaction(trx)
+          item.cartId = userCart.id
+          await item.save()
+        }
+      }
+      await guestCart.useTransaction(trx).delete()
+    })
+  }
+
+  async add(owner: CartOwner, variantId: string, quantity: number) {
     const variant = await ProductVariant.query()
       .where('id', variantId)
       .preload('product', (product) => product.preload('shop'))
@@ -86,7 +137,7 @@ export default class CartService {
       fieldError('variantId', 'This item is no longer available')
     }
 
-    const cart = await this.getOrCreateCart(user)
+    const cart = await this.getOrCreateCart(owner)
     const existing = await CartItem.query()
       .where('cart_id', cart.id)
       .where('product_variant_id', variant.id)
@@ -114,8 +165,8 @@ export default class CartService {
     return CartItem.create({ cartId: cart.id, productVariantId: variant.id, quantity })
   }
 
-  async update(user: User, itemId: string, quantity: number) {
-    const item = await this.#findItem(user, itemId)
+  async update(owner: CartOwner | null, itemId: string, quantity: number) {
+    const item = await this.#findItem(owner, itemId)
     if (quantity === 0) {
       await item.delete()
       return
@@ -134,13 +185,13 @@ export default class CartService {
     await item.save()
   }
 
-  async remove(user: User, itemId: string) {
-    const item = await this.#findItem(user, itemId)
+  async remove(owner: CartOwner | null, itemId: string) {
+    const item = await this.#findItem(owner, itemId)
     await item.delete()
   }
 
-  async #findItem(user: User, itemId: string) {
-    const cart = await this.findCart(user)
+  async #findItem(owner: CartOwner | null, itemId: string) {
+    const cart = await this.findCart(owner)
     if (!cart) fieldError('item', 'This item is not in your cart')
 
     const item = await CartItem.query().where('cart_id', cart.id).where('id', itemId).first()
