@@ -2,22 +2,29 @@
 /*
  * Claude Code PreToolUse hook (.claude/settings.json): a pull request is
  * opened only after a Fable-model code review has been recorded for the
- * exact commit it proposes (docs/09 §11.5). It runs before the GitHub
- * tool `create_pull_request` and before `gh pr create`.
+ * commit it proposes (docs/09 §11.5). It runs before the GitHub tool
+ * `create_pull_request` and before Bash commands that run `gh pr create`.
  *
  * Reviews are recorded with record_fable_review.mjs under the clone's git
  * directory (`<git common dir>/fable-reviews/<commit>.md`), so they are
- * never committed. A commit added after the review has no record, so the
- * review always covers the code being proposed.
+ * never committed. A commit added after the review has no record. When
+ * the local branch and `origin/<branch>` differ, both need a record, so a
+ * `git push && gh pr create` can't slip an unreviewed commit through.
  *
  * Exit 0 lets the call through; exit 2 blocks it and tells Claude why.
  */
 import { execFileSync } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
+const cwd = process.env.CLAUDE_PROJECT_DIR || process.cwd()
+
 function git(...args) {
-  return execFileSync('git', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
+  return execFileSync('git', args, {
+    cwd,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+  }).trim()
 }
 
 function block(message) {
@@ -25,56 +32,154 @@ function block(message) {
   process.exit(2)
 }
 
-let input = {}
-try {
-  input = JSON.parse(readFileSync(0, 'utf8') || '{}')
-} catch {
-  block('The pull request check could not read its input. Open the pull request again.')
+async function readInput() {
+  let text = ''
+  for await (const chunk of process.stdin) text += chunk
+  return JSON.parse(text || '{}')
 }
 
-// The branch the pull request proposes: `head` for the GitHub tool,
-// `--head`/`-H` for gh; without one, gh uses the current branch.
-function proposedBranch() {
-  const named =
-    input.tool_name === 'Bash'
-      ? /(?:--head|-H)[\s=]+["']?([^\s"']+)/.exec(input.tool_input?.command ?? '')?.[1]
-      : input.tool_input?.head
-  if (!named) return git('rev-parse', '--abbrev-ref', 'HEAD')
-  // "owner:branch" names a branch of a fork; the local branch has the same name.
-  return named.includes(':') ? named.slice(named.indexOf(':') + 1) : named
+/*
+ * The words of each simple command in a shell line, split on unquoted
+ * `;`, `&`, `|`, parentheses and newlines. Quotes group words, so text in
+ * a title or body is never read as a flag.
+ */
+function shellCommands(line) {
+  const commands = []
+  let words = []
+  let word = ''
+  let inWord = false
+  let quote = null
+  const endWord = () => {
+    if (inWord) words.push(word)
+    word = ''
+    inWord = false
+  }
+  const endCommand = () => {
+    endWord()
+    if (words.length > 0) commands.push(words)
+    words = []
+  }
+  for (let index = 0; index < line.length; index++) {
+    const char = line[index]
+    if (quote) {
+      if (char === quote) quote = null
+      else if (char === '\\' && quote === '"' && index + 1 < line.length) word += line[++index]
+      else word += char
+    } else if (char === "'" || char === '"') {
+      quote = char
+      inWord = true
+    } else if (char === '\\' && index + 1 < line.length) {
+      word += line[++index]
+      inWord = true
+    } else if (';&|()\n'.includes(char)) {
+      endCommand()
+    } else if (/\s/.test(char)) {
+      endWord()
+    } else {
+      word += char
+      inWord = true
+    }
+  }
+  endCommand()
+  return commands
 }
 
-// GitHub opens the pull request from the pushed branch, so its commit
-// counts; the local branch is the fallback before a fetch.
-function commitOf(branch) {
-  const candidates = branch === 'HEAD' ? ['HEAD'] : [`origin/${branch}`, branch]
-  for (const candidate of candidates) {
-    try {
-      return git('rev-parse', '--verify', '--quiet', `${candidate}^{commit}`)
-    } catch {}
+/*
+ * For a Bash call: the arguments after `gh pr create`, or null when the
+ * command doesn't open a pull request. The settings `if` filter is only a
+ * first pass: it also matches shell it can't parse, such as a `for` loop.
+ */
+function ghPrCreateArgs(command) {
+  for (const words of shellCommands(command)) {
+    let start = 0
+    while (start < words.length && /^[A-Za-z_]\w*=/.test(words[start])) start++
+    if (words[start] === 'env' || words[start] === 'command') start++
+    if (!/(^|\/)gh$/.test(words[start] ?? '')) continue
+    const pr = words.indexOf('pr', start + 1)
+    if (pr !== -1 && words[pr + 1] === 'create') return words.slice(pr + 2)
   }
   return null
 }
 
-const ref = proposedBranch()
-const commit = commitOf(ref)
-if (!commit) {
+function headFromArgs(args) {
+  for (let index = 0; index < args.length; index++) {
+    const arg = args[index]
+    if (arg === '--') break
+    if (arg === '--head' || arg === '-H') return args[index + 1]
+    if (arg.startsWith('--head=')) return arg.slice('--head='.length)
+    if (arg.startsWith('-H') && arg.length > 2) return arg.slice(2)
+  }
+  return undefined
+}
+
+function resolveCommit(ref) {
+  try {
+    return git('rev-parse', '--verify', '--quiet', `${ref}^{commit}`)
+  } catch {
+    return null
+  }
+}
+
+async function main() {
+  let input
+  try {
+    input = await readInput()
+  } catch {
+    block('The pull request check could not read its input. Open the pull request again.')
+  }
+
+  let named
+  if (input.tool_name === 'Bash') {
+    const args = ghPrCreateArgs(String(input.tool_input?.command ?? ''))
+    if (args === null) process.exit(0)
+    named = headFromArgs(args)
+  } else {
+    named = input.tool_input?.head
+  }
+
+  // Without a head, gh proposes the current branch. "owner:branch" names
+  // the branch of a fork; the local branch has the same name.
+  let branch = named ? String(named) : git('rev-parse', '--abbrev-ref', 'HEAD')
+  if (branch.includes(':')) branch = branch.slice(branch.indexOf(':') + 1)
+
+  const refs = branch === 'HEAD' ? ['HEAD'] : [branch, `origin/${branch}`]
+  const commits = refs
+    .map((ref) => ({ ref, commit: resolveCommit(ref) }))
+    .filter((entry) => entry.commit)
+  if (commits.length === 0) {
+    block(
+      `The pull request check could not find the branch "${branch}" in this clone. ` +
+        'Fetch or check out the branch, then open the pull request again.'
+    )
+  }
+
+  const records = join(resolve(cwd, git('rev-parse', '--git-common-dir')), 'fable-reviews')
+  const missing = commits.filter(({ commit }) => !existsSync(join(records, `${commit}.md`)))
+  if (missing.length === 0) process.exit(0)
+
+  const distinct = new Set(commits.map(({ commit }) => commit))
+  const where = commits.map(({ ref, commit }) => `${ref} is ${commit.slice(0, 7)}`).join(', ')
+  const unreviewed = [...new Set(missing.map(({ commit }) => commit.slice(0, 7)))].join(' and ')
   block(
-    `The pull request check could not find the commit of "${ref}" in this clone. ` +
-      'Fetch or check out the branch, then open the pull request again.'
+    [
+      `No Fable code review is recorded for ${unreviewed}, which this pull request for "${branch}" would propose (${where}).`,
+      ...(distinct.size > 1
+        ? [
+            'The local branch and the pushed branch differ: push (or fetch) first so they match, then make sure the final commit is reviewed.',
+          ]
+        : []),
+      'This repository opens a pull request only after a Fable review of its final commit (docs/09 §11.5):',
+      `1. Review the change with a Fable-model reviewer (an agent with model "fable") on \`git diff origin/main...${branch}\` (use the pull request's base branch if it is not main). Give it the diff and the files it touches, not your own conclusions, and ask for verified findings with file, line and a concrete failure.`,
+      '2. Check each finding against the code. Fix the real ones and commit. If you commit after the review, review those commits too, so the record is for the final commit.',
+      '3. Record it: node .claude/hooks/record_fable_review.mjs --model <the Fable model id> --report <a file with the findings and what you did about each>',
+      '4. Open the pull request again, with the findings and their outcome in its description.',
+    ].join('\n')
   )
 }
 
-const record = join(resolve(git('rev-parse', '--git-common-dir')), 'fable-reviews', `${commit}.md`)
-if (existsSync(record)) process.exit(0)
-
-block(
-  [
-    `No Fable code review is recorded for ${commit.slice(0, 7)} ("${ref}"), the commit this pull request proposes.`,
-    'This repository opens a pull request only after a Fable review of its final commit (docs/09 §11.5):',
-    `1. Review the change with a Fable-model reviewer (an agent with model "fable") on \`git diff origin/main...${commit.slice(0, 7)}\` (use the pull request's base branch if it is not main). Give it the diff and the files it touches, not your own conclusions, and ask for verified findings with file, line and a concrete failure.`,
-    '2. Check each finding against the code. Fix the real ones and commit. If you commit after the review, review those commits too, so the record is for the final commit.',
-    '3. Record it: node .claude/hooks/record_fable_review.mjs --model <the Fable model id> --report <a file with the findings and what you did about each>',
-    '4. Open the pull request again, with the findings and their outcome in its description.',
-  ].join('\n')
-)
+main().catch((error) => {
+  block(
+    `The pull request check failed (${error?.message ?? error}). ` +
+      'Run it from inside the repository, or check .claude/hooks/require_fable_review.mjs.'
+  )
+})
