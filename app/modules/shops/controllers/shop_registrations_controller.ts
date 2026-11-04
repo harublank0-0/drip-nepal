@@ -20,16 +20,23 @@ export default class ShopRegistrationController {
   /*
    * Renders the shop registration form. The owner is logged in after
    * registering and lands back here with `?success=1` to see the success
-   * screen; any other logged-in visit goes home.
+   * screen; any other logged-in visit goes home. The page gets the state
+   * as props (not from the address bar), so the server render and the
+   * browser render agree.
    */
   async create({ inertia, auth, request, response }: HttpContext) {
     if (!shopRegistrationOpen) throw new lucidErrors.E_ROW_NOT_FOUND()
 
-    if (auth.isAuthenticated && request.qs().success !== '1') {
+    const success = auth.isAuthenticated && request.qs().success === '1'
+    if (auth.isAuthenticated && !success) {
       return response.redirect().toRoute('home')
     }
 
-    return inertia.render('shops/register/index', {})
+    // The owner's newest shop, the one just registered.
+    const shop = success
+      ? await auth.user!.related('shops').query().orderBy('created_at', 'desc').first()
+      : null
+    return inertia.render('shops/register/index', { success, shopSlug: shop?.slug ?? null })
   }
 
   /*

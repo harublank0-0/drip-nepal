@@ -79,7 +79,8 @@ export default function CheckoutSuccessPage({ orders, guest = false }: PageProps
                   <h2 id={`order-${order.id}`} className="text-sm font-semibold">
                     Order{' '}
                     <Link
-                      route="account.orders.show"
+                      // A guest has no account: their order opens on the tracking page.
+                      route={guest ? 'orders.track.show' : 'account.orders.show'}
                       routeParams={{ orderNumber: order.orderNumber }}
                       className="font-mono underline-offset-4 hover:underline"
                     >
