@@ -13,6 +13,7 @@ import { errors as authErrors } from '@adonisjs/auth'
 import { errors as vineErrors } from '@vinejs/vine'
 
 import type { HttpContext } from '@adonisjs/core/http'
+import { safeReturnPath } from '#modules/auth/return_path'
 
 /*
  * One message for a wrong password, an unknown email and a blocked account,
@@ -26,10 +27,8 @@ export default class SessionController {
    */
   async create({ inertia, request, session }: HttpContext) {
     // "Log in" links can say where to come back to, e.g. ?next=/checkout.
-    const next = request.input('next')
-    if (typeof next === 'string' && /^\/(?!\/)/.test(next) && !next.startsWith('/api/')) {
-      session.setIntendedUrl(next)
-    }
+    const next = safeReturnPath(request.input('next'))
+    if (next) session.setIntendedUrl(next)
     return inertia.render('auth/login', {})
   }
 
