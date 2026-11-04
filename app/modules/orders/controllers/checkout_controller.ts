@@ -93,7 +93,10 @@ export default class CheckoutController {
 
     return inertia.render('commerce/checkout/success', {
       orders: OrderTransformer.transform(orders),
-      guest: !auth.user,
+      // Guest orders, whoever is looking now: a guest who logs in after
+      // checking out still finds these orders by tracking, not in the
+      // account. One checkout's orders all have the same owner.
+      guest: orders.every((order) => order.userId === null),
     })
   }
 }

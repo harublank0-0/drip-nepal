@@ -16,22 +16,14 @@ const steps = [
   { number: 2, label: 'Shop Information' },
 ]
 
-function getInitialSuccess(): boolean {
-  if (typeof window === 'undefined') return false
-
-  const params = new URLSearchParams(window.location.search)
-  return params.get('success') === '1'
+type PageProps = {
+  // After registering, the owner lands back here to see the success screen.
+  success: boolean
+  shopSlug: string | null
 }
 
-function getRegisteredShopSlug(): string | null {
-  if (typeof window === 'undefined') return null
-
-  return new URLSearchParams(window.location.search).get('shop')
-}
-
-export default function ShopSignupPage() {
+export default function ShopSignupPage({ success: isSuccess, shopSlug }: PageProps) {
   const [step, setStep] = useState(1)
-  const [isSuccess] = useState(getInitialSuccess)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const router = useRouter()
 
@@ -90,20 +82,17 @@ export default function ShopSignupPage() {
   }, [])
 
   const goToDashboard = useCallback(() => {
-    const shopSlug = getRegisteredShopSlug()
-
     if (!shopSlug) {
       router.visit({ route: 'home' })
       return
     }
 
     router.visit({ route: 'ui.shops.shop_dashboard.create', routeParams: { shopSlug } })
-  }, [router])
+  }, [router, shopSlug])
 
   const goToNewProduct = useCallback(() => {
-    const shopSlug = getRegisteredShopSlug()
     router.visit(shopSlug ? { href: `/shops/${shopSlug}/products/create` } : { route: 'home' })
-  }, [router])
+  }, [router, shopSlug])
 
   return (
     <div className="flex min-h-screen w-screen flex-col lg:flex-row">
