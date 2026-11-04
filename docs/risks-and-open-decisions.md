@@ -231,6 +231,19 @@ OD-28 to OD-54 register the owner decisions that the three deep audits left open
 Newest first. The entry format is in §1.5. A ruling that is not an OD but changes an owning document or an ADR is logged in the same format, headed "Not an OD".
 
 ```text
+Not an OD — Decided 2026-11-04 by product owner: a Fable code review before every pull request
+Ruling: Before a pull request is opened, a Fable-model reviewer reviews the commit it proposes. The author
+        checks each finding, fixes the real ones (fix commits are reviewed too) and lists the findings and
+        their outcome in the description. A Claude Code PreToolUse hook (.claude/settings.json and
+        .claude/hooks/) blocks the GitHub create_pull_request tool and `gh pr create` until a review of
+        that commit is recorded in the clone's git directory.
+Evidence: A Fable review of the v1 store on 2026-11-04 found defects that the tests and CI had not, among
+          them a lost stock update on product edit and the buyer's contact details on order tracking.
+ADR: none.
+Docs updated: 09 §11.5 and note 78, AGENTS.md  |  Status: Decided
+```
+
+```text
 Not an OD — Decided 2026-11-04 by product owner: production deploys from main, by release tag
 Ruling: PR #142 merged the v1 branch into main, so main now carries the single-seller v1 store as well as
         the documents. Production deploys from main: a release is a commit on main with green CI, tagged
