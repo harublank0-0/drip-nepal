@@ -29,7 +29,7 @@ export default function Signup() {
                 Create your account
               </h1>
               <p className="mt-1.5 text-sm text-muted-foreground">
-                You need an account to order. It takes a minute.
+                Save your addresses and see all your orders in one place.
               </p>
             </div>
 

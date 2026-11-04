@@ -18,10 +18,11 @@ export default function Terms() {
         </p>
       }
     >
-      <LegalSection title="Your account">
+      <LegalSection title="Ordering and your account">
         <ul>
           <li>
-            You need an account to order. Give your real name and a phone number we can reach.
+            You can order as a guest or with an account. Either way, give your real name and a phone
+            number we can reach.
           </li>
           <li>
             Keep your password to yourself. You are responsible for orders placed from your account.

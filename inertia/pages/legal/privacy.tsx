@@ -18,7 +18,10 @@ export default function Privacy() {
       <LegalSection title="What we collect">
         <ul>
           <li>Your name, email address, phone number and password, when you create an account.</li>
-          <li>The delivery addresses you enter at checkout.</li>
+          <li>
+            Your name, phone number and delivery address, when you order, with or without an
+            account.
+          </li>
           <li>Your orders, your cart and any notes you add to an order.</li>
         </ul>
         <p>Your password is stored scrambled (hashed). Nobody, including us, can read it.</p>
@@ -27,7 +30,10 @@ export default function Privacy() {
       <LegalSection title="How we use it">
         <ul>
           <li>To deliver your orders and call you about them.</li>
-          <li>To show your order history and keep you logged in.</li>
+          <li>
+            To show your order history, let you track an order with its ID and your phone number,
+            and keep you logged in.
+          </li>
           <li>To stop fraud and abuse, such as fake orders or repeated failed logins.</li>
         </ul>
       </LegalSection>
@@ -47,8 +53,9 @@ export default function Privacy() {
       <LegalSection title="Cookies">
         <p>
           We use cookies only to keep you logged in (and remember you, if you tick &quot;Remember
-          me&quot;) and to protect forms from forgery. Your light or dark theme choice is saved in
-          your browser. There are no advertising or tracking cookies.
+          me&quot;), to keep a guest&apos;s cart and orders on their device, and to protect forms
+          from forgery. Your light or dark theme choice is saved in your browser. There are no
+          advertising or tracking cookies.
         </p>
       </LegalSection>
 
