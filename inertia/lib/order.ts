@@ -14,6 +14,10 @@ export function cancelOrderUrl(orderNumber: string) {
   return `/api/v1/account/orders/${encodeURIComponent(orderNumber)}/cancel`
 }
 
+export function trackCancelUrl(orderNumber: string) {
+  return `/api/v1/track-order/${encodeURIComponent(orderNumber)}/cancel`
+}
+
 /*
  * Units that will actually be ordered: unavailable lines are listed in the
  * cart but left out of its totals.

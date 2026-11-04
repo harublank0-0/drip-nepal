@@ -133,6 +133,8 @@ type AddressFormProps = {
   onChange: (patch: Partial<AddressFields>) => void
   errors?: Record<string, unknown>
   disabled?: boolean
+  /* A guest's address is used for this order only, so there is no label. */
+  guest?: boolean
 }
 
 /*
@@ -140,7 +142,7 @@ type AddressFormProps = {
  * the shared list so the server's "district belongs to province" check
  * passes.
  */
-export function AddressForm({ value, onChange, errors, disabled }: AddressFormProps) {
+export function AddressForm({ value, onChange, errors, disabled, guest }: AddressFormProps) {
   const districts = districtsOf(value.province)
   const municipalities = municipalitiesOf(value.province, value.district)
 
@@ -187,7 +189,9 @@ export function AddressForm({ value, onChange, errors, disabled }: AddressFormPr
         />
         {errorFor('recipientPhone') ?? (
           <FieldDescription className="text-xs">
-            The shop calls this number to deliver.
+            {guest
+              ? 'The shop calls this number to deliver. You also need it to track your order.'
+              : 'The shop calls this number to deliver.'}
           </FieldDescription>
         )}
       </Field>
@@ -309,17 +313,19 @@ export function AddressForm({ value, onChange, errors, disabled }: AddressFormPr
         {errorFor('streetAddress')}
       </Field>
 
-      <Field data-invalid={!!addressError(errors, 'label')} className="sm:col-span-2">
-        <FieldLabel htmlFor={addressFieldId('label')}>
-          Save as <span className="font-normal text-muted-foreground">(optional)</span>
-        </FieldLabel>
-        <Input {...text('label')} placeholder="e.g. Home, Office" maxLength={50} />
-        {errorFor('label') ?? (
-          <FieldDescription className="text-xs">
-            We&apos;ll keep this address for your next order.
-          </FieldDescription>
-        )}
-      </Field>
+      {!guest && (
+        <Field data-invalid={!!addressError(errors, 'label')} className="sm:col-span-2">
+          <FieldLabel htmlFor={addressFieldId('label')}>
+            Save as <span className="font-normal text-muted-foreground">(optional)</span>
+          </FieldLabel>
+          <Input {...text('label')} placeholder="e.g. Home, Office" maxLength={50} />
+          {errorFor('label') ?? (
+            <FieldDescription className="text-xs">
+              We&apos;ll keep this address for your next order.
+            </FieldDescription>
+          )}
+        </Field>
+      )}
     </div>
   )
 }

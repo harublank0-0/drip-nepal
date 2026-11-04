@@ -4,9 +4,9 @@ import { router, usePage } from '@inertiajs/react'
 const CART_ITEMS_URL = '/api/v1/cart/items'
 
 /*
- * Posts a variant to the cart. The server redirects back with a flash
- * message (shown as a toast by the root layout), or to the login page when
- * the shopper is logged out. Validation errors come back as page errors.
+ * Posts a variant to the cart, for guests and logged-in shoppers alike.
+ * The server redirects back with a flash message (shown as a toast by the
+ * root layout). Validation errors come back as page errors.
  */
 export function useAddToCart() {
   const { errors } = usePage().props

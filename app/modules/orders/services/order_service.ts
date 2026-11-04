@@ -31,6 +31,21 @@ export default class OrderService {
       )
   }
 
+  /*
+   * The order with this number placed with this phone (its last ten
+   * digits, compared with the shipping address), or null.
+   */
+  async findByNumberAndPhone(orderNumber: string, digits: string) {
+    if (digits.length < 10) return null
+    return Order.query()
+      .where('order_number', orderNumber)
+      .whereRaw(
+        `right(regexp_replace(shipping_address->>'recipientPhone', '[^0-9]', '', 'g'), 10) = ?`,
+        [digits]
+      )
+      .first()
+  }
+
   async findForCustomer(user: User, orderNumber: string) {
     return this.detailQuery()
       .where('user_id', user.id)

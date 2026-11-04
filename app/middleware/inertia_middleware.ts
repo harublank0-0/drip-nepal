@@ -4,6 +4,7 @@ import UserTransformer from '#transformers/user_transformer'
 import BaseInertiaMiddleware from '@adonisjs/inertia/inertia_middleware'
 import ShopTransformer from '#transformers/shop_transformer'
 import CartService from '#modules/orders/services/cart_service'
+import { guestToken } from '#modules/orders/customer'
 import { shopRegistrationOpen } from '#config/marketplace'
 import { appUrl, support } from '#config/storefront'
 
@@ -45,7 +46,13 @@ export default class InertiaMiddleware extends BaseInertiaMiddleware {
       /*
        * Number of items in the cart, for the navbar badge.
        */
-      cartCount: auth?.user ? await new CartService().count(auth.user) : 0,
+      cartCount: await new CartService().count(
+        auth?.user
+          ? { userId: auth.user.id }
+          : guestToken(session)
+            ? { guestToken: guestToken(session)! }
+            : null
+      ),
       /*
        * Shows the admin link in the navbar.
        */

@@ -1,8 +1,12 @@
+import { usePage } from '@inertiajs/react'
 import { Link } from '@adonisjs/inertia/react'
 import { PackageIcon, ShoppingBagIcon } from 'lucide-react'
+import type { Data } from '@generated/data'
 import { Button } from '~/components/ui/button'
 
 export function EmptyCart() {
+  const { user } = usePage<Data.SharedProps>().props
+
   return (
     <div className="flex flex-col items-center px-4 py-16 text-center">
       <div className="mb-6 flex size-16 items-center justify-center rounded-full bg-muted">
@@ -17,9 +21,9 @@ export function EmptyCart() {
           <Link route="home">Start shopping</Link>
         </Button>
         <Button size="lg" variant="outline" className="h-11 rounded-xl px-6" asChild>
-          <Link route="account.orders.index">
+          <Link route={user ? 'account.orders.index' : 'orders.track'}>
             <PackageIcon className="size-4" aria-hidden="true" />
-            My orders
+            {user ? 'My orders' : 'Track an order'}
           </Link>
         </Button>
       </div>
