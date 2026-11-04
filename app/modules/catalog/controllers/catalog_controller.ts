@@ -174,9 +174,18 @@ export default class CatalogController {
       ? (request.input('sort') as CatalogSort)
       : 'newest'
     const page = Math.max(1, Number(request.input('page', 1)) || 1)
+    const category =
+      context.kind === 'search'
+        ? String(request.input('category') ?? '')
+            .trim()
+            .toLowerCase()
+            .slice(0, 100) || undefined
+        : undefined
 
     const filters: CatalogFilters = {
       ...scope,
+      // Search categories refine the results; the query's facets stay available.
+      ...(category ? { categorySlug: category } : {}),
       sizes: listParam(request.input('size')),
       colors: listParam(request.input('color')),
       minPrice: priceParam(request.input('min')),
@@ -194,6 +203,7 @@ export default class CatalogController {
       products: ProductCardTransformer.paginate(products.all(), products.getMeta()),
       facets,
       filters: {
+        ...(context.kind === 'search' ? { category: category ?? null } : {}),
         sizes: filters.sizes ?? [],
         colors: filters.colors ?? [],
         min: filters.minPrice ?? null,

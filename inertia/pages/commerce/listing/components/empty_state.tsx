@@ -23,7 +23,7 @@ function copyFor(context: ListingContext, hasFilters: boolean, pastLastPage: boo
   if (hasFilters) {
     return {
       title: 'Nothing matches these filters',
-      body: 'Try removing a size or color, or widening the price range.',
+      body: 'Try removing a category, size or color, or widening the price range.',
     }
   }
   if (context.kind === 'search' && context.query) {
