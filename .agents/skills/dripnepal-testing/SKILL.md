@@ -49,8 +49,10 @@ Production and CI run PostgreSQL 18.4. An older local server (16 is common) runs
 
 ```bash
 cp .env.example .env
-node ace generate:key
+node ace generate:key --show
 ```
+
+Paste the printed key after `APP_KEY=` in `.env`. Plain `node ace generate:key` would write it for you, but it also rewrites `.env.example`, which you'd then have to restore.
 
 `.env.test` (committed) switches to `NODE_ENV=test`, `SESSION_DRIVER=memory` and `DB_DATABASE=dripnepal_test`. CI has no `.env`: the "Tests" job in `.github/workflows/ci.yml` sets the same variables in its `env:` block.
 
