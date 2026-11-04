@@ -31,12 +31,34 @@ type VariantInput = ProductPayload['variants'][number]
 
 type StoredPhoto = StoredPhotoFiles & { name: string }
 
+// What the variant holding a clashing SKU does with it in this save.
+type SkuMove = 'removed' | 'kept' | 'cycle' | 'given-up'
+
+// A variant that holds a SKU, with its product, for the clash message.
+type SkuHolder = {
+  id: string
+  sku: string
+  status: string
+  product_id: string
+  shop_id: string
+  name: string
+  deleted_at: Date | null
+}
+
 /*
  * Every file a media row owns. Rows from before photos were resized have
  * only `key`, the original upload.
  */
 function mediaFileKeys(media: ProductMedia): string[] {
   return [media.metadata?.key, media.metadata?.thumbnailKey].filter(Boolean)
+}
+
+/*
+ * A variant's size and color as one key. Values are matched without case,
+ * as their slugs are ("Red" and "red" are one color).
+ */
+function optionKey(size: string | undefined, color: string | undefined) {
+  return `${size?.toLowerCase() ?? ''}|${color?.toLowerCase() ?? ''}`
 }
 
 /*
@@ -206,8 +228,9 @@ export default class ProductService {
       .orderBy('id', 'asc')
       .forUpdate()
     const existingById = new Map(existing.map((variant) => [variant.id, variant]))
+    const restored = await this.#removedVariantsAddedBack(inputs, existing, trx)
 
-    await this.#assertVariantsAreValid(product, inputs, existingById, trx)
+    await this.#assertVariantsAreValid(product, inputs, existingById, restored, trx)
 
     const keptIds = new Set<string>()
 
@@ -221,7 +244,7 @@ export default class ProductService {
           'This variant was removed while you were editing. Reload the page to see the current variants.'
         )
       }
-      const variant = stored ?? new ProductVariant()
+      const variant = stored ?? restored.get(index) ?? new ProductVariant()
       variant.useTransaction(trx)
       variant.merge({
         productId: product.id,
@@ -277,10 +300,47 @@ export default class ProductService {
     return input.quantity
   }
 
+  /*
+   * Rows without an id that bring back a removed (archived) variant of
+   * this product: same SKU, size and color. In v1 a SKU is unique across
+   * the store and a removed variant keeps it, so adding the variant again
+   * reuses its row. Its stock is the number entered, as for a new row.
+   * (In the target schema an archived SKU is free to reuse, docs/04a §7.8.)
+   */
+  async #removedVariantsAddedBack(
+    inputs: VariantInput[],
+    existing: ProductVariant[],
+    trx: TransactionClientContract
+  ) {
+    const restored = new Map<number, ProductVariant>()
+    for (const [index, input] of inputs.entries()) {
+      if (input.id || !input.sku) continue
+      const removed = existing.find(
+        (variant) => variant.status === VariantStatus.ARCHIVED && variant.sku === input.sku
+      )
+      if (!removed) continue
+      const values = await removed
+        .related('attributeValues')
+        .query()
+        .useTransaction(trx)
+        .preload('attribute')
+      const option = (slug: string) =>
+        values.find((value) => value.attribute.slug === slug)?.value ?? ''
+      if (
+        optionKey(option(VariantAttributes.SIZE.slug), option(VariantAttributes.COLOR.slug)) ===
+        optionKey(input.size, input.color)
+      ) {
+        restored.set(index, removed)
+      }
+    }
+    return restored
+  }
+
   async #assertVariantsAreValid(
     product: Product,
     inputs: VariantInput[],
     existingById: Map<string, ProductVariant>,
+    restored: Map<number, ProductVariant>,
     trx: TransactionClientContract
   ) {
     const seenOptions = new Map<string, number>()
@@ -298,11 +358,11 @@ export default class ProductService {
         )
       }
 
-      const optionKey = `${input.size?.toLowerCase() ?? ''}|${input.color?.toLowerCase() ?? ''}`
-      if (seenOptions.has(optionKey)) {
+      const options = optionKey(input.size, input.color)
+      if (seenOptions.has(options)) {
         fieldError(`variants.${index}.size`, 'Two variants have the same size and color')
       }
-      seenOptions.set(optionKey, index)
+      seenOptions.set(options, index)
 
       if (input.sku) {
         if (seenSkus.has(input.sku)) {
@@ -314,15 +374,88 @@ export default class ProductService {
 
     if (seenSkus.size === 0) return
 
-    const conflicts = await ProductVariant.query({ client: trx })
-      .whereIn('sku', [...seenSkus.keys()])
-      .whereNot('product_id', product.id ?? '00000000-0000-0000-0000-000000000000')
-      .select('sku')
-
-    if (conflicts.length > 0) {
-      const index = seenSkus.get(conflicts[0].sku)!
-      fieldError(`variants.${index}.sku`, 'This SKU is already used by another product')
+    // Any variant holding the SKU other than the row's own (or the removed
+    // variant it brings back) is a clash: the insert or update would break
+    // the store-wide unique SKU. The message says where the SKU is.
+    const holders: SkuHolder[] = await trx
+      .from('product_variants')
+      .join('products', 'products.id', 'product_variants.product_id')
+      .whereIn('product_variants.sku', [...seenSkus.keys()])
+      .select(
+        'product_variants.id',
+        'product_variants.sku',
+        'product_variants.status',
+        'products.id as product_id',
+        'products.shop_id',
+        'products.name',
+        'products.deleted_at'
+      )
+    for (const holder of holders) {
+      const index = seenSkus.get(holder.sku)!
+      if (holder.id === inputs[index].id || holder.id === restored.get(index)?.id) continue
+      fieldError(
+        `variants.${index}.sku`,
+        this.#skuClash(holder, product, this.#skuMove(holder, index, inputs, existingById))
+      )
     }
+  }
+
+  /*
+   * For a SKU held by another active variant of this product that stays in
+   * this save: whether that variant keeps the SKU, or gives it up as part
+   * of a cycle (two or more variants passing SKUs round, which no single
+   * change can be saved first), or simply gives it up.
+   */
+  #skuMove(
+    holder: SkuHolder,
+    index: number,
+    inputs: VariantInput[],
+    existingById: Map<string, ProductVariant>
+  ): SkuMove {
+    const rowById = new Map(inputs.filter((input) => input.id).map((input) => [input.id, input]))
+    const holderRow = rowById.get(holder.id)
+    if (!holderRow) return 'removed'
+    // An empty SKU box keeps the stored SKU.
+    if ((holderRow.sku ?? holder.sku) === holder.sku) return 'kept'
+
+    const active = [...existingById.values()].filter(
+      (variant) => variant.status === VariantStatus.ACTIVE
+    )
+    const holderOf = new Map(active.map((variant) => [variant.sku, variant]))
+    const start = existingById.get(inputs[index].id ?? '')?.sku
+    let sku: string | undefined = inputs[index].sku
+    for (let step = 0; start && sku && step < inputs.length; step++) {
+      const next = holderOf.get(sku)
+      const row = next && rowById.get(next.id)
+      if (!next || !row) break
+      sku = row.sku ?? next.sku
+      if (sku === start) return 'cycle'
+      if (sku === next.sku) break
+    }
+    return 'given-up'
+  }
+
+  #skuClash(holder: SkuHolder, product: Product, move: SkuMove) {
+    if (holder.product_id === product.id) {
+      if (holder.status === VariantStatus.ARCHIVED) {
+        return 'A variant you removed from this product still has this SKU. Use another SKU.'
+      }
+      switch (move) {
+        case 'kept':
+          return 'Another variant of this product has this SKU. Change its SKU first, or use another SKU here.'
+        case 'cycle':
+          return "SKUs can't move round between variants in one save: give one a temporary SKU and save, then set the final SKUs."
+        case 'given-up':
+          return 'Another variant of this product has this SKU until this save. Save that change first, then use the SKU here.'
+        case 'removed':
+          return 'A variant you are removing has this SKU. Save the removal first, then add the variant again.'
+      }
+    }
+    if (holder.shop_id !== product.shopId) return 'This SKU is already in use. Use another SKU.'
+    if (holder.deleted_at) {
+      return `A product you deleted ("${holder.name}") used this SKU. Use another SKU.`
+    }
+    return `Your product "${holder.name}" already uses this SKU`
   }
 
   async #findOrCreateValue(
@@ -337,8 +470,16 @@ export default class ProductService {
     )
 
     const value = rawValue.trim()
-    const slug = string.slug(value, { lower: true, strict: true }) || randomCode(6)
+    // The value as written, however it was slugged: a value with no Latin
+    // letters (रातो) slugs to '' and gets a random slug, so the slug can't
+    // find it again.
+    const known = await AttributeValue.query({ client: trx })
+      .where('attribute_id', attribute.id)
+      .whereRaw('lower(value) = lower(?)', [value])
+      .first()
+    if (known) return known.id
 
+    const slug = string.slug(value, { lower: true, strict: true }) || randomCode(6)
     const attributeValue = await AttributeValue.firstOrCreate(
       { attributeId: attribute.id, slug },
       { value },
