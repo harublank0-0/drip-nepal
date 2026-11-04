@@ -298,7 +298,7 @@ export default function CheckoutPage({ cart, addresses }: PageProps) {
         </div>
 
         {/* Place order bar for small screens, where the summary sits below the form. */}
-        <div className="sticky bottom-0 z-40 border-t border-border/60 bg-background/95 p-4 backdrop-blur lg:hidden">
+        <div className="sticky bottom-0 z-40 border-t border-border/60 bg-background/95 px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] backdrop-blur lg:hidden">
           <div className="mx-auto flex max-w-lg items-center gap-4">
             <div className="min-w-0 flex-1">
               <p className="text-xs text-muted-foreground">To pay on delivery</p>

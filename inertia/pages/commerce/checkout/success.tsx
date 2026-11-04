@@ -130,10 +130,10 @@ export default function CheckoutSuccessPage({ orders }: PageProps) {
         )}
 
         <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-          <Button size="lg" className="h-11 flex-1 rounded-xl" asChild>
+          <Button size="lg" className="h-12 rounded-xl sm:flex-1" asChild>
             <Link route="account.orders.index">View my orders</Link>
           </Button>
-          <Button size="lg" variant="outline" className="h-11 flex-1 rounded-xl" asChild>
+          <Button size="lg" variant="outline" className="h-12 rounded-xl sm:flex-1" asChild>
             <Link route="home">Continue shopping</Link>
           </Button>
         </div>
