@@ -52,13 +52,14 @@ async function readInput() {
 }
 
 /*
- * The index just past a heredoc started at `index` (pointing at `<<`):
- * its body runs to the line holding only the delimiter.
+ * The delimiter of a heredoc whose `<<` is at `index` (`<<-`, quoted and
+ * `\EOF` delimiters too), and the index just past it.
  */
-function skipHeredoc(line, index) {
+function heredocDelimiter(line, index) {
   let at = index + 2
   if (line[at] === '-') at++
   while (line[at] === ' ' || line[at] === '\t') at++
+  if (line[at] === '\\') at++
   const quote = line[at] === "'" || line[at] === '"' ? line[at] : null
   if (quote) at++
   let delimiter = ''
@@ -66,9 +67,15 @@ function skipHeredoc(line, index) {
     delimiter += line[at++]
   }
   if (quote) at++
-  const bodyStart = line.indexOf('\n', at)
-  if (!delimiter || bodyStart === -1) return at
-  let lineStart = bodyStart + 1
+  return { delimiter, end: at }
+}
+
+/*
+ * The index of the newline that ends a heredoc body starting after the
+ * newline at `newline`: the line holding only the delimiter.
+ */
+function heredocBodyEnd(line, newline, delimiter) {
+  let lineStart = newline + 1
   while (lineStart < line.length) {
     const lineEnd = line.indexOf('\n', lineStart)
     const text = line.slice(lineStart, lineEnd === -1 ? line.length : lineEnd)
@@ -77,6 +84,17 @@ function skipHeredoc(line, index) {
     lineStart = lineEnd + 1
   }
   return line.length
+}
+
+/*
+ * The index just past a heredoc started at `index` (pointing at `<<`):
+ * its body runs to the line holding only the delimiter.
+ */
+function skipHeredoc(line, index) {
+  const { delimiter, end } = heredocDelimiter(line, index)
+  const bodyStart = line.indexOf('\n', end)
+  if (!delimiter || bodyStart === -1) return end
+  return heredocBodyEnd(line, bodyStart, delimiter)
 }
 
 /*
@@ -121,6 +139,7 @@ function shellCommands(line) {
   let word = ''
   let inWord = false
   let quote = null
+  let heredocs = []
   const endWord = () => {
     if (inWord) words.push(word)
     word = ''
@@ -161,6 +180,20 @@ function shellCommands(line) {
       if (char === '"') quote = null
       else if (char === '\\' && index + 1 < line.length) word += line[++index]
       else word += char
+    } else if (char === '#' && !inWord) {
+      // A comment runs to the end of the line.
+      const end = line.indexOf('\n', index)
+      index = (end === -1 ? line.length : end) - 1
+    } else if (char === '<' && line[index + 1] === '<' && line[index + 2] !== '<') {
+      // A heredoc: its body, from the next line, is data, not commands.
+      endWord()
+      const { delimiter, end } = heredocDelimiter(line, index)
+      if (delimiter) heredocs.push(delimiter)
+      index = end - 1
+    } else if (char === '\n' && heredocs.length > 0) {
+      endCommand()
+      for (const delimiter of heredocs) index = heredocBodyEnd(line, index, delimiter)
+      heredocs = []
     } else if (char === "'" || char === '"') {
       quote = char
       inWord = true
@@ -180,28 +213,65 @@ function shellCommands(line) {
   return commands
 }
 
+// Commands that run the next word as the program, with the options of
+// theirs that take a value.
+const LAUNCHERS = {
+  env: ['-u', '--unset', '-C', '--chdir', '-S', '--split-string'],
+  command: [],
+  exec: ['-a'],
+  time: ['-f', '--format', '-o', '--output'],
+  nohup: [],
+  nice: ['-n', '--adjustment'],
+  sudo: ['-u', '--user', '-g', '--group', '-C', '-D', '-h', '-p', '-U'],
+  xargs: ['-I', '-i', '-n', '-P', '-L', '-l', '-d', '-E', '-e', '-s', '-a', '--arg-file'],
+}
+
+// The index of the program a simple command runs.
+function programIndex(words) {
+  let at = 0
+  while (at < words.length && /^[A-Za-z_]\w*=/.test(words[at])) at++
+  while (at < words.length && Object.hasOwn(LAUNCHERS, words[at])) {
+    const valueOptions = LAUNCHERS[words[at]]
+    at++
+    while (at < words.length && (words[at].startsWith('-') || /^[A-Za-z_]\w*=/.test(words[at]))) {
+      at += valueOptions.includes(words[at]) ? 2 : 1
+    }
+  }
+  return at
+}
+
+// Skips gh's `-R <repo>`, `--repo <repo>` and their attached forms.
+function skipRepo(words, at) {
+  while (at < words.length) {
+    if (words[at] === '-R' || words[at] === '--repo') at += 2
+    else if (words[at].startsWith('--repo=') || /^-R./.test(words[at])) at++
+    else break
+  }
+  return at
+}
+
 /*
  * For a Bash call: the arguments after `gh pr create`, or null when the
- * command doesn't open a pull request. `gh` may follow a launcher such as
- * `env`, `exec` or `xargs`, and `pr` may take `-R <repo>` before `create`.
+ * command doesn't open a pull request. `gh` is the program of a simple
+ * command, possibly after variable assignments and a launcher such as
+ * `env`, `exec` or `xargs`; `-R <repo>` may come before `pr` or `create`.
  * The settings `if` filter is only a first pass: it also matches shell it
  * can't parse, such as a `for` loop.
  */
 function ghPrCreateArgs(command) {
   for (const words of shellCommands(command)) {
-    for (let gh = 0; gh < words.length; gh++) {
-      if (!/(^|\/)gh$/.test(words[gh]) || words[gh + 1] !== 'pr') continue
-      let at = gh + 2
-      while (at < words.length) {
-        if (words[at] === '-R' || words[at] === '--repo') at += 2
-        else if (words[at].startsWith('--repo=') || /^-R./.test(words[at])) at++
-        else break
-      }
-      if (words[at] === 'create') return words.slice(at + 1)
-    }
+    const gh = programIndex(words)
+    if (!/(^|\/)gh$/.test(words[gh] ?? '')) continue
+    let at = skipRepo(words, gh + 1)
+    if (words[at] !== 'pr') continue
+    at = skipRepo(words, at + 1)
+    if (words[at] === 'create') return words.slice(at + 1)
   }
   return null
 }
+
+// Short options of `gh pr create` that take a value.
+const SHORT_VALUE_OPTIONS = 'aBbFlmpRrTt'
 
 // Options of `gh pr create` that take a value, so their value is skipped.
 const VALUE_OPTIONS = new Set([
@@ -234,9 +304,21 @@ function headFromArgs(args) {
   for (let index = 0; index < args.length; index++) {
     const arg = args[index]
     if (arg === '--') break
-    if (arg === '--head' || arg === '-H') return args[index + 1]
+    if (arg === '--head') return args[index + 1]
     if (arg.startsWith('--head=')) return arg.slice('--head='.length)
-    if (arg.startsWith('-H')) return arg.slice(2)
+    if (/^-[A-Za-z]/.test(arg)) {
+      // A cluster of short options, as in `-dH feat` or `-Hfeat`.
+      for (let letter = 1; letter < arg.length; letter++) {
+        const option = arg[letter]
+        const rest = arg.slice(letter + 1)
+        if (option === 'H') return rest || args[index + 1]
+        if (SHORT_VALUE_OPTIONS.includes(option)) {
+          if (!rest) index++
+          break
+        }
+      }
+      continue
+    }
     if (VALUE_OPTIONS.has(arg)) index++
   }
   return undefined
@@ -271,7 +353,7 @@ async function main() {
   }
 
   if (named && CURRENT_BRANCH.test(named)) named = undefined
-  if (named && /^[$`]/.test(named)) {
+  if (named && (/^[$`]/.test(named) || named.includes('{}'))) {
     block(
       `The pull request check can't read the branch "${named}". ` +
         'Pass the branch name to --head as plain text, or leave --head out to use the current branch.'

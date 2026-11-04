@@ -18,7 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "if": "Bash(gh pr create*)",
+            "if": "Bash(gh *)",
             "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/require_fable_review.mjs\"",
             "timeout": 30,
             "onFailure": "block",
