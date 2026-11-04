@@ -150,6 +150,13 @@ export default class ProductService {
       product.deletedAt = DateTime.now()
       await product.save()
 
+      // Locked in ascending id first, the order checkout locks variants in
+      // (docs/05 §4.4), so deleting a product never deadlocks with a
+      // checkout of two of its variants.
+      await ProductVariant.query({ client: trx })
+        .where('product_id', product.id)
+        .orderBy('id', 'asc')
+        .forUpdate()
       await ProductVariant.query({ client: trx })
         .where('product_id', product.id)
         .update({ status: VariantStatus.ARCHIVED })
@@ -206,6 +213,14 @@ export default class ProductService {
 
     for (const [index, input] of inputs.entries()) {
       const stored = input.id ? existingById.get(input.id) : undefined
+      // The form lists active variants only, so this one was removed
+      // elsewhere (another tab) after the page loaded.
+      if (stored?.status === VariantStatus.ARCHIVED) {
+        fieldError(
+          `variants.${index}.id`,
+          'This variant was removed while you were editing. Reload the page to see the current variants.'
+        )
+      }
       const variant = stored ?? new ProductVariant()
       variant.useTransaction(trx)
       variant.merge({

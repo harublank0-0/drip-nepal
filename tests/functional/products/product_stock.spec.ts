@@ -7,7 +7,7 @@ import type Shop from '#models/shop'
 import CheckoutService from '#modules/orders/services/checkout_service'
 import ProductService from '#modules/products/services/product_service'
 import type { ProductPayload } from '#modules/shops/validators/product'
-import { ProductGender, ProductStatus } from '#constants/product'
+import { ProductGender, ProductStatus, VariantStatus } from '#constants/product'
 import {
   addressPayload,
   createShop,
@@ -124,6 +124,23 @@ test.group('Product form stock [v1]', (group) => {
     assert.instanceOf(error, vineErrors.E_VALIDATION_ERROR)
     assert.equal(error.messages[0].field, 'variants.0.expectedQuantity')
     assert.equal(await stockOf(variant), 5)
+  })
+
+  test('a variant removed in another tab is refused with a reload message', async ({ assert }) => {
+    const { shop, variant, product } = await productWithStock(5)
+    // What saving the form without this variant (in another tab) leaves.
+    await ProductVariant.query().where('id', variant.id).update({ status: VariantStatus.ARCHIVED })
+
+    const error = await refusal(
+      formSave(shop, product, variant, { quantity: 8, expectedQuantity: 5 })
+    )
+
+    assert.instanceOf(error, vineErrors.E_VALIDATION_ERROR)
+    assert.equal(error.messages[0].field, 'variants.0.id')
+    assert.match(error.messages[0].message, /removed while you were editing/)
+    const fresh = await ProductVariant.findOrFail(variant.id)
+    assert.equal(fresh.status, VariantStatus.ARCHIVED)
+    assert.equal(fresh.quantity, 5)
   })
 
   test('a new variant gets the stock the form gives it', async ({ assert }) => {
