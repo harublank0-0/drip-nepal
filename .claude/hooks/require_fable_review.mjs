@@ -386,6 +386,9 @@ async function main() {
     block('The pull request check could not read its input. Open the pull request again.')
   }
 
+  // Only a Bash call or the GitHub tool's call can open a pull request.
+  if (!input || typeof input !== 'object' || Array.isArray(input)) process.exit(0)
+
   let named
   if (input.tool_name === 'Bash') {
     const command = String(input.tool_input?.command ?? '')
@@ -394,8 +397,10 @@ async function main() {
     const args = ghPrCreateArgs(command)
     if (args === null) process.exit(0)
     named = headFromArgs(args)
-  } else {
+  } else if (/create_pull_request$/.test(String(input.tool_name ?? ''))) {
     named = input.tool_input?.head
+  } else {
+    process.exit(0)
   }
 
   if (named && CURRENT_BRANCH.test(named)) named = undefined
