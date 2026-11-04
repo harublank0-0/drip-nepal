@@ -58,6 +58,33 @@ export function limiterKey(name: string, ...parts: string[]) {
   return `${name}:${digest}`
 }
 
+/*
+ * Counts only failed calls, like the limiter's own `penalize`, but never
+ * wipes the count when a call succeeds. For order tracking a success is
+ * cheap to arrange (anyone can look up their own order), so with the wipe
+ * one real order would allow unlimited guessing of others. Returns
+ * `[throttled, result]` like `penalize`.
+ */
+export async function penalizeFailures<T>(
+  rateLimiter: Limiter,
+  key: string,
+  callback: () => Promise<T>
+): Promise<[InstanceType<typeof limiterErrors.E_TOO_MANY_REQUESTS>, null] | [null, T]> {
+  const state = await rateLimiter.get(key)
+  if (state && state.remaining <= 0) {
+    return [new limiterErrors.E_TOO_MANY_REQUESTS(state), null]
+  }
+  try {
+    return [null, await callback()]
+  } catch (error) {
+    const { consumed, limit } = await rateLimiter.increment(key)
+    if (consumed >= limit && rateLimiter.blockDuration) {
+      await rateLimiter.block(key, rateLimiter.blockDuration)
+    }
+    throw error
+  }
+}
+
 export function tooManyAttempts(field: string, seconds: number): never {
   throw new vineErrors.E_VALIDATION_ERROR([
     { field, message: `Too many attempts. Try again in ${Math.max(1, seconds)} seconds.` },

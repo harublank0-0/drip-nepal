@@ -10,6 +10,7 @@ import {
   clientNetwork,
   limiterKey,
   orderLookupLimiter,
+  penalizeFailures,
   tooManyAttempts,
 } from '#modules/auth/rate_limits'
 import OrderTransformer from '#transformers/order_transformer'
@@ -44,18 +45,17 @@ export default class TrackOrdersController {
     const key = limiterKey('track:ip', clientNetwork(request.ip()))
 
     // Only failed lookups count, so a customer checking often isn't blocked.
-    const [throttled, order] = await orderLookupLimiter()
-      .penalize(key, async () => {
-        const found = await this.orders.findByNumberAndPhone(orderNumber, phoneDigits(phone))
-        if (!found) throw new lucidErrors.E_ROW_NOT_FOUND()
-        return found
-      })
-      .catch((error) => {
-        if (error instanceof lucidErrors.E_ROW_NOT_FOUND) {
-          throw new vineErrors.E_VALIDATION_ERROR([{ field: 'orderNumber', message: NOT_FOUND }])
-        }
-        throw error
-      })
+    // A lookup that finds its order doesn't reset the failed ones before it.
+    const [throttled, order] = await penalizeFailures(orderLookupLimiter(), key, async () => {
+      const found = await this.orders.findByNumberAndPhone(orderNumber, phoneDigits(phone))
+      if (!found) throw new lucidErrors.E_ROW_NOT_FOUND()
+      return found
+    }).catch((error) => {
+      if (error instanceof lucidErrors.E_ROW_NOT_FOUND) {
+        throw new vineErrors.E_VALIDATION_ERROR([{ field: 'orderNumber', message: NOT_FOUND }])
+      }
+      throw error
+    })
     if (throttled) tooManyAttempts('orderNumber', throttled.response.availableIn)
 
     rememberOrders(session, [order.orderNumber])
