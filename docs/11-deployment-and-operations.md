@@ -737,7 +737,7 @@ The env files are the "host secret store" of [03 §12.6](03-system-architecture.
 
 ## 5. CI/CD and release promotion
 
-[10](10-testing-and-quality-gates.md) owns which checks run and their IDs; this section owns the pipeline shape, the promotion rules, configuration per environment and rollback. There is no CI today (RF-09 [Verified-repo: no `.github` directory]); the pipeline is built in M0 up to the image push, and the deploy jobs are added when staging exists (§2.4).
+[10](10-testing-and-quality-gates.md) owns which checks run and their IDs; this section owns the pipeline shape, the promotion rules, configuration per environment and rollback. Today `ci.yml` runs only the v1 checks that 10 §5 lists; the full pipeline is built in M0 up to the image push, and the deploy jobs are added when staging exists (§2.4).
 
 ### 5.1 Pipeline
 
