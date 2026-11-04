@@ -1,5 +1,6 @@
 import type Product from '#models/product'
 import { BaseTransformer } from '@adonisjs/core/transformers'
+import { smallPhotoUrl } from '#modules/products/photo_urls'
 
 /*
  * The compact product shape used by product cards and grids. Expects
@@ -16,8 +17,8 @@ export default class ProductCardTransformer extends BaseTransformer<Product> {
 
     return {
       ...this.pick(this.resource, ['id', 'name', 'slug', 'brand', 'gender']),
-      image: media[0]?.url ?? null,
-      hoverImage: media[1]?.url ?? null,
+      image: smallPhotoUrl(media[0]),
+      hoverImage: smallPhotoUrl(media[1]),
       price: cheapest ? Number(cheapest.price) : 0,
       comparePrice: cheapest?.comparePrice ? Number(cheapest.comparePrice) : null,
       inStock: variants.some((variant) => variant.quantity > 0),

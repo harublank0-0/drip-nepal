@@ -230,7 +230,7 @@ export default class CatalogService {
       .select('c.name', 'c.slug', 'c.image')
       .select(
         db.raw(
-          `(select pm.url from product_media pm
+          `(select coalesce(pm.thumbnail_url, pm.url) from product_media pm
               join products cp on cp.id = pm.product_id
              where cp.category_id = c.id and cp.id = any(?)
              order by cp.created_at desc, pm.sort_order asc nulls last

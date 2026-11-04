@@ -1,5 +1,6 @@
 import type Order from '#models/order'
 import { BaseTransformer } from '@adonisjs/core/transformers'
+import { smallPhotoUrl } from '#modules/products/photo_urls'
 
 type ShippingAddress = {
   recipientName: string
@@ -51,7 +52,7 @@ export default class OrderTransformer extends BaseTransformer<Order> {
         quantity: item.quantity,
         subTotal: Number(item.subTotal),
         productSlug: item.product?.slug ?? null,
-        image: item.product?.media?.[0]?.url ?? null,
+        image: smallPhotoUrl(item.product?.media?.[0]),
       })),
       itemCount: (order.items ?? []).reduce((sum, item) => sum + item.quantity, 0),
     }
