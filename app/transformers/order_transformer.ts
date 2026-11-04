@@ -14,9 +14,12 @@ type ShippingAddress = {
 }
 
 /*
- * An order with its items, for the customer's and the shop's order pages.
- * Expects `items.product.media` and `shop` preloaded; `user` for the shop
- * view.
+ * An order with its items. `toObject` is for the customer's pages,
+ * including guest tracking, and carries no buyer account details: whoever
+ * tracks a gift with the recipient's phone must not get the buyer's email
+ * and phone (docs/07 §5). `forShop` adds the buyer's account for the
+ * shop's pages. Expects `items.product.media` and `shop` preloaded, and
+ * `user` for `forShop`.
  */
 export default class OrderTransformer extends BaseTransformer<Order> {
   toObject() {
@@ -40,9 +43,6 @@ export default class OrderTransformer extends BaseTransformer<Order> {
       paymentMethod: 'Cash on delivery',
       shippingAddress: (order.shippingAddress ?? null) as ShippingAddress | null,
       shop: order.shop ? { name: order.shop.name, slug: order.shop.slug } : null,
-      customer: order.user
-        ? { fullName: order.user.fullName, email: order.user.email, phone: order.user.phone }
-        : null,
       items: (order.items ?? []).map((item) => ({
         id: item.id,
         name: item.productNameSnapshot,
@@ -55,6 +55,18 @@ export default class OrderTransformer extends BaseTransformer<Order> {
         image: smallPhotoUrl(item.product?.media?.[0]),
       })),
       itemCount: (order.items ?? []).reduce((sum, item) => sum + item.quantity, 0),
+    }
+  }
+
+  /*
+   * The shop's view: the order plus the buyer's account, so the shop can
+   * reach a customer who ordered for someone else.
+   */
+  forShop() {
+    const user = this.resource.user
+    return {
+      ...this.toObject(),
+      customer: user ? { fullName: user.fullName, email: user.email, phone: user.phone } : null,
     }
   }
 }

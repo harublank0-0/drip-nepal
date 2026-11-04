@@ -15,12 +15,13 @@ function statusError(message: string): never {
 
 export default class OrderService {
   /*
-   * An order with everything the order pages show.
+   * An order with everything the customer's order pages show. It leaves
+   * out the buyer's account (docs/07 §5); the shop's pages use
+   * `shopDetailQuery`.
    */
   detailQuery() {
     return Order.query()
       .preload('shop')
-      .preload('user')
       .preload('payments')
       .preload('items', (items) =>
         items
@@ -66,8 +67,15 @@ export default class OrderService {
     return Number(result.$extras.total)
   }
 
+  /*
+   * An order for the shop's pages: everything, plus the buyer's account.
+   */
+  shopDetailQuery() {
+    return this.detailQuery().preload('user')
+  }
+
   async findForShop(shop: Shop, orderNumber: string) {
-    return this.detailQuery()
+    return this.shopDetailQuery()
       .where('shop_id', shop.id)
       .where('order_number', orderNumber)
       .firstOrFail()

@@ -19,7 +19,7 @@ import { formatDate, formatPrice } from '~/lib/format'
 import type { InertiaProps } from '~/types'
 
 type PageProps = InertiaProps<{
-  order: Data.Order
+  order: Data.Order.Variants['forShop']
   nextStatuses: string[]
 }>
 

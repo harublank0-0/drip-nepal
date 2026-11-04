@@ -12,7 +12,7 @@ import type { InertiaProps } from '~/types'
 import type { Paginated } from '~/types/pagination'
 
 type PageProps = InertiaProps<{
-  orders: Paginated<Data.Order>
+  orders: Paginated<Data.Order.Variants['forShop']>
   filters: { status: string }
   counts: Record<string, number>
 }>
