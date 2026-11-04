@@ -27,7 +27,7 @@ Each rule names its owner; read it there before relying on the summary.
 - **Jobs.** Jobs run on pg-boss and are sent inside the same transaction as the change that causes them; handlers are idempotent ([ADR-0010](docs/adr/0010-postgres-jobs-pg-boss-transactional-send.md), [03 §9–§10](docs/03-system-architecture.md#9-asynchronous-work)).
 - **Data model and migrations.** Tables, columns and constraints are exactly those of [04a](docs/04a-data-dictionary-tables.md); conventions in [04 §2](docs/04-domain-model-and-data-dictionary.md). The schema is re-baselined in M0; after that an applied migration is never edited ([ADR-0011](docs/adr/0011-schema-rebaseline-before-production.md), [09 §8](docs/09-code-structure-and-engineering-standards.md#8-migrations-and-seeders)).
 - **Personal data and logs.** Classification, encryption, masking and retention rules are in [07 §5](docs/07-security-threat-model-and-permissions.md) and [04 §19](docs/04-domain-model-and-data-dictionary.md); no third-party analytics. Never log secrets, tokens or personal values ([09 §7](docs/09-code-structure-and-engineering-standards.md#7-structured-logging)).
-- **Frontend.** Pages, components, tokens and the accessibility target are in [08](docs/08-ui-ux-and-design-system.md); frontend code rules in [09 §13](docs/09-code-structure-and-engineering-standards.md#13-frontend-code-standards). shadcn/ui is the component base ([ADR-0015](docs/adr/0015-ui-foundation-shadcn-and-kit-policy.md)); the UI skills in `.agents/skills/` help with design work but never override 08.
+- **Frontend.** Pages, components, tokens and the accessibility target are in [08](docs/08-ui-ux-and-design-system.md); frontend code rules in [09 §13](docs/09-code-structure-and-engineering-standards.md#13-frontend-code-standards). shadcn/ui is the component base ([ADR-0015](docs/adr/0015-ui-foundation-shadcn-and-kit-policy.md)); the `shadcn` and `vercel-react-best-practices` skills help with UI work but never override 08 or 09.
 - **Files and names.** snake_case file names on the server and in `inertia/` (shadcn copies in `inertia/components/ui/` keep their names). Generated files are never edited by hand ([09 §1.4](docs/09-code-structure-and-engineering-standards.md#14-generated-artefacts)).
 - **Tests.** Every behaviour you add cites a test ID from [10 §6](docs/10-testing-and-quality-gates.md#6-test-id-registry); a new test gets its ID registered there first. Concurrency, triggers and grants are tested on real PostgreSQL ([10 §3](docs/10-testing-and-quality-gates.md#3-test-layers-and-tooling)).
 
@@ -38,6 +38,20 @@ Work is tracked in GitHub Issues: one GitHub milestone per milestone of [docs/12
 ## When the code and the documents disagree
 
 The documents describe the target. If the code differs, the code is wrong unless the document is. If the document is wrong or incomplete, fix the owning document in the same pull request, then the documents that restate it, and record the change in its Consistency notes ([docs/README.md §4](docs/README.md#4-changing-a-document)). An Accepted ADR is changed only by a dated "Edited YYYY-MM-DD" note before the first production release, and by a superseding ADR after it. A new open decision goes to the [risks register](docs/risks-and-open-decisions.md), a new assumption to [00 §6](docs/00-context-assumptions-and-questions.md#6-proposed-defaults-and-assumptions-register).
+
+## Skills
+
+Skills live in `.agents/skills/` and are tracked; each has a symlink in `.claude/skills/`, where Claude Code loads project skills ([09 §1.5](docs/09-code-structure-and-engineering-standards.md#15-current-code--target-structure)).
+
+| Skill                                                                                | Use it to                                                                        |
+| ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| [`dripnepal-docs`](.agents/skills/dripnepal-docs/SKILL.md)                           | Find the document that owns a fact, and change the docs correctly                |
+| [`dripnepal-testing`](.agents/skills/dripnepal-testing/SKILL.md)                     | Get a test database, run the suites, and write tests that can fail               |
+| [`dripnepal-run`](.agents/skills/dripnepal-run/SKILL.md)                             | Start the app with demo data and check pages in a headless browser               |
+| [`shadcn`](.agents/skills/shadcn/SKILL.md)                                           | Work with shadcn/ui components (patched to ADR-0015; see its `LOCAL_CHANGES.md`) |
+| [`vercel-react-best-practices`](.agents/skills/vercel-react-best-practices/SKILL.md) | Review React code for performance; its Next.js server rules don't apply here     |
+
+A new project skill goes in `.agents/skills/dripnepal-<name>/` with a `.claude/skills/` symlink. A third-party skill is committed only after a licence check and a read-through for scripts, commands it runs on load, and remote instructions it fetches; record it in `skills-lock.json` and the risks decision log.
 
 ## Keep the repository self-contained
 
