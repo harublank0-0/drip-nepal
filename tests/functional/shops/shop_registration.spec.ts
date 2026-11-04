@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { test } from '@japa/runner'
 import { errors as vineErrors } from '@vinejs/vine'
 import { userSignupValidator } from '#modules/auth/validators/user'
-import { shopSignupValidator } from '#modules/shops/validators/shop'
+import { SHOP_SLUG_MESSAGE, shopSignupValidator } from '#modules/shops/validators/shop'
 import { createShop } from '#tests/support/fixtures'
 
 /*
@@ -48,16 +48,21 @@ function signup(fields: Record<string, unknown> = {}) {
   }
 }
 
-async function refusedFields(validation: Promise<unknown>) {
+async function refusals(validation: Promise<unknown>) {
   try {
     await validation
   } catch (error) {
     if (error instanceof vineErrors.E_VALIDATION_ERROR) {
-      return (error.messages as { field: string }[]).map((message) => message.field)
+      return error.messages as { field: string; message: string }[]
     }
     throw error
   }
   return []
+}
+
+async function refusedFields(validation: Promise<unknown>) {
+  const found = await refusals(validation)
+  return found.map((refusal) => refusal.field)
 }
 
 test.group('Shop registration checks [v1]', (group) => {
@@ -124,6 +129,22 @@ test.group('Shop registration checks [v1]', (group) => {
     )
 
     assert.sameMembers(refused, ['email', 'phone'])
+  })
+
+  test('the refusals say what to change', async ({ assert }) => {
+    const taken = await createShop()
+
+    const messages = await refusals(
+      shopSignupValidator.validate(
+        registration({ shopName: taken.name, shopSlug: 'Asha Store', categories: ['no-such'] })
+      )
+    )
+
+    assert.deepEqual(Object.fromEntries(messages.map(({ field, message }) => [field, message])), {
+      'shopName': 'A shop with this name already exists',
+      'shopSlug': SHOP_SLUG_MESSAGE,
+      'categories.0': 'Select categories from the list',
+    })
   })
 
   test('an email longer than the 100-character column is refused', async ({ assert }) => {

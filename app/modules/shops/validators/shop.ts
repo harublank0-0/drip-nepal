@@ -1,4 +1,4 @@
-import vine from '@vinejs/vine'
+import vine, { SimpleMessagesProvider } from '@vinejs/vine'
 import { ACCOUNT_EMAIL_MAX, email, password } from '#validators/shared'
 
 /*
@@ -6,6 +6,8 @@ import { ACCOUNT_EMAIL_MAX, email, password } from '#validators/shared'
  * registration form makes it from the shop name (`dripSlugify`).
  */
 export const SHOP_SLUG_FORMAT = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
+export const SHOP_SLUG_MESSAGE =
+  'Use lower-case letters and numbers, with single hyphens between words'
 
 export const shopSignupValidator = vine.create({
   // user data
@@ -56,4 +58,16 @@ export const shopSignupValidator = vine.create({
   city: vine.string().trim().minLength(1).maxLength(100),
   district: vine.string().trim().minLength(1).maxLength(100),
   province: vine.string().trim().minLength(1).maxLength(100),
+})
+
+// Shown under the registration form's fields.
+shopSignupValidator.messagesProvider = new SimpleMessagesProvider({
+  'email.database.unique': 'An account or shop already uses this email',
+  'phone.database.unique': 'An account or shop already uses this phone number',
+  'shopName.database.unique': 'A shop with this name already exists',
+  'shopSlug.regex': SHOP_SLUG_MESSAGE,
+  'shopSlug.database.unique': 'This shop URL is taken. Try another.',
+  'categories.array.minLength': 'Select at least one category',
+  'categories.distinct': 'Select each category once',
+  'categories.*.database.exists': 'Select categories from the list',
 })
