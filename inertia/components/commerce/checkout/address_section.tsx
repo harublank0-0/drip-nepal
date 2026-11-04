@@ -18,6 +18,7 @@ type AddressSectionProps = {
   onPickSaved: (id: string) => void
   onPickNew: () => void
   onAddressChange: (patch: Partial<AddressFields>) => void
+  guest?: boolean
 }
 
 const optionClass =
@@ -37,12 +38,19 @@ export function AddressSection({
   onPickSaved,
   onPickNew,
   onAddressChange,
+  guest,
 }: AddressSectionProps) {
   const addressIdError = typeof errors?.addressId === 'string' ? errors.addressId : undefined
 
   if (addresses.length === 0) {
     return (
-      <AddressForm value={address} onChange={onAddressChange} errors={errors} disabled={disabled} />
+      <AddressForm
+        value={address}
+        onChange={onAddressChange}
+        errors={errors}
+        disabled={disabled}
+        guest={guest}
+      />
     )
   }
 

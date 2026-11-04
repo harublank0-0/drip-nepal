@@ -80,6 +80,7 @@ declare module '@adonisjs/inertia/types' {
     'legal/privacy': ExtractProps<(typeof import('../../inertia/pages/legal/privacy.tsx'))['default']>
     'legal/returns': ExtractProps<(typeof import('../../inertia/pages/legal/returns.tsx'))['default']>
     'legal/terms': ExtractProps<(typeof import('../../inertia/pages/legal/terms.tsx'))['default']>
+    'orders/track': ExtractProps<(typeof import('../../inertia/pages/orders/track.tsx'))['default']>
     'shops/dashboard/index': ExtractProps<(typeof import('../../inertia/pages/shops/dashboard/index.tsx'))['default']>
     'shops/dashboard/orders/index': ExtractProps<(typeof import('../../inertia/pages/shops/dashboard/orders/index.tsx'))['default']>
     'shops/dashboard/orders/show': ExtractProps<(typeof import('../../inertia/pages/shops/dashboard/orders/show.tsx'))['default']>

@@ -13,7 +13,7 @@ type BrandingPanelProps = {
 const defaultBenefits = [
   'Pay cash when your order arrives',
   'Delivery across Nepal',
-  'Track every order from your account',
+  'All your orders in one place',
 ]
 
 const containerVariants: Variants = {
@@ -79,7 +79,8 @@ export function BrandingPanel({
             </Typography.H1>
           )}
           <Typography.P className="!mt-0 max-w-md text-base text-muted-foreground lg:text-lg">
-            {subheading ?? 'Create an account to order. You pay in cash when your parcel arrives.'}
+            {subheading ??
+              'An account keeps your addresses and orders in one place. You can also order as a guest.'}
           </Typography.P>
         </motion.div>
 

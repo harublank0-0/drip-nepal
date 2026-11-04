@@ -248,7 +248,7 @@ export class OrderSchema extends BaseModel {
   @column()
   declare userAddressId: string | null
   @column()
-  declare userId: string
+  declare userId: string | null
 }
 
 export class PaymentSchema extends BaseModel {

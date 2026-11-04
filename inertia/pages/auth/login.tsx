@@ -55,9 +55,9 @@ export default function Login() {
               </span>
             </>
           }
-          subheading="Log in to check out, track your orders and reuse your saved addresses."
+          subheading="Log in to see your orders and check out faster with your saved addresses."
           benefits={[
-            'Track every order from your account',
+            'All your orders in one place',
             'Check out faster with saved addresses',
             'Pay cash when your order arrives',
           ]}
@@ -74,7 +74,7 @@ export default function Login() {
             <div className="mb-6 sm:mb-8 sm:text-center">
               <h1 className="font-heading text-3xl font-bold tracking-tight sm:text-2xl">Log in</h1>
               <p className="mt-1.5 text-sm text-muted-foreground">
-                Welcome back. Log in to check out and track your orders.
+                Welcome back. Log in to use your saved addresses and see your orders.
               </p>
             </div>
 

@@ -161,8 +161,9 @@ export default function ShopDashboardPage({ stats, lowStock, recentOrders }: Pag
                     <div className="min-w-0">
                       <p className="font-medium">{order.orderNumber}</p>
                       <p className="truncate text-xs text-muted-foreground">
-                        {order.customer?.fullName} · {order.itemCount}{' '}
-                        {order.itemCount === 1 ? 'item' : 'items'} · {formatDate(order.placedAt)}
+                        {order.shippingAddress?.recipientName ?? order.customer?.fullName} ·{' '}
+                        {order.itemCount} {order.itemCount === 1 ? 'item' : 'items'} ·{' '}
+                        {formatDate(order.placedAt)}
                       </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-3">

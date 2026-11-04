@@ -81,6 +81,11 @@ export function Footer() {
             <h3 className={headingClass}>Help</h3>
             <ul>
               <li>
+                <Link route="orders.track" className={linkClass}>
+                  Track order
+                </Link>
+              </li>
+              <li>
                 <Link route="account.orders.index" className={linkClass}>
                   My orders
                 </Link>

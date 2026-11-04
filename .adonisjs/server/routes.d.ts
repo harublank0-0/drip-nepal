@@ -36,12 +36,16 @@ export type ScannedRoutes = {
     'cart.show': { paramsTuple?: []; params?: {} }
     'checkout.show': { paramsTuple?: []; params?: {} }
     'checkout.success': { paramsTuple: [ParamValue]; params: {'checkoutId': ParamValue} }
-    'account.orders.index': { paramsTuple?: []; params?: {} }
-    'account.orders.show': { paramsTuple: [ParamValue]; params: {'orderNumber': ParamValue} }
     'api.cart.items.store': { paramsTuple?: []; params?: {} }
     'api.cart.items.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'api.cart.items.destroy': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'api.checkout.store': { paramsTuple?: []; params?: {} }
+    'orders.track': { paramsTuple?: []; params?: {} }
+    'orders.track.show': { paramsTuple: [ParamValue]; params: {'orderNumber': ParamValue} }
+    'api.orders.track.lookup': { paramsTuple?: []; params?: {} }
+    'api.orders.track.cancel': { paramsTuple: [ParamValue]; params: {'orderNumber': ParamValue} }
+    'account.orders.index': { paramsTuple?: []; params?: {} }
+    'account.orders.show': { paramsTuple: [ParamValue]; params: {'orderNumber': ParamValue} }
     'api.account.orders.cancel': { paramsTuple: [ParamValue]; params: {'orderNumber': ParamValue} }
     'admin.home': { paramsTuple?: []; params?: {} }
     'admin.shops.index': { paramsTuple?: []; params?: {} }
@@ -73,6 +77,8 @@ export type ScannedRoutes = {
     'cart.show': { paramsTuple?: []; params?: {} }
     'checkout.show': { paramsTuple?: []; params?: {} }
     'checkout.success': { paramsTuple: [ParamValue]; params: {'checkoutId': ParamValue} }
+    'orders.track': { paramsTuple?: []; params?: {} }
+    'orders.track.show': { paramsTuple: [ParamValue]; params: {'orderNumber': ParamValue} }
     'account.orders.index': { paramsTuple?: []; params?: {} }
     'account.orders.show': { paramsTuple: [ParamValue]; params: {'orderNumber': ParamValue} }
     'admin.home': { paramsTuple?: []; params?: {} }
@@ -104,6 +110,8 @@ export type ScannedRoutes = {
     'cart.show': { paramsTuple?: []; params?: {} }
     'checkout.show': { paramsTuple?: []; params?: {} }
     'checkout.success': { paramsTuple: [ParamValue]; params: {'checkoutId': ParamValue} }
+    'orders.track': { paramsTuple?: []; params?: {} }
+    'orders.track.show': { paramsTuple: [ParamValue]; params: {'orderNumber': ParamValue} }
     'account.orders.index': { paramsTuple?: []; params?: {} }
     'account.orders.show': { paramsTuple: [ParamValue]; params: {'orderNumber': ParamValue} }
     'admin.home': { paramsTuple?: []; params?: {} }
@@ -121,6 +129,8 @@ export type ScannedRoutes = {
     'api.cart.items.store': { paramsTuple?: []; params?: {} }
     'api.cart.items.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'api.checkout.store': { paramsTuple?: []; params?: {} }
+    'api.orders.track.lookup': { paramsTuple?: []; params?: {} }
+    'api.orders.track.cancel': { paramsTuple: [ParamValue]; params: {'orderNumber': ParamValue} }
     'api.account.orders.cancel': { paramsTuple: [ParamValue]; params: {'orderNumber': ParamValue} }
     'api.admin.shops.status': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
   }

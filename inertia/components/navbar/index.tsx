@@ -63,10 +63,8 @@ export const NavBar = () => {
   const [profileOpen, setProfileOpen] = useState(false)
   const router = useRouter()
 
-  const itemCount = user ? cartCount : 0
-  const cartLabel = user
-    ? `Shopping bag${itemCount > 0 ? `, ${itemCount} ${itemCount === 1 ? 'item' : 'items'}` : ''}`
-    : 'Shopping bag (sign in to view)'
+  const itemCount = cartCount
+  const cartLabel = `Shopping bag${itemCount > 0 ? `, ${itemCount} ${itemCount === 1 ? 'item' : 'items'}` : ''}`
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 80)
@@ -178,26 +176,20 @@ export const NavBar = () => {
               </Button>
             </li>
 
-            {/* Cart: logged-out shoppers go to the login page instead */}
+            {/* Cart: guests have one too */}
             <li>
               <Button variant="ghost" size="icon-sm" className="relative size-11 md:size-8" asChild>
-                {user ? (
-                  <Link route="cart.show" aria-label={cartLabel}>
-                    <LucideShoppingBag className="size-5" aria-hidden="true" />
-                    {itemCount > 0 && (
-                      <span
-                        className="absolute top-1 right-1 md:-top-1 md:-right-1 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground"
-                        aria-hidden="true"
-                      >
-                        {itemCount > 9 ? '9+' : itemCount}
-                      </span>
-                    )}
-                  </Link>
-                ) : (
-                  <Link route="ui.auth.user_session.create" aria-label={cartLabel}>
-                    <LucideShoppingBag className="size-5" aria-hidden="true" />
-                  </Link>
-                )}
+                <Link route="cart.show" aria-label={cartLabel}>
+                  <LucideShoppingBag className="size-5" aria-hidden="true" />
+                  {itemCount > 0 && (
+                    <span
+                      className="absolute top-1 right-1 md:-top-1 md:-right-1 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground"
+                      aria-hidden="true"
+                    >
+                      {itemCount > 9 ? '9+' : itemCount}
+                    </span>
+                  )}
+                </Link>
               </Button>
             </li>
 
@@ -427,18 +419,26 @@ export const NavBar = () => {
                     </button>
                   </>
                 ) : (
-                  <div className="grid grid-cols-2 gap-2 p-1">
-                    <Button asChild className="h-11 rounded-xl">
-                      <Link route="ui.auth.user_session.create">Log in</Link>
-                    </Button>
-                    <Button asChild variant="outline" className="h-11 rounded-xl">
-                      <Link route="ui.auth.user_registration.create">Create account</Link>
-                    </Button>
-                  </div>
+                  <>
+                    <MobileMenuLink route="cart.show" icon={LucideShoppingBag}>
+                      Cart{itemCount > 0 ? ` (${itemCount})` : ''}
+                    </MobileMenuLink>
+                    <div className="grid grid-cols-2 gap-2 p-1">
+                      <Button asChild className="h-11 rounded-xl">
+                        <Link route="ui.auth.user_session.create">Log in</Link>
+                      </Button>
+                      <Button asChild variant="outline" className="h-11 rounded-xl">
+                        <Link route="ui.auth.user_registration.create">Create account</Link>
+                      </Button>
+                    </div>
+                  </>
                 )}
               </div>
 
               <nav aria-label="Help" className="mx-5 mt-4 mb-8">
+                <MobileMenuLink route="orders.track" icon={LucideSearch}>
+                  Track order
+                </MobileMenuLink>
                 <MobileMenuLink route="legal.returns" icon={LucideRotateCcw}>
                   Returns and refunds
                 </MobileMenuLink>

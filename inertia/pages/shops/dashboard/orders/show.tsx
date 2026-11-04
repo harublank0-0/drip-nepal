@@ -200,11 +200,11 @@ export default function ShopOrderPage({ order, nextStatuses }: PageProps) {
             ) : (
               <p className="text-muted-foreground">No address on this order.</p>
             )}
-            {order.customer && (
-              <p className="border-t pt-3 text-xs text-muted-foreground">
-                Account: {order.customer.fullName} · {order.customer.email}
-              </p>
-            )}
+            <p className="border-t pt-3 text-xs text-muted-foreground">
+              {order.customer
+                ? `Account: ${order.customer.fullName} · ${order.customer.email}`
+                : 'Guest order, placed without an account. Call the number above to confirm it.'}
+            </p>
           </section>
 
           {order.notes && (
