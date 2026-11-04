@@ -96,7 +96,12 @@ export default class OrderService {
       locked.status = to
 
       if (to === OrderStatus.CANCELLED) {
-        const items = await OrderItem.query({ client: trx }).where('order_id', order.id)
+        // Restocked in ascending variant id, the order checkout locks
+        // variants in (docs/05 §4.4), so a cancellation never deadlocks
+        // with a checkout of the same items.
+        const items = await OrderItem.query({ client: trx })
+          .where('order_id', order.id)
+          .orderBy('product_variant_id', 'asc')
         for (const item of items) {
           if (item.productVariantId) {
             await ProductVariant.query({ client: trx })

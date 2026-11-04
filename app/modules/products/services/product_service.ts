@@ -150,6 +150,13 @@ export default class ProductService {
       product.deletedAt = DateTime.now()
       await product.save()
 
+      // Locked in ascending id first, the order checkout locks variants in
+      // (docs/05 §4.4), so deleting a product never deadlocks with a
+      // checkout of two of its variants.
+      await ProductVariant.query({ client: trx })
+        .where('product_id', product.id)
+        .orderBy('id', 'asc')
+        .forUpdate()
       await ProductVariant.query({ client: trx })
         .where('product_id', product.id)
         .update({ status: VariantStatus.ARCHIVED })
@@ -191,24 +198,39 @@ export default class ProductService {
     inputs: VariantInput[],
     trx: TransactionClientContract
   ) {
-    const existing = await ProductVariant.query({ client: trx }).where('product_id', product.id)
+    // Locked in ascending id, the order checkout locks variants in
+    // (docs/05 §4.4), so a save and a checkout never deadlock, and the
+    // stock compared below is current.
+    const existing = await ProductVariant.query({ client: trx })
+      .where('product_id', product.id)
+      .orderBy('id', 'asc')
+      .forUpdate()
     const existingById = new Map(existing.map((variant) => [variant.id, variant]))
 
     await this.#assertVariantsAreValid(product, inputs, existingById, trx)
 
     const keptIds = new Set<string>()
 
-    for (const input of inputs) {
-      const variant = (input.id && existingById.get(input.id)) || new ProductVariant()
+    for (const [index, input] of inputs.entries()) {
+      const stored = input.id ? existingById.get(input.id) : undefined
+      // The form lists active variants only, so this one was removed
+      // elsewhere (another tab) after the page loaded.
+      if (stored?.status === VariantStatus.ARCHIVED) {
+        fieldError(
+          `variants.${index}.id`,
+          'This variant was removed while you were editing. Reload the page to see the current variants.'
+        )
+      }
+      const variant = stored ?? new ProductVariant()
       variant.useTransaction(trx)
       variant.merge({
         productId: product.id,
         sku: input.sku ?? variant.sku ?? this.#makeSku(shop),
         price: input.price.toFixed(2),
         comparePrice: typeof input.comparePrice === 'number' ? input.comparePrice.toFixed(2) : null,
-        quantity: input.quantity,
         status: VariantStatus.ACTIVE,
       })
+      variant.quantity = stored ? this.#stockToSave(stored, input, index) : input.quantity
       await variant.save()
       keptIds.add(variant.id)
 
@@ -229,6 +251,30 @@ export default class ProductService {
         await variant.save()
       }
     }
+  }
+
+  /*
+   * The stock to keep for an existing variant, read under its row lock.
+   * The form can be open for minutes while customers buy, so it sends the
+   * stock it showed (`expectedQuantity`). A number the seller didn't change
+   * keeps the current stock, so sales made meanwhile stand. A changed
+   * number is taken only if the stock is still what the form showed;
+   * otherwise the seller is told the current stock and saves again. This
+   * is the stocktake rule of docs/05 §5.9 (`expected_on_hand`).
+   */
+  #stockToSave(locked: ProductVariant, input: VariantInput, index: number) {
+    const field = `variants.${index}.expectedQuantity`
+    if (input.expectedQuantity === undefined) {
+      fieldError(field, 'Reload the page to see the current stock, then save again')
+    }
+    if (input.quantity === input.expectedQuantity) return locked.quantity
+    if (locked.quantity !== input.expectedQuantity) {
+      fieldError(
+        field,
+        `Stock changed to ${locked.quantity} while you were editing (an order or a cancellation). Check the number and save again.`
+      )
+    }
+    return input.quantity
   }
 
   async #assertVariantsAreValid(
