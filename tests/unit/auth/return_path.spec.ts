@@ -29,6 +29,10 @@ test.group('Return path after login', () => {
       { $self: 'https://evil.example/' },
       { $self: 'evil.example' },
       { $self: '/api/v1/checkout' },
+      { $self: '/..//evil.example' },
+      { $self: '/.//evil.example' },
+      { $self: '/x/..//evil.example' },
+      { $self: '/%2e%2e//evil.example' },
       { $self: '' },
     ])
     .run(({ assert }, row) => {

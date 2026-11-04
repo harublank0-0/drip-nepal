@@ -5,8 +5,9 @@ const BASE = 'http://return.invalid'
  * value isn't a path on this site. Browsers read `//host`, `/\host` and
  * `/<tab>/host` as another host, so a value is kept only when it starts
  * with a single `/`, holds no backslash or control character, and a URL
- * parser resolves it to this site. API paths are refused: they aren't
- * pages. The fragment is dropped.
+ * parser resolves it to a path on this site that doesn't itself start
+ * with `//`. API paths are refused: they aren't pages. The fragment is
+ * dropped.
  */
 export function safeReturnPath(value: unknown): string | null {
   if (typeof value !== 'string' || !value.startsWith('/') || value.startsWith('//')) return null
@@ -19,6 +20,9 @@ export function safeReturnPath(value: unknown): string | null {
   } catch {
     return null
   }
-  if (url.origin !== BASE || url.pathname.startsWith('/api/')) return null
+  // Dot segments can still resolve to `//host`: `/..//host` is `//host`.
+  if (url.origin !== BASE || url.pathname.startsWith('//') || url.pathname.startsWith('/api/')) {
+    return null
+  }
   return `${url.pathname}${url.search}`
 }
