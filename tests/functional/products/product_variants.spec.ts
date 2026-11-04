@@ -44,16 +44,22 @@ function save(shop: Shop, product: Product, rows: Row[]) {
 
 // An existing variant as the form sends it back unchanged.
 function kept(variant: ProductVariant): Row {
+  const option = (slug: string) =>
+    variant.attributeValues.find((value) => value.attribute.slug === slug)?.value
   return {
     id: variant.id,
     sku: variant.sku,
+    size: option('size'),
+    color: option('color'),
     quantity: variant.quantity,
     expectedQuantity: variant.quantity,
   }
 }
 
 async function variantsOf(product: Product) {
-  return ProductVariant.query().where('product_id', product.id).preload('attributeValues')
+  return ProductVariant.query()
+    .where('product_id', product.id)
+    .preload('attributeValues', (values) => values.preload('attribute'))
 }
 
 async function variantSized(product: Product, size: string) {
@@ -69,13 +75,15 @@ function refusal(promise: Promise<unknown>) {
 }
 
 function assertFieldError(
-  assert: { instanceOf: Function; equal: Function },
+  assert: { instanceOf: Function; match: Function; include: Function },
   error: unknown,
-  field: string
+  field: RegExp,
+  says: string
 ) {
   assert.instanceOf(error, vineErrors.E_VALIDATION_ERROR)
-  const messages = (error as { messages: { field: string }[] }).messages
-  assert.equal(messages[0]?.field, field)
+  const [first] = (error as { messages: { field: string; message: string }[] }).messages
+  assert.match(first?.field, field)
+  assert.include(first?.message, says)
 }
 
 test.group('Product form variants [v1]', (group) => {
@@ -132,6 +140,7 @@ test.group('Product form variants [v1]', (group) => {
       .where('product_id', product.id)
       .where('status', VariantStatus.ACTIVE)
     assert.lengthOf(active, 2)
+    assert.deepEqual(kept(await variantSized(product, 'L')).color, 'Red')
   })
 
   test("a removed variant's SKU on another size is refused on the field", async ({ assert }) => {
@@ -151,7 +160,7 @@ test.group('Product form variants [v1]', (group) => {
       save(shop, product, [kept(large), { size: 'S', color: 'Red', sku }])
     )
 
-    assertFieldError(assert, error, 'variants.1.sku')
+    assertFieldError(assert, error, /^variants\.1\.sku$/, 'A variant you removed')
   })
 
   test('removing a variant and adding its SKU in the same save is refused on the field', async ({
@@ -172,18 +181,69 @@ test.group('Product form variants [v1]', (group) => {
       save(shop, product, [kept(large), { size: 'M', color: 'Red', sku }])
     )
 
-    assertFieldError(assert, error, 'variants.1.sku')
+    assertFieldError(assert, error, /^variants\.1\.sku$/, 'Save the removal first')
   })
 
-  test("another product's SKU is refused on the field", async ({ assert }) => {
+  test('two variants swapping SKUs in one save are refused, saying how to do it', async ({
+    assert,
+  }) => {
     const shop = await createShop()
-    const sku = `TEE-M-RED-${Date.now()}`
-    await new ProductService().create(shop, await payload([{ size: 'M', sku }]))
+    const product = await new ProductService().create(
+      shop,
+      await payload([
+        { size: 'M', sku: `SWAP-A-${Date.now()}` },
+        { size: 'L', sku: `SWAP-B-${Date.now()}` },
+      ])
+    )
+    const medium = await variantSized(product, 'M')
+    const large = await variantSized(product, 'L')
+
+    const error = await refusal(
+      save(shop, product, [
+        { ...kept(medium), sku: large.sku },
+        { ...kept(large), sku: medium.sku },
+      ])
+    )
+
+    assertFieldError(assert, error, /^variants\.[01]\.sku$/, 'give one a temporary SKU')
+  })
+
+  test("the shop's other product's SKU is refused, naming the product", async ({ assert }) => {
+    const shop = await createShop()
+    const sku = `KURTA-M-${Date.now()}`
+    await new ProductService().create(shop, await payload([{ size: 'M', sku }], 'Silk saree'))
 
     const error = await refusal(
       new ProductService().create(shop, await payload([{ size: 'L', sku }], 'Other'))
     )
 
-    assertFieldError(assert, error, 'variants.0.sku')
+    assertFieldError(assert, error, /^variants\.0\.sku$/, 'Your product "Silk saree"')
+  })
+
+  test('a SKU of a product the shop deleted is refused, saying so', async ({ assert }) => {
+    const shop = await createShop()
+    const sku = `KURTA-M-${Date.now()}`
+    const service = new ProductService()
+    const deleted = await service.create(shop, await payload([{ size: 'M', sku }], 'Old kurta'))
+    await service.archive(deleted)
+
+    const error = await refusal(service.create(shop, await payload([{ size: 'M', sku }], 'New')))
+
+    assertFieldError(assert, error, /^variants\.0\.sku$/, 'A product you deleted ("Old kurta")')
+  })
+
+  test("another shop's SKU is refused without naming its product", async ({ assert }) => {
+    const sku = `KURTA-M-${Date.now()}`
+    await new ProductService().create(
+      await createShop(),
+      await payload([{ size: 'M', sku }], 'Their kurta')
+    )
+
+    const error = await refusal(
+      new ProductService().create(await createShop(), await payload([{ size: 'M', sku }], 'Mine'))
+    )
+
+    assertFieldError(assert, error, /^variants\.0\.sku$/, 'already in use')
+    assert.notInclude((error as Error).message + JSON.stringify(error), 'Their kurta')
   })
 })

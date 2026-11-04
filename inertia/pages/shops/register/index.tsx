@@ -29,8 +29,9 @@ export default function ShopSignupPage({ success: isSuccess, shopSlug }: PagePro
   const [step, setStep] = useState(1)
   const [isSubmitting, setIsSubmitting] = useState(false)
   // What the server refused (an email or shop name already taken, ...),
-  // which the form's own checks can't know.
-  const [refusals, setRefusals] = useState<string[]>([])
+  // which the form's own checks can't know. Each goes once its field is
+  // changed.
+  const [refusals, setRefusals] = useState<{ field: string; message: string }[]>([])
   const router = useRouter()
 
   const shopRegisterForm = useForm({
@@ -38,6 +39,18 @@ export default function ShopSignupPage({ success: isSuccess, shopSlug }: PagePro
     validators: {
       onChange: onboardingSchema,
       onSubmit: onboardingSchema,
+    },
+    listeners: {
+      onChange: ({ fieldApi }) => {
+        // A new shop name also makes a new shop URL (step_shop_info.tsx).
+        const changed =
+          fieldApi.name === 'shopName' ? ['shopName', 'shopSlug'] : [String(fieldApi.name)]
+        setRefusals((current) =>
+          current.some(({ field }) => changed.includes(field))
+            ? current.filter(({ field }) => !changed.includes(field))
+            : current
+        )
+      },
     },
     onSubmit: async ({ value }) => {
       setIsSubmitting(true)
@@ -53,9 +66,13 @@ export default function ShopSignupPage({ success: isSuccess, shopSlug }: PagePro
           // on the step that has it.
           preserveState: true,
           onError: (errors) => {
-            setRefusals([...new Set(Object.values(errors))])
-            const fields = Object.keys(errors).map((path) => path.split('.')[0])
-            setStep(fields.some((field) => ACCOUNT_FIELDS.includes(field)) ? 1 : 2)
+            // `categories.1` is the categories field.
+            const found = Object.entries(errors).map(([path, message]) => ({
+              field: path.split('.')[0],
+              message,
+            }))
+            setRefusals(found)
+            setStep(found.some(({ field }) => ACCOUNT_FIELDS.includes(field)) ? 1 : 2)
           },
           onFinish: () => setIsSubmitting(false),
         }
@@ -175,7 +192,7 @@ export default function ShopSignupPage({ success: isSuccess, shopSlug }: PagePro
                 <AlertTitle>Your shop wasn&apos;t created</AlertTitle>
                 <AlertDescription>
                   <ul className="list-disc pl-4">
-                    {refusals.map((message) => (
+                    {[...new Set(refusals.map(({ message }) => message))].map((message) => (
                       <li key={message}>{message}</li>
                     ))}
                   </ul>

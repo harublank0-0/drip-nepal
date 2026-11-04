@@ -31,6 +31,17 @@ type VariantInput = ProductPayload['variants'][number]
 
 type StoredPhoto = StoredPhotoFiles & { name: string }
 
+// A variant that holds a SKU, with its product, for the clash message.
+type SkuHolder = {
+  id: string
+  sku: string
+  status: string
+  product_id: string
+  shop_id: string
+  name: string
+  deleted_at: Date | null
+}
+
 /*
  * Every file a media row owns. Rows from before photos were resized have
  * only `key`, the original upload.
@@ -362,26 +373,44 @@ export default class ProductService {
 
     // Any variant holding the SKU other than the row's own (or the removed
     // variant it brings back) is a clash: the insert or update would break
-    // the store-wide unique SKU.
-    const holders = await ProductVariant.query({ client: trx })
-      .whereIn('sku', [...seenSkus.keys()])
-      .select('id', 'sku', 'product_id', 'status')
+    // the store-wide unique SKU. The message says where the SKU is.
+    const holders: SkuHolder[] = await trx
+      .from('product_variants')
+      .join('products', 'products.id', 'product_variants.product_id')
+      .whereIn('product_variants.sku', [...seenSkus.keys()])
+      .select(
+        'product_variants.id',
+        'product_variants.sku',
+        'product_variants.status',
+        'products.id as product_id',
+        'products.shop_id',
+        'products.name',
+        'products.deleted_at'
+      )
+    const keptIds = new Set(inputs.map((input) => input.id).filter(Boolean))
 
     for (const holder of holders) {
       const index = seenSkus.get(holder.sku)!
       if (holder.id === inputs[index].id || holder.id === restored.get(index)?.id) continue
-
-      const field = `variants.${index}.sku`
-      if (holder.productId !== product.id) {
-        fieldError(field, 'This SKU is already used by another product')
-      }
-      fieldError(
-        field,
-        holder.status === VariantStatus.ARCHIVED
-          ? 'A variant you removed from this product has this SKU, with another size or color. Use another SKU.'
-          : 'Another variant of this product has this SKU. Save the other change first, then this one.'
-      )
+      fieldError(`variants.${index}.sku`, this.#skuClash(holder, product, keptIds))
     }
+  }
+
+  #skuClash(holder: SkuHolder, product: Product, keptIds: Set<string | undefined>) {
+    if (holder.product_id === product.id) {
+      if (holder.status === VariantStatus.ARCHIVED) {
+        return 'A variant you removed from this product still has this SKU. Use another SKU.'
+      }
+      if (keptIds.has(holder.id)) {
+        return "Another variant of this product has this SKU until this save. Two variants can't swap SKUs in one save: give one a temporary SKU and save, then set the final SKUs."
+      }
+      return 'A variant you are removing has this SKU. Save the removal first, then add the variant again.'
+    }
+    if (holder.shop_id !== product.shopId) return 'This SKU is already in use. Use another SKU.'
+    if (holder.deleted_at) {
+      return `A product you deleted ("${holder.name}") used this SKU. Use another SKU.`
+    }
+    return `Your product "${holder.name}" already uses this SKU`
   }
 
   async #findOrCreateValue(
