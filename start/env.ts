@@ -9,9 +9,10 @@
 |
 */
 
-import { Env } from '@adonisjs/core/env'
+import { Env, errors } from '@adonisjs/core/env'
+import { environmentPolicyViolations } from '#start/env_policy'
 
-export default await Env.create(new URL('../', import.meta.url), {
+const env = await Env.create(new URL('../', import.meta.url), {
   // Node
   NODE_ENV: Env.schema.enum(['development', 'production', 'test'] as const),
   PORT: Env.schema.number(),
@@ -32,3 +33,21 @@ export default await Env.create(new URL('../', import.meta.url), {
   DB_PASSWORD: Env.schema.string(),
   DB_DATABASE: Env.schema.string(),
 })
+
+/*
+ * Cross-field policy (docs/09 §6.2). Boot stops with every broken rule listed,
+ * so the web process, the test runner and every `node ace` command refuse a
+ * bad combination before anything connects to the database.
+ */
+const violations = environmentPolicyViolations({
+  NODE_ENV: env.get('NODE_ENV'),
+  DB_DATABASE: env.get('DB_DATABASE'),
+})
+
+if (violations.length > 0) {
+  const error = new errors.E_INVALID_ENV_VARIABLES()
+  error.help = violations.map((violation) => `- ${violation}`).join('\n')
+  throw error
+}
+
+export default env
