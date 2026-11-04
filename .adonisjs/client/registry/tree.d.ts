@@ -45,6 +45,7 @@ export interface ApiDefinition {
         destroy: typeof routes['api.shops.shop_products.destroy']
       }
       shopOrders: {
+        awaiting: typeof routes['api.shops.shop_orders.awaiting']
         updateStatus: typeof routes['api.shops.shop_orders.update_status']
       }
     }

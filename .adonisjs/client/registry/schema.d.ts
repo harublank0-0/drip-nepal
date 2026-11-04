@@ -343,6 +343,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#modules/shops/controllers/shop_products_controller').default['destroy']>>>
     }
   }
+  'api.shops.shop_orders.awaiting': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/shops/:shopSlug/orders/awaiting'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { shopSlug: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#modules/shops/controllers/shop_orders_controller').default['awaiting']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#modules/shops/controllers/shop_orders_controller').default['awaiting']>>>
+    }
+  }
   'api.shops.shop_orders.update_status': {
     methods: ["POST"]
     pattern: '/api/v1/shops/:shopSlug/orders/:orderNumber/status'

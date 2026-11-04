@@ -1,5 +1,8 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react'
+import { usePage } from '@inertiajs/react'
+import type { Data } from '@generated/data'
 import type { BreadcrumbItem } from './types'
+import { useOrderAlerts, type OrderAlerts } from './use_order_alerts'
 
 interface DashboardContextType {
   sidebarCollapsed: boolean
@@ -9,6 +12,7 @@ interface DashboardContextType {
   setMobileNavOpen: (open: boolean) => void
   breadcrumbs: BreadcrumbItem[]
   setBreadcrumbs: (items: BreadcrumbItem[]) => void
+  orderAlerts: OrderAlerts
 }
 
 const DashboardContext = createContext<DashboardContextType | null>(null)
@@ -17,6 +21,8 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [breadcrumbs, setBreadcrumbs] = useState<BreadcrumbItem[]>([])
+  const { currentShop } = usePage<Data.SharedProps>().props
+  const orderAlerts = useOrderAlerts(currentShop?.slug)
 
   const toggleSidebar = useCallback(() => {
     setSidebarCollapsed((prev) => !prev)
@@ -32,6 +38,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
         setMobileNavOpen,
         breadcrumbs,
         setBreadcrumbs,
+        orderAlerts,
       }}
     >
       {children}

@@ -12,6 +12,8 @@ import {
   MenuIcon,
   HomeIcon,
   CheckIcon,
+  BellIcon,
+  BellRingIcon,
 } from 'lucide-react'
 import type { Data } from '@generated/data'
 import { cn } from '~/lib/utils'
@@ -29,7 +31,8 @@ import { useDashboard } from './dashboard_context'
 import { useTheme } from '~/components/providers/theme_provider'
 
 export function Navbar() {
-  const { toggleSidebar, setMobileNavOpen } = useDashboard()
+  const { toggleSidebar, setMobileNavOpen, orderAlerts } = useDashboard()
+  const { pending, alertsOn, notificationsAllowed, enableAlerts, disableAlerts } = orderAlerts
   const { theme, setTheme } = useTheme()
   const [scrolled, setScrolled] = useState(false)
   const { user, shops, currentShop } = usePage<Data.SharedProps>().props
@@ -107,6 +110,51 @@ export function Navbar() {
           ))}
         </DropdownMenuContent>
       </DropdownMenu>
+
+      {currentShop && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="relative"
+              aria-label={
+                pending ? `Order alerts: ${pending} waiting to be confirmed` : 'Order alerts'
+              }
+            >
+              {alertsOn ? <BellRingIcon className="size-4" /> : <BellIcon className="size-4" />}
+              {pending ? (
+                <span className="absolute -top-0.5 -right-0.5 flex min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] leading-4 font-semibold text-primary-foreground">
+                  {pending}
+                </span>
+              ) : null}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-64">
+            <DropdownMenuLabel>
+              {pending
+                ? `${pending} order${pending === 1 ? '' : 's'} waiting to be confirmed`
+                : 'No orders waiting'}
+            </DropdownMenuLabel>
+            {pending ? (
+              <DropdownMenuItem asChild>
+                <Link href={`/shops/${currentShop.slug}/orders?status=pending`}>
+                  See orders to confirm
+                </Link>
+              </DropdownMenuItem>
+            ) : null}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => (alertsOn ? disableAlerts() : void enableAlerts())}>
+              {alertsOn ? 'Turn off sound and desktop alerts' : 'Turn on sound and desktop alerts'}
+            </DropdownMenuItem>
+            {alertsOn && !notificationsAllowed ? (
+              <p className="px-2 pb-1.5 text-xs text-muted-foreground">
+                This browser blocks desktop notifications for this site, so alerts are sound only.
+              </p>
+            ) : null}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>

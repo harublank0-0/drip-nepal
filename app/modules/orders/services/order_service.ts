@@ -53,6 +53,19 @@ export default class OrderService {
       .firstOrFail()
   }
 
+  /*
+   * How many of the shop's orders wait for the shop to confirm them: the
+   * seller dashboard's new-order indicator (FR-NOT-003).
+   */
+  async awaitingCount(shop: Shop) {
+    const result = await Order.query()
+      .where('shop_id', shop.id)
+      .where('status', OrderStatus.PENDING)
+      .count('* as total')
+      .firstOrFail()
+    return Number(result.$extras.total)
+  }
+
   async findForShop(shop: Shop, orderNumber: string) {
     return this.detailQuery()
       .where('shop_id', shop.id)
