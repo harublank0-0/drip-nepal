@@ -18,7 +18,10 @@ export default class ShopOrdersController {
     const page = Math.max(1, Number(request.input('page', 1)) || 1)
     const status = String(request.input('status') ?? '')
 
-    const query = this.orders.detailQuery().where('shop_id', shop.id).orderBy('created_at', 'desc')
+    const query = this.orders
+      .shopDetailQuery()
+      .where('shop_id', shop.id)
+      .orderBy('created_at', 'desc')
     if (OrderStatusValues.includes(status as OrderStatus)) {
       query.where('status', status)
     }
@@ -32,7 +35,7 @@ export default class ShopOrdersController {
       .count('* as total')
 
     return inertia.render('shops/dashboard/orders/index', {
-      orders: OrderTransformer.paginate(orders.all(), orders.getMeta()),
+      orders: OrderTransformer.paginate(orders.all(), orders.getMeta()).useVariant('forShop'),
       filters: { status },
       counts: Object.fromEntries(counts.map((row) => [row.status, Number(row.total)])) as Record<
         string,
@@ -53,7 +56,7 @@ export default class ShopOrdersController {
     const order = await this.orders.findForShop(shop, params.orderNumber)
 
     return inertia.render('shops/dashboard/orders/show', {
-      order: OrderTransformer.transform(order),
+      order: OrderTransformer.transform(order).useVariant('forShop'),
       nextStatuses: ORDER_TRANSITIONS[order.status as OrderStatus] ?? [],
     })
   }
