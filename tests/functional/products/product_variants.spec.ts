@@ -224,6 +224,52 @@ test.group('Product form variants [v1]', (group) => {
     assertFieldError(assert, error, /^variants\.1\.sku$/, 'Save that change first')
   })
 
+  test('three variants passing SKUs round in one save are refused, saying how', async ({
+    assert,
+  }) => {
+    const shop = await createShop()
+    const stamp = Date.now()
+    const product = await new ProductService().create(
+      shop,
+      await payload([
+        { size: 'S', sku: `ROT-A-${stamp}` },
+        { size: 'M', sku: `ROT-B-${stamp}` },
+        { size: 'L', sku: `ROT-C-${stamp}` },
+      ])
+    )
+    const [small, medium, large] = await Promise.all(
+      ['S', 'M', 'L'].map((size) => variantSized(product, size))
+    )
+
+    const error = await refusal(
+      save(shop, product, [
+        { ...kept(small), sku: medium.sku },
+        { ...kept(medium), sku: large.sku },
+        { ...kept(large), sku: small.sku },
+      ])
+    )
+
+    assertFieldError(assert, error, /^variants\.[012]\.sku$/, 'give one a temporary SKU')
+  })
+
+  test('a SKU kept by a variant whose SKU box is empty is refused, saying so', async ({
+    assert,
+  }) => {
+    const shop = await createShop()
+    const sku = `KEEP-A-${Date.now()}`
+    const product = await new ProductService().create(shop, await payload([{ size: 'M', sku }]))
+    const medium = await variantSized(product, 'M')
+
+    const error = await refusal(
+      save(shop, product, [
+        { ...kept(medium), sku: undefined },
+        { size: 'L', sku },
+      ])
+    )
+
+    assertFieldError(assert, error, /^variants\.1\.sku$/, 'Change its SKU first')
+  })
+
   test("the shop's other product's SKU is refused, naming the product", async ({ assert }) => {
     const shop = await createShop()
     const sku = `KURTA-M-${Date.now()}`

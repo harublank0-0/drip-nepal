@@ -31,6 +31,9 @@ type VariantInput = ProductPayload['variants'][number]
 
 type StoredPhoto = StoredPhotoFiles & { name: string }
 
+// What the variant holding a clashing SKU does with it in this save.
+type SkuMove = 'removed' | 'kept' | 'cycle' | 'given-up'
+
 // A variant that holds a SKU, with its product, for the clash message.
 type SkuHolder = {
   id: string
@@ -390,33 +393,63 @@ export default class ProductService {
     for (const holder of holders) {
       const index = seenSkus.get(holder.sku)!
       if (holder.id === inputs[index].id || holder.id === restored.get(index)?.id) continue
-      // The holder's row in this save, and whether it takes this row's SKU
-      // in return (a swap).
-      const holderRow = inputs.find((input) => input.id === holder.id)
-      const swap =
-        holderRow?.sku !== undefined &&
-        holderRow.sku === existingById.get(inputs[index].id ?? '')?.sku
-      fieldError(`variants.${index}.sku`, this.#skuClash(holder, product, holderRow, swap))
+      fieldError(
+        `variants.${index}.sku`,
+        this.#skuClash(holder, product, this.#skuMove(holder, index, inputs, existingById))
+      )
     }
   }
 
-  #skuClash(
+  /*
+   * For a SKU held by another active variant of this product that stays in
+   * this save: whether that variant keeps the SKU, or gives it up as part
+   * of a cycle (two or more variants passing SKUs round, which no single
+   * change can be saved first), or simply gives it up.
+   */
+  #skuMove(
     holder: SkuHolder,
-    product: Product,
-    holderRow: VariantInput | undefined,
-    swap: boolean
-  ) {
+    index: number,
+    inputs: VariantInput[],
+    existingById: Map<string, ProductVariant>
+  ): SkuMove {
+    const rowById = new Map(inputs.filter((input) => input.id).map((input) => [input.id, input]))
+    const holderRow = rowById.get(holder.id)
+    if (!holderRow) return 'removed'
+    // An empty SKU box keeps the stored SKU.
+    if ((holderRow.sku ?? holder.sku) === holder.sku) return 'kept'
+
+    const active = [...existingById.values()].filter(
+      (variant) => variant.status === VariantStatus.ACTIVE
+    )
+    const holderOf = new Map(active.map((variant) => [variant.sku, variant]))
+    const start = existingById.get(inputs[index].id ?? '')?.sku
+    let sku: string | undefined = inputs[index].sku
+    for (let step = 0; start && sku && step < inputs.length; step++) {
+      const next = holderOf.get(sku)
+      const row = next && rowById.get(next.id)
+      if (!next || !row) break
+      sku = row.sku ?? next.sku
+      if (sku === start) return 'cycle'
+      if (sku === next.sku) break
+    }
+    return 'given-up'
+  }
+
+  #skuClash(holder: SkuHolder, product: Product, move: SkuMove) {
     if (holder.product_id === product.id) {
       if (holder.status === VariantStatus.ARCHIVED) {
         return 'A variant you removed from this product still has this SKU. Use another SKU.'
       }
-      if (swap) {
-        return "Two variants can't swap SKUs in one save: give one a temporary SKU and save, then set the final SKUs."
+      switch (move) {
+        case 'kept':
+          return 'Another variant of this product has this SKU. Change its SKU first, or use another SKU here.'
+        case 'cycle':
+          return "SKUs can't move round between variants in one save: give one a temporary SKU and save, then set the final SKUs."
+        case 'given-up':
+          return 'Another variant of this product has this SKU until this save. Save that change first, then use the SKU here.'
+        case 'removed':
+          return 'A variant you are removing has this SKU. Save the removal first, then add the variant again.'
       }
-      if (holderRow) {
-        return 'Another variant of this product has this SKU until this save. Save that change first, then use the SKU here.'
-      }
-      return 'A variant you are removing has this SKU. Save the removal first, then add the variant again.'
     }
     if (holder.shop_id !== product.shopId) return 'This SKU is already in use. Use another SKU.'
     if (holder.deleted_at) {
