@@ -37,19 +37,23 @@ function repositoryDirectory() {
   return process.cwd()
 }
 
-const cwd = repositoryDirectory()
-const git = (...args) => runGit(cwd, args)
+let repository
+const repositoryRoot = () => (repository ??= repositoryDirectory())
+const git = (...args) => runGit(repositoryRoot(), args)
 
 function block(message) {
   process.stderr.write(`${message}\n`)
   process.exit(2)
 }
 
-async function readInput() {
+async function readText() {
   let text = ''
   for await (const chunk of process.stdin) text += chunk
-  return JSON.parse(text || '{}')
+  return text
 }
+
+// Could this call open a pull request? Used when its input is unreadable.
+const LOOKS_LIKE_PR = /create_pull_request|\bgh\b[\s\S]*\bcreate\b/
 
 /*
  * The delimiter of a heredoc whose `<<` is at `index` (`<<-`, quoted and
@@ -98,6 +102,18 @@ function skipHeredoc(line, index) {
 }
 
 /*
+ * The index of the `'` that closes an ANSI-C string `$'…'` whose opening
+ * `'` is at `index` (a backslash escapes the next character there).
+ */
+function ansiQuoteEnd(line, index) {
+  for (let at = index + 1; at < line.length; at++) {
+    if (line[at] === '\\') at++
+    else if (line[at] === "'") return at
+  }
+  return line.length - 1
+}
+
+/*
  * The index of the `)` that closes the command substitution whose `(`
  * is at `index`, honouring quotes, nesting and heredocs inside it.
  */
@@ -113,6 +129,8 @@ function closingParen(line, index) {
       else if (char === '"') quote = null
     } else if (char === '\\') {
       at++
+    } else if (char === '$' && line[at + 1] === "'") {
+      at = ansiQuoteEnd(line, at + 1)
     } else if (char === "'" || char === '"') {
       quote = char
     } else if (char === '<' && line[at + 1] === '<' && line[at + 2] !== '<') {
@@ -131,10 +149,12 @@ function closingParen(line, index) {
  * The words of each simple command in a shell line, split on unquoted
  * `;`, `&`, `|`, parentheses and newlines. Quotes group words, and a
  * `$(…)` or backtick substitution stays inside its word, so text in a
- * title or body is never read as a flag.
+ * title or body is never read as a flag; the commands inside a
+ * substitution are listed too, as in `URL=$(gh pr create …)`.
  */
 function shellCommands(line) {
   const commands = []
+  const nested = []
   let words = []
   let word = ''
   let inWord = false
@@ -161,9 +181,17 @@ function shellCommands(line) {
       index++ // a line continuation
       continue
     }
+    if (char === '$' && line[index + 1] === "'" && quote === null) {
+      const end = ansiQuoteEnd(line, index + 1)
+      word += line.slice(index + 2, end)
+      inWord = true
+      index = end
+      continue
+    }
     if (char === '$' && line[index + 1] === '(') {
       const end = closingParen(line, index + 1)
       word += line.slice(index, end + 1)
+      nested.push(...shellCommands(line.slice(index + 2, end)))
       inWord = true
       index = end
       continue
@@ -172,6 +200,7 @@ function shellCommands(line) {
       const end = line.indexOf('`', index + 1)
       const stop = end === -1 ? line.length - 1 : end
       word += line.slice(index, stop + 1)
+      nested.push(...shellCommands(line.slice(index + 1, stop)))
       inWord = true
       index = stop
       continue
@@ -210,7 +239,7 @@ function shellCommands(line) {
     }
   }
   endCommand()
-  return commands
+  return [...commands, ...nested]
 }
 
 // Commands that run the next word as the program, with the options of
@@ -226,9 +255,13 @@ const LAUNCHERS = {
   xargs: ['-I', '-i', '-n', '-P', '-L', '-l', '-d', '-E', '-e', '-s', '-a', '--arg-file'],
 }
 
+// Shell words that can come before a command: `if …; then gh …`.
+const RESERVED = new Set(['if', 'then', 'else', 'elif', 'do', 'while', 'until', '!', '{'])
+
 // The index of the program a simple command runs.
 function programIndex(words) {
   let at = 0
+  while (at < words.length && RESERVED.has(words[at])) at++
   while (at < words.length && /^[A-Za-z_]\w*=/.test(words[at])) at++
   while (at < words.length && Object.hasOwn(LAUNCHERS, words[at])) {
     const valueOptions = LAUNCHERS[words[at]]
@@ -253,15 +286,21 @@ function skipRepo(words, at) {
 /*
  * For a Bash call: the arguments after `gh pr create`, or null when the
  * command doesn't open a pull request. `gh` is the program of a simple
- * command, possibly after variable assignments and a launcher such as
- * `env`, `exec` or `xargs`; `-R <repo>` may come before `pr` or `create`.
- * The settings `if` filter is only a first pass: it also matches shell it
- * can't parse, such as a `for` loop.
+ * command, possibly after shell words such as `if` or `then`, variable
+ * assignments and a launcher such as `env`, `exec` or `xargs`; `-R <repo>`
+ * may come before `pr` or `create`. A `bash -c "…"` script is read too.
  */
-function ghPrCreateArgs(command) {
+function ghPrCreateArgs(command, depth = 0) {
   for (const words of shellCommands(command)) {
     const gh = programIndex(words)
-    if (!/(^|\/)gh$/.test(words[gh] ?? '')) continue
+    const program = words[gh] ?? ''
+    if (/(^|\/)(ba|z|da)?sh$/.test(program) && depth < 3) {
+      const script = words.findIndex((word, at) => at > gh && /^-[a-z]*c[a-z]*$/.test(word))
+      const found = script === -1 ? null : ghPrCreateArgs(words[script + 1] ?? '', depth + 1)
+      if (found) return found
+      continue
+    }
+    if (!/(^|\/)gh$/.test(program)) continue
     let at = skipRepo(words, gh + 1)
     if (words[at] !== 'pr') continue
     at = skipRepo(words, at + 1)
@@ -336,16 +375,23 @@ function resolveCommit(ref) {
 }
 
 async function main() {
+  const text = await readText()
   let input
   try {
-    input = await readInput()
+    input = JSON.parse(text || '{}')
   } catch {
+    // This runs before every Bash call: only something that looks like a
+    // pull request is held up by input it can't read.
+    if (!LOOKS_LIKE_PR.test(text)) process.exit(0)
     block('The pull request check could not read its input. Open the pull request again.')
   }
 
   let named
   if (input.tool_name === 'Bash') {
-    const args = ghPrCreateArgs(String(input.tool_input?.command ?? ''))
+    const command = String(input.tool_input?.command ?? '')
+    // Most Bash calls: nothing that could open a pull request.
+    if (!/\bgh\b/.test(command) || !/\bcreate\b/.test(command)) process.exit(0)
+    const args = ghPrCreateArgs(command)
     if (args === null) process.exit(0)
     named = headFromArgs(args)
   } else {
@@ -376,7 +422,10 @@ async function main() {
     )
   }
 
-  const records = join(resolve(cwd, git('rev-parse', '--git-common-dir')), 'fable-reviews')
+  const records = join(
+    resolve(repositoryRoot(), git('rev-parse', '--git-common-dir')),
+    'fable-reviews'
+  )
   const missing = commits.filter(({ commit }) => !existsSync(join(records, `${commit}.md`)))
   if (missing.length === 0) process.exit(0)
 
