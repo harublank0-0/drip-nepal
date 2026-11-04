@@ -59,7 +59,7 @@ export default class SessionController {
     }
 
     await signIn(ctx, user)
-    return ctx.response.redirect().toRoute('home')
+    return ctx.response.redirect().toIntendedRoute('home')
   }
 
   /*

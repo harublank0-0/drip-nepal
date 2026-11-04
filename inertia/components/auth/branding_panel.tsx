@@ -11,10 +11,9 @@ type BrandingPanelProps = {
 }
 
 const defaultBenefits = [
-  'Fast delivery',
-  'Secure checkout',
-  'Trusted local sellers',
-  'Easy order tracking',
+  'Pay cash when your order arrives',
+  'Delivery across Nepal',
+  'Track every order from your account',
 ]
 
 const containerVariants: Variants = {
@@ -76,13 +75,11 @@ export function BrandingPanel({
             </Typography.H1>
           ) : (
             <Typography.H1 className="!mt-0 text-left text-4xl leading-tight lg:text-5xl">
-              Discover amazing products
-              <br />
-              <span className="text-primary">from local shops.</span>
+              Fashion from local shops, delivered.
             </Typography.H1>
           )}
           <Typography.P className="!mt-0 max-w-md text-base text-muted-foreground lg:text-lg">
-            {subheading ?? 'Join thousands of customers shopping across Nepal.'}
+            {subheading ?? 'Create an account to order. You pay in cash when your parcel arrives.'}
           </Typography.P>
         </motion.div>
 

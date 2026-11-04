@@ -7,18 +7,22 @@ type PasswordInputProps = React.ComponentProps<'input'> & {
   onValueChange?: (value: string) => void
 }
 
-export function PasswordInput({ onValueChange, ...props }: PasswordInputProps) {
+export function PasswordInput({ onValueChange, className, ...props }: PasswordInputProps) {
   const [visible, setVisible] = useState(false)
 
   const toggle = useCallback(() => setVisible((v) => !v), [])
 
   return (
     <div className="relative">
-      <Input {...props} type={visible ? 'text' : 'password'} />
+      <Input
+        {...props}
+        className={className ?? 'h-11 pr-11'}
+        type={visible ? 'text' : 'password'}
+      />
       <button
         type="button"
         onClick={toggle}
-        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+        className="absolute right-0 top-0 flex h-full w-11 items-center justify-center text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
         aria-label={visible ? 'Hide password' : 'Show password'}
         tabIndex={-1}
       >
