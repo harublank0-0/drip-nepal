@@ -10,6 +10,16 @@ import RootLayout from '~/layouts/root_layout'
  * keeps the shop's header and footer, where the contact details are, and
  * offers to try again (docs/08 §4.3).
  */
+/*
+ * After a failed form submit (a POST to /api/v1/…), the address bar shows
+ * the API address, which has no page: go back to the form instead of
+ * reloading it.
+ */
+function tryAgain() {
+  if (window.location.pathname.startsWith('/api/')) window.history.back()
+  else window.location.reload()
+}
+
 export default function ServerError() {
   return (
     <>
@@ -24,11 +34,7 @@ export default function ServerError() {
           (details at the bottom of the page).
         </p>
         <div className="mt-8 flex w-full max-w-xs flex-col gap-3 sm:max-w-none sm:flex-row sm:justify-center">
-          <Button
-            size="lg"
-            className="h-11 rounded-xl px-6"
-            onClick={() => window.location.reload()}
-          >
+          <Button size="lg" className="h-11 rounded-xl px-6" onClick={tryAgain}>
             <RefreshCwIcon className="size-4" aria-hidden="true" />
             Try again
           </Button>

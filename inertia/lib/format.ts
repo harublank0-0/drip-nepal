@@ -27,3 +27,16 @@ export function formatDate(value: string | Date | null | undefined) {
   if (!value) return ''
   return dateFormatter.format(new Date(value))
 }
+
+const yearFormatter = new Intl.DateTimeFormat('en-GB', {
+  year: 'numeric',
+  timeZone: 'Asia/Kathmandu',
+})
+
+/*
+ * The year in Nepal, for the footers: in Nepal's first hours of a new year
+ * it is still the old year in UTC, where the server renders.
+ */
+export function currentYear(now = new Date()) {
+  return yearFormatter.format(now)
+}

@@ -3,8 +3,9 @@ import { test } from '@japa/runner'
 // inertia/ is a separate TypeScript project, which the server build won't
 // compile into this one, so the module is loaded at run time.
 const frontendFormat = '../../../inertia/lib/format.js'
-const { formatDate } = (await import(frontendFormat)) as {
+const { formatDate, currentYear } = (await import(frontendFormat)) as {
   formatDate: (value: string | Date | null | undefined) => string
+  currentYear: (now?: Date) => string
 }
 
 /*
@@ -14,7 +15,7 @@ const { formatDate } = (await import(frontendFormat)) as {
  * zone renders differently in the two and React re-renders the page.
  */
 
-test.group('formatDate [v1]', (group) => {
+test.group('Dates in Nepal time [v1]', (group) => {
   group.tap((t) => t.tags(['@v1']))
 
   test('{instant} is {expected} in Nepal')
@@ -34,5 +35,11 @@ test.group('formatDate [v1]', (group) => {
   test('an empty value formats as nothing', ({ assert }) => {
     assert.equal(formatDate(null), '')
     assert.equal(formatDate(undefined), '')
+  })
+
+  test('the year turns at midnight in Nepal, not in UTC', ({ assert }) => {
+    // 00:15 on 1 January 2027 in Nepal, still 31 December 2026 in UTC.
+    assert.equal(currentYear(new Date('2026-12-31T18:30:00Z')), '2027')
+    assert.equal(currentYear(new Date('2026-12-31T18:00:00Z')), '2026')
   })
 })
