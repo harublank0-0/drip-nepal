@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { DateTime } from 'luxon'
+import logger from '@adonisjs/core/services/logger'
 import db from '@adonisjs/lucid/services/db'
 import { errors as vineErrors } from '@vinejs/vine'
 import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
@@ -13,6 +14,7 @@ import type User from '#models/user'
 import { randomCode } from '#utils/random'
 import { OrderStatus, PaymentProvider, PaymentStatus, shippingFeeFor } from '#constants/order'
 import CartService, { isPurchasable } from '#modules/orders/services/cart_service'
+import OrderAlerts from '#modules/orders/services/order_alerts'
 import type { AddressPayload, CheckoutPayload } from '#modules/orders/validators/checkout'
 
 /*
@@ -50,14 +52,29 @@ export function addressSnapshot(address: AddressFields) {
 }
 
 export default class CheckoutService {
-  constructor(protected cart = new CartService()) {}
+  constructor(
+    protected cart = new CartService(),
+    protected alerts = new OrderAlerts()
+  ) {}
 
   /*
    * Turns the cart into one cash-on-delivery order per shop. Stock is
    * re-checked under a row lock so two buyers can't take the last item.
    * Returns the checkout id that groups the orders, and their numbers.
+   * Once the orders are committed, each shop is emailed about its order
+   * (OrderAlerts); that never delays or fails the checkout.
    */
   async placeOrders(buyer: Buyer, payload: CheckoutPayload) {
+    const placed = await this.#placeOrders(buyer, payload)
+    try {
+      this.alerts.sendInBackground(placed.orderNumbers)
+    } catch (error) {
+      logger.error({ err: (error as Error).name }, 'Could not start the new-order emails')
+    }
+    return placed
+  }
+
+  async #placeOrders(buyer: Buyer, payload: CheckoutPayload) {
     const user = 'user' in buyer ? buyer.user : null
     const owner = 'user' in buyer ? { userId: buyer.user.id } : { guestToken: buyer.guestToken }
 
