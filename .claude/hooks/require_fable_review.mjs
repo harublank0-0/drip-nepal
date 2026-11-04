@@ -17,15 +17,28 @@ import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
-const cwd = process.env.CLAUDE_PROJECT_DIR || process.cwd()
-
-function git(...args) {
+function runGit(directory, args) {
   return execFileSync('git', args, {
-    cwd,
+    cwd: directory,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'ignore'],
   }).trim()
 }
+
+// Hooks run in the session's directory, which may be a linked worktree;
+// the project directory is the fallback when that is not in a repository.
+function repositoryDirectory() {
+  for (const directory of [process.cwd(), process.env.CLAUDE_PROJECT_DIR]) {
+    if (!directory) continue
+    try {
+      if (runGit(directory, ['rev-parse', '--is-inside-work-tree']) === 'true') return directory
+    } catch {}
+  }
+  return process.cwd()
+}
+
+const cwd = repositoryDirectory()
+const git = (...args) => runGit(cwd, args)
 
 function block(message) {
   process.stderr.write(`${message}\n`)
@@ -39,9 +52,68 @@ async function readInput() {
 }
 
 /*
+ * The index just past a heredoc started at `index` (pointing at `<<`):
+ * its body runs to the line holding only the delimiter.
+ */
+function skipHeredoc(line, index) {
+  let at = index + 2
+  if (line[at] === '-') at++
+  while (line[at] === ' ' || line[at] === '\t') at++
+  const quote = line[at] === "'" || line[at] === '"' ? line[at] : null
+  if (quote) at++
+  let delimiter = ''
+  while (at < line.length && (quote ? line[at] !== quote : /[^\s;&|()<>]/.test(line[at]))) {
+    delimiter += line[at++]
+  }
+  if (quote) at++
+  const bodyStart = line.indexOf('\n', at)
+  if (!delimiter || bodyStart === -1) return at
+  let lineStart = bodyStart + 1
+  while (lineStart < line.length) {
+    const lineEnd = line.indexOf('\n', lineStart)
+    const text = line.slice(lineStart, lineEnd === -1 ? line.length : lineEnd)
+    if (text.replace(/^\t+/, '') === delimiter) return lineEnd === -1 ? line.length : lineEnd
+    if (lineEnd === -1) break
+    lineStart = lineEnd + 1
+  }
+  return line.length
+}
+
+/*
+ * The index of the `)` that closes the command substitution whose `(`
+ * is at `index`, honouring quotes, nesting and heredocs inside it.
+ */
+function closingParen(line, index) {
+  let depth = 0
+  let quote = null
+  for (let at = index; at < line.length; at++) {
+    const char = line[at]
+    if (quote === "'") {
+      if (char === "'") quote = null
+    } else if (quote === '"') {
+      if (char === '\\') at++
+      else if (char === '"') quote = null
+    } else if (char === '\\') {
+      at++
+    } else if (char === "'" || char === '"') {
+      quote = char
+    } else if (char === '<' && line[at + 1] === '<' && line[at + 2] !== '<') {
+      at = skipHeredoc(line, at) - 1
+    } else if (char === '(') {
+      depth++
+    } else if (char === ')') {
+      depth--
+      if (depth === 0) return at
+    }
+  }
+  return line.length - 1
+}
+
+/*
  * The words of each simple command in a shell line, split on unquoted
- * `;`, `&`, `|`, parentheses and newlines. Quotes group words, so text in
- * a title or body is never read as a flag.
+ * `;`, `&`, `|`, parentheses and newlines. Quotes group words, and a
+ * `$(…)` or backtick substitution stays inside its word, so text in a
+ * title or body is never read as a flag.
  */
 function shellCommands(line) {
   const commands = []
@@ -61,9 +133,33 @@ function shellCommands(line) {
   }
   for (let index = 0; index < line.length; index++) {
     const char = line[index]
-    if (quote) {
-      if (char === quote) quote = null
-      else if (char === '\\' && quote === '"' && index + 1 < line.length) word += line[++index]
+    if (quote === "'") {
+      if (char === "'") quote = null
+      else word += char
+      continue
+    }
+    if (char === '\\' && line[index + 1] === '\n') {
+      index++ // a line continuation
+      continue
+    }
+    if (char === '$' && line[index + 1] === '(') {
+      const end = closingParen(line, index + 1)
+      word += line.slice(index, end + 1)
+      inWord = true
+      index = end
+      continue
+    }
+    if (char === '`') {
+      const end = line.indexOf('`', index + 1)
+      const stop = end === -1 ? line.length - 1 : end
+      word += line.slice(index, stop + 1)
+      inWord = true
+      index = stop
+      continue
+    }
+    if (quote === '"') {
+      if (char === '"') quote = null
+      else if (char === '\\' && index + 1 < line.length) word += line[++index]
       else word += char
     } else if (char === "'" || char === '"') {
       quote = char
@@ -86,20 +182,53 @@ function shellCommands(line) {
 
 /*
  * For a Bash call: the arguments after `gh pr create`, or null when the
- * command doesn't open a pull request. The settings `if` filter is only a
- * first pass: it also matches shell it can't parse, such as a `for` loop.
+ * command doesn't open a pull request. `gh` may follow a launcher such as
+ * `env`, `exec` or `xargs`, and `pr` may take `-R <repo>` before `create`.
+ * The settings `if` filter is only a first pass: it also matches shell it
+ * can't parse, such as a `for` loop.
  */
 function ghPrCreateArgs(command) {
   for (const words of shellCommands(command)) {
-    let start = 0
-    while (start < words.length && /^[A-Za-z_]\w*=/.test(words[start])) start++
-    if (words[start] === 'env' || words[start] === 'command') start++
-    if (!/(^|\/)gh$/.test(words[start] ?? '')) continue
-    const pr = words.indexOf('pr', start + 1)
-    if (pr !== -1 && words[pr + 1] === 'create') return words.slice(pr + 2)
+    for (let gh = 0; gh < words.length; gh++) {
+      if (!/(^|\/)gh$/.test(words[gh]) || words[gh + 1] !== 'pr') continue
+      let at = gh + 2
+      while (at < words.length) {
+        if (words[at] === '-R' || words[at] === '--repo') at += 2
+        else if (words[at].startsWith('--repo=') || /^-R./.test(words[at])) at++
+        else break
+      }
+      if (words[at] === 'create') return words.slice(at + 1)
+    }
   }
   return null
 }
+
+// Options of `gh pr create` that take a value, so their value is skipped.
+const VALUE_OPTIONS = new Set([
+  '-a',
+  '--assignee',
+  '-B',
+  '--base',
+  '-b',
+  '--body',
+  '-F',
+  '--body-file',
+  '-l',
+  '--label',
+  '-m',
+  '--milestone',
+  '-p',
+  '--project',
+  '-R',
+  '--repo',
+  '-r',
+  '--reviewer',
+  '-T',
+  '--template',
+  '-t',
+  '--title',
+  '--recover',
+])
 
 function headFromArgs(args) {
   for (let index = 0; index < args.length; index++) {
@@ -107,10 +236,14 @@ function headFromArgs(args) {
     if (arg === '--') break
     if (arg === '--head' || arg === '-H') return args[index + 1]
     if (arg.startsWith('--head=')) return arg.slice('--head='.length)
-    if (arg.startsWith('-H') && arg.length > 2) return arg.slice(2)
+    if (arg.startsWith('-H')) return arg.slice(2)
+    if (VALUE_OPTIONS.has(arg)) index++
   }
   return undefined
 }
+
+const CURRENT_BRANCH =
+  /^\$\(\s*git\s+(branch\s+--show-current|rev-parse\s+--abbrev-ref\s+HEAD)\s*\)$/
 
 function resolveCommit(ref) {
   try {
@@ -135,6 +268,14 @@ async function main() {
     named = headFromArgs(args)
   } else {
     named = input.tool_input?.head
+  }
+
+  if (named && CURRENT_BRANCH.test(named)) named = undefined
+  if (named && /^[$`]/.test(named)) {
+    block(
+      `The pull request check can't read the branch "${named}". ` +
+        'Pass the branch name to --head as plain text, or leave --head out to use the current branch.'
+    )
   }
 
   // Without a head, gh proposes the current branch. "owner:branch" names
