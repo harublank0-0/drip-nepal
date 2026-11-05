@@ -245,8 +245,8 @@ Evidence: Q6 checks the account only; phone OTP stays R2 (FR-IAM-010). Fake COD 
           courier trip both ways (R-02).
 ADR: none (a column set and a business rule).
 Docs updated: §2.2, 00 (A-55, §7.2, §7.3), 01 (FR-ORD-009, §4.7, §5.2, §6), 12 (§4.1 E4, §5.6)  |  Status: Decided
-              Still to update: 04a §11.1 (columns, `orders_guard` list), 05 (dispatch rule), 07
-              (permission, proposed), 10 §6 (test IDs)
+              Data model, same day: 04a §11.1 (columns, `orders_guard` list), 04 (INV-33), 05 §6.3
+              (dispatch rule), 07 (permission map), 02 (AC-J12-21), 10 §6 (T-ORD-011, T-ORD-109)
 ```
 
 ```text
@@ -273,9 +273,10 @@ Docs updated: §1.2, §2.2, §3.1, §3.2, §4.2 (R-12, R-33), §5, 00 (§2.1, §
               A-53, A-54, §7.2, §7.3, §8), 01 (§2.4, §2.5, §4.1, §4.3, §4.5, §5.1, §5.2, §5.4, §6,
               FR-FUL-004, §11.1), 03 (§1.1, §2, §4.4, §11.1, §14), 12 (§3, §4.1, §5.6, §6), AGENTS.md,
               ADR-0019, adr/README  |  Status: Decided
-              Still to update: 02 (J-12, J-13), 04, 04a (§9, §11.5, §11.6, and §6.6: several active
-              pickup addresses, archive-and-replace once a shipment uses one, no purge while
-              referenced), 05 §6.3, 07, 10 §6
+              Data model, same day: 04a (§6.6, §9.8 to §9.11, §11.5, §11.6, §11.9), 04 (INV-28 to
+              INV-32, §16.4, §19.3, §20.2.2, §21.6), 05 (§6.3, §7.12), 07 (TB-11, TM-32, two proposed
+              permissions), 02 (J-12, J-13), 06 and openapi.yaml (`ShipmentStatus`), 10 §6 (test
+              IDs), 12 (M0 and M6 exits)
 ```
 
 ```text
@@ -747,4 +748,4 @@ This matrix is authoritative for decision gates. [12 §3](12-roadmap-and-backlog
 22. **v1 launch (2026-11-03).** The product owner decided to sell from a single-seller v1 before M0 (§2.3). OD-55 is new and blocks the M0 exit (§5). A-01 in [00 §6](00-context-assumptions-and-questions.md#6-proposed-defaults-and-assumptions-register) and ADR-0011's Status now say that A-01 stops holding when v1 goes live. Still open: OD-55, and whether R1's launch gate (12 §5.7) treats v1 customers as existing users.
 23. **Agent skills (2026-11-04).** §2.3 logs the product owner's decision to commit reviewed agent skills and load them in Claude Code through `.claude/skills/`. It partly reverses the RF-42 removal in [09 §1.5](09-code-structure-and-engineering-standards.md#15-current-code--target-structure), which 09 note 77 records; no OD was open on it.
 24. **Deploying from `main` (2026-11-04).** §2.3 logs that production deploys release tags cut from `main`, after #142 merged `v1` into `main`. The 2026-11-03 entry stays in the log as history; its "main stays the documented system (v2) and M0 continues there" no longer holds, because `main` is also the live store. Still open, for E4 with OD-55: how the breaking M0 steps are staged before the cutover release.
-25. **Courier integration and order verification (2026-11-05).** §2.3 logs OD-56 (courier integration in R1, reduced scope) and OD-57 (a verification flag on `orders`, no hold), and §2.2 opens OD-58 (COD on platform-owned courier accounts). §3.1 adds VX-16 to VX-18 for Nepal Can Move, §4.2 adds R-33, and §5 adds the M6 items. The §2 and §3 headings keep their old ranges (OD-54, VX-15) because other documents link to their anchors; the intro gives the current ranges. R-12 fired: the product owner moved nothing out of R1 for this addition, which the OD-56 entry records; the M6 effort in [12 §5.6](12-roadmap-and-backlog.md#56-m6-order-processing--fulfillment-r1) grows instead. FR-FUL-004 is Must, so VX-16 is also an M7 launch-gate item. Still open: (a) the M6 effort estimate, revisited at M6 planning. (b) The data model (04, 04a), the shipment machine and dispatch rule (05 §6.3), the permission and credential rules (07), the journeys (02 J-12, J-13) and the test IDs (10 §6) follow in the data-model change named in the OD-56 and OD-57 entries.
+25. **Courier integration and order verification (2026-11-05).** §2.3 logs OD-56 (courier integration in R1, reduced scope) and OD-57 (a verification flag on `orders`, no hold), and §2.2 opens OD-58 (COD on platform-owned courier accounts). §3.1 adds VX-16 to VX-18 for Nepal Can Move, §4.2 adds R-33, and §5 adds the M6 items. The §2 and §3 headings keep their old ranges (OD-54, VX-15) because other documents link to their anchors; the intro gives the current ranges. R-12 fired: the product owner moved nothing out of R1 for this addition, which the OD-56 entry records; the M6 effort in [12 §5.6](12-roadmap-and-backlog.md#56-m6-order-processing--fulfillment-r1) grows instead. FR-FUL-004 is Must, so VX-16 is also an M7 launch-gate item. Still open: (a) the M6 effort estimate, revisited at M6 planning. (b) Done the same day in the data-model change: the data model (04, 04a), the shipment machine and dispatch rule (05 §6.3), the permission and credential rules (07, with the proposed `shop.courier_accounts.manage` and `platform.logistics.manage`), the journeys (02 J-12, J-13) and the test IDs (10 §6). Still open: the operations, jobs and courier inbox, which M6 specifies.

@@ -77,13 +77,14 @@ Status: Draft v1 (2026-11-05)
 
 ## Verification
 
-The test IDs will be registered in [10 §6](../10-testing-and-quality-gates.md#6-test-id-registry) together with the 04a tables, before the baseline that builds them. They will cover:
+The test IDs are registered in [10 §6](../10-testing-and-quality-gates.md#6-test-id-registry) and specified with the tables in [04a](../04a-data-dictionary-tables.md). They cover:
 
-- each CHECK and composite foreign key of decisions 2 to 4, with rows that break them (23514, 23503);
-- the guard trigger of decision 2 (P0001);
-- a second shop added to a shop-owned account, and a shop-owned row with a null owner-shop copy, both refused by the composite foreign keys and CHECK of decision 3;
-- an edit of a pickup address that a shipment references, which leaves the shipment's row unchanged, and the purge, which keeps that row;
-- `credentials_enc` absent from every serialised model and transformer, and its ciphertext format CHECK;
+- each CHECK and composite foreign key of decisions 2 to 4, with rows that break them (23514, 23503): T-SHOP-111, T-SHOP-113, T-FUL-102;
+- the guard trigger of decision 2 (P0001): T-SHOP-111;
+- a second shop added to a shop-owned account, and a shop-owned row with a null owner-shop copy, both refused by the composite foreign keys and CHECK of decision 3: T-SHOP-112;
+- an edit of a pickup address that a shipment references, which leaves the shipment's row unchanged, and the purge, which keeps that row: T-SHOP-006;
+- `shipments_booking_guard`, which keeps what a booking used (P0001): T-FUL-103;
+- `credentials_enc` absent from every serialised model, transformer, log line and job payload: T-SEC-040; its ciphertext format CHECK: T-SHOP-111; the two proposed permissions: T-SEC-041;
 - T-SEC-016: no outbound HTTP outside `providers/` folders.
 
 ## Related

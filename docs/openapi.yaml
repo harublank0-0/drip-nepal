@@ -2556,11 +2556,26 @@ components:
       enum: [awaiting_payment, awaiting_acceptance, accepted, completed, cancelled, rejected]
     ShipmentStatus:
       type: string
-      description: '`shipments_status_check` (04a §11.5); transitions in 05 §6.3. There is no `cancelled` shipment state.'
-      enum: [pending, packed, shipped, delivered, delivery_failed, returning, returned_to_origin]
+      description: '`shipments_status_check` (04a §11.5); transitions in 05 §6.3. The manual path uses the first seven values; the courier path of OD-56 adds the booking states, `out_for_delivery` and `cancelled` (a booking that failed or was cancelled before pickup).'
+      enum:
+        [
+          pending,
+          packed,
+          shipped,
+          delivered,
+          delivery_failed,
+          returning,
+          returned_to_origin,
+          booking_requested,
+          booked,
+          booking_failed,
+          needs_reconciliation,
+          out_for_delivery,
+          cancelled,
+        ]
     FulfillmentEvent:
       type: string
-      description: '`shipment_events_event_check` (04a §11.6); the events of `recordFulfillmentEvent` (06 §13.5).'
+      description: 'The vendor events of `recordFulfillmentEvent` (06 §13.5). `shipment_events_event_check` (04a §11.6) also holds the courier events of OD-56, which no request sends.'
       enum: [packed, shipped, delivered, delivery_failed, reattempt, returning, returned_to_origin]
     DeliveryFailureReason:
       type: string
@@ -3905,3 +3920,8 @@ components:
 #     `info.description` carries the one plain review line that 06 uses. No schema, response
 #     or example changes: `VERSION_CONFLICT`, `PRECONDITION_REQUIRED` and the shared 412 and
 #     428 responses already cover the new cases.
+# 43. OD-56 (2026-11-05, 06 note 41): `ShipmentStatus` adds the courier-path statuses of 04a §11.5
+#     and 05 §6.3, so a shop or customer order response can carry them; `FulfillmentEvent` keeps
+#     the vendor events, and its description names the courier events that only the adapter
+#     writes. The courier booking, courier-account and verification operations are added to
+#     `paths` or `x-pending-operations` when M6 designs them.

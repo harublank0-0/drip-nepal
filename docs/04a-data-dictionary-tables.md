@@ -14,9 +14,9 @@ Editor notes for these sections are consolidated at the end of [04](04-domain-mo
 | §6      | shops                   | `shops`, `shop_memberships`, `shop_invitations`, `shop_agreements`, `shop_review_decisions`, `shop_addresses`, `shop_payout_accounts`, `shop_categories`, `shop_category_assignments`, `slug_redirects`                                                                                          |
 | §7      | catalog, media          | `categories`, `attributes`, `attribute_values`, `category_attributes`, `brands`, `products`, `product_attribute_values`, `product_option_axes`, `product_variants`, `variant_option_values`, `product_review_decisions`, `product_listings`, `media_assets`, `product_media`, `collections` (R2) |
 | §8      | inventory               | `inventory_items`, `inventory_reservations`, `inventory_movements`                                                                                                                                                                                                                               |
-| §9      | logistics               | `provinces`, `districts`, `local_levels`, `delivery_zones`, `delivery_zone_districts`, `shop_delivery_coverage`, `shop_shipping_rates`                                                                                                                                                           |
+| §9      | logistics               | `provinces`, `districts`, `local_levels`, `delivery_zones`, `delivery_zone_districts`, `shop_delivery_coverage`, `shop_shipping_rates`, `logistics_providers`, `logistics_accounts`, `logistics_account_shops`, `shop_logistics_settings`                                                        |
 | §10     | cart                    | `carts`, `cart_items`                                                                                                                                                                                                                                                                            |
-| §11     | orders                  | `orders`, `shop_orders`, `order_items`, `order_events`, `shipments`, `shipment_events`, `return_requests`, `return_items`                                                                                                                                                                        |
+| §11     | orders                  | `orders`, `shop_orders`, `order_items`, `order_events`, `shipments`, `shipment_events`, `return_requests`, `return_items`, `shipment_items`                                                                                                                                                      |
 | §12     | payments                | `payments`, `payment_allocations`, `provider_events`, `refunds`, `refund_items`                                                                                                                                                                                                                  |
 | §13     | ledger                  | `ledger_entries`, `payouts`, `payout_entries`, `vendor_remittances`, `ledger_adjustment_requests` (proposed)                                                                                                                                                                                     |
 | §14     | notifications, platform | `support_cases`, `support_case_messages`, `notification_deliveries`                                                                                                                                                                                                                              |
@@ -484,16 +484,16 @@ Pickup and return addresses. The layout matches `user_addresses` (§5.5), so the
 
 **Keys and constraints**
 
-- `shop_addresses_pkey PRIMARY KEY (id)`; `shop_addresses_shop_fkey FOREIGN KEY (shop_id) REFERENCES shops (id) ON DELETE RESTRICT`.
+- `shop_addresses_pkey PRIMARY KEY (id)`; `shop_addresses_shop_fkey FOREIGN KEY (shop_id) REFERENCES shops (id) ON DELETE RESTRICT`; `shop_addresses_id_shop_id_key UNIQUE (id, shop_id)`, the target of `shipments_pickup_address_fkey` (§11.5).
 - The three location keys of §5.5, named `shop_addresses_province_fkey`, `shop_addresses_district_fkey` and `shop_addresses_local_level_fkey`.
 - `shop_addresses_purpose_check CHECK (purpose IN ('pickup','return'))`; `shop_addresses_ward_no_check CHECK (ward_no BETWEEN 1 AND 40)`; `shop_addresses_contact_name_check CHECK (char_length(contact_name) BETWEEN 2 AND 100)`; `shop_addresses_default_not_archived_check CHECK (NOT (is_default AND archived_at IS NOT NULL))`.
 - `shop_addresses_one_default_key UNIQUE (shop_id, purpose) WHERE is_default AND archived_at IS NULL` (partial; fixes A1-12).
 - Ciphertext format CHECKs (INV-25, pattern of §5.1): `shop_addresses_contact_phone_enc_check`, `shop_addresses_area_tole_enc_check` and `shop_addresses_street_landmark_enc_check` (the last allows null).
-- Application-enforced: approval needs a default pickup address; if no return address exists, returns go to the default pickup address. In R1 a shop has at most one active address per purpose, and it is the default of that purpose. `applyForShop` inserts the pickup address. `updateShopProfile` (`shop.profile.manage`) takes optional `pickup_address` and `return_address` objects with the §5.5 fields, and `resubmitShopApplication` a `pickup_address` (proposed inputs, [06 §13.4 and §13.5](06-api-design.md)); each updates the active row of that purpose in place, or inserts it as the default when there is none. A `return_address` of `null` archives the return address, so returns go to the default pickup address again. No operation archives the pickup address, so an approved shop (`active`, `suspended` or `closed`) keeps the default pickup address its approval required until the retention command deletes a closed shop's configuration rows, 7 years after `closed_at` (§6.1); the addresses of a never-approved application go in its 1-year purge (§6.1).
+- Application-enforced: approval needs a default pickup address; if no return address exists, returns go to the default pickup address. A shop has at most one active `return` address, which is its default, and one or more active `pickup` addresses, exactly one of which is the default (OD-56, changed 2026-11-05 from one per purpose). Several pickup addresses serve courier bookings from more than one place ([ADR-0019](adr/0019-courier-integration-in-r1.md) decision 4). `applyForShop` inserts the pickup address. `updateShopProfile` (`shop.profile.manage`) takes optional `pickup_address` and `return_address` objects with the §5.5 fields, and `resubmitShopApplication` a `pickup_address` (proposed inputs, [06 §13.4 and §13.5](06-api-design.md)); each updates the active row of that purpose in place, or inserts it as the default when there is none. From M6 the pickup-address operations (proposed with M6, `shop.shipping.manage`) add, edit and archive further pickup addresses and move the default. **A pickup address that a shipment references is never edited in place:** an edit archives that row and inserts the edited copy, which takes over its default flag, so a shipment always shows the address its parcel left from (INV-30). A `return_address` of `null` archives the return address, so returns go to the default pickup address again. A shop always keeps one live default pickup address: an edit replaces it, and no operation archives it without a replacement, so an approved shop (`active`, `suspended` or `closed`) keeps the default pickup address its approval required until the retention command deletes a closed shop's configuration rows, 7 years after `closed_at` (§6.1); the addresses of a never-approved application go in its 1-year purge (§6.1).
 
 **Indexes.** `shop_addresses_shop_idx ON (shop_id, purpose) WHERE archived_at IS NULL` serves the settings page and the approval check. The partial unique index serves "default pickup address of this shop".
 
-**Lifecycle and retention.** As §5.5, through the inputs above: edited in place; a removed return address is archived; archived rows are hard-deleted after 30 days [Assumption] by `platform.retention_purge` ([04 §19.3](04-domain-model-and-data-dictionary.md)). The same job deletes every address of an application that was never approved, one year after its last rejection (§6.1), and the retention command deletes a closed shop's addresses 7 years after `closed_at`, with its other configuration rows (§6.1).
+**Lifecycle and retention.** As §5.5, through the inputs above: edited in place unless a shipment references it; a removed return or pickup address is archived; archived rows are hard-deleted after 30 days [Assumption] by `platform.retention_purge` ([04 §19.3](04-domain-model-and-data-dictionary.md)), except a row that `shipments.pickup_address_id` references, which the purge skips and which is kept as long as that shipment (§11.5). At the end of that shipment's retention period the retention command nulls the personal columns of such a row, as it redacts the order snapshot ([04 §19.3](04-domain-model-and-data-dictionary.md#193-retention-schedule)). T-SHOP-006 (proposed). The same job deletes every address of an application that was never approved, one year after its last rejection (§6.1), and the retention command deletes a closed shop's addresses 7 years after `closed_at`, with its other configuration rows (§6.1).
 
 ### 6.7 `shop_payout_accounts`
 
@@ -1285,7 +1285,7 @@ pg-boss may run a job twice [Verified-doc <https://github.com/timgit/pg-boss/blo
 
 ## 9. Logistics and locations
 
-The `logistics` module owns the national location reference data and each shop's delivery configuration. The address tables that use the codes are §5.5 (`user_addresses`) and §6.6 (`shop_addresses`). The seed dataset and its source are [04 §21.4](04-domain-model-and-data-dictionary.md) and [04 §21.5](04-domain-model-and-data-dictionary.md).
+The `logistics` module owns the national location reference data, each shop's delivery configuration, and the courier tables of OD-56: the courier registry (§9.8), courier accounts (§9.9), the shops allowed to use each account (§9.10) and each shop's logistics settings (§9.11). The address tables that use the codes are §5.5 (`user_addresses`) and §6.6 (`shop_addresses`). The seed dataset and its source are [04 §21.4](04-domain-model-and-data-dictionary.md) and [04 §21.5](04-domain-model-and-data-dictionary.md).
 
 **Codes.** Nepal Post's federal postal codes give every local level a 5-digit code made of a province digit, a 2-digit district number and a 2-digit local-level number, and every ward a 7-digit code (the local-level code plus a 2-digit ward). Kathmandu Metropolitan City is `30608`, with wards `3060801` to `3060832` [Verified-doc <https://giwmscdnone.gov.np/media/pdf_upload/Postal%20Code_wteggid.pdf>]. DripNepal uses the first digit as the province code and the first three digits as the district code (`3` Bagmati, `306` Kathmandu, `307` Bhaktapur, `308` Lalitpur). A CHECK then proves that every code sits inside its parent. The counts to seed are 7 provinces, 77 districts and 753 local levels with 6,743 wards ([04 §21.4](04-domain-model-and-data-dictionary.md#214-locations-dataset-vx-10); [research: nepal-regulatory-locale](research/nepal-regulatory-locale.md)). Whether this list is the authoritative dataset to build on is [Verify-external VX-10].
 
@@ -1476,6 +1476,174 @@ The estimate is the "delivery date and time" disclosure of E-Commerce Act 2081 s
 
 **Lifecycle and retention.** As §9.6.
 
+### 9.8 `logistics_providers`
+
+**Module** `logistics` · **Release** R1 · **Shop scope** none · **Lifecycle** Reference · **Sensitivity** Internal
+
+One row per courier that DripNepal integrates with ([ADR-0019](adr/0019-courier-integration-in-r1.md) decision 1, OD-56). Nepal Can Move is the first row, code `ncm` [Assumption A-53]. It comes from the reference seeder ([04 §21.6](04-domain-model-and-data-dictionary.md#216-couriers)), never from a migration. No column here or elsewhere is specific to one courier.
+
+| Column                     | Type        | Null | Default | Notes                                                                                                                                                                                                        |
+| -------------------------- | ----------- | ---- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `code`                     | text        | no   | App     | Primary key, for example `ncm`. A code is the key, as for the other reference tables of §9                                                                                                                   |
+| `name`                     | text        | no   | App     | Display name, for example "Nepal Can Move". Copied into `shipments.courier_name` at booking (§11.5)                                                                                                          |
+| `is_active`                | boolean     | no   | `true`  | `false` retires the courier: no new account or booking uses it                                                                                                                                               |
+| `capabilities`             | jsonb       | no   | `'{}'`  | What the adapter supports, as boolean members `booking`, `cancellation`, `tracking_callback`, `tracking_poll` and `cod`, filled when VX-16 is answered. Read by the adapter and settings pages, never by SQL |
+| `created_at`, `updated_at` | timestamptz | no   | `now()` |                                                                                                                                                                                                              |
+
+**Keys and constraints.**
+
+```sql
+CONSTRAINT logistics_providers_pkey PRIMARY KEY (code),
+CONSTRAINT logistics_providers_code_check CHECK (code ~ '^[a-z][a-z0-9_]{1,31}$'),
+CONSTRAINT logistics_providers_name_check CHECK (char_length(name) BETWEEN 2 AND 80),
+CONSTRAINT logistics_providers_capabilities_check CHECK (jsonb_typeof(capabilities) = 'object')
+```
+
+**Indexes.** Primary key only: the table holds a handful of rows.
+
+**Lifecycle and retention.** Seeded by the reference seeder ([04 §20.3](04-domain-model-and-data-dictionary.md)) and changed only by a reviewed seeder. Never deleted: accounts reference it with RESTRICT. A courier that stops working with DripNepal gets `is_active = false`.
+
+### 9.9 `logistics_accounts`
+
+**Module** `logistics` · **Release** R1 · **Shop scope** `shop_id` for a shop-owned account; none for a platform-owned one · **Lifecycle** Configuration · **Sensitivity** Secret (`credentials_enc`); Internal
+
+A merchant account with a courier, owned by the platform or by one shop ([ADR-0019](adr/0019-courier-integration-in-r1.md) decision 2). Which shops may book through it is §9.10.
+
+| Column                     | Type        | Null | Default     | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| -------------------------- | ----------- | ---- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                       | uuid        | no   | `uuidv7()`  |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `provider_code`            | text        | no   | App         | The courier. Never changes                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `owner_type`               | text        | no   | App         | `platform` or `shop`. Never changes                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `shop_id`                  | uuid        | yes  | —           | The owning shop; null exactly when `owner_type = 'platform'`. Never changes                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `name`                     | text        | no   | App         | Label shown in settings, for example "NCM Kathmandu"                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `environment`              | text        | no   | App         | `sandbox` or `production`. In production the booking action refuses a `sandbox` account. Never changes                                                                                                                                                                                                                                                                                                                                                                                         |
+| `external_account_ref`     | text        | yes  | —           | The courier's own merchant or vendor ID, if it has one (VX-16). Never changes: a different merchant account is a new row                                                                                                                                                                                                                                                                                                                                                                       |
+| `credentials_enc`          | text        | yes  | —           | The courier credentials as a JSON object, encrypted in the format of [04 §2.9](04-domain-model-and-data-dictionary.md#29-sensitive-column-encryption-and-blind-indexes) with the additional authenticated data `logistics_accounts.credentials_enc`. Null before they are entered and after `disabled`. Never serialised, logged, put in a job payload or written to `audit_logs` ([07 §5.5](07-security-threat-model-and-permissions.md#55-encryption)); only the courier adapter decrypts it |
+| `status`                   | text        | no   | `'pending'` | `pending` (entered, not yet verified), `active` (a test call succeeded; bookable), `invalid` (the courier refused the credentials; they must be entered again), `suspended` (paused by platform staff), `disabled` (closed for good; credentials erased)                                                                                                                                                                                                                                       |
+| `verified_at`              | timestamptz | yes  | —           | Last successful test call                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `disabled_at`              | timestamptz | yes  | —           | Set by the transition to `disabled`                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `version`                  | int         | no   | `1`         | [04 §2.10](04-domain-model-and-data-dictionary.md)                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `created_at`, `updated_at` | timestamptz | no   | `now()`     |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+
+**Keys and constraints.**
+
+```sql
+CONSTRAINT logistics_accounts_pkey PRIMARY KEY (id),
+CONSTRAINT logistics_accounts_id_owner_type_key UNIQUE (id, owner_type),   -- target for §9.10, §9.11
+CONSTRAINT logistics_accounts_id_shop_id_key UNIQUE (id, shop_id),         -- target for §9.10
+CONSTRAINT logistics_accounts_external_ref_key
+  UNIQUE (provider_code, environment, external_account_ref),               -- NULLs are distinct
+CONSTRAINT logistics_accounts_provider_fkey FOREIGN KEY (provider_code)
+  REFERENCES logistics_providers (code) ON DELETE RESTRICT,
+CONSTRAINT logistics_accounts_shop_fkey FOREIGN KEY (shop_id) REFERENCES shops (id) ON DELETE RESTRICT,
+CONSTRAINT logistics_accounts_owner_check CHECK (owner_type IN ('platform', 'shop')
+  AND (owner_type = 'platform') = (shop_id IS NULL)),
+CONSTRAINT logistics_accounts_environment_check CHECK (environment IN ('sandbox', 'production')),
+CONSTRAINT logistics_accounts_status_check
+  CHECK (status IN ('pending', 'active', 'invalid', 'suspended', 'disabled')),
+CONSTRAINT logistics_accounts_active_check
+  CHECK (status <> 'active' OR (credentials_enc IS NOT NULL AND verified_at IS NOT NULL)),
+CONSTRAINT logistics_accounts_disabled_check CHECK ((status = 'disabled') = (disabled_at IS NOT NULL)
+  AND (status <> 'disabled' OR credentials_enc IS NULL)),
+CONSTRAINT logistics_accounts_name_check CHECK (char_length(name) BETWEEN 2 AND 80),
+CONSTRAINT logistics_accounts_external_ref_check
+  CHECK (external_account_ref IS NULL OR char_length(external_account_ref) BETWEEN 1 AND 100),
+CONSTRAINT logistics_accounts_credentials_enc_check CHECK (credentials_enc IS NULL
+  OR credentials_enc ~ '^v[0-9]+\.[A-Za-z0-9_-]{1,32}\.[A-Za-z0-9_-]{16}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{22}$')
+
+CREATE TRIGGER logistics_accounts_guard BEFORE UPDATE ON logistics_accounts FOR EACH ROW
+  EXECUTE FUNCTION allow_only_columns('name', 'credentials_enc', 'status', 'verified_at', 'disabled_at',
+    'version', 'updated_at');
+```
+
+`logistics_accounts_guard` keeps the provider, owner type, owner shop, environment and external reference as they were inserted, so a shipment's account always names the same owner (INV-28). `logistics_accounts_credentials_enc_check` is the ciphertext format CHECK of INV-25. `disabled` is terminal: the action refuses any transition out of it, and new credentials make a new account. T-SHOP-111 (proposed).
+
+**Indexes.** `logistics_accounts_shop_idx (shop_id) WHERE shop_id IS NOT NULL` serves the seller settings page (`WHERE shop_id = :resolved_shop`) and the RESTRICT check from `shops`. Platform-owned accounts number a few rows and are listed by a sequential scan.
+
+**Lifecycle and retention.** A shop-owned account is created, re-keyed and disabled under `shop.courier_accounts.manage` (owner only, with password re-entry), a platform-owned one under `platform.logistics.manage` ([07 §4.2–§4.3](07-security-threat-model-and-permissions.md#43-shop-roles-and-permissions); proposed). Each change writes one `audit_logs` row that names the account and never the credentials. The test call that moves an account to `active` or `invalid` runs as a job (`logistics.verify_account`, proposed), so only the worker decrypts `credentials_enc`. Never deleted: shipments reference it through §9.10 with RESTRICT. The transition to `disabled` erases `credentials_enc` and, in the same transaction, deactivates the account's §9.10 rows, which returns the shops whose default it was to `manual` (§9.11). `suspended` and `invalid` keep the rows: the booking action refuses an account that is not `active`, and the settings page shows the default as unusable. Closing a shop (`closeShop`, [05 §6.10](05-order-payment-and-inventory-lifecycles.md#610-product-and-shop-lifecycles-summary)) disables its own accounts and deactivates its rows on platform-owned accounts in the closure transaction. A shop-owned row is kept as the shop's configuration ([04 §19.3](04-domain-model-and-data-dictionary.md#193-retention-schedule)), and as long as a shipment references it.
+
+### 9.10 `logistics_account_shops`
+
+**Module** `logistics` · **Release** R1 · **Shop scope** `shop_id` · **Lifecycle** Configuration · **Sensitivity** Internal
+
+Which shops may book through which account ([ADR-0019](adr/0019-courier-integration-in-r1.md) decision 3). A shop-owned account has exactly one row, for its owner. A platform-owned account has one row per shop that platform staff allow. `shipments` and `shop_logistics_settings` reference `(account_id, shop_id)` of this table, so the database refuses an account the shop was never allowed to use.
+
+| Column                     | Type        | Null | Default | Notes                                                                                                     |
+| -------------------------- | ----------- | ---- | ------- | --------------------------------------------------------------------------------------------------------- |
+| `account_id`               | uuid        | no   | App     |                                                                                                           |
+| `shop_id`                  | uuid        | no   | App     | The shop allowed to book                                                                                  |
+| `account_owner_type`       | text        | no   | App     | Copy of `logistics_accounts.owner_type`, checked by `logistics_account_shops_account_fkey`                |
+| `owner_shop_id`            | uuid        | yes  | —       | Copy of the owning shop of a shop-owned account; null for a platform-owned one. Checked by `…_owner_fkey` |
+| `is_active`                | boolean     | no   | `true`  | `false` stops new bookings; shipments already booked keep their reference                                 |
+| `enabled_at`               | timestamptz | no   | `now()` | When the row last became active                                                                           |
+| `disabled_at`              | timestamptz | yes  | —       | Set when the row becomes inactive                                                                         |
+| `created_at`, `updated_at` | timestamptz | no   | `now()` |                                                                                                           |
+
+**Keys and constraints.**
+
+```sql
+CONSTRAINT logistics_account_shops_pkey PRIMARY KEY (account_id, shop_id),   -- target for §9.11, §11.5
+CONSTRAINT logistics_account_shops_account_fkey FOREIGN KEY (account_id, account_owner_type)
+  REFERENCES logistics_accounts (id, owner_type) ON DELETE RESTRICT,
+CONSTRAINT logistics_account_shops_owner_fkey FOREIGN KEY (account_id, owner_shop_id)
+  REFERENCES logistics_accounts (id, shop_id) ON DELETE RESTRICT,     -- MATCH SIMPLE: skipped when owner_shop_id is null
+CONSTRAINT logistics_account_shops_shop_fkey FOREIGN KEY (shop_id) REFERENCES shops (id) ON DELETE RESTRICT,
+CONSTRAINT logistics_account_shops_owner_check CHECK ((account_owner_type = 'platform') = (owner_shop_id IS NULL)
+  AND (owner_shop_id IS NULL OR owner_shop_id = shop_id)),
+CONSTRAINT logistics_account_shops_active_check CHECK (is_active = (disabled_at IS NULL))
+
+CREATE TRIGGER logistics_account_shops_guard BEFORE UPDATE ON logistics_account_shops FOR EACH ROW
+  EXECUTE FUNCTION allow_only_columns('is_active', 'enabled_at', 'disabled_at', 'updated_at');
+```
+
+How the keys fit together. `…_account_fkey` makes `account_owner_type` equal the account's owner type, so a row cannot call a shop-owned account `platform`. On a shop-owned row `…_owner_check` requires `owner_shop_id`, so `…_owner_fkey` is always checked and makes it equal the account's `shop_id`; the same CHECK makes it equal the row's `shop_id`. A shop-owned account can therefore list only its owner, at most once (the primary key). On a platform-owned row the CHECK requires `owner_shop_id` to be null. The action that creates a shop-owned account inserts the owner's row in the same transaction; an account without its row cannot be booked, which is safe. INV-29; T-SHOP-112 (proposed).
+
+**Indexes.**
+
+| Index                              | Definition                  | Query served                                                                                                                                     |
+| ---------------------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `logistics_account_shops_pkey`     | `(account_id, shop_id)`     | The shops of a platform-owned account (admin page); the booking check `WHERE account_id = :a AND shop_id = :s AND is_active`; foreign-key target |
+| `logistics_account_shops_shop_idx` | `(shop_id) WHERE is_active` | The accounts a shop may use: seller settings and the booking form                                                                                |
+
+**Lifecycle and retention.** The owner's row of a shop-owned account comes with the account. Rows for platform-owned accounts are added and deactivated under `platform.logistics.manage`, each with an `audit_logs` row. Deactivating a row also returns that shop's settings to `manual` if their default account was this one (§9.11), in the same transaction. Rows are never deleted: shipments and settings reference them with RESTRICT. Retained as §9.9.
+
+### 9.11 `shop_logistics_settings`
+
+**Module** `logistics` · **Release** R1 · **Shop scope** `shop_id` · **Lifecycle** Configuration · **Sensitivity** Internal
+
+How a shop fulfils its orders (OD-56). A shop with no row is in the `manual` mode with `is_enabled` true; the row is created the first time a setting changes. Courier booking needs the `vendor` or `platform` mode. Nothing here books a shipment by itself ([ADR-0019](adr/0019-courier-integration-in-r1.md) decision 7). The default pickup address is not here: it is the `shop_addresses` row with `purpose = 'pickup'` and `is_default` (§6.6).
+
+| Column                       | Type        | Null | Default    | Notes                                                                                                                                                                 |
+| ---------------------------- | ----------- | ---- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `shop_id`                    | uuid        | no   | App        | Primary key                                                                                                                                                           |
+| `fulfillment_mode`           | text        | no   | `'manual'` | `manual` (vendor-entered tracking, FR-FUL-001 to 003), `vendor` (the shop's own courier account) or `platform` (a platform-owned account shared with the shop) [A-54] |
+| `default_account_id`         | uuid        | yes  | —          | The account the booking form offers first; null in `manual`                                                                                                           |
+| `default_account_owner_type` | text        | yes  | —          | Copy of the account's owner type, so the mode matches the account                                                                                                     |
+| `is_enabled`                 | boolean     | no   | `true`     | Platform switch under `platform.logistics.manage`: `false` refuses new courier bookings for the shop in any mode. Manual entries are not affected                     |
+| `version`                    | int         | no   | `1`        | [04 §2.10](04-domain-model-and-data-dictionary.md)                                                                                                                    |
+| `created_at`, `updated_at`   | timestamptz | no   | `now()`    |                                                                                                                                                                       |
+
+**Keys and constraints.**
+
+```sql
+CONSTRAINT shop_logistics_settings_pkey PRIMARY KEY (shop_id),
+CONSTRAINT shop_logistics_settings_shop_fkey FOREIGN KEY (shop_id) REFERENCES shops (id) ON DELETE RESTRICT,
+CONSTRAINT shop_logistics_settings_account_shop_fkey FOREIGN KEY (default_account_id, shop_id)
+  REFERENCES logistics_account_shops (account_id, shop_id) ON DELETE RESTRICT,
+CONSTRAINT shop_logistics_settings_account_owner_fkey FOREIGN KEY (default_account_id, default_account_owner_type)
+  REFERENCES logistics_accounts (id, owner_type) ON DELETE RESTRICT,
+CONSTRAINT shop_logistics_settings_mode_check CHECK (
+     (fulfillment_mode = 'manual' AND default_account_id IS NULL AND default_account_owner_type IS NULL)
+  OR (fulfillment_mode = 'vendor' AND default_account_id IS NOT NULL AND default_account_owner_type = 'shop')
+  OR (fulfillment_mode = 'platform' AND default_account_id IS NOT NULL AND default_account_owner_type = 'platform'))
+```
+
+The two foreign keys and the CHECK make the default account one the shop may use and of the owner type its mode names. That the default account's row is still active is checked by the action that saves the settings, and by the deactivation of §9.10. T-SHOP-113 (proposed).
+
+**Indexes.** Primary key only: every read is by shop.
+
+**Lifecycle and retention.** The mode and default account change under `shop.shipping.manage`, `is_enabled` under `platform.logistics.manage`, with ⟳ `If-Match` on `version` and an `audit_logs` row (operations proposed with M6). Retained as the shop's other configuration ([04 §19.3](04-domain-model-and-data-dictionary.md#193-retention-schedule)).
+
 ---
 
 ## 10. Cart
@@ -1597,26 +1765,30 @@ END $$;
 
 The checkout the customer sees as "my order DN-4K7Q2M9": who ordered, how they pay, the totals as placed and the delivery address as it was. The parent status is derived from the shop orders ([05 §3.8](05-order-payment-and-inventory-lifecycles.md#38-parent-status-derivation)). This table replaces the current `orders`, which cascades from users and addresses (RF-06), mixes shops (RF-07) and has no idempotency (RF-15).
 
-| Column                     | Type        | Null | Default    | Notes                                                                                                                                                                                                                                                 |
-| -------------------------- | ----------- | ---- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`                       | uuid        | no   | `uuidv7()` | Supplied by the action so that step 8 can run before the insert ([05 §4.3](05-order-payment-and-inventory-lifecycles.md#43-step-by-step))                                                                                                             |
-| `number`                   | text        | no   | App        | `DN-` + 7 Crockford base32 characters                                                                                                                                                                                                                 |
-| `customer_user_id`         | uuid        | no   | App        | The signed-in customer                                                                                                                                                                                                                                |
-| `status`                   | text        | no   | App        | `awaiting_payment`, `placed`, `in_progress`, `completed`, `cancelled`. Written only by `recomputeOrderStatus`, in the transaction of a shop order change                                                                                              |
-| `payment_method`           | text        | no   | App        | `cod`, `esewa`, `khalti`. All three are in the CHECK from the baseline. The API offers only the enabled methods (R1: `cod`)                                                                                                                           |
-| `currency`                 | char(3)     | no   | `'NPR'`    |                                                                                                                                                                                                                                                       |
-| `items_subtotal_minor`     | bigint      | no   | App        | Σ `shop_orders.items_subtotal_minor`                                                                                                                                                                                                                  |
-| `shipping_total_minor`     | bigint      | no   | App        | Σ `shop_orders.shipping_fee_minor`                                                                                                                                                                                                                    |
-| `discount_total_minor`     | bigint      | no   | `0`        | Σ `shop_orders.discount_minor`; 0 in R1 ([05 §3.4](05-order-payment-and-inventory-lifecycles.md#34-discount-allocation))                                                                                                                              |
-| `grand_total_minor`        | bigint      | no   | App        | As placed. The request's `expected_grand_total_minor` is only compared with it (`PRICE_CHANGED`), never stored                                                                                                                                        |
-| `shipping_address`         | jsonb       | no   | App        | Snapshot; shape below                                                                                                                                                                                                                                 |
-| `shipping_district_code`   | text        | no   | App        | Copy of the snapshot's district for zone reports and filters                                                                                                                                                                                          |
-| `customer_email_snapshot`  | text        | yes  | App        | The account email at placement, for receipts and support. Set at placement; null only after anonymisation ([04 §19.2](04-domain-model-and-data-dictionary.md)) or the end-of-retention redaction ([04 §19.3](04-domain-model-and-data-dictionary.md)) |
-| `customer_note`            | text        | yes  | —          | At most 500 characters                                                                                                                                                                                                                                |
-| `placed_at`                | timestamptz | no   | `now()`    |                                                                                                                                                                                                                                                       |
-| `idempotency_key_id`       | uuid        | yes  | —          | The key row of the placing request; null once the key is purged                                                                                                                                                                                       |
-| `request_id`               | text        | yes  | —          | `X-Request-Id` of the placing request                                                                                                                                                                                                                 |
-| `created_at`, `updated_at` | timestamptz | no   | `now()`    |                                                                                                                                                                                                                                                       |
+| Column                     | Type        | Null | Default     | Notes                                                                                                                                                                                                                                                                               |
+| -------------------------- | ----------- | ---- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                       | uuid        | no   | `uuidv7()`  | Supplied by the action so that step 8 can run before the insert ([05 §4.3](05-order-payment-and-inventory-lifecycles.md#43-step-by-step))                                                                                                                                           |
+| `number`                   | text        | no   | App         | `DN-` + 7 Crockford base32 characters                                                                                                                                                                                                                                               |
+| `customer_user_id`         | uuid        | no   | App         | The signed-in customer                                                                                                                                                                                                                                                              |
+| `status`                   | text        | no   | App         | `awaiting_payment`, `placed`, `in_progress`, `completed`, `cancelled`. Written only by `recomputeOrderStatus`, in the transaction of a shop order change                                                                                                                            |
+| `payment_method`           | text        | no   | App         | `cod`, `esewa`, `khalti`. All three are in the CHECK from the baseline. The API offers only the enabled methods (R1: `cod`)                                                                                                                                                         |
+| `currency`                 | char(3)     | no   | `'NPR'`     |                                                                                                                                                                                                                                                                                     |
+| `items_subtotal_minor`     | bigint      | no   | App         | Σ `shop_orders.items_subtotal_minor`                                                                                                                                                                                                                                                |
+| `shipping_total_minor`     | bigint      | no   | App         | Σ `shop_orders.shipping_fee_minor`                                                                                                                                                                                                                                                  |
+| `discount_total_minor`     | bigint      | no   | `0`         | Σ `shop_orders.discount_minor`; 0 in R1 ([05 §3.4](05-order-payment-and-inventory-lifecycles.md#34-discount-allocation))                                                                                                                                                            |
+| `grand_total_minor`        | bigint      | no   | App         | As placed. The request's `expected_grand_total_minor` is only compared with it (`PRICE_CHANGED`), never stored                                                                                                                                                                      |
+| `shipping_address`         | jsonb       | no   | App         | Snapshot; shape below                                                                                                                                                                                                                                                               |
+| `shipping_district_code`   | text        | no   | App         | Copy of the snapshot's district for zone reports and filters                                                                                                                                                                                                                        |
+| `customer_email_snapshot`  | text        | yes  | App         | The account email at placement, for receipts and support. Set at placement; null only after anonymisation ([04 §19.2](04-domain-model-and-data-dictionary.md)) or the end-of-retention redaction ([04 §19.3](04-domain-model-and-data-dictionary.md))                               |
+| `customer_note`            | text        | yes  | —           | At most 500 characters                                                                                                                                                                                                                                                              |
+| `verification_status`      | text        | no   | `'pending'` | Platform-level customer verification (OD-57): `pending`, `verified`, `review_required`, `failed`. Set by platform staff under `platform.orders.intervene`, or by the R2 phone OTP. Independent of every shop order status: it never holds an order back from its shops (FR-ORD-009) |
+| `verification_method`      | text        | yes  | —           | `phone_call`, `sms_otp` (R2) or `manual` [Assumption A-55]; null while `pending`                                                                                                                                                                                                    |
+| `verified_at`              | timestamptz | yes  | —           | Set exactly while `verification_status = 'verified'`                                                                                                                                                                                                                                |
+| `verification_notes`       | text        | yes  | —           | Staff note, at most 500 characters. Never contact data ([04 §19.1](04-domain-model-and-data-dictionary.md)); shown only to platform staff                                                                                                                                           |
+| `placed_at`                | timestamptz | no   | `now()`     |                                                                                                                                                                                                                                                                                     |
+| `idempotency_key_id`       | uuid        | yes  | —           | The key row of the placing request; null once the key is purged                                                                                                                                                                                                                     |
+| `request_id`               | text        | yes  | —           | `X-Request-Id` of the placing request                                                                                                                                                                                                                                               |
+| `created_at`, `updated_at` | timestamptz | no   | `now()`     |                                                                                                                                                                                                                                                                                     |
 
 **The `shipping_address` snapshot** (schema version 1):
 
@@ -1682,18 +1854,25 @@ CONSTRAINT orders_recipient_present_check CHECK (customer_email_snapshot IS NULL
 CONSTRAINT orders_shipping_district_fkey FOREIGN KEY (shipping_district_code)
   REFERENCES districts (code) ON DELETE RESTRICT,
 CONSTRAINT orders_customer_note_check CHECK (customer_note IS NULL OR char_length(customer_note) <= 500),
+CONSTRAINT orders_verification_check CHECK (
+  verification_status IN ('pending', 'verified', 'review_required', 'failed')
+  AND (verification_method IS NULL OR verification_method IN ('phone_call', 'sms_otp', 'manual'))
+  AND (verification_status = 'pending') = (verification_method IS NULL)
+  AND (verification_status = 'verified') = (verified_at IS NOT NULL)
+  AND (verification_notes IS NULL OR char_length(verification_notes) <= 500)),
 CONSTRAINT orders_request_id_check CHECK (request_id IS NULL OR request_id ~ '^[A-Za-z0-9-]{8,64}$'),
 CONSTRAINT orders_idempotency_key_fkey FOREIGN KEY (idempotency_key_id)
   REFERENCES idempotency_keys (id) ON DELETE SET NULL
 
 CREATE TRIGGER orders_guard BEFORE UPDATE ON orders FOR EACH ROW
   EXECUTE FUNCTION allow_only_columns('status', 'updated_at', 'idempotency_key_id',
-    'shipping_address', 'customer_email_snapshot', 'customer_note');   -- the last three for 04 §19.2 and key rotation (04 §2.9)
+    'shipping_address', 'customer_email_snapshot', 'customer_note',   -- these three for 04 §19.2 and key rotation (04 §2.9)
+    'verification_status', 'verification_method', 'verified_at', 'verification_notes');   -- OD-57
 ```
 
 `orders_idempotency_key_key` is a partial unique index: at most one order per `idempotency_keys` row (INV-22 of [04 §16.2](04-domain-model-and-data-dictionary.md)). `idempotency_keys_scope_key` already makes a duplicate request wait and replay (§15.2), so the index is a backstop against a code path that inserts a second order under the same key row. Rows whose key was purged hold null and are outside the index. T-CHK-004 covers the normal path.
 
-`orders_totals_check` is the grand-total arithmetic invariant. The cross-row sums (parent equals the sum of its shop orders) cannot be CHECKs. They are asserted by the checkout action before commit and by the nightly integrity job ([05 §7.12](05-order-payment-and-inventory-lifecycles.md#712-statements-and-integrity-checks)); their test is T-ORD-102 ([04 §16.4](04-domain-model-and-data-dictionary.md)). `orders_cod_status_check` backs [05 §4.3](05-order-payment-and-inventory-lifecycles.md#43-step-by-step): a COD order is placed as `placed` and never waits for a payment. T-ORD-108 (proposed) inserts rows that break each CHECK of `orders`, `shop_orders` and `order_items` and expects 23514.
+`orders_totals_check` is the grand-total arithmetic invariant. The cross-row sums (parent equals the sum of its shop orders) cannot be CHECKs. They are asserted by the checkout action before commit and by the nightly integrity job ([05 §7.12](05-order-payment-and-inventory-lifecycles.md#712-statements-and-integrity-checks)); their test is T-ORD-102 ([04 §16.4](04-domain-model-and-data-dictionary.md)). `orders_cod_status_check` backs [05 §4.3](05-order-payment-and-inventory-lifecycles.md#43-step-by-step): a COD order is placed as `placed` and never waits for a payment. `orders_verification_check` keeps the OD-57 flag consistent (INV-33); the verification columns are the only columns outside `status` that staff change, and every change writes an `audit_logs` row with the old and new status. That a shop order of a `review_required` or `failed` order is not dispatched is checked by the dispatch actions ([05 §6.3](05-order-payment-and-inventory-lifecycles.md#63-shipment-fulfillment)), not by a constraint. T-ORD-109 (proposed). T-ORD-108 (proposed) inserts rows that break each CHECK of `orders`, `shop_orders` and `order_items` and expects 23514.
 
 **Indexes.**
 
@@ -1707,7 +1886,7 @@ CREATE TRIGGER orders_guard BEFORE UPDATE ON orders FOR EACH ROW
 | `orders_idempotency_key_key`     | UNIQUE `(idempotency_key_id) WHERE idempotency_key_id IS NOT NULL`                        | One order per idempotency key row (INV-22), and the `SET NULL` action run by the hourly key purge. Without it, every purged key scans `orders` |
 | `orders_id_customer_user_id_key` | `(id, customer_user_id)`                                                                  | Foreign-key target only                                                                                                                        |
 
-**Lifecycle and retention.** Inserted once by `placeOrder`. Afterwards only `status` changes (and, under [04 §19.2](04-domain-model-and-data-dictionary.md), the personal snapshot fields, whose `*_enc` members key rotation also re-encrypts, [04 §2.9](04-domain-model-and-data-dictionary.md)). Never deleted inside the retention period: 7 years after the order's last shop order became terminal, which approximates "six years after the end of the fiscal year" without a Bikram Sambat calendar (VAT Rules 2053 r23(7) requires 6 years; E-Commerce Directive 2082 s14 at least 5 [Verify-external VX-08]; [04 §19.3](04-domain-model-and-data-dictionary.md)).
+**Lifecycle and retention.** Inserted once by `placeOrder`. Afterwards only `status` and the OD-57 verification columns change (and, under [04 §19.2](04-domain-model-and-data-dictionary.md), the personal snapshot fields, whose `*_enc` members key rotation also re-encrypts, [04 §2.9](04-domain-model-and-data-dictionary.md)). Never deleted inside the retention period: 7 years after the order's last shop order became terminal, which approximates "six years after the end of the fiscal year" without a Bikram Sambat calendar (VAT Rules 2053 r23(7) requires 6 years; E-Commerce Directive 2082 s14 at least 5 [Verify-external VX-08]; [04 §19.3](04-domain-model-and-data-dictionary.md)).
 
 ### 11.2 `shop_orders`
 
@@ -1846,7 +2025,7 @@ CONSTRAINT order_items_variant_product_fkey FOREIGN KEY (variant_id, product_id)
   REFERENCES product_variants (id, product_id) ON DELETE RESTRICT,
 CONSTRAINT order_items_shop_order_variant_key UNIQUE (shop_order_id, variant_id),  -- one line per variant
 CONSTRAINT order_items_id_shop_id_key UNIQUE (id, shop_id),                        -- target for §13.1
-CONSTRAINT order_items_id_shop_order_id_key UNIQUE (id, shop_order_id),            -- target for §11.8, §12.5
+CONSTRAINT order_items_id_shop_order_id_key UNIQUE (id, shop_order_id),            -- target for §11.8, §11.9, §12.5
 CONSTRAINT order_items_reservation_ref_key UNIQUE (id, order_id, shop_id, variant_id),  -- target for §8.2
 CONSTRAINT order_items_currency_check CHECK (currency = 'NPR'),
 CONSTRAINT order_items_quantity_check CHECK (quantity > 0),
@@ -1954,79 +2133,160 @@ CONSTRAINT order_events_data_check CHECK (jsonb_typeof(data) = 'object')
 
 **Module** `orders` · **Release** R1 · **Shop scope** `shop_id` · **Lifecycle** Entity · **Sensitivity** Internal (tracking data is shown to the customer)
 
-The parcel of a shop order. R1 has exactly one shipment per shop order and no courier API: every transition is a vendor entry through `recordFulfillmentEvent` [Confirmed Q5]. The machine is [05 §6.3](05-order-payment-and-inventory-lifecycles.md#63-shipment-fulfillment).
+The parcel of a shop order. R1 has one live shipment per shop order (A-28). It moves along one of two paths of [05 §6.3](05-order-payment-and-inventory-lifecycles.md#63-shipment-fulfillment) (OD-56, [ADR-0019](adr/0019-courier-integration-in-r1.md)):
 
-| Column                       | Type        | Null | Default     | Notes                                                                                                                                                                       |
-| ---------------------------- | ----------- | ---- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`                         | uuid        | no   | `uuidv7()`  |                                                                                                                                                                             |
-| `shop_order_id`              | uuid        | no   | App         | Unique in R1                                                                                                                                                                |
-| `shop_id`                    | uuid        | no   | App         |                                                                                                                                                                             |
-| `status`                     | text        | no   | `'pending'` | `pending`, `packed`, `shipped`, `delivered`, `delivery_failed`, `returning`, `returned_to_origin`                                                                           |
-| `courier_name`               | text        | yes  | —           | Free text in R1 (for example "Nepal Can Move", own rider). R3 courier APIs add a `courier_code`                                                                             |
-| `tracking_number`            | text        | yes  | —           | Optional in R1, whatever the courier ([05 §6.3](05-order-payment-and-inventory-lifecycles.md#63-shipment-fulfillment))                                                      |
-| `tracking_url`               | text        | yes  | —           | HTTPS only, so a vendor cannot plant a `javascript:` link on the customer's order page                                                                                      |
-| `shipped_at`, `delivered_at` | timestamptz | yes  | —           | `delivered_at` starts the return window and the ledger hold                                                                                                                 |
-| `return_window_ends_at`      | timestamptz | yes  | —           | `delivered_at + return_window_days`, computed and stored in the `delivered` transaction ([05 §9.6](05-order-payment-and-inventory-lifecycles.md)). Never changed afterwards |
-| `attempt_count`              | smallint    | no   | `0`         | 1 at first shipment, +1 per reattempt                                                                                                                                       |
-| `version`                    | int         | no   | `1`         |                                                                                                                                                                             |
-| `created_at`, `updated_at`   | timestamptz | no   | `now()`     |                                                                                                                                                                             |
+- **Manual** (`logistics_account_id` null): every transition is a vendor entry through `recordFulfillmentEvent` [Confirmed Q5], as before OD-56.
+- **Courier** (`logistics_account_id` set): the vendor requests a booking through a courier account (operations proposed with M6), and the courier's status updates move the shipment, through the `CourierProvider` port.
+
+A booking that fails or is cancelled before pickup ends its row in `cancelled`; the shop order then gets a new `pending` shipment, so the account a parcel was booked on is never rewritten. Which units a shipment carries is §11.9.
+
+| Column                       | Type        | Null | Default     | Notes                                                                                                                                                                                                                                                                                                        |
+| ---------------------------- | ----------- | ---- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `id`                         | uuid        | no   | `uuidv7()`  |                                                                                                                                                                                                                                                                                                              |
+| `shop_order_id`              | uuid        | no   | App         | One live (not `cancelled`) shipment per shop order in R1                                                                                                                                                                                                                                                     |
+| `shop_id`                    | uuid        | no   | App         |                                                                                                                                                                                                                                                                                                              |
+| `status`                     | text        | no   | `'pending'` | Manual path: `pending`, `packed`, `shipped`, `delivered`, `delivery_failed`, `returning`, `returned_to_origin`. The courier path adds `booking_requested`, `booked`, `booking_failed`, `needs_reconciliation`, `out_for_delivery` and `cancelled`                                                            |
+| `logistics_account_id`       | uuid        | yes  | —           | The courier account the booking used (§9.9); null in the manual path. Set by `pending` or `packed` → `booking_requested` and never changed                                                                                                                                                                   |
+| `pickup_address_id`          | uuid        | yes  | —           | The pickup address the parcel leaves from (§6.6, `purpose = 'pickup'`); required with an account, optional in the manual path. Never changed once a booking is requested                                                                                                                                     |
+| `merchant_reference`         | text        | yes  | —           | DripNepal's reference sent to the courier, `<shop order number>-S<n>`, for example `DN-4K7Q2M9-1-S1`, where `n` counts the shop order's shipment rows that have one, cancelled rows included. The same on every job retry of one booking, so a courier that checks references can refuse a duplicate (VX-16) |
+| `external_shipment_id`       | text        | yes  | —           | The courier's ID for the booking. Written once                                                                                                                                                                                                                                                               |
+| `service_code`               | text        | yes  | —           | The courier service booked (VX-16)                                                                                                                                                                                                                                                                           |
+| `currency`                   | char(3)     | no   | `'NPR'`     |                                                                                                                                                                                                                                                                                                              |
+| `cod_amount_minor`           | bigint      | yes  | —           | The cash the courier is told to collect: the shop order's COD `payments.amount_minor` (§12.1) when the booking is requested, or `0` for a gateway order (R1.1). Null in the manual path, where the COD payment row alone holds it                                                                            |
+| `provider_cost_minor`        | bigint      | yes  | —           | What the courier charges for the parcel, once it reports it; kept for the manual COD reconciliation of OD-58. Never charged to the customer, who pays only `shop_orders.shipping_fee_minor` (§9.7)                                                                                                           |
+| `courier_name`               | text        | yes  | —           | Free text in the manual path (for example "Nepal Can Move", own rider); `logistics_providers.name` copied at booking in the courier path                                                                                                                                                                     |
+| `tracking_number`            | text        | yes  | —           | Optional in the manual path, whatever the courier ([05 §6.3](05-order-payment-and-inventory-lifecycles.md#63-shipment-fulfillment)); the courier's tracking number in the courier path                                                                                                                       |
+| `tracking_url`               | text        | yes  | —           | HTTPS only, so a vendor cannot plant a `javascript:` link on the customer's order page                                                                                                                                                                                                                       |
+| `booked_at`                  | timestamptz | yes  | —           | When the courier confirmed the booking                                                                                                                                                                                                                                                                       |
+| `shipped_at`, `delivered_at` | timestamptz | yes  | —           | `shipped_at` is the hand-over: the vendor's `shipped`, or the courier's pickup. `delivered_at` starts the return window and the ledger hold                                                                                                                                                                  |
+| `cancelled_at`               | timestamptz | yes  | —           | Set by the transition to `cancelled`                                                                                                                                                                                                                                                                         |
+| `return_window_ends_at`      | timestamptz | yes  | —           | `delivered_at + return_window_days`, computed and stored in the `delivered` transaction ([05 §9.6](05-order-payment-and-inventory-lifecycles.md)). Never changed afterwards                                                                                                                                  |
+| `attempt_count`              | smallint    | no   | `0`         | 1 at first shipment, +1 per reattempt                                                                                                                                                                                                                                                                        |
+| `version`                    | int         | no   | `1`         |                                                                                                                                                                                                                                                                                                              |
+| `created_at`, `updated_at`   | timestamptz | no   | `now()`     |                                                                                                                                                                                                                                                                                                              |
 
 **Keys and constraints.**
 
 ```sql
 CONSTRAINT shipments_pkey PRIMARY KEY (id),
-CONSTRAINT shipments_shop_order_key UNIQUE (shop_order_id),     -- R1: one parcel per shop order
-CONSTRAINT shipments_id_shop_id_key UNIQUE (id, shop_id),       -- target for §11.6
+CONSTRAINT shipments_id_shop_id_key UNIQUE (id, shop_id),               -- target for §11.6
+CONSTRAINT shipments_id_shop_order_id_key UNIQUE (id, shop_order_id),   -- target for §11.9
+CONSTRAINT shipments_merchant_reference_key UNIQUE (merchant_reference), -- NULLs are distinct
 CONSTRAINT shipments_shop_order_fkey FOREIGN KEY (shop_order_id, shop_id)
   REFERENCES shop_orders (id, shop_id) ON DELETE RESTRICT,
-CONSTRAINT shipments_status_check CHECK (status IN ('pending', 'packed', 'shipped', 'delivered',
-  'delivery_failed', 'returning', 'returned_to_origin')),
-CONSTRAINT shipments_shipped_check CHECK (status IN ('pending', 'packed')
+CONSTRAINT shipments_account_fkey FOREIGN KEY (logistics_account_id, shop_id)
+  REFERENCES logistics_account_shops (account_id, shop_id) ON DELETE RESTRICT,
+CONSTRAINT shipments_pickup_address_fkey FOREIGN KEY (pickup_address_id, shop_id)
+  REFERENCES shop_addresses (id, shop_id) ON DELETE RESTRICT,
+CONSTRAINT shipments_status_check CHECK (status IN ('pending', 'packed', 'booking_requested', 'booked',
+  'booking_failed', 'needs_reconciliation', 'shipped', 'out_for_delivery', 'delivered', 'delivery_failed',
+  'returning', 'returned_to_origin', 'cancelled')),
+CONSTRAINT shipments_path_check CHECK (CASE WHEN logistics_account_id IS NULL
+  THEN status IN ('pending', 'packed', 'shipped', 'delivered', 'delivery_failed', 'returning', 'returned_to_origin')
+    AND merchant_reference IS NULL AND external_shipment_id IS NULL AND service_code IS NULL
+    AND cod_amount_minor IS NULL AND provider_cost_minor IS NULL AND booked_at IS NULL
+  ELSE status NOT IN ('pending', 'packed')
+    AND pickup_address_id IS NOT NULL AND merchant_reference IS NOT NULL AND cod_amount_minor IS NOT NULL END),
+CONSTRAINT shipments_booked_check CHECK ((status IN ('pending', 'packed', 'booking_requested', 'booking_failed',
+  'needs_reconciliation', 'cancelled') OR logistics_account_id IS NULL
+  OR (external_shipment_id IS NOT NULL AND booked_at IS NOT NULL))
+  AND (status NOT IN ('booking_requested', 'booking_failed', 'needs_reconciliation')
+  OR (external_shipment_id IS NULL AND booked_at IS NULL))),
+CONSTRAINT shipments_cancelled_check CHECK ((status = 'cancelled') = (cancelled_at IS NOT NULL)
+  AND (status <> 'cancelled' OR shipped_at IS NULL)),
+CONSTRAINT shipments_shipped_check CHECK (status IN ('pending', 'packed', 'booking_requested', 'booked',
+  'booking_failed', 'needs_reconciliation', 'cancelled')
   OR (shipped_at IS NOT NULL AND courier_name IS NOT NULL AND attempt_count >= 1)),
 CONSTRAINT shipments_delivered_check CHECK ((status = 'delivered') = (delivered_at IS NOT NULL)
   AND (delivered_at IS NULL OR delivered_at >= shipped_at)),
 CONSTRAINT shipments_return_window_check CHECK ((delivered_at IS NULL) = (return_window_ends_at IS NULL)
   AND (return_window_ends_at IS NULL OR return_window_ends_at >= delivered_at + interval '7 days')),
 CONSTRAINT shipments_attempt_count_check CHECK (attempt_count BETWEEN 0 AND 3),  -- reattempt limit [Assumption A-47, 05 §6.3]
+CONSTRAINT shipments_currency_check CHECK (currency = 'NPR'),
+CONSTRAINT shipments_amounts_check CHECK ((cod_amount_minor IS NULL OR cod_amount_minor >= 0)
+  AND (provider_cost_minor IS NULL OR provider_cost_minor >= 0)),
+CONSTRAINT shipments_merchant_reference_check CHECK (merchant_reference IS NULL
+  OR merchant_reference ~ '^DN-[0-9A-HJKMNP-TV-Z]{7}-[1-9][0-9]?-S[1-9][0-9]?$'),
+CONSTRAINT shipments_external_shipment_id_check
+  CHECK (external_shipment_id IS NULL OR char_length(external_shipment_id) BETWEEN 1 AND 100),
+CONSTRAINT shipments_service_code_check CHECK (service_code IS NULL OR char_length(service_code) BETWEEN 1 AND 40),
 CONSTRAINT shipments_courier_name_check
   CHECK (courier_name IS NULL OR char_length(courier_name) BETWEEN 2 AND 80),
 CONSTRAINT shipments_tracking_number_check
   CHECK (tracking_number IS NULL OR char_length(tracking_number) BETWEEN 3 AND 64),
 CONSTRAINT shipments_tracking_url_check
   CHECK (tracking_url IS NULL OR (tracking_url ~ '^https://' AND char_length(tracking_url) <= 500))
+
+CREATE UNIQUE INDEX shipments_shop_order_key ON shipments (shop_order_id)
+  WHERE status <> 'cancelled';                          -- R1: one live parcel per shop order
+CREATE UNIQUE INDEX shipments_external_id_key ON shipments (logistics_account_id, external_shipment_id)
+  WHERE external_shipment_id IS NOT NULL;               -- one courier ID per account
+
+-- What a booking was made with never changes (INV-30, ADR-0019 decision 4)
+CREATE OR REPLACE FUNCTION shipments_booking_guard() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF (OLD.logistics_account_id IS NOT NULL
+      AND ROW(NEW.logistics_account_id, NEW.pickup_address_id, NEW.merchant_reference,
+              NEW.cod_amount_minor, NEW.service_code)
+          IS DISTINCT FROM ROW(OLD.logistics_account_id, OLD.pickup_address_id, OLD.merchant_reference,
+                               OLD.cod_amount_minor, OLD.service_code))
+     OR (OLD.external_shipment_id IS NOT NULL
+         AND NEW.external_shipment_id IS DISTINCT FROM OLD.external_shipment_id)
+     OR (OLD.status = 'cancelled' AND NEW.status <> 'cancelled') THEN
+    RAISE EXCEPTION 'shipments: a booking keeps its account, pickup address, reference, COD amount and courier ID'
+      USING ERRCODE = 'P0001';
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER shipments_booking_guard BEFORE UPDATE ON shipments
+  FOR EACH ROW EXECUTE FUNCTION shipments_booking_guard();
 ```
 
-T-FUL-101 (proposed) sets each shipped status without the required fields and expects 23514.
+- `shipments_path_check` keeps the two paths apart: the courier statuses and fields exist only with an account, and an account comes with its pickup address, reference and COD amount. `shipments_booked_check` requires the courier's ID once the courier confirmed the booking, and none before; `shipments_cancelled_check` keeps `cancelled` to bookings that never left. T-FUL-101 (widened) and T-FUL-102 (proposed) set each status without its required fields and expect 23514.
+- `shipments_account_fkey` and `shipments_pickup_address_fkey` are the composite keys of INV-29: the account must be one the shop may use (§9.10), and the pickup address one of the shop's own. That the address has `purpose = 'pickup'`, that the account and its row are active, and that the account's environment fits the deployment are checked by the booking action in its transaction. T-FUL-102 (proposed) expects 23503 for another shop's account or address.
+- `shipments_booking_guard` is INV-30: once a booking is requested, its account, pickup address, reference, COD amount and service never change, the courier's ID is written once, and a `cancelled` row stays cancelled. Together with the archive-and-replace rule of §6.6, a shipment always shows the account and address its parcel used, whatever the shop changes later. T-FUL-103 (proposed) expects P0001.
+- `shipments_shop_order_key` is now a partial unique index: a shop order has one live shipment, and its cancelled bookings stay beside it as history. `shipments_external_id_key` refuses the same courier ID twice on one account. T-FUL-104 (proposed).
+- For a COD order `cod_amount_minor` equals the COD payment's `amount_minor` when the booking is requested; the two are in different tables, so the booking action copies it in one transaction (04 §16.4). A COD amount can still go down before collection only through item-level rejection, which happens before any booking (05 §6.1).
 
-**Return window snapshot.** `return_window_ends_at` copies the `return_window_days` setting (§15.1) at delivery, as [05 §9.6](05-order-payment-and-inventory-lifecycles.md) requires for every deadline: a later settings change never moves a window a customer was already given. Auto-complete ([05 §6.1](05-order-payment-and-inventory-lifecycles.md#61-shoporder)) and return creation (§11.7) read this column, not the live setting. `shipments_return_window_check` keeps the column in step with `delivered_at` and never shorter than the legal minimum of 7 days (CPA 2075 s14 [Verify-external VX-04]). The tracking-correction transition `shipped → shipped` ([05 §6.3](05-order-payment-and-inventory-lifecycles.md#63-shipment-fulfillment)) changes only `courier_name`, `tracking_number` and `tracking_url`.
+**Return window snapshot.** `return_window_ends_at` copies the `return_window_days` setting (§15.1) at delivery, as [05 §9.6](05-order-payment-and-inventory-lifecycles.md) requires for every deadline: a later settings change never moves a window a customer was already given. Auto-complete ([05 §6.1](05-order-payment-and-inventory-lifecycles.md#61-shoporder)) and return creation (§11.7) read this column, not the live setting. `shipments_return_window_check` keeps the column in step with `delivered_at` and never shorter than the legal minimum of 7 days (CPA 2075 s14 [Verify-external VX-04]). The tracking-correction transition `shipped → shipped` ([05 §6.3](05-order-payment-and-inventory-lifecycles.md#63-shipment-fulfillment)) changes only `courier_name`, `tracking_number` and `tracking_url`, and exists only in the manual path: in the courier path these fields come from the courier.
 
 **Indexes.**
 
-| Index                      | Definition                                                        | Query served                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| -------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `shipments_shop_order_key` | `(shop_order_id)`                                                 | Shipment of a shop order (every fulfilment action, order pages)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `shipments_to_ship_idx`    | `(shop_id, created_at, id) WHERE status IN ('pending', 'packed')` | Seller "ready to ship" list: `SELECT s.* FROM shipments s JOIN shop_orders so ON so.id = s.shop_order_id AND so.shop_id = s.shop_id WHERE s.shop_id = :resolved_shop AND s.status IN ('pending','packed') AND so.status = 'accepted' ORDER BY s.created_at, s.id`. A shop order cancelled or rejected after acceptance leaves its shipment in `pending` or `packed` for good ([05 §6.3](05-order-payment-and-inventory-lifecycles.md#63-shipment-fulfillment)), so those few rows stay in the index and the join on `so.status = 'accepted'` is required (T-FUL-001, proposed, checks that the shipment of a shop order cancelled by `adminCancelShopOrder` after acceptance is not listed)                                                                                                                                                                                                                                                                                                                                                           |
-| `shipments_in_transit_idx` | `(updated_at) WHERE status IN ('shipped', 'delivery_failed')`     | Admin follow-up lists of [05 §8.9](05-order-payment-and-inventory-lifecycles.md#89-cod-refusal-and-collection-reconciliation), read when the queue is opened: "no outcome" (`WHERE status IN ('shipped','delivery_failed') AND updated_at < now() - interval '10 days'`; every shipment event updates the row), and COD collected while the shipment is still `shipped` (the same rows joined through `payments_cod_shop_order_key` to a `collected` COD payment with `captured_at < now() - interval '3 days'`, also [05 §7.12](05-order-payment-and-inventory-lifecycles.md#712-statements-and-integrity-checks) check 1). The other "COD outcome missing" list, delivered but still `awaiting_collection` after 3 days, starts from `payments_cod_uncollected_idx` (§12.1) and joins `shipments_shop_order_key` with `status = 'delivered' AND delivered_at < now() - interval '3 days'`. The reminders themselves are delayed `orders.cod_outcome_reminder` jobs and need no index; auto-complete is driven by `shop_orders_accepted_idx` (§11.2) |
+| Index                              | Definition                                                                                                                                 | Query served                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `shipments_shop_order_key`         | UNIQUE `(shop_order_id) WHERE status <> 'cancelled'`                                                                                       | The live shipment of a shop order: every fulfilment action and order page, `WHERE shop_order_id = :so AND status <> 'cancelled'`. Every join from another table through this index (§11.2 auto-complete, §12.1 "COD outcome missing") repeats `status <> 'cancelled'` ([04 §17.1](04-domain-model-and-data-dictionary.md#171-rules) rule 3)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `shipments_cancelled_idx`          | `(shop_order_id) WHERE status = 'cancelled'`                                                                                               | The cancelled bookings of a shop order, on the admin order page. With the index above it covers every row; a shop order has few or none                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `shipments_to_ship_idx`            | `(shop_id, created_at, id) WHERE status IN ('pending', 'packed', 'booking_requested', 'booked', 'booking_failed', 'needs_reconciliation')` | Seller "ready to ship" list, including bookings that wait for pickup or for the vendor: `SELECT s.* FROM shipments s JOIN shop_orders so ON so.id = s.shop_order_id AND so.shop_id = s.shop_id WHERE s.shop_id = :resolved_shop AND s.status IN (…) AND so.status = 'accepted' ORDER BY s.created_at, s.id`. A shop order cancelled or rejected after acceptance leaves a manual shipment in `pending` or `packed` for good ([05 §6.3](05-order-payment-and-inventory-lifecycles.md#63-shipment-fulfillment)), so those few rows stay in the index and the join on `so.status = 'accepted'` is required (T-FUL-001, proposed, checks that the shipment of a shop order cancelled by `adminCancelShopOrder` after acceptance is not listed)                                                                                                                                                                                                                                                                                                                                |
+| `shipments_in_transit_idx`         | `(updated_at) WHERE status IN ('shipped', 'out_for_delivery', 'delivery_failed')`                                                          | Admin follow-up lists of [05 §8.9](05-order-payment-and-inventory-lifecycles.md#89-cod-refusal-and-collection-reconciliation), read when the queue is opened: "no outcome" (`WHERE status IN ('shipped','out_for_delivery','delivery_failed') AND updated_at < now() - interval '10 days'`; every shipment event updates the row), and COD collected while the shipment is still in transit (the same rows joined through `payments_cod_shop_order_key` to a `collected` COD payment with `captured_at < now() - interval '3 days'`, also [05 §7.12](05-order-payment-and-inventory-lifecycles.md#712-statements-and-integrity-checks) check 1). The other "COD outcome missing" list, delivered but still `awaiting_collection` after 3 days, starts from `payments_cod_uncollected_idx` (§12.1) and joins `shipments_shop_order_key` with `status = 'delivered' AND delivered_at < now() - interval '3 days'`. The reminders themselves are delayed `orders.cod_outcome_reminder` jobs and need no index; auto-complete is driven by `shop_orders_accepted_idx` (§11.2) |
+| `shipments_account_idx`            | `(logistics_account_id, status) WHERE logistics_account_id IS NOT NULL`                                                                    | Shipments of one courier account by status: the tracking poll of parcels still moving (`status IN ('booked','shipped','out_for_delivery','delivery_failed','returning')`), and the manual COD reconciliation of one account (OD-58), filtered further by `booked_at`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `shipments_external_id_key`        | UNIQUE `(logistics_account_id, external_shipment_id) WHERE external_shipment_id IS NOT NULL`                                               | A courier status update finds its shipment by the courier's ID within the account                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `shipments_booking_unresolved_idx` | `(updated_at) WHERE status IN ('booking_requested', 'needs_reconciliation')`                                                               | Bookings with no outcome yet: the M6 job that moves a stale `booking_requested` to `needs_reconciliation`, and the admin queue that resolves it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 
-**Lifecycle and retention.** Created in the accept transaction. Updated by fulfilment events. Never deleted. Retained as §11.1. R2 partial shipments (FR-FUL-005) drop `shipments_shop_order_key` and add a `shipment_items` table.
+Not created: an index on `tracking_number`. Courier updates are matched by `external_shipment_id`, and no R1 operation searches by tracking number.
+
+**Lifecycle and retention.** Created in the accept transaction, and again after a cancelled booking. Updated by fulfilment events and courier status updates. Never deleted. Retained as §11.1, and the pickup address and courier account it references are kept as long as it ([04 §19.3](04-domain-model-and-data-dictionary.md#193-retention-schedule)). R2 partial shipments (FR-FUL-005) drop the uniqueness of `shipments_shop_order_key`; `shipment_items` (§11.9) already exists.
 
 ### 11.6 `shipment_events`
 
 **Module** `orders` · **Release** R1 · **Shop scope** `shop_id`, composite FK · **Lifecycle** Record, append-only ([04 §2.12](04-domain-model-and-data-dictionary.md)) · **Sensitivity** Internal; `note` Personal (no-contact-data rule, [04 §19.1](04-domain-model-and-data-dictionary.md))
 
-One row per fulfilment event recorded by the vendor (or by staff for a frozen shop).
+One row per fulfilment event: recorded by the vendor (or by staff for a frozen shop) in the manual path, and also reported by the courier in the courier path (OD-56). A courier update keeps the courier's own status in `raw_status` beside the normalised `event` and `status`, so the mapping can be checked and corrected later ([ADR-0019](adr/0019-courier-integration-in-r1.md) decision 6).
 
 | Column                   | Type        | Null | Default    | Notes                                                                                                                                                                                                                                                                                                                                                        |
 | ------------------------ | ----------- | ---- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `id`                     | uuid        | no   | `uuidv7()` |                                                                                                                                                                                                                                                                                                                                                              |
 | `shipment_id`, `shop_id` | uuid        | no   | App        |                                                                                                                                                                                                                                                                                                                                                              |
-| `event`                  | text        | no   | App        | `packed`, `shipped`, `delivered`, `delivery_failed`, `reattempt`, `returning`, `returned_to_origin` (the `recordFulfillmentEvent` values)                                                                                                                                                                                                                    |
+| `event`                  | text        | no   | App        | The `recordFulfillmentEvent` values `packed`, `shipped`, `delivered`, `delivery_failed`, `reattempt`, `returning`, `returned_to_origin`; and in the courier path `booking_requested`, `booked`, `booking_failed`, `needs_reconciliation`, `picked_up`, `in_transit`, `out_for_delivery`, `cancelled`                                                         |
 | `status`                 | text        | no   | App        | Shipment status after the event                                                                                                                                                                                                                                                                                                                              |
-| `reason_code`            | text        | yes  | —          | Only for `delivery_failed`: `customer_unreachable`, `refused`, `address_problem`, `other`                                                                                                                                                                                                                                                                    |
+| `reason_code`            | text        | yes  | —          | Only for `delivery_failed`: `customer_unreachable`, `refused`, `address_problem`, `other`. A courier reason that maps to none of these is `other`, with the courier's words in `raw_status`                                                                                                                                                                  |
 | `note`                   | text        | yes  | —          | At most 500 characters. On a `returned_to_origin` row it holds the reason for the units not restocked, required when any unit is not restocked ([05 §5.8](05-order-payment-and-inventory-lifecycles.md#58-rto-restock)). Never contact data: kept for the record's life under the no-contact-data rule of [04 §19.1](04-domain-model-and-data-dictionary.md) |
-| `actor_type`             | text        | no   | App        | `shop_member`, `platform_staff`, `system`                                                                                                                                                                                                                                                                                                                    |
+| `actor_type`             | text        | no   | App        | `shop_member`, `platform_staff`, `system`, `provider` (the courier, through its adapter)                                                                                                                                                                                                                                                                     |
 | `actor_user_id`          | uuid        | yes  | —          |                                                                                                                                                                                                                                                                                                                                                              |
-| `created_at`             | timestamptz | no   | `now()`    |                                                                                                                                                                                                                                                                                                                                                              |
+| `provider_event_key`     | text        | yes  | —          | The courier's ID for the update, or a hash of its shipment ID, status and time when it sends none (VX-16). Only on `provider` rows                                                                                                                                                                                                                           |
+| `raw_status`             | text        | yes  | —          | The courier's status string as received. Required on `provider` rows                                                                                                                                                                                                                                                                                         |
+| `metadata`               | jsonb       | yes  | —          | Allow-listed courier fields such as the hub or branch name. The adapter copies only listed members, so no recipient name, phone or address is stored                                                                                                                                                                                                         |
+| `occurred_at`            | timestamptz | no   | `now()`    | When it happened: the courier's event time on `provider` rows, otherwise the time of the entry                                                                                                                                                                                                                                                               |
+| `created_at`             | timestamptz | no   | `now()`    | When DripNepal recorded it                                                                                                                                                                                                                                                                                                                                   |
 
 **Keys and constraints.**
 
@@ -2036,22 +2296,38 @@ CONSTRAINT shipment_events_shipment_fkey FOREIGN KEY (shipment_id, shop_id)
   REFERENCES shipments (id, shop_id) ON DELETE RESTRICT,
 CONSTRAINT shipment_events_actor_fkey FOREIGN KEY (actor_user_id) REFERENCES users (id) ON DELETE RESTRICT,
 CONSTRAINT shipment_events_event_check CHECK (event IN ('packed', 'shipped', 'delivered',
-  'delivery_failed', 'reattempt', 'returning', 'returned_to_origin')),
-CONSTRAINT shipment_events_status_check
-  CHECK ((event = 'reattempt' AND status = 'shipped') OR (event <> 'reattempt' AND status = event)),
+  'delivery_failed', 'reattempt', 'returning', 'returned_to_origin', 'booking_requested', 'booked',
+  'booking_failed', 'needs_reconciliation', 'picked_up', 'in_transit', 'out_for_delivery', 'cancelled')),
+CONSTRAINT shipment_events_status_check CHECK (CASE event
+  WHEN 'reattempt' THEN status = 'shipped'
+  WHEN 'picked_up' THEN status = 'shipped'
+  WHEN 'in_transit' THEN status IN ('shipped', 'out_for_delivery')
+  ELSE status = event END),
 CONSTRAINT shipment_events_reason_check CHECK ((event = 'delivery_failed') = (reason_code IS NOT NULL)
   AND (reason_code IS NULL
        OR reason_code IN ('customer_unreachable', 'refused', 'address_problem', 'other'))),
-CONSTRAINT shipment_events_actor_check CHECK (actor_type IN ('shop_member', 'platform_staff', 'system')
-  AND (actor_type = 'system') = (actor_user_id IS NULL)),
-CONSTRAINT shipment_events_note_check CHECK (note IS NULL OR char_length(note) <= 500)
+CONSTRAINT shipment_events_actor_check
+  CHECK (actor_type IN ('shop_member', 'platform_staff', 'system', 'provider')
+  AND (actor_type IN ('system', 'provider')) = (actor_user_id IS NULL)),
+CONSTRAINT shipment_events_provider_check CHECK ((actor_type = 'provider') = (raw_status IS NOT NULL)
+  AND (provider_event_key IS NULL OR actor_type = 'provider')),
+CONSTRAINT shipment_events_note_check CHECK (note IS NULL OR char_length(note) <= 500),
+CONSTRAINT shipment_events_provider_text_check CHECK (
+      (raw_status IS NULL OR char_length(raw_status) BETWEEN 1 AND 100)
+  AND (provider_event_key IS NULL OR char_length(provider_event_key) BETWEEN 1 AND 200)),
+CONSTRAINT shipment_events_metadata_check CHECK (metadata IS NULL OR jsonb_typeof(metadata) = 'object')
+
+CREATE UNIQUE INDEX shipment_events_provider_event_key ON shipment_events (shipment_id, provider_event_key)
+  WHERE provider_event_key IS NOT NULL;
 ```
 
-A tracking correction ([05 §6.3](05-order-payment-and-inventory-lifecycles.md#63-shipment-fulfillment), `shipped → shipped`) is recorded as `event = 'shipped'`, `status = 'shipped'` with the note "tracking corrected"; `shipment_events_status_check` accepts it without a separate event value.
+A tracking correction ([05 §6.3](05-order-payment-and-inventory-lifecycles.md#63-shipment-fulfillment), `shipped → shipped`, manual path only) is recorded as `event = 'shipped'`, `status = 'shipped'` with the note "tracking corrected"; `shipment_events_status_check` accepts it without a separate event value. `in_transit` records a courier update that does not change the shipment status.
 
-**Indexes.** `shipment_events_shipment_idx (shipment_id, created_at, id)` serves the tracking timeline. If OD-18 adopts the repeat-refuser COD rule (`cod_max_refusals`, §15.1), `shipment_events_refused_idx (created_at) WHERE reason_code = 'refused'` is added with it to count a customer's refusals in the window. It is not created before that decision.
+`shipment_events_provider_event_key` stores each courier update once per shipment (INV-32): the adapter inserts with `ON CONFLICT DO NOTHING`, so a repeated callback or poll result changes nothing (AC-FR-FUL-004-3). An update that the state machine does not allow, or one for a `cancelled` shipment, is not written here: it stays in the courier event inbox that 04a specifies before the M6 code ([ADR-0019](adr/0019-courier-integration-in-r1.md) decision 6) and raises an admin alert ([05 §6.3](05-order-payment-and-inventory-lifecycles.md#63-shipment-fulfillment)). T-FUL-105 (proposed).
 
-**Lifecycle and retention.** Insert-only. Retained as §11.1. `note` is not redacted at the end of the period (append-only, [04 §2.12](04-domain-model-and-data-dictionary.md)); it follows the no-contact-data rule of [04 §19.1](04-domain-model-and-data-dictionary.md).
+**Indexes.** `shipment_events_shipment_idx (shipment_id, occurred_at, id)` serves the tracking timeline, in the order things happened even when a courier update arrives late. `shipment_events_provider_event_key` serves the duplicate check above. If OD-18 adopts the repeat-refuser COD rule (`cod_max_refusals`, §15.1), `shipment_events_refused_idx (created_at) WHERE reason_code = 'refused'` is added with it to count a customer's refusals in the window. It is not created before that decision.
+
+**Lifecycle and retention.** Insert-only. Retained as §11.1. `note`, `raw_status` and `metadata` are not redacted at the end of the period (append-only, [04 §2.12](04-domain-model-and-data-dictionary.md)); they follow the no-contact-data rule of [04 §19.1](04-domain-model-and-data-dictionary.md).
 
 ### 11.7 `return_requests`
 
@@ -2164,6 +2440,37 @@ The two composite FKs share `shop_order_id`, so a return can only list lines of 
 **Indexes.** `return_items_order_item_idx (order_item_id)` serves "units of this line in open returns" (§11.7): `SELECT SUM(ri.quantity) FROM return_items ri JOIN return_requests rr ON rr.id = ri.return_request_id WHERE ri.order_item_id = :i AND rr.status IN ('requested','approved','in_transit','received')`. Closed returns are already counted in `order_items.returned_quantity` and are not summed again.
 
 **Lifecycle and retention.** Inserted with the return. `condition_note` and `restock_quantity` are written once each. Retained as §11.7; at the end of the period the retention command sets `condition_note` to null ([04 §19.3](04-domain-model-and-data-dictionary.md)).
+
+### 11.9 `shipment_items`
+
+**Module** `orders` · **Release** R1 · **Shop scope** through `shop_order_id`, composite FKs · **Lifecycle** Record · **Sensitivity** Internal
+
+Which units of which order lines a shipment carries (OD-56). R1 has one live shipment per shop order (A-28), so its rows list every kept unit of the shop order. The table exists from the baseline so that partial shipments (FR-FUL-005, R2) need no new table. It is numbered after §11.8 so that the anchors of §11.6 to §11.8 stay as they were.
+
+| Column          | Type        | Null | Default | Notes                             |
+| --------------- | ----------- | ---- | ------- | --------------------------------- |
+| `shipment_id`   | uuid        | no   | App     |                                   |
+| `order_item_id` | uuid        | no   | App     |                                   |
+| `shop_order_id` | uuid        | no   | App     | Carried for the two composite FKs |
+| `quantity`      | int         | no   | App     | Units of the line in this parcel  |
+| `created_at`    | timestamptz | no   | `now()` |                                   |
+
+**Keys and constraints.**
+
+```sql
+CONSTRAINT shipment_items_pkey PRIMARY KEY (shipment_id, order_item_id),
+CONSTRAINT shipment_items_shipment_fkey FOREIGN KEY (shipment_id, shop_order_id)
+  REFERENCES shipments (id, shop_order_id) ON DELETE RESTRICT,
+CONSTRAINT shipment_items_order_item_fkey FOREIGN KEY (order_item_id, shop_order_id)
+  REFERENCES order_items (id, shop_order_id) ON DELETE RESTRICT,
+CONSTRAINT shipment_items_quantity_check CHECK (quantity > 0)
+```
+
+The two composite FKs share `shop_order_id`, as in §11.8, so a shipment can list only lines of its own shop order (23503). That the units in the shop order's live and delivered shipments never exceed a line's kept quantity (`quantity − rejected_quantity − cancelled_quantity`) spans rows: the action that writes them locks the shop order row first ([05 §4.4](05-order-payment-and-inventory-lifecycles.md#44-global-lock-ordering)), and the nightly integrity check re-verifies it ([04 §16.4](04-domain-model-and-data-dictionary.md#164-rules-that-cannot-be-constraints)). INV-31; T-FUL-106 (proposed) for the keys, T-FUL-107 (proposed) for concurrent writers. Written with the query builder inside the owning action (composite primary key, [04 §2.15](04-domain-model-and-data-dictionary.md)).
+
+**Indexes.** The primary key serves "the units in this shipment". `shipment_items_order_item_idx (order_item_id)` serves "the units of this line already in a shipment" for the check above.
+
+**Lifecycle and retention.** Inserted in the transaction that moves the shipment out of `pending` or `packed` (`booking_requested` or `shipped`), one row per line with kept units. Never updated or deleted: the rows of a cancelled booking stay as its history, and the new shipment gets its own rows. Retained as §11.1.
 
 ---
 
