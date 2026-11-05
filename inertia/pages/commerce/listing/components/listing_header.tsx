@@ -1,14 +1,8 @@
-import { useState, type SubmitEvent } from 'react'
-import { router } from '@inertiajs/react'
 import { Link } from '@adonisjs/inertia/react'
 import type { Data } from '@generated/data'
-import { ChevronRight, SearchIcon } from 'lucide-react'
+import { ChevronRight } from 'lucide-react'
 import ManImage from '~/assets/hero-image/man.png'
 import WomanImage from '~/assets/hero-image/woman.png'
-import { Button } from '~/components/ui/button'
-import { Input } from '~/components/ui/input'
-import { urlFor } from '~/client'
-import { addRecentSearch } from '~/lib/recent_searches'
 import { cn } from '~/lib/utils'
 import type { ListingContext, ListingKind } from '../types'
 
@@ -76,40 +70,6 @@ function StoreMark({ store }: { store: Data.StoreCard }) {
   )
 }
 
-function SearchForm({ initialQuery }: { initialQuery: string }) {
-  const [value, setValue] = useState(initialQuery)
-
-  const submit = (event: SubmitEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    const q = value.trim()
-    if (q) addRecentSearch(q)
-    router.get(urlFor('search'), q ? { q } : {})
-  }
-
-  return (
-    <form role="search" onSubmit={submit} className="flex w-full max-w-xl gap-2">
-      <div className="relative flex-1">
-        <SearchIcon
-          aria-hidden="true"
-          className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
-        />
-        <Input
-          type="search"
-          name="q"
-          value={value}
-          onChange={(event) => setValue(event.target.value)}
-          placeholder="Search products, brands and stores"
-          aria-label="Search products, brands and stores"
-          className="h-11 pl-9"
-        />
-      </div>
-      <Button type="submit" className="h-11 px-4">
-        Search
-      </Button>
-    </form>
-  )
-}
-
 type ListingHeaderProps = {
   context: ListingContext
   total: number
@@ -141,44 +101,50 @@ export function ListingHeader({ context, total, hasFilters }: ListingHeaderProps
         </ol>
       </nav>
 
-      <header
-        className={cn(
-          'grid overflow-hidden rounded-2xl border border-border bg-card',
-          image && 'md:grid-cols-[minmax(0,1fr)_minmax(0,20rem)] lg:grid-cols-[minmax(0,1fr)_24rem]'
-        )}
-      >
-        <div className="flex min-w-0 flex-col justify-end gap-2 p-5 md:gap-3 md:p-10">
-          {context.kind === 'store' && context.store && <StoreMark store={context.store} />}
-          <p className="hidden text-xs font-medium tracking-[0.2em] text-muted-foreground uppercase md:block">
-            {EYEBROW[context.kind]}
-          </p>
-          <h1 className="font-heading text-2xl font-bold tracking-tight text-balance break-words md:text-5xl">
-            {context.title}
+      {context.kind === 'search' ? (
+        <header>
+          <h1 className="font-heading text-2xl font-bold tracking-tight md:text-3xl">
+            Search products
           </h1>
-          {context.description && (
-            <p className="max-w-xl text-sm text-muted-foreground md:text-base">
-              {context.description}
+        </header>
+      ) : (
+        <header
+          className={cn(
+            'grid overflow-hidden rounded-2xl border border-border bg-card',
+            image &&
+              'md:grid-cols-[minmax(0,1fr)_minmax(0,20rem)] lg:grid-cols-[minmax(0,1fr)_24rem]'
+          )}
+        >
+          <div className="flex min-w-0 flex-col justify-end gap-2 p-5 md:gap-3 md:p-10">
+            {context.kind === 'store' && context.store && <StoreMark store={context.store} />}
+            <p className="hidden text-xs font-medium tracking-[0.2em] text-muted-foreground uppercase md:block">
+              {EYEBROW[context.kind]}
             </p>
-          )}
-          {context.kind === 'search' && (
-            <SearchForm key={context.query ?? ''} initialQuery={context.query ?? ''} />
-          )}
-          <p className="text-sm text-muted-foreground" aria-live="polite">
-            {countLabel(total, hasFilters, context.kind)}
-          </p>
-        </div>
-
-        {image && (
-          <div className="relative hidden md:block md:h-auto md:min-h-72">
-            <img
-              src={image}
-              alt=""
-              className="absolute inset-0 size-full object-cover object-[center_25%]"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-card via-card/10 to-transparent md:bg-gradient-to-r" />
+            <h1 className="font-heading text-2xl font-bold tracking-tight text-balance break-words md:text-5xl">
+              {context.title}
+            </h1>
+            {context.description && (
+              <p className="max-w-xl text-sm text-muted-foreground md:text-base">
+                {context.description}
+              </p>
+            )}
+            <p className="text-sm text-muted-foreground" aria-live="polite">
+              {countLabel(total, hasFilters, context.kind)}
+            </p>
           </div>
-        )}
-      </header>
+
+          {image && (
+            <div className="relative hidden md:block md:h-auto md:min-h-72">
+              <img
+                src={image}
+                alt=""
+                className="absolute inset-0 size-full object-cover object-[center_25%]"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-card via-card/10 to-transparent md:bg-gradient-to-r" />
+            </div>
+          )}
+        </header>
+      )}
     </>
   )
 }

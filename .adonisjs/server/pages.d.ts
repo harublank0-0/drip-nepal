@@ -28,6 +28,8 @@ declare module '@adonisjs/inertia/types' {
     'commerce/listing/components/listing_pagination': ExtractProps<(typeof import('../../inertia/pages/commerce/listing/components/listing_pagination.tsx'))['default']>
     'commerce/listing/components/mobile_filters': ExtractProps<(typeof import('../../inertia/pages/commerce/listing/components/mobile_filters.tsx'))['default']>
     'commerce/listing/components/price_filter': ExtractProps<(typeof import('../../inertia/pages/commerce/listing/components/price_filter.tsx'))['default']>
+    'commerce/listing/components/results_toolbar': ExtractProps<(typeof import('../../inertia/pages/commerce/listing/components/results_toolbar.tsx'))['default']>
+    'commerce/listing/components/search_box': ExtractProps<(typeof import('../../inertia/pages/commerce/listing/components/search_box.tsx'))['default']>
     'commerce/listing/components/sort_select': ExtractProps<(typeof import('../../inertia/pages/commerce/listing/components/sort_select.tsx'))['default']>
     'commerce/listing/index': ExtractProps<(typeof import('../../inertia/pages/commerce/listing/index.tsx'))['default']>
     'commerce/listing/types': ExtractProps<(typeof import('../../inertia/pages/commerce/listing/types.ts'))['default']>

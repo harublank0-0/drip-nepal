@@ -37,19 +37,41 @@ type FilterPanelProps = {
   filters: ListingFilters
   onToggle: (filter: 'sizes' | 'colors', slug: string) => void
   onPriceChange: (min: number | null, max: number | null) => void
+  onCategoryChange?: (category: string | null) => void
 }
 
 const chipClass = (active: boolean) =>
   cn(
-    'inline-flex h-9 min-w-10 items-center justify-center gap-2 rounded-md border px-3 text-xs font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
+    'inline-flex min-h-11 min-w-10 items-center justify-center gap-2 rounded-md border px-3 text-xs font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50 lg:min-h-9',
     active
       ? 'border-foreground bg-foreground text-background'
       : 'border-border text-muted-foreground hover:border-foreground/50 hover:text-foreground'
   )
 
-export function FilterPanel({ kind, facets, filters, onToggle, onPriceChange }: FilterPanelProps) {
+export function FilterPanel({
+  kind,
+  facets,
+  filters,
+  onToggle,
+  onPriceChange,
+  onCategoryChange,
+}: FilterPanelProps) {
   const showCategories = kind !== 'category' && facets.categories.length > 0
   const showPrice = facets.price.maxRupees > 0 || filters.min !== null || filters.max !== null
+
+  if (
+    kind === 'search' &&
+    !showCategories &&
+    !showPrice &&
+    facets.sizes.length === 0 &&
+    facets.colors.length === 0
+  ) {
+    return (
+      <p className="py-4 text-sm text-muted-foreground">
+        Try a broader search to see available filters.
+      </p>
+    )
+  }
 
   return (
     <div>
@@ -58,14 +80,33 @@ export function FilterPanel({ kind, facets, filters, onToggle, onPriceChange }: 
           <ul className="-mx-2 space-y-0.5">
             {facets.categories.map((category) => (
               <li key={category.slug}>
-                <Link
-                  route="categories.show"
-                  routeParams={{ slug: category.slug }}
-                  className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
-                >
-                  <span className="truncate">{category.name}</span>
-                  <span className="text-xs tabular-nums">{category.productCount}</span>
-                </Link>
+                {kind === 'search' && onCategoryChange ? (
+                  <button
+                    type="button"
+                    aria-pressed={filters.category === category.slug}
+                    onClick={() =>
+                      onCategoryChange(filters.category === category.slug ? null : category.slug)
+                    }
+                    className={cn(
+                      'flex min-h-11 w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 lg:min-h-9',
+                      filters.category === category.slug
+                        ? 'bg-primary/10 text-primary'
+                        : 'text-muted-foreground hover:text-foreground'
+                    )}
+                  >
+                    <span className="truncate">{category.name}</span>
+                    <span className="text-xs tabular-nums">{category.productCount}</span>
+                  </button>
+                ) : (
+                  <Link
+                    route="categories.show"
+                    routeParams={{ slug: category.slug }}
+                    className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+                  >
+                    <span className="truncate">{category.name}</span>
+                    <span className="text-xs tabular-nums">{category.productCount}</span>
+                  </Link>
+                )}
               </li>
             ))}
           </ul>
