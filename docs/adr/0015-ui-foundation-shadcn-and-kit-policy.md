@@ -6,14 +6,16 @@ Reviewed: 2026-09-25 · consistency review 2026-09-30 to 2026-10-04
 
 ## Status
 
-| Field              | Value                                                                                                                                                                       |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Decision status    | **Accepted** (from Q7). Committing any kit item is gated on **VX-13**; the policy holds for OD-22 option (a), and option (b) would need a superseding ADR.                  |
-| Date               | 2026-09-25                                                                                                                                                                  |
-| Deciders           | Product owner (Q7), lead developer                                                                                                                                          |
-| Supersedes         | —                                                                                                                                                                           |
-| Superseded by      | —                                                                                                                                                                           |
-| Related open items | **VX-13** (free kit items in a public MIT repo), **OD-22** (repo visibility and kit tier), OD-23 (decided 2026-09-30: keep MIT; M0 sets `package.json` to MIT), OD-25, R-15 |
+| Field              | Value                                                                                                                                                                                                                            |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Decision status    | **Accepted** (from Q7). Committing any kit item is gated on **VX-13**; the policy holds for OD-22 option (a), and option (b) would need a superseding ADR.                                                                       |
+| Date               | 2026-09-25                                                                                                                                                                                                                       |
+| Deciders           | Product owner (Q7), lead developer                                                                                                                                                                                               |
+| Supersedes         | —                                                                                                                                                                                                                                |
+| Superseded by      | —                                                                                                                                                                                                                                |
+| Related open items | **VX-13** (free kit items in a public MIT repo), **OD-22** (repo visibility and kit tier), OD-23 (decided 2026-09-30: keep MIT; M0 sets `package.json` to MIT), OD-25, R-15, **OD-56** (repository visibility, added 2026-11-05) |
+
+Edited 2026-11-05: Q7 and this ADR describe the repository as public. On 2026-11-05 the GitHub REST API showed it private, and [OD-56](../risks-and-open-decisions.md#22-decision-table) decides whether it goes public again. The decision is unchanged: no kit licence is bought, so premium kit code stays out of the repository (decision 5), and going private with a paid kit tier still needs OD-22 option (b) and a superseding ADR. Free kit items still wait for VX-13, because the code is MIT-licensed and the repository may be public again. Where the text below says "the public repository", read the repository as it was when Q7 was answered.
 
 ## Context
 

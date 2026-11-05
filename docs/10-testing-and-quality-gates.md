@@ -179,7 +179,7 @@ A mandatory set exists before the feature it protects merges; none of its tests 
 
 ### 5.1 Every pull request (`ci.yml`)
 
-"Merge" means a required status check on `main`; "warn" means reported only.
+"Merge" means a required status check on `main`; "warn" means reported only. Required status checks need branch protection, which the repository does not have on its current GitHub plan [Open OD-56]; until OD-56 is decided, a "merge" check blocks only because the developers merge on green.
 
 | Stage        | Checks                                                                                                                                    | IDs                                                                                                                              | From | Level |
 | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ---- | ----- |
@@ -222,7 +222,7 @@ Decisions in this table:
 
 ### 5.4 The smallest gate before the first feature code (M0)
 
-Before the first M1 feature pull request, `main` is protected and `ci.yml` blocks on:
+Before the first M1 feature pull request, `main` is protected [Open OD-56] and `ci.yml` blocks on:
 
 1. The Static, Repository, Supply chain and Contract stages of §5.1 (without the kit and licence checks until those files exist).
 2. The test database guard and two-role setup (§3.2); `T-ARCH-010`, `T-ARCH-011`, `T-ARCH-012`, `T-ARCH-015` and `T-ARCH-022` as the baseline lands ([09 §8.1](09-code-structure-and-engineering-standards.md#81-the-m0-re-baseline-adr-0011-od-01)); `T-ARCH-031` for the first factories.
@@ -230,6 +230,8 @@ Before the first M1 feature pull request, `main` is protected and `ci.yml` block
 4. The concurrency suite with `T-ARCH-032`, so M5 adds tests, not infrastructure.
 5. The image build with `T-ARCH-002` (RF-08) and `T-OPS-010`, and the browser smoke.
 6. `T-ARCH-030`, blocking, in the Repository stage (warning only while the consistency review's final check still finds a local reference, §5.1).
+
+**Protection of `main` [Open OD-56].** On 2026-11-05 the repository was private on a GitHub plan without branch protection, so no check can be made required and nothing stops a direct push. Until OD-56 is decided, `ci.yml` still runs every check above and the developers merge only when they are green; the M0 exit waits for the decision ([risks §5](risks-and-open-decisions.md#5-decisions-that-block-implementation-by-milestone)).
 
 ## 6. Test ID registry
 
@@ -647,3 +649,4 @@ The full version adds, each when its milestone needs it:
 32. **v1 search category filters (2026-11-04).** `T-CAT-110` exercises the search page controller with the real catalog service and PostgreSQL. A `category` query parameter refines the results together with `q`, size, colour, price and sort; facets keep the search query scope so another matching category can still be selected. Page props return the selected category, or `null`, for URL-backed chips and controls.
 33. **v1 money tests (2026-11-05).** With money in paisa in the v1 store (04 note 10), its tests cite `T-ARCH-013` for the parts v1 implements: the int8 parser returns the largest safe bigint as a number and refuses the next, `sumMinor` returns a number where a plain `SUM` is a string, `toMinor`, and `parseRupeesToMinor` with the inputs of 04 §18.4 (`tests/functional/platform/money_db.spec.ts`, `tests/unit/money/money_format.spec.ts`). The formatter tests cite `T-UI-020` for the money part (0, 50 paisa, Rs 7,250, Rs 12,34,567.50, a negative, and the same text as ICU's NPR format). `tests/functional/money/money_in_paisa.spec.ts` (`@v1`, no registered ID) covers checkout at the free-delivery threshold, an order beyond the old `decimal(10,2)` limit, the product price validator, the catalog price filter and the dashboard revenue. They are tagged `@v1`, like the tests of note 29.
 34. **Recent searches in `T-UI-014` (2026-11-05).** The `T-UI-014` row also covers when the search page remembers a term in the browser's recent searches ([08 §11.1](08-ui-ux-and-design-system.md), 08 note 64). The browser suite that runs it is still to come (§3.1); the row gives the behaviour an owner until then.
+35. **`main` cannot be protected yet (2026-11-05).** On 2026-11-05 the repository was private and its owner's GitHub plan offered no branch protection, so the required status checks of §5.1 and the protected `main` of §5.4 cannot be set up. Both now carry [Open OD-56] ([risks §2.2](risks-and-open-decisions.md#22-decision-table)), and §5.4 says what holds until it is decided: `ci.yml` runs every check, and the developers merge on green. The checks, their IDs and their levels are unchanged. Still open: OD-56, which also decides whether 12 §4.3 item 1 can be met as written.

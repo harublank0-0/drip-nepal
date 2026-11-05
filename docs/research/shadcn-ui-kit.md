@@ -2,6 +2,8 @@
 
 Part of the [research digests](README.md) (digest name `shadcnuikit`). Compiled on 2026-09-25; repository paths refer to the code at commit `0282605`. This is a dated snapshot: re-check a fact against its source before relying on it.
 
+Re-checked 2026-11-05: the DripNepal repository was private on that date ([risks OD-56](../risks-and-open-decisions.md#22-decision-table)). The statements below that it is public describe it on 2026-09-25.
+
 Original title: Research: Shadcn UI Kit (shadcnuikit.com), accessed 2026-09-25
 
 - [verified-official] (identity) Shadcn UI Kit (shadcnuikit.com) is published by Bundui. The footer reads "© 2026 Bundui" and the founder/contact is Toby Belhome (@TobyBelhome, github.com/bundui). The site states: "An independent product built on top of shadcn/ui. Not affiliated with the official shadcn/ui project." Its llms.txt adds that it "is not the official shadcn/ui library, nor affiliated with shadcn" and is "a separate, paid product sold with a one-time lifetime license."
