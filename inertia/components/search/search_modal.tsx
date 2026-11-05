@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import { router } from '@inertiajs/react'
 import { SearchIcon, X } from 'lucide-react'
 import { urlFor } from '~/client'
@@ -103,7 +103,7 @@ export function SearchModal({ onOpenChange }: SearchModalProps) {
   }, [activeId])
 
   const remember = () => {
-    if (term) setRecent(addRecentSearch(term))
+    if (isSearchable) setRecent(addRecentSearch(term))
   }
 
   const close = () => {
@@ -111,9 +111,23 @@ export function SearchModal({ onOpenChange }: SearchModalProps) {
     onOpenChange(false)
   }
 
+  // The search page remembers its own term when a visit starts, so this
+  // term is remembered after the visit starts to stay the most recent.
   const visit = (href: string) => {
-    close()
     router.visit(href)
+    close()
+  }
+
+  // The rows are Inertia links, whose own click handler runs after this one.
+  // A plain click visits here instead; a modified click (new tab) keeps the
+  // browser's behaviour, and the modal only closes.
+  const select = (event: MouseEvent) => {
+    const href = event.currentTarget.getAttribute('href')
+    const plain =
+      event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey
+    if (!href || !plain) return close()
+    event.preventDefault()
+    visit(href)
   }
 
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -195,7 +209,7 @@ export function SearchModal({ onOpenChange }: SearchModalProps) {
               onRemove={(item) => setRecent(removeRecentSearch(item))}
               onClear={() => setRecent(clearRecentSearches())}
             />
-            <PopularCategories onNavigate={() => onOpenChange(false)} />
+            <PopularCategories onNavigate={select} />
           </div>
         )}
 
@@ -207,7 +221,7 @@ export function SearchModal({ onOpenChange }: SearchModalProps) {
           </p>
         )}
 
-        {isSearchable && isEmpty && !isLoading && <NoResults query={term} onNavigate={close} />}
+        {isSearchable && isEmpty && !isLoading && <NoResults query={term} onNavigate={select} />}
 
         {options.length > 0 && (
           <SearchResults
@@ -216,7 +230,7 @@ export function SearchModal({ onOpenChange }: SearchModalProps) {
             activeIndex={activeIndex}
             term={term}
             onHover={setActiveIndex}
-            onSelect={close}
+            onSelect={select}
           />
         )}
       </div>

@@ -14,6 +14,10 @@ function validQuery(query: string) {
   return query.length === 0 || (query.length >= 2 && query.length <= 100)
 }
 
+function remember(term: string) {
+  if (term) addRecentSearch(term)
+}
+
 /* Values are encoded, while comma-separated prototype filters stay readable. */
 function listingUrl(path: string, filters: ListingFilters, extra: { q?: string; page?: number }) {
   const params: [string, string][] = []
@@ -78,6 +82,20 @@ export function useListingFilters(filters: ListingFilters, searchQuery?: string)
     desiredQuery.current = committed.current.query
   }, [cancelDebounce, cancelRequest])
 
+  /* The term a change applies: the draft when it can be searched, else the last one asked for. */
+  const currentTerm = useCallback(() => {
+    const term = draft.current.trim()
+    return !composing.current && validQuery(term) ? term : desiredQuery.current
+  }, [])
+
+  /*
+   * The last term asked for joins the recent searches when the customer is
+   * done with it (Enter, blur, leaving the page), not on every debounce
+   * commit, so typing one word does not fill the list with its prefixes.
+   * A draft whose search never started is not remembered.
+   */
+  const rememberQuery = useCallback(() => remember(desiredQuery.current), [])
+
   const restorePage = useCallback(
     (nextUrl: string, props: ListingProps) => {
       cancelPending()
@@ -102,7 +120,9 @@ export function useListingFilters(filters: ListingFilters, searchQuery?: string)
   useEffect(() => {
     // Replace visits do not emit navigate. Success also covers external reloads.
     const removeBefore = router.on('before', () => {
-      if (!startingOwnVisit.current) cancelPending()
+      if (startingOwnVisit.current) return
+      rememberQuery()
+      cancelPending()
     })
     const removeNavigate = router.on('navigate', ({ detail }) => {
       restorePage(detail.page.url, detail.page.props as ListingProps)
@@ -111,18 +131,25 @@ export function useListingFilters(filters: ListingFilters, searchQuery?: string)
       if (!pending.current) restorePage(detail.page.url, detail.page.props as ListingProps)
     })
     // Stop the timer before Inertia asynchronously restores browser history.
-    window.addEventListener('popstate', cancelPending)
+    const leaveHistory = () => {
+      rememberQuery()
+      cancelPending()
+    }
+    window.addEventListener('popstate', leaveHistory)
+    // A reload, an external link or a closed tab fire no Inertia event.
+    window.addEventListener('pagehide', rememberQuery)
     return () => {
       removeBefore()
       removeNavigate()
       removeSuccess()
-      window.removeEventListener('popstate', cancelPending)
+      window.removeEventListener('popstate', leaveHistory)
+      window.removeEventListener('pagehide', rememberQuery)
       cancelDebounce()
       requestId.current += 1
       pending.current?.cancel?.()
       pending.current = null
     }
-  }, [cancelDebounce, cancelPending, restorePage])
+  }, [cancelDebounce, cancelPending, rememberQuery, restorePage])
 
   const request = useCallback(
     (nextFilters: ListingFilters, nextQuery: string) => {
@@ -220,7 +247,7 @@ export function useListingFilters(filters: ListingFilters, searchQuery?: string)
     cancelDebounce()
     const term = draft.current.trim()
     if (composing.current || !validQuery(term)) return
-    if (term) addRecentSearch(term)
+    remember(term)
     request(desiredFilters.current, term)
   }
 
@@ -232,13 +259,8 @@ export function useListingFilters(filters: ListingFilters, searchQuery?: string)
     request(desiredFilters.current, '')
   }
 
-  const queryForUpdate = () => {
-    const term = draft.current.trim()
-    return !composing.current && validQuery(term) ? term : desiredQuery.current
-  }
-
   const update = (patch: Partial<ListingFilters>) => {
-    request({ ...desiredFilters.current, ...patch }, queryForUpdate())
+    request({ ...desiredFilters.current, ...patch }, currentTerm())
   }
 
   const toggle = (filter: MultiFilter, slug: string) => {
@@ -258,7 +280,7 @@ export function useListingFilters(filters: ListingFilters, searchQuery?: string)
 
   const clear = () => update({ category: null, sizes: [], colors: [], min: null, max: null })
   const pageUrl = (page: number) =>
-    listingUrl(committed.current.path, desiredFilters.current, { q: queryForUpdate(), page })
+    listingUrl(committed.current.path, desiredFilters.current, { q: currentTerm(), page })
 
   const activeCount =
     (filters.category ? 1 : 0) +
@@ -271,6 +293,7 @@ export function useListingFilters(filters: ListingFilters, searchQuery?: string)
     setQuery,
     submitQuery,
     clearQuery,
+    rememberQuery,
     setComposing,
     update,
     toggle,

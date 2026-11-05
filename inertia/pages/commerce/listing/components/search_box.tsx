@@ -14,6 +14,7 @@ type SearchBoxProps = {
   onQueryChange: (query: string) => void
   onSubmit: () => void
   onClear: () => void
+  onBlur: () => void
   onCompositionChange: (composing: boolean) => void
 }
 
@@ -23,6 +24,7 @@ export function SearchBox({
   onQueryChange,
   onSubmit,
   onClear,
+  onBlur,
   onCompositionChange,
 }: SearchBoxProps) {
   const inputRef = useRef<HTMLInputElement>(null)
@@ -47,6 +49,7 @@ export function SearchBox({
           name="q"
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
+          onBlur={onBlur}
           onCompositionStart={() => onCompositionChange(true)}
           onCompositionEnd={() => onCompositionChange(false)}
           onKeyDown={(event) => {

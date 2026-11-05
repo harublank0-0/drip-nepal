@@ -1,3 +1,4 @@
+import type { MouseEvent } from 'react'
 import { Link } from '@adonisjs/inertia/react'
 import { ArrowRight, SearchIcon } from 'lucide-react'
 import { cn } from '~/lib/utils'
@@ -11,7 +12,7 @@ type SearchResultsProps = {
   activeIndex: number
   term: string
   onHover: (index: number) => void
-  onSelect: () => void
+  onSelect: (event: MouseEvent) => void
 }
 
 const headingClass = 'px-2 pb-1 text-xs font-medium tracking-wider text-muted-foreground uppercase'

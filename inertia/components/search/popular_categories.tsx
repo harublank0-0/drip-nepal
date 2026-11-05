@@ -1,3 +1,4 @@
+import type { MouseEvent } from 'react'
 import { Link } from '@adonisjs/inertia/react'
 
 /*
@@ -20,7 +21,7 @@ const CATEGORIES = [
 ]
 
 type PopularCategoriesProps = {
-  onNavigate: () => void
+  onNavigate: (event: MouseEvent) => void
 }
 
 export function PopularCategories({ onNavigate }: PopularCategoriesProps) {

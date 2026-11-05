@@ -78,6 +78,7 @@ export function ResultsToolbar({
           onQueryChange={listing.setQuery}
           onSubmit={listing.submitQuery}
           onClear={listing.clearQuery}
+          onBlur={listing.rememberQuery}
           onCompositionChange={listing.setComposing}
         />
       )}
