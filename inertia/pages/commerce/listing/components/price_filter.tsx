@@ -2,7 +2,7 @@ import { useId, useState, type SubmitEvent } from 'react'
 import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
 import { Label } from '~/components/ui/label'
-import { formatNPR } from '@shared/format/money'
+import { formatNPR, NPR_DISPLAY_PREFIX } from '@shared/format/money'
 
 type PriceFilterProps = {
   // Whole rupees, like the URL's min and max.
@@ -45,7 +45,7 @@ export function PriceFilter({ bounds, min, max, onApply }: PriceFilterProps) {
       <div className="flex items-end gap-2">
         <div className="flex-1 space-y-1.5">
           <Label htmlFor={`${id}-min`} className="text-xs font-normal text-muted-foreground">
-            Min (Rs.)
+            Min ({NPR_DISPLAY_PREFIX})
           </Label>
           <Input
             id={`${id}-min`}
@@ -64,7 +64,7 @@ export function PriceFilter({ bounds, min, max, onApply }: PriceFilterProps) {
         </span>
         <div className="flex-1 space-y-1.5">
           <Label htmlFor={`${id}-max`} className="text-xs font-normal text-muted-foreground">
-            Max (Rs.)
+            Max ({NPR_DISPLAY_PREFIX})
           </Label>
           <Input
             id={`${id}-max`}

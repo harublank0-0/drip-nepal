@@ -1,7 +1,6 @@
 import vine, { SimpleMessagesProvider } from '@vinejs/vine'
 import { MAX_PRODUCT_IMAGES, ProductGenderValues, ProductStatus } from '#constants/product'
-import { PRICE_MAX_MINOR } from '#shared/constants/money'
-import { formatNPR } from '#shared/format/money'
+import { PRICE_MAX_MINOR, PRICE_MESSAGES } from '#shared/constants/money'
 
 /*
  * The bodyparser turns empty form inputs into null, which `optional()`
@@ -49,11 +48,16 @@ export const productValidator = vine.create({
 
 export type ProductPayload = Awaited<ReturnType<typeof productValidator.validate>>
 
-// Shown under the product form's price fields.
+// Shown under the product form's price fields (only those: a stock
+// number's messages stay VineJS's own).
+const priceMessages = (field: string) => ({
+  [`variants.*.${field}.number`]: PRICE_MESSAGES.unreadable,
+  [`variants.*.${field}.withoutDecimals`]: PRICE_MESSAGES.unreadable,
+  [`variants.*.${field}.min`]: PRICE_MESSAGES.unreadable,
+  [`variants.*.${field}.max`]: PRICE_MESSAGES.tooHigh,
+})
 productValidator.messagesProvider = new SimpleMessagesProvider({
-  'variants.*.priceMinor.required': 'Enter a price',
-  'variants.*.priceMinor.max': `The highest price is ${formatNPR(PRICE_MAX_MINOR)}`,
-  'variants.*.comparePriceMinor.max': `The highest price is ${formatNPR(PRICE_MAX_MINOR)}`,
-  'number': 'Enter an amount in rupees, such as 1299 or 1299.50',
-  'withoutDecimals': 'Enter an amount in rupees, such as 1299 or 1299.50',
+  'variants.*.priceMinor.required': PRICE_MESSAGES.missing,
+  ...priceMessages('priceMinor'),
+  ...priceMessages('comparePriceMinor'),
 })

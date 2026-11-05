@@ -4,6 +4,7 @@ import { Link } from '@adonisjs/inertia/react'
 import { ArrowLeftIcon, ImagePlusIcon, PlusIcon, Trash2Icon, XIcon } from 'lucide-react'
 import type { Data } from '@generated/data'
 import { minorToRupeesText, parseRupeesToMinor } from '@shared/format/money'
+import { PRICE_MAX_MINOR, PRICE_MESSAGES } from '@shared/constants/money'
 import RootLayout from '~/layouts/root_layout'
 import { ShopDashboardLayout } from '~/layouts/shop_dashboard_layout'
 import { Button } from '~/components/ui/button'
@@ -52,7 +53,18 @@ type ProductFormData = {
 
 const MAX_IMAGES = 8
 
-const RUPEES_HINT = 'Enter an amount in rupees, such as 1299 or 1299.50'
+/*
+ * Why typed rupees can't be a price, or null when they can: the server's
+ * messages, before sending.
+ */
+function priceProblem(typed: string, minor: number | null) {
+  if (typed.trim() === '') return PRICE_MESSAGES.missing
+  // More whole rupees than any price has.
+  if (/^\d{10,}(\.\d{1,2})?$/.test(typed.trim().replaceAll(',', ''))) return PRICE_MESSAGES.tooHigh
+  if (minor === null) return PRICE_MESSAGES.unreadable
+  if (minor > PRICE_MAX_MINOR) return PRICE_MESSAGES.tooHigh
+  return null
+}
 
 const GENDERS = [
   { value: 'men', label: 'Men' },
@@ -196,13 +208,11 @@ export default function ShopProductFormPage({ product, categories }: PageProps) 
       const priceMinor = parseRupeesToMinor(row.price)
       const comparePriceMinor =
         row.comparePrice.trim() === '' ? null : parseRupeesToMinor(row.comparePrice)
-      if (priceMinor === null) {
-        unreadable[`variants.${index}.priceMinor`] =
-          row.price.trim() === '' ? 'Enter a price' : RUPEES_HINT
-      }
-      if (row.comparePrice.trim() !== '' && comparePriceMinor === null) {
-        unreadable[`variants.${index}.comparePriceMinor`] = RUPEES_HINT
-      }
+      const priceRefused = priceProblem(row.price, priceMinor)
+      if (priceRefused) unreadable[`variants.${index}.priceMinor`] = priceRefused
+      const compareRefused =
+        row.comparePrice.trim() === '' ? null : priceProblem(row.comparePrice, comparePriceMinor)
+      if (compareRefused) unreadable[`variants.${index}.comparePriceMinor`] = compareRefused
       const { price, comparePrice, ...rest } = row
       return { ...rest, priceMinor, comparePriceMinor: comparePriceMinor ?? '' }
     })

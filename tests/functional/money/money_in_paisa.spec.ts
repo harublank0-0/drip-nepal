@@ -13,7 +13,7 @@ import { clientNetwork, limiterKey, loginNetworkLimiter } from '#modules/auth/ra
 import OrderTransformer from '#transformers/order_transformer'
 import { OrderStatus } from '#constants/order'
 import { ProductGender, ProductStatus } from '#constants/product'
-import { PRICE_MAX_MINOR } from '#shared/constants/money'
+import { PRICE_MAX_MINOR, PRICE_MESSAGES } from '#shared/constants/money'
 import { testBrowser } from '#tests/support/browser'
 import {
   addressPayload,
@@ -131,6 +131,18 @@ test.group('Money in paisa: product prices [v1]', (group) => {
     assert.equal(tooHigh?.message, `The highest price is Rs${NBSP}1,00,00,000`)
     const missing = await refusal({})
     assert.equal(missing?.message, 'Enter a price')
+  })
+
+  test("the price messages are the price fields' own", async ({ assert }) => {
+    const negative = await refusal({ priceMinor: -100 })
+    assert.equal(negative?.message, PRICE_MESSAGES.unreadable)
+
+    // A stock number keeps VineJS's message, not one about rupees.
+    for (const quantity of ['abc', 1.5]) {
+      const stock = await refusal({ priceMinor: 100, quantity })
+      assert.equal(stock?.field, 'variants.0.quantity')
+      assert.notEqual(stock?.message, PRICE_MESSAGES.unreadable)
+    }
   })
 })
 
