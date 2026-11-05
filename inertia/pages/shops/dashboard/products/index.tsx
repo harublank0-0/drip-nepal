@@ -17,7 +17,7 @@ import {
   DialogTitle,
 } from '~/components/ui/dialog'
 import { Pager } from '~/components/dashboard/pager'
-import { formatPrice } from '~/lib/format'
+import { formatNPR } from '@shared/format/money'
 import type { InertiaProps } from '~/types'
 import type { Paginated } from '~/types/pagination'
 
@@ -34,10 +34,10 @@ const STATUS_FILTERS = [
 
 function priceRange(variants: Data.ProductVariant[]) {
   if (variants.length === 0) return '—'
-  const prices = variants.map((variant) => variant.price)
+  const prices = variants.map((variant) => variant.priceMinor)
   const min = Math.min(...prices)
   const max = Math.max(...prices)
-  return min === max ? formatPrice(min) : `${formatPrice(min)} – ${formatPrice(max)}`
+  return min === max ? formatNPR(min) : `${formatNPR(min)} – ${formatNPR(max)}`
 }
 
 export default function ShopProductsPage({ products, filters }: PageProps) {

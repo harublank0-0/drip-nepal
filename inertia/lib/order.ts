@@ -1,10 +1,8 @@
 /*
- * Mirrors app/constants/order.ts, which the frontend can't import. The
- * server's cart and order totals are the source of truth; these only drive
- * hints (the free delivery nudge) and the quantity stepper's upper bound.
+ * Mirrors app/constants/order.ts, which the frontend can't import; it drives
+ * the quantity stepper's upper bound. The delivery fee and threshold are in
+ * shared/constants/delivery.ts, which both sides import.
  */
-export const FREE_SHIPPING_THRESHOLD = 5000
-export const SHIPPING_FEE_PER_SHOP = 100
 export const MAX_QUANTITY_PER_ITEM = 10
 
 export const CART_ITEMS_URL = '/api/v1/cart/items'

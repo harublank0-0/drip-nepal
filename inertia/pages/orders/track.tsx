@@ -10,7 +10,8 @@ import { Button } from '~/components/ui/button'
 import { Field, FieldError, FieldLabel } from '~/components/ui/field'
 import { Input } from '~/components/ui/input'
 import { Spinner } from '~/components/ui/spinner'
-import { formatDate, formatPrice } from '~/lib/format'
+import { formatDate } from '~/lib/format'
+import { formatNPR } from '@shared/format/money'
 import type { InertiaProps } from '~/types'
 
 type PageProps = InertiaProps<{
@@ -112,7 +113,7 @@ export default function TrackOrderPage({ orders }: PageProps) {
                       <p className="font-mono text-sm font-semibold">{order.orderNumber}</p>
                       <p className="mt-0.5 text-xs text-muted-foreground">
                         {formatDate(order.placedAt ?? order.createdAt)} ·{' '}
-                        {formatPrice(order.grandTotal)}
+                        {formatNPR(order.grandTotalMinor)}
                       </p>
                     </div>
                     <OrderStatusBadge status={order.status} />

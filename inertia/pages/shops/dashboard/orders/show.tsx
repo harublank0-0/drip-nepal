@@ -15,7 +15,8 @@ import {
   DialogTitle,
 } from '~/components/ui/dialog'
 import { OrderStatusBadge } from '~/components/dashboard/order_status_badge'
-import { formatDate, formatPrice } from '~/lib/format'
+import { formatDate } from '~/lib/format'
+import { formatNPR } from '@shared/format/money'
 import type { InertiaProps } from '~/types'
 
 type PageProps = InertiaProps<{
@@ -141,9 +142,9 @@ export default function ShopOrderPage({ order, nextStatuses }: PageProps) {
                 </div>
                 <div className="text-right text-sm">
                   <p>
-                    {item.quantity} × {formatPrice(item.unitPrice)}
+                    {item.quantity} × {formatNPR(item.unitPriceMinor)}
                   </p>
-                  <p className="font-medium">{formatPrice(item.subTotal)}</p>
+                  <p className="font-medium">{formatNPR(item.subTotalMinor)}</p>
                 </div>
               </li>
             ))}
@@ -151,15 +152,17 @@ export default function ShopOrderPage({ order, nextStatuses }: PageProps) {
           <dl className="space-y-1.5 border-t px-4 py-3 text-sm">
             <div className="flex justify-between">
               <dt className="text-muted-foreground">Subtotal</dt>
-              <dd>{formatPrice(order.subtotal)}</dd>
+              <dd>{formatNPR(order.subtotalMinor)}</dd>
             </div>
             <div className="flex justify-between">
               <dt className="text-muted-foreground">Delivery</dt>
-              <dd>{order.shippingTotal === 0 ? 'Free' : formatPrice(order.shippingTotal)}</dd>
+              <dd>
+                {order.shippingTotalMinor === 0 ? 'Free' : formatNPR(order.shippingTotalMinor)}
+              </dd>
             </div>
             <div className="flex justify-between text-base font-semibold">
               <dt>Collect on delivery</dt>
-              <dd>{formatPrice(order.grandTotal)}</dd>
+              <dd>{formatNPR(order.grandTotalMinor)}</dd>
             </div>
             <div className="flex justify-between text-xs text-muted-foreground">
               <dt>Payment</dt>

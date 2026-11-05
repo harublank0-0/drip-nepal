@@ -36,7 +36,7 @@ export default function ListingPage({ context, products, facets, filters }: Page
    * Facets are empty only when nothing at all is listed in this scope.
    */
   const isSearch = context.kind === 'search'
-  const canFilter = isSearch || hasFilters || facets.price.max > 0
+  const canFilter = isSearch || hasFilters || facets.price.maxRupees > 0
 
   const panel = (
     <FilterPanel

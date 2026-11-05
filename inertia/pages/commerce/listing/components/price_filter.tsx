@@ -2,10 +2,11 @@ import { useId, useState, type SubmitEvent } from 'react'
 import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
 import { Label } from '~/components/ui/label'
-import { formatPrice } from '~/lib/format'
+import { formatNPR, NPR_DISPLAY_PREFIX } from '@shared/format/money'
 
 type PriceFilterProps = {
-  bounds: { min: number; max: number }
+  // Whole rupees, like the URL's min and max.
+  bounds: { minRupees: number; maxRupees: number }
   min: number | null
   max: number | null
   onApply: (min: number | null, max: number | null) => void
@@ -44,7 +45,7 @@ export function PriceFilter({ bounds, min, max, onApply }: PriceFilterProps) {
       <div className="flex items-end gap-2">
         <div className="flex-1 space-y-1.5">
           <Label htmlFor={`${id}-min`} className="text-xs font-normal text-muted-foreground">
-            Min (Rs.)
+            Min ({NPR_DISPLAY_PREFIX})
           </Label>
           <Input
             id={`${id}-min`}
@@ -63,7 +64,7 @@ export function PriceFilter({ bounds, min, max, onApply }: PriceFilterProps) {
         </span>
         <div className="flex-1 space-y-1.5">
           <Label htmlFor={`${id}-max`} className="text-xs font-normal text-muted-foreground">
-            Max (Rs.)
+            Max ({NPR_DISPLAY_PREFIX})
           </Label>
           <Input
             id={`${id}-max`}
@@ -78,11 +79,11 @@ export function PriceFilter({ bounds, min, max, onApply }: PriceFilterProps) {
           />
         </div>
       </div>
-      {bounds.max > 0 && (
+      {bounds.maxRupees > 0 && (
         <p className="text-xs text-muted-foreground">
           Prices here range from{' '}
-          <span className="whitespace-nowrap">{formatPrice(bounds.min)}</span> to{' '}
-          <span className="whitespace-nowrap">{formatPrice(bounds.max)}</span>
+          <span className="whitespace-nowrap">{formatNPR(bounds.minRupees * 100)}</span> to{' '}
+          <span className="whitespace-nowrap">{formatNPR(bounds.maxRupees * 100)}</span>
         </p>
       )}
       <Button type="submit" variant="outline" size="lg" className="w-full" disabled={isUnchanged}>

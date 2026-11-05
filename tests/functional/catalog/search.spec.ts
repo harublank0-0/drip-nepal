@@ -54,10 +54,11 @@ async function product(
   shop: Shop,
   name: string,
   category: Category,
-  { price = 1800, size = 'm', color = 'black' } = {}
+  // Whole rupees, like the listing's price filter.
+  { rupees = 1800, size = 'm', color = 'black' } = {}
 ) {
   const variant = await createVariant(shop, {
-    price,
+    priceMinor: rupees * 100,
     product: { name, categoryId: category.id },
   })
   const sizeAttribute = await Attribute.findByOrFail('slug', 'size')
@@ -84,13 +85,13 @@ test.group('Search category refinements [v1]', (group) => {
     const hoodies = await Category.findByOrFail('slug', 'hoodies')
     const q = `discovery-${randomUUID()}`
     const cheaper = await product(shop, `${q} utility`, cargo)
-    const dearer = await product(shop, `${q} relaxed`, cargo, { price: 2400 })
+    const dearer = await product(shop, `${q} relaxed`, cargo, { rupees: 2400 })
     const hoodie = await product(shop, `${q} layer`, hoodies)
     await product(shop, 'Unrelated utility pants', cargo)
     await product(shop, `${q} large`, cargo, { size: 'l' })
     await product(shop, `${q} white`, cargo, { color: 'white' })
-    await product(shop, `${q} budget`, cargo, { price: 900 })
-    await product(shop, `${q} premium`, cargo, { price: 3200 })
+    await product(shop, `${q} budget`, cargo, { rupees: 900 })
+    await product(shop, `${q} premium`, cargo, { rupees: 3200 })
 
     const query = {
       q,

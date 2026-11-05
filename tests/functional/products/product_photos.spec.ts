@@ -44,7 +44,7 @@ async function payload(images: MultipartFile[], keepMediaIds?: string[]): Promis
     categoryId: category.id,
     gender: ProductGender.UNISEX,
     status: ProductStatus.ACTIVE,
-    variants: [{ price: 1500, quantity: 5 }],
+    variants: [{ priceMinor: 150_000, quantity: 5 }],
     images,
     keepMediaIds,
   } as ProductPayload

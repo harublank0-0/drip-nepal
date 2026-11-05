@@ -25,8 +25,8 @@ import {
 async function twoShopCheckout() {
   const shopA = await createShop()
   const shopB = await createShop()
-  const shirt = await createVariant(shopA, { price: 2500, quantity: 5 })
-  const scarf = await createVariant(shopB, { price: 450, quantity: 5 })
+  const shirt = await createVariant(shopA, { priceMinor: 250_000, quantity: 5 })
+  const scarf = await createVariant(shopB, { priceMinor: 45_000, quantity: 5 })
   const buyer = guestOwner()
   await fillCart(buyer, [
     { variant: shirt, quantity: 1 },
@@ -184,7 +184,7 @@ test.group('Order alerts: the email [v1]', (group) => {
   test('it names the order and links to it, without the customer', async ({ assert }) => {
     const shop = await createShop({ name: 'Thamel Threads', slug: `thamel-${Date.now()}` })
     const variant = await createVariant(shop, {
-      price: 2500,
+      priceMinor: 250_000,
       quantity: 5,
       product: { name: 'Linen Kurta' },
     })
@@ -205,10 +205,12 @@ test.group('Order alerts: the email [v1]', (group) => {
 
     const [email] = sent()
     const message = email.message
-    message.assertSubject(`New order ${orderNumbers[0]} · Rs. 2,600 · Thamel Threads`)
+    // The storefront's format: "Rs", a no-break space, lakh grouping.
+    const rupees = (amount: string) => `Rs\u00A0${amount}`
+    message.assertSubject(`New order ${orderNumbers[0]} · ${rupees('2,600')} · Thamel Threads`)
     message.assertTextIncludes('Linen Kurta × 1')
-    message.assertTextIncludes('Delivery: Rs. 100')
-    message.assertTextIncludes('Total: Rs. 2,600')
+    message.assertTextIncludes(`Delivery: ${rupees('100')}`)
+    message.assertTextIncludes(`Total: ${rupees('2,600')}`)
     message.assertTextIncludes('Guest order')
     message.assertTextIncludes(`/shops/${shop.slug}/orders/${orderNumbers[0]}`)
     message.assertHtmlIncludes('Linen Kurta')

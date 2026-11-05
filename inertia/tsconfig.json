@@ -15,6 +15,7 @@
     "./**/*.ts",
     "./**/*.tsx",
     "../.adonisjs/client/**/*.ts",
-    "../.adonisjs/server/**/*.ts"
+    "../.adonisjs/server/**/*.ts",
+    "../types/**/*.d.ts"
   ]
 }
