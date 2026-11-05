@@ -2,6 +2,7 @@ import { usePage } from '@inertiajs/react'
 import { Link } from '@adonisjs/inertia/react'
 import type { Data } from '@generated/data'
 import { Separator } from '~/components/ui/separator'
+import { currentYear } from '~/lib/format'
 
 const linkClass =
   'inline-flex min-h-9 items-center text-sm text-muted-foreground hover:text-foreground transition-colors duration-200'
@@ -146,7 +147,7 @@ export function Footer() {
         <Separator className="my-8" />
 
         <p className="text-xs text-muted-foreground">
-          &copy; {new Date().getFullYear()} Drip Nepal. Cash on delivery across Nepal.
+          &copy; {currentYear()} Drip Nepal. Cash on delivery across Nepal.
         </p>
       </div>
     </footer>

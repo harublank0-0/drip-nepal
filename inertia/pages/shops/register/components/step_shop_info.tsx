@@ -1,4 +1,4 @@
-import { Loader2Icon, InfoIcon, UploadIcon } from 'lucide-react'
+import { Loader2Icon, InfoIcon } from 'lucide-react'
 import { type ReactFormExtendedApi } from '@tanstack/react-form'
 import { Field, FieldError, FieldLabel, FieldDescription } from '~/components/ui/field'
 import { Input } from '~/components/ui/input'
@@ -243,35 +243,6 @@ export function StepShopInfo({ form, isSubmitting, onSubmit, onBack }: StepShopI
           }}
         </form.Field>
       </div>
-
-      <form.Field name="logo">
-        {(field) => (
-          <Field>
-            <FieldLabel htmlFor="logo">Shop Logo</FieldLabel>
-            <FieldDescription>Optional. Upload a square image for best results.</FieldDescription>
-            <label
-              htmlFor="logo"
-              className={cn(
-                'flex cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed border-input bg-transparent px-4 py-6 text-sm text-muted-foreground transition-colors hover:border-primary hover:text-primary',
-                field.state.value && 'border-primary text-primary'
-              )}
-            >
-              <UploadIcon className="size-4" />
-              {field.state.value ? (field.state.value as File).name : 'Upload logo (optional)'}
-            </label>
-            <input
-              id="logo"
-              type="file"
-              accept="image/*"
-              className="sr-only"
-              onChange={(e) => {
-                const file = e.target.files?.[0]
-                if (file) field.handleChange(file as any)
-              }}
-            />
-          </Field>
-        )}
-      </form.Field>
 
       {/* info card */}
       <div className="flex items-start gap-3 rounded-lg bg-muted/50 p-4 ring-1 ring-foreground/5">

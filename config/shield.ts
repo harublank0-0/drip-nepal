@@ -51,6 +51,14 @@ const shieldConfig = defineConfig({
     enableXsrfCookie: true,
 
     /**
+     * The XSRF-TOKEN cookie lives as long as the session (config/session.ts
+     * `age`). With the 2-hour default of config/app.ts, a form left open
+     * longer (a checkout on a phone, say) failed with a CSRF error on submit
+     * although the session was still valid.
+     */
+    cookieOptions: { maxAge: '7d' },
+
+    /**
      * HTTP methods protected by CSRF validation.
      */
     methods: ['POST', 'PUT', 'PATCH', 'DELETE'],

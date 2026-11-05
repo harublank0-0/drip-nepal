@@ -2,6 +2,7 @@ import type { HttpContext } from '@adonisjs/core/http'
 import type { NextFn } from '@adonisjs/core/types/http'
 import type { Authenticators } from '@adonisjs/auth/types'
 import { errors as authErrors } from '@adonisjs/auth'
+import { safeReturnPath } from '#modules/auth/return_path'
 
 const LOGIN_PROMPT = 'Log in or create an account to continue.'
 
@@ -48,10 +49,8 @@ export default class AuthMiddleware {
     } catch (error) {
       if (!(error instanceof authErrors.E_UNAUTHORIZED_ACCESS)) throw error
 
-      const path = returnPath(ctx)
-      if (path?.startsWith('/') && !path.startsWith('//') && !path.startsWith('/api/')) {
-        ctx.session.setIntendedUrl(path)
-      }
+      const path = safeReturnPath(returnPath(ctx))
+      if (path) ctx.session.setIntendedUrl(path)
       throw new authErrors.E_UNAUTHORIZED_ACCESS(LOGIN_PROMPT, {
         redirectTo: this.redirectTo,
         guardDriverName: error.guardDriverName,

@@ -27,7 +27,7 @@ type PageProps = InertiaProps<{
     draftProducts: number
   }
   lowStock: { productId: string; name: string; sku: string; quantity: number }[]
-  recentOrders: Data.Order[]
+  recentOrders: Data.Order.Variants['forShop'][]
 }>
 
 function StatCard({

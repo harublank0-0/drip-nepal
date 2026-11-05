@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { Data } from '@generated/data'
+import { MAX_QUANTITY_PER_ITEM } from '~/lib/order'
 
 export type ProductVariant = NonNullable<Data.Product['variants']>[number]
 export type VariantOption = 'size' | 'color'
@@ -132,7 +133,10 @@ export function useVariantSelection(allVariants: ProductVariant[] | undefined) {
   else if (missing.length > 0) state = 'incomplete'
   else if (!selectedVariant || selectedVariant.quantity <= 0) state = 'out_of_stock'
 
-  const maxQuantity = selectedVariant ? Math.max(selectedVariant.quantity, 0) : 0
+  // Stock, up to the server's per-item limit (app/constants/order.ts).
+  const maxQuantity = selectedVariant
+    ? Math.min(Math.max(selectedVariant.quantity, 0), MAX_QUANTITY_PER_ITEM)
+    : 0
 
   function select(option: VariantOption, value: string) {
     setSelection((current) => {

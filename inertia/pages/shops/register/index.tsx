@@ -2,13 +2,14 @@ import { useState, useCallback } from 'react'
 import { useForm } from '@tanstack/react-form'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Link, useRouter } from '@adonisjs/inertia/react'
-import { XIcon } from 'lucide-react'
+import { AlertCircleIcon, XIcon } from 'lucide-react'
 import { BrandingPanel } from './components/branding_panel'
 import { ProgressStepper } from './components/progress_stepper'
 import { StepAccount } from './components/step_account'
 import { StepShopInfo } from './components/step_shop_info'
 import { SuccessScreen } from './components/success_screen'
 import { defaultOnboardingFormValues, type OnboardingForm, onboardingSchema } from './form'
+import { Alert, AlertDescription, AlertTitle } from '~/components/ui/alert'
 import { Show } from '~/components/ui/show'
 
 const steps = [
@@ -16,23 +17,21 @@ const steps = [
   { number: 2, label: 'Shop Information' },
 ]
 
-function getInitialSuccess(): boolean {
-  if (typeof window === 'undefined') return false
+const ACCOUNT_FIELDS = ['fullName', 'email', 'phone', 'password', 'confirmPassword']
 
-  const params = new URLSearchParams(window.location.search)
-  return params.get('success') === '1'
+type PageProps = {
+  // After registering, the owner lands back here to see the success screen.
+  success: boolean
+  shopSlug: string | null
 }
 
-function getRegisteredShopSlug(): string | null {
-  if (typeof window === 'undefined') return null
-
-  return new URLSearchParams(window.location.search).get('shop')
-}
-
-export default function ShopSignupPage() {
+export default function ShopSignupPage({ success: isSuccess, shopSlug }: PageProps) {
   const [step, setStep] = useState(1)
-  const [isSuccess] = useState(getInitialSuccess)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  // What the server refused (an email or shop name already taken, ...),
+  // which the form's own checks can't know. Each goes once its field is
+  // changed.
+  const [refusals, setRefusals] = useState<{ field: string; message: string }[]>([])
   const router = useRouter()
 
   const shopRegisterForm = useForm({
@@ -41,8 +40,18 @@ export default function ShopSignupPage() {
       onChange: onboardingSchema,
       onSubmit: onboardingSchema,
     },
+    listeners: {
+      // Also when the form sets a field: a new shop name sets a new shop URL.
+      onChange: ({ fieldApi }) =>
+        setRefusals((current) =>
+          current.some(({ field }) => field === fieldApi.name)
+            ? current.filter(({ field }) => field !== fieldApi.name)
+            : current
+        ),
+    },
     onSubmit: async ({ value }) => {
       setIsSubmitting(true)
+      setRefusals([])
       router.visit(
         {
           route: 'api.auth.shop.shop_registration.store',
@@ -50,6 +59,18 @@ export default function ShopSignupPage() {
         {
           method: 'post',
           data: value,
+          // Stay on the form, with what was entered, and say what to change,
+          // on the step that has it.
+          preserveState: true,
+          onError: (errors) => {
+            // `categories.1` is the categories field.
+            const found = Object.entries(errors).map(([path, message]) => ({
+              field: path.split('.')[0],
+              message,
+            }))
+            setRefusals(found)
+            setStep(found.some(({ field }) => ACCOUNT_FIELDS.includes(field)) ? 1 : 2)
+          },
           onFinish: () => setIsSubmitting(false),
         }
       )
@@ -57,7 +78,7 @@ export default function ShopSignupPage() {
   })
 
   const validateStep1 = useCallback(async (): Promise<boolean> => {
-    const fields = ['fullName', 'email', 'phone', 'password', 'confirmPassword']
+    const fields = ACCOUNT_FIELDS
 
     let valid = true
     for (const name of fields) {
@@ -90,20 +111,17 @@ export default function ShopSignupPage() {
   }, [])
 
   const goToDashboard = useCallback(() => {
-    const shopSlug = getRegisteredShopSlug()
-
     if (!shopSlug) {
       router.visit({ route: 'home' })
       return
     }
 
     router.visit({ route: 'ui.shops.shop_dashboard.create', routeParams: { shopSlug } })
-  }, [router])
+  }, [router, shopSlug])
 
   const goToNewProduct = useCallback(() => {
-    const shopSlug = getRegisteredShopSlug()
     router.visit(shopSlug ? { href: `/shops/${shopSlug}/products/create` } : { route: 'home' })
-  }, [router])
+  }, [router, shopSlug])
 
   return (
     <div className="flex min-h-screen w-screen flex-col lg:flex-row">
@@ -163,6 +181,20 @@ export default function ShopSignupPage() {
               >
                 <ProgressStepper steps={steps} currentStep={step} />
               </motion.div>
+            </Show>
+
+            <Show when={!isSuccess && refusals.length > 0}>
+              <Alert variant="destructive">
+                <AlertCircleIcon />
+                <AlertTitle>Your shop wasn&apos;t created</AlertTitle>
+                <AlertDescription>
+                  <ul className="list-disc pl-4">
+                    {[...new Set(refusals.map(({ message }) => message))].map((message) => (
+                      <li key={message}>{message}</li>
+                    ))}
+                  </ul>
+                </AlertDescription>
+              </Alert>
             </Show>
 
             {/* step content with animated transitions */}

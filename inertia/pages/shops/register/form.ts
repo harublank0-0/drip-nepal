@@ -7,10 +7,14 @@ import { z } from 'zod'
 export const onboardingSchema = z
   .object({
     // name of the owner (user)
-    fullName: z.string().min(1, 'Full name is required'),
+    fullName: z
+      .string()
+      .trim()
+      .min(1, 'Full name is required')
+      .max(100, 'Use at most 100 characters'),
 
     // email of the owner
-    email: z.email('Invalid email address'),
+    email: z.email('Invalid email address').max(100, 'Use an email of at most 100 characters'),
 
     // owner's phone number
     phone: z.string().min(7, 'Invalid phone number').max(15, 'Invalid phone number'),
@@ -19,11 +23,23 @@ export const onboardingSchema = z
     confirmPassword: z.string(),
 
     // this is the shop name
-    shopName: z.string().min(1, 'Shop name is required'),
+    shopName: z
+      .string()
+      .trim()
+      .min(1, 'Shop name is required')
+      .max(100, 'Use at most 100 characters'),
 
     // we will auto generate it for better ux
     // and validate or regenerate it on server side
-    shopSlug: z.string().min(1, 'Shop URL is required'),
+    shopSlug: z
+      .string()
+      .min(1, 'Shop URL is required')
+      .max(100, 'Use at most 100 characters')
+      // The server's rule (SHOP_SLUG_FORMAT in app/modules/shops/validators/shop.ts).
+      .regex(
+        /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
+        'Use lower-case letters and numbers, with single hyphens between words'
+      ),
 
     // a shop can have multiple categories
     categories: z.string().array().min(1, 'Select at least one category'),

@@ -10,6 +10,7 @@ import type { CartOwner } from '#modules/orders/customer'
 import CartService from '#modules/orders/services/cart_service'
 import CheckoutService, { type Buyer } from '#modules/orders/services/checkout_service'
 import OrderService from '#modules/orders/services/order_service'
+import OrderAlerts from '#modules/orders/services/order_alerts'
 import type { AddressPayload } from '#modules/orders/validators/checkout'
 
 const PASSWORD = 'dripnepal'
@@ -139,7 +140,10 @@ export default class extends BaseSeeder {
   static environment = ['development']
 
   #cart = new CartService()
-  #checkout = new CheckoutService(this.#cart)
+  // Demo orders email no one: they are placed and then moved to other
+  // statuses at once, and the retries of a mail server that isn't running
+  // would keep `db:seed` alive for two minutes.
+  #checkout = new CheckoutService(this.#cart, new OrderAlerts({ enabled: false }))
   #orders = new OrderService()
 
   async run() {
