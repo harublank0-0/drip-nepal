@@ -1464,7 +1464,7 @@ ADR files live in [docs/adr](adr/README.md). Status is the "Decision status" fie
 | [ADR-0016](adr/0016-hosting-single-region-portable.md)                | Hosting: single region near Nepal, portable                | Proposed, blocked on VX-09 and OD-09; portability binding now                             | Sections 3, 5, 13                                          |
 | [ADR-0017](adr/0017-product-urls-public-id.md)                        | Product URLs by immutable public ID                        | Accepted, including the `/seller/{shopSlug}` prefix (OD-12 decided 2026-09-30)            | Sections 6.1, 6.2                                          |
 | [ADR-0018](adr/0018-error-contract-problem-details.md)                | RFC 9457 problem details                                   | Accepted                                                                                  | Sections 6.5, 12.8                                         |
-| [ADR-0019](adr/0019-courier-integration-in-r1.md)                     | Courier registry, accounts owned by the platform or a shop | Accepted for the schema; Proposed for the `CourierProvider` adapter (VX-16)               |
+| [ADR-0019](adr/0019-courier-integration-in-r1.md)                     | Courier registry, accounts owned by the platform or a shop | Accepted for the schema; Proposed for the `CourierProvider` adapter (VX-16)               | Sections 1.1 (D5), 2, 4.4, 11.1                            |
 
 ---
 
