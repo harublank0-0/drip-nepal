@@ -14,6 +14,10 @@ function validQuery(query: string) {
   return query.length === 0 || (query.length >= 2 && query.length <= 100)
 }
 
+function remember(term: string) {
+  if (term) addRecentSearch(term)
+}
+
 /* Values are encoded, while comma-separated prototype filters stay readable. */
 function listingUrl(path: string, filters: ListingFilters, extra: { q?: string; page?: number }) {
   const params: [string, string][] = []
@@ -85,14 +89,12 @@ export function useListingFilters(filters: ListingFilters, searchQuery?: string)
   }, [])
 
   /*
-   * Recent searches are remembered when the customer is done with the
-   * field (Enter, blur, leaving the page), not on every debounce commit,
-   * so typing one word does not fill the list with its prefixes.
+   * The last term asked for joins the recent searches when the customer is
+   * done with it (Enter, blur, leaving the page), not on every debounce
+   * commit, so typing one word does not fill the list with its prefixes.
+   * A draft whose search never started is not remembered.
    */
-  const rememberQuery = useCallback(() => {
-    const term = currentTerm()
-    if (term) addRecentSearch(term)
-  }, [currentTerm])
+  const rememberQuery = useCallback(() => remember(desiredQuery.current), [])
 
   const restorePage = useCallback(
     (nextUrl: string, props: ListingProps) => {
@@ -129,12 +131,19 @@ export function useListingFilters(filters: ListingFilters, searchQuery?: string)
       if (!pending.current) restorePage(detail.page.url, detail.page.props as ListingProps)
     })
     // Stop the timer before Inertia asynchronously restores browser history.
-    window.addEventListener('popstate', cancelPending)
+    const leaveHistory = () => {
+      rememberQuery()
+      cancelPending()
+    }
+    window.addEventListener('popstate', leaveHistory)
+    // A reload, an external link or a closed tab fire no Inertia event.
+    window.addEventListener('pagehide', rememberQuery)
     return () => {
       removeBefore()
       removeNavigate()
       removeSuccess()
-      window.removeEventListener('popstate', cancelPending)
+      window.removeEventListener('popstate', leaveHistory)
+      window.removeEventListener('pagehide', rememberQuery)
       cancelDebounce()
       requestId.current += 1
       pending.current?.cancel?.()
@@ -238,7 +247,7 @@ export function useListingFilters(filters: ListingFilters, searchQuery?: string)
     cancelDebounce()
     const term = draft.current.trim()
     if (composing.current || !validQuery(term)) return
-    rememberQuery()
+    remember(term)
     request(desiredFilters.current, term)
   }
 

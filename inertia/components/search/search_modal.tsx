@@ -111,9 +111,11 @@ export function SearchModal({ onOpenChange }: SearchModalProps) {
     onOpenChange(false)
   }
 
+  // The search page remembers its own term when the visit starts, so this
+  // term is remembered after it to stay the most recent.
   const visit = (href: string) => {
-    close()
     router.visit(href)
+    close()
   }
 
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {

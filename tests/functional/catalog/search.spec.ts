@@ -160,14 +160,15 @@ test.group('Search category refinements [v1]', (group) => {
     const cargoId = await product(shop, 'Utility pants', cargo)
     const hoodieId = await product(shop, 'Everyday hoodie', hoodies)
 
+    // Without a query the search covers the whole catalog, so assert on this
+    // test's products: the reference seeds hold no products, but a seeded
+    // product or a shared fixture must not break this test.
     const narrowed = await search({ category: 'cargo-pants' })
-    assert.deepEqual(
-      narrowed.products.data.map((item) => item.id),
-      [cargoId]
-    )
+    const narrowedIds = narrowed.products.data.map((item) => item.id)
+    assert.include(narrowedIds, cargoId)
+    assert.notInclude(narrowedIds, hoodieId)
     assert.equal(narrowed.context.query, '')
 
-    // Other tests' products may share the catalog: assert on this shop's only.
     const all = await search({})
     assert.includeMembers(
       all.products.data.map((item) => item.id),
