@@ -1,3 +1,4 @@
+import type { MouseEvent } from 'react'
 import type { Data } from '@generated/data'
 
 /*
@@ -23,5 +24,5 @@ export type OptionRowProps = {
   id: string
   isActive: boolean
   onHover: () => void
-  onSelect: () => void
+  onSelect: (event: MouseEvent) => void
 }

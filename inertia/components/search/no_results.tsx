@@ -1,9 +1,10 @@
+import type { MouseEvent } from 'react'
 import { SearchSlash } from 'lucide-react'
 import { PopularCategories } from './popular_categories'
 
 type NoResultsProps = {
   query: string
-  onNavigate: () => void
+  onNavigate: (event: MouseEvent) => void
 }
 
 export function NoResults({ query, onNavigate }: NoResultsProps) {
