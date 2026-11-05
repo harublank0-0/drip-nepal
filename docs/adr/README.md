@@ -62,9 +62,8 @@ None supersedes another yet.
 
 These ADRs, or parts of them, stay Proposed until the named items close. Owners and deadlines are in the [risk register](../risks-and-open-decisions.md).
 
-| ADR                                   | Blocked on                                | Latest responsible moment                                               |
-| ------------------------------------- | ----------------------------------------- | ----------------------------------------------------------------------- |
-| 0009 (gateway collection, payouts)    | VX-01, OD-02                              | Before applying for a gateway merchant account; at the latest, M8 start |
-| 0016                                  | VX-09, OD-09 (and OD-26 for invoice data) | 4 weeks before launch (M7)                                              |
-| 0019 (`CourierProvider` adapter)      | VX-16                                     | Before M6 code starts                                                   |
-| 0019 (COD on platform-owned accounts) | OD-58, VX-18                              | Before the first live COD shipment on a platform-owned account          |
+| ADR                                | Blocked on                                | Latest responsible moment                                               |
+| ---------------------------------- | ----------------------------------------- | ----------------------------------------------------------------------- |
+| 0009 (gateway collection, payouts) | VX-01, OD-02                              | Before applying for a gateway merchant account; at the latest, M8 start |
+| 0016                               | VX-09, OD-09 (and OD-26 for invoice data) | 4 weeks before launch (M7)                                              |
+| 0019 (`CourierProvider` adapter)   | VX-16                                     | Before the adapter's code starts (M6)                                   |
