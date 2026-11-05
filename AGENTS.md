@@ -4,7 +4,7 @@ Guidance for coding agents and contributors working in this repository. It summa
 
 ## The project in brief
 
-DripNepal is a multi-vendor fashion marketplace for Nepal (cash on delivery first, English UI, vendors ship their own parcels in R1), built by a team of one or two developers. The [documentation](docs/README.md) describes the target system. The code is an exploratory prototype with known defects (RF-01 to RF-47 in [docs/00 §4.6](docs/00-context-assumptions-and-questions.md#46-consolidated-repository-findings-rf-01--rf-47)); milestone M0 hardens it before feature work ([docs/12 §4](docs/12-roadmap-and-backlog.md#4-m0-foundation-hardening-r0-ready-to-start)). Treat existing code as evidence of what exists, not as the pattern to follow: [docs/09](docs/09-code-structure-and-engineering-standards.md) says, file by file, what is kept, fixed, rewritten or deleted.
+DripNepal is a multi-vendor fashion marketplace for Nepal (cash on delivery first, English UI; in R1 vendors ship their own parcels or book Nepal Can Move through a courier account, [ADR-0019](docs/adr/0019-courier-integration-in-r1.md)), built by a team of one or two developers. The [documentation](docs/README.md) describes the target system. The code is an exploratory prototype with known defects (RF-01 to RF-47 in [docs/00 §4.6](docs/00-context-assumptions-and-questions.md#46-consolidated-repository-findings-rf-01--rf-47)); milestone M0 hardens it before feature work ([docs/12 §4](docs/12-roadmap-and-backlog.md#4-m0-foundation-hardening-r0-ready-to-start)). Treat existing code as evidence of what exists, not as the pattern to follow: [docs/09](docs/09-code-structure-and-engineering-standards.md) says, file by file, what is kept, fixed, rewritten or deleted.
 
 ## Before you write code
 

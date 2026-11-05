@@ -34,7 +34,7 @@ grep -n '`placeOrder`' docs/*.md docs/openapi.yaml   # every mention of a name
 | Local setup, releases, jobs operations, alerts, runbooks         | `docs/11-deployment-and-operations.md`                                                                                                             |
 | When something is built                                          | `docs/12-roadmap-and-backlog.md` §3 (milestones), §4 (M0), §5 (M1 to M9 scope and exit criteria)                                                   |
 | Whether something is decided, and what blocks a milestone        | `docs/risks-and-open-decisions.md` §2 (OD-xx), §3 (VX-xx), §5 (blockers by milestone); decision log §2.3                                           |
-| Why the design is the way it is                                  | `docs/adr/` (ADR-0001 to ADR-0018; index in `docs/adr/README.md`)                                                                                  |
+| Why the design is the way it is                                  | `docs/adr/` (ADR-0001 to ADR-0019; index in `docs/adr/README.md`)                                                                                  |
 | What an ID or label means; assumptions A-xx; known code defects  | `docs/00-context-assumptions-and-questions.md` §1.2 (labels), §1.3 (IDs), §4.6 (RF-xx), §6 (A-xx)                                                  |
 
 ## 2. Trace a feature end to end

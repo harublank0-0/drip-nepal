@@ -14,6 +14,8 @@ Reviewed: 2026-09-25 · consistency review 2026-09-30 to 2026-10-04
 
 Edited 2026-09-30 (consistency review): the refund rule of decision 4 follows [05 §7.4](../05-order-payment-and-inventory-lifecycles.md#74-refund-postings-and-commission-reversal) (vendor impact fixed when the refund is created); the decision is unchanged.
 
+Edited 2026-11-05 (OD-56): the Context's "the vendor or its courier collects COD cash, so the platform holds no customer money" holds for the `manual` mode and shop-owned courier accounts of [ADR-0019](0019-courier-integration-in-r1.md). For a COD shipment on a platform-owned courier account, who receives the cash is [Open OD-58]; until it is decided such an account books no live COD shipment, and no posting rule of decision 4 changes. The decision is unchanged.
+
 ## Context
 
 **Confirmed answers** ([00 §3.2](../00-context-assumptions-and-questions.md#32-product-owner-answers-q1q8-and-their-consequences)): one payment for a multi-shop cart, split into per-shop suborders (Q2). DripNepal is the payee for gateway payments and pays vendors out, subject to VX-01 (Q3). COD at launch and one wallet gateway in R1.1 (Q4). Vendors ship with their own couriers (Q5).
