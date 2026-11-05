@@ -103,7 +103,7 @@ export function SearchModal({ onOpenChange }: SearchModalProps) {
   }, [activeId])
 
   const remember = () => {
-    if (term) setRecent(addRecentSearch(term))
+    if (isSearchable) setRecent(addRecentSearch(term))
   }
 
   const close = () => {
