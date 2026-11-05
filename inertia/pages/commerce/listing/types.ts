@@ -29,6 +29,7 @@ export type ListingFacets = {
 }
 
 export type ListingFilters = {
+  category?: string | null
   sizes: string[]
   colors: string[]
   min: number | null

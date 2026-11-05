@@ -36,7 +36,7 @@ export function MobileFilters({
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
-        <Button variant="outline" className="h-9 gap-2 px-3">
+        <Button variant="outline" className="h-11 gap-2 px-3 md:h-9">
           <SlidersHorizontal aria-hidden="true" />
           Filters
           {activeCount > 0 && (
