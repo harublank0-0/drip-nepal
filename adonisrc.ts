@@ -73,6 +73,7 @@ export default defineConfig({
   |
   */
   preloads: [
+    () => import('#start/database_types'),
     () => import('#start/routes'),
     () => import('#start/kernel'),
     () => import('#start/validator'),
