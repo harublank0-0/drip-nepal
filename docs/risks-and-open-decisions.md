@@ -231,6 +231,20 @@ OD-28 to OD-54 register the owner decisions that the three deep audits left open
 Newest first. The entry format is in §1.5. A ruling that is not an OD but changes an owning document or an ADR is logged in the same format, headed "Not an OD".
 
 ```text
+Not an OD — Decided 2026-11-05 by product owner: tickets move from GitHub Issues to Linear
+Ruling: Work is tracked in Linear's drip-nepal team (keys DRIP-NN), not GitHub Issues. Each milestone of 12
+        is a Linear project; epics are parent issues with their tasks as sub-issues, labelled by release
+        and area. Branches take Linear's branch name; a pull request names its issue with `Closes DRIP-NN`.
+        The GitHub issues were imported with their bodies; the open ones were closed with a comment
+        linking the Linear ticket that holds them. The closed issues and merged pull requests of the
+        prototype and the v1 store became Done tickets.
+Evidence: On 2026-11-05 the product owner, who had created the drip-nepal team in Linear, asked for all
+          finished and open tickets there.
+ADR: none.
+Docs updated: 09 §11.6 and note 79, 12 §8 and note 19, AGENTS.md  |  Status: Decided
+```
+
+```text
 Not an OD — Decided 2026-11-04 by product owner: a Fable code review before every pull request
 Ruling: Before a pull request is opened, a Fable-model reviewer reviews the commit it proposes. The author
         checks each finding, fixes the real ones (fix commits are reviewed too) and lists the findings and
