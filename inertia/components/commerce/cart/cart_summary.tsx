@@ -10,7 +10,7 @@ type CartSummaryProps = {
 }
 
 export function CartSummary({ cart }: CartSummaryProps) {
-  const shopCount = cart.shops.filter((group) => group.subtotal > 0).length
+  const shopCount = cart.shops.filter((group) => group.subtotalMinor > 0).length
   const blocked = cart.hasUnavailableItems
   const orderable = orderableQuantity(cart.shops.flatMap((group) => group.items))
 
@@ -24,11 +24,11 @@ export function CartSummary({ cart }: CartSummaryProps) {
       </h2>
 
       <PriceRows
-        subtotal={cart.subtotal}
+        subtotalMinor={cart.subtotalMinor}
         subtotalLabel={`Subtotal (${pluralize(orderable, 'item')})`}
-        shipping={cart.shippingTotal}
+        shippingMinor={cart.shippingTotalMinor}
         shippingLabel={shopCount > 1 ? `Delivery (${shopCount} shops)` : 'Delivery'}
-        total={cart.total}
+        totalMinor={cart.totalMinor}
       />
 
       {shopCount > 1 && (

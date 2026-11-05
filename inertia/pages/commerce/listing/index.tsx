@@ -35,7 +35,7 @@ export default function ListingPage({ context, products, facets, filters }: Page
   /*
    * Facets are empty only when nothing at all is listed in this scope.
    */
-  const canFilter = hasFilters || facets.price.max > 0
+  const canFilter = hasFilters || facets.price.maxRupees > 0
   const firstItem = (metadata.currentPage - 1) * metadata.perPage + 1
   const lastItem = firstItem + products.data.length - 1
 

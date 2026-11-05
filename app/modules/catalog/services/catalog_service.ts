@@ -14,8 +14,9 @@ export type CatalogFilters = {
   search?: string
   sizes?: string[]
   colors?: string[]
-  minPrice?: number
-  maxPrice?: number
+  // Whole rupees, as in the listing's URL (`?min=1000&max=5000`).
+  minRupees?: number
+  maxRupees?: number
   sort?: CatalogSort
 }
 
@@ -38,7 +39,7 @@ function compareSizes(a: { slug: string }, b: { slug: string }) {
   return groupA - groupB || valueA - valueB || a.slug.localeCompare(b.slug)
 }
 
-const MIN_PRICE_SQL = `(select min(pv.price) from product_variants pv where pv.product_id = products.id and pv.status = '${VariantStatus.ACTIVE}')`
+const MIN_PRICE_SQL = `(select min(pv.price_minor) from product_variants pv where pv.product_id = products.id and pv.status = '${VariantStatus.ACTIVE}')`
 
 /*
  * Everything the storefront reads. A product is listed when it is active,
@@ -117,12 +118,13 @@ export default class CatalogService {
     optionFilter(VariantAttributes.SIZE.slug, filters.sizes)
     optionFilter(VariantAttributes.COLOR.slug, filters.colors)
 
-    if (filters.minPrice !== undefined) {
-      query.whereRaw(`${MIN_PRICE_SQL} >= ?`, [filters.minPrice])
+    // Prices are paisa (docs/04 §18.1).
+    if (filters.minRupees !== undefined) {
+      query.whereRaw(`${MIN_PRICE_SQL} >= ?`, [filters.minRupees * 100])
     }
 
-    if (filters.maxPrice !== undefined) {
-      query.whereRaw(`${MIN_PRICE_SQL} <= ?`, [filters.maxPrice])
+    if (filters.maxRupees !== undefined) {
+      query.whereRaw(`${MIN_PRICE_SQL} <= ?`, [filters.maxRupees * 100])
     }
 
     switch (filters.sort) {
@@ -157,7 +159,7 @@ export default class CatalogService {
     const productIds = scopedProducts.map((product) => product.id)
 
     if (productIds.length === 0) {
-      return { sizes: [], colors: [], categories: [], price: { min: 0, max: 0 } }
+      return { sizes: [], colors: [], categories: [], price: { minRupees: 0, maxRupees: 0 } }
     }
 
     const options = await db
@@ -187,8 +189,8 @@ export default class CatalogService {
       .from('product_variants')
       .whereIn('product_id', productIds)
       .where('status', VariantStatus.ACTIVE)
-      .min('price as min')
-      .max('price as max')
+      .min('price_minor as min')
+      .max('price_minor as max')
       .first()
 
     const toOption = (row: { slug: string; value: string }) => ({
@@ -207,7 +209,11 @@ export default class CatalogService {
         slug: row.slug as string,
         productCount: Number(row.productCount),
       })),
-      price: { min: Math.floor(Number(price?.min ?? 0)), max: Math.ceil(Number(price?.max ?? 0)) },
+      // Whole rupees around the paisa prices, for the price filter.
+      price: {
+        minRupees: Math.floor((price?.min ?? 0) / 100),
+        maxRupees: Math.ceil((price?.max ?? 0) / 100),
+      },
     }
   }
 

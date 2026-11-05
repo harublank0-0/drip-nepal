@@ -6,6 +6,7 @@ import CatalogService, {
   type CatalogSort,
 } from '#modules/catalog/services/catalog_service'
 import { ProductGender } from '#constants/product'
+import { PRICE_MAX_MINOR } from '#shared/constants/money'
 import CategoryTransformer from '#transformers/category_transformer'
 import ProductCardTransformer from '#transformers/product_card_transformer'
 import ProductTransformer from '#transformers/product_transformer'
@@ -22,10 +23,14 @@ function listParam(value: unknown): string[] {
     .slice(0, 20)
 }
 
-function priceParam(value: unknown): number | undefined {
+/*
+ * A price bound from the URL, in whole rupees, within the prices a product
+ * can have (a bigger number would not fit the paisa comparison).
+ */
+function rupeesParam(value: unknown): number | undefined {
   const number = Number(value)
   return value !== undefined && value !== null && value !== '' && Number.isFinite(number)
-    ? Math.max(0, number)
+    ? Math.min(Math.max(0, Math.floor(number)), PRICE_MAX_MINOR / 100)
     : undefined
 }
 
@@ -179,8 +184,8 @@ export default class CatalogController {
       ...scope,
       sizes: listParam(request.input('size')),
       colors: listParam(request.input('color')),
-      minPrice: priceParam(request.input('min')),
-      maxPrice: priceParam(request.input('max')),
+      minRupees: rupeesParam(request.input('min')),
+      maxRupees: rupeesParam(request.input('max')),
       sort,
     }
 
@@ -196,8 +201,9 @@ export default class CatalogController {
       filters: {
         sizes: filters.sizes ?? [],
         colors: filters.colors ?? [],
-        min: filters.minPrice ?? null,
-        max: filters.maxPrice ?? null,
+        // Whole rupees, as in the URL.
+        min: filters.minRupees ?? null,
+        max: filters.maxRupees ?? null,
         sort,
       },
     })

@@ -1,5 +1,7 @@
-import vine from '@vinejs/vine'
+import vine, { SimpleMessagesProvider } from '@vinejs/vine'
 import { MAX_PRODUCT_IMAGES, ProductGenderValues, ProductStatus } from '#constants/product'
+import { PRICE_MAX_MINOR } from '#shared/constants/money'
+import { formatNPR } from '#shared/format/money'
 
 /*
  * The bodyparser turns empty form inputs into null, which `optional()`
@@ -7,15 +9,19 @@ import { MAX_PRODUCT_IMAGES, ProductGenderValues, ProductStatus } from '#constan
  */
 const optionalText = (max: number) => vine.string().trim().maxLength(max).optional()
 
-const money = () => vine.number().min(0).max(10_000_000).decimal([0, 2])
+/*
+ * Prices are whole paisa (docs/04 §18.1): the form turns the rupees typed
+ * into paisa with parseRupeesToMinor before sending.
+ */
+const paisa = () => vine.number().withoutDecimals().min(0).max(PRICE_MAX_MINOR)
 
 const variant = vine.object({
   id: vine.string().uuid().optional(),
   size: optionalText(30),
   color: optionalText(30),
   sku: optionalText(100),
-  price: money(),
-  comparePrice: money().optional().nullable(),
+  priceMinor: paisa(),
+  comparePriceMinor: paisa().optional().nullable(),
   quantity: vine.number().withoutDecimals().min(0).max(1_000_000),
   // The stock the form showed for an existing variant (docs/05 §5.9).
   expectedQuantity: vine.number().withoutDecimals().min(0).max(1_000_000).optional(),
@@ -42,3 +48,12 @@ export const productValidator = vine.create({
 })
 
 export type ProductPayload = Awaited<ReturnType<typeof productValidator.validate>>
+
+// Shown under the product form's price fields.
+productValidator.messagesProvider = new SimpleMessagesProvider({
+  'variants.*.priceMinor.required': 'Enter a price',
+  'variants.*.priceMinor.max': `The highest price is ${formatNPR(PRICE_MAX_MINOR)}`,
+  'variants.*.comparePriceMinor.max': `The highest price is ${formatNPR(PRICE_MAX_MINOR)}`,
+  'number': 'Enter an amount in rupees, such as 1299 or 1299.50',
+  'withoutDecimals': 'Enter an amount in rupees, such as 1299 or 1299.50',
+})

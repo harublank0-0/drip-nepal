@@ -8,7 +8,8 @@ import { Pager } from '~/components/dashboard/pager'
 import { OrderStatusBadge } from '~/components/commerce/orders/order_status_badge'
 import { ProductThumb } from '~/components/commerce/product_thumb'
 import { Button } from '~/components/ui/button'
-import { formatDate, formatPrice } from '~/lib/format'
+import { formatDate } from '~/lib/format'
+import { formatNPR } from '@shared/format/money'
 import { pluralize } from '~/lib/order'
 import type { InertiaProps } from '~/types'
 import type { Paginated } from '~/types/pagination'
@@ -69,7 +70,7 @@ function OrderCard({ order }: { order: Data.Order }) {
         </div>
         <div className="flex shrink-0 items-center gap-1">
           <span className="text-sm font-semibold tabular-nums">
-            {formatPrice(order.grandTotal)}
+            {formatNPR(order.grandTotalMinor)}
           </span>
           <ChevronRightIcon
             className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5"

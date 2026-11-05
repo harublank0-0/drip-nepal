@@ -1,6 +1,7 @@
 import { inject } from '@adonisjs/core'
 import type { HttpContext } from '@adonisjs/core/http'
 import db from '@adonisjs/lucid/services/db'
+import { toMinor } from '#modules/platform/money'
 import OrderService from '#modules/orders/services/order_service'
 import { OrderStatus } from '#constants/order'
 import { ProductStatus, VariantStatus } from '#constants/product'
@@ -20,9 +21,12 @@ export default class ShopDashboardController {
         .select(
           db.raw(`count(*) filter (where status = ?) as to_confirm`, [OrderStatus.PENDING]),
           db.raw(`count(*) filter (where status = ?) as to_ship`, [OrderStatus.CONFIRMED]),
-          db.raw(`coalesce(sum(grand_total) filter (where status = ?), 0) as revenue`, [
-            OrderStatus.DELIVERED,
-          ]),
+          // Paisa; cast back to bigint so it arrives as a safe number
+          // (docs/04 §18.4: a SUM of a bigint is numeric, a string).
+          db.raw(
+            `coalesce(sum(grand_total_minor) filter (where status = ?), 0)::bigint as revenue_minor`,
+            [OrderStatus.DELIVERED]
+          ),
           db.raw(`count(*) filter (where status = ?) as delivered`, [OrderStatus.DELIVERED])
         )
         .first(),
@@ -57,7 +61,7 @@ export default class ShopDashboardController {
         ordersToConfirm: Number(orderStats?.to_confirm ?? 0),
         ordersToShip: Number(orderStats?.to_ship ?? 0),
         deliveredOrders: Number(orderStats?.delivered ?? 0),
-        revenue: Number(orderStats?.revenue ?? 0),
+        revenueMinor: toMinor(orderStats?.revenue_minor ?? 0),
         activeProducts: Number(productStats?.active ?? 0),
         draftProducts: Number(productStats?.draft ?? 0),
       },

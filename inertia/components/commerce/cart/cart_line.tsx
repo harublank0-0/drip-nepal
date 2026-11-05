@@ -4,7 +4,7 @@ import type { Data } from '@generated/data'
 import { ProductThumb } from '~/components/commerce/product_thumb'
 import { Button } from '~/components/ui/button'
 import { Spinner } from '~/components/ui/spinner'
-import { formatPrice } from '~/lib/format'
+import { formatNPR } from '@shared/format/money'
 import { MAX_QUANTITY_PER_ITEM } from '~/lib/order'
 import { cn } from '~/lib/utils'
 import { QuantitySelector } from './quantity_selector'
@@ -22,7 +22,8 @@ type CartLineProps = {
 export function CartLine({ line, pending, error, onQuantityChange, onRemove }: CartLineProps) {
   const { product, variant } = line
   const max = Math.max(Math.min(variant.stock, MAX_QUANTITY_PER_ITEM), line.quantity)
-  const onSale = variant.comparePrice !== null && variant.comparePrice > variant.price
+  const onSale =
+    variant.comparePriceMinor !== null && variant.comparePriceMinor > variant.priceMinor
   /* More in the cart than the shop has left: offer to take what's there. */
   const canReduceToStock = !line.available && variant.stock > 0 && variant.stock < line.quantity
 
@@ -60,17 +61,17 @@ export function CartLine({ line, pending, error, onQuantityChange, onRemove }: C
                 !line.available && 'text-muted-foreground line-through'
               )}
             >
-              {formatPrice(line.lineTotal)}
+              {formatNPR(line.lineTotalMinor)}
             </p>
             {(line.quantity > 1 || onSale) && (
               <p className="text-xs text-muted-foreground tabular-nums">
                 {onSale && (
                   <>
-                    <s className="mr-1">{formatPrice(variant.comparePrice!)}</s>
+                    <s className="mr-1">{formatNPR(variant.comparePriceMinor!)}</s>
                     <span className="sr-only">now </span>
                   </>
                 )}
-                {formatPrice(variant.price)} each
+                {formatNPR(variant.priceMinor)} each
               </p>
             )}
           </div>

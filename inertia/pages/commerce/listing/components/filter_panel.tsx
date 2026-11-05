@@ -49,7 +49,7 @@ const chipClass = (active: boolean) =>
 
 export function FilterPanel({ kind, facets, filters, onToggle, onPriceChange }: FilterPanelProps) {
   const showCategories = kind !== 'category' && facets.categories.length > 0
-  const showPrice = facets.price.max > 0 || filters.min !== null || filters.max !== null
+  const showPrice = facets.price.maxRupees > 0 || filters.min !== null || filters.max !== null
 
   return (
     <div>

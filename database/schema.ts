@@ -164,8 +164,8 @@ export class OrderItemSchema extends BaseModel {
     'quantity',
     'shopId',
     'skuSnapshot',
-    'subTotal',
-    'unitPrice',
+    'subTotalMinor',
+    'unitPriceMinor',
   ] as const
   $columns = OrderItemSchema.$columns
   @column.dateTime({ autoCreate: true })
@@ -189,27 +189,27 @@ export class OrderItemSchema extends BaseModel {
   @column()
   declare skuSnapshot: string | null
   @column()
-  declare subTotal: string
+  declare subTotalMinor: number
   @column()
-  declare unitPrice: string
+  declare unitPriceMinor: number
 }
 
 export class OrderSchema extends BaseModel {
   static $columns = [
     'checkoutId',
     'createdAt',
-    'discountTotal',
-    'grandTotal',
+    'discountTotalMinor',
+    'grandTotalMinor',
     'id',
     'notes',
     'orderNumber',
     'paymentStatus',
     'placedAt',
     'shippingAddress',
-    'shippingTotal',
+    'shippingTotalMinor',
     'shopId',
     'status',
-    'subtotal',
+    'subtotalMinor',
     'updatedAt',
     'userAddressId',
     'userId',
@@ -220,9 +220,9 @@ export class OrderSchema extends BaseModel {
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
   @column()
-  declare discountTotal: string
+  declare discountTotalMinor: number
   @column()
-  declare grandTotal: string
+  declare grandTotalMinor: number
   @column({ isPrimary: true })
   declare id: string
   @column()
@@ -236,13 +236,13 @@ export class OrderSchema extends BaseModel {
   @column()
   declare shippingAddress: any | null
   @column()
-  declare shippingTotal: string
+  declare shippingTotalMinor: number
   @column()
   declare shopId: string | null
   @column()
   declare status: string
   @column()
-  declare subtotal: string
+  declare subtotalMinor: number
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime | null
   @column()
@@ -253,7 +253,7 @@ export class OrderSchema extends BaseModel {
 
 export class PaymentSchema extends BaseModel {
   static $columns = [
-    'amount',
+    'amountMinor',
     'createdAt',
     'gatewayResponse',
     'id',
@@ -266,7 +266,7 @@ export class PaymentSchema extends BaseModel {
   ] as const
   $columns = PaymentSchema.$columns
   @column()
-  declare amount: string
+  declare amountMinor: number
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
   @column()
@@ -354,10 +354,10 @@ export class ProductVariantAttributeValueSchema extends BaseModel {
 
 export class ProductVariantSchema extends BaseModel {
   static $columns = [
-    'comparePrice',
+    'comparePriceMinor',
     'createdAt',
     'id',
-    'price',
+    'priceMinor',
     'productId',
     'quantity',
     'sku',
@@ -367,13 +367,13 @@ export class ProductVariantSchema extends BaseModel {
   ] as const
   $columns = ProductVariantSchema.$columns
   @column()
-  declare comparePrice: string | null
+  declare comparePriceMinor: number | null
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
   @column({ isPrimary: true })
   declare id: string
   @column()
-  declare price: string
+  declare priceMinor: number
   @column()
   declare productId: string
   @column()
@@ -440,7 +440,7 @@ export class RateLimitSchema extends BaseModel {
   static $columns = ['expire', 'key', 'points'] as const
   $columns = RateLimitSchema.$columns
   @column()
-  declare expire: bigint | number | null
+  declare expire: number | null
   @column({ isPrimary: true })
   declare key: string
   @column()

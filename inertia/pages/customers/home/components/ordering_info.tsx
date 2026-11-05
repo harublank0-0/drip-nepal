@@ -1,7 +1,10 @@
 import { Link } from '@adonisjs/inertia/react'
 import { BanknoteIcon, RotateCcwIcon, TruckIcon } from 'lucide-react'
-import { formatPrice } from '~/lib/format'
-import { FREE_SHIPPING_THRESHOLD, SHIPPING_FEE_PER_SHOP } from '~/lib/order'
+import { formatNPR } from '@shared/format/money'
+import {
+  FREE_SHIPPING_THRESHOLD_MINOR,
+  SHIPPING_FEE_PER_SHOP_MINOR,
+} from '@shared/constants/delivery'
 import { RETURN_DAYS } from '~/lib/policies'
 
 /*
@@ -17,8 +20,8 @@ export function OrderingInfo() {
     },
     {
       icon: TruckIcon,
-      title: `Delivery ${formatPrice(SHIPPING_FEE_PER_SHOP)}`,
-      text: `Free over ${formatPrice(FREE_SHIPPING_THRESHOLD)}`,
+      title: `Delivery ${formatNPR(SHIPPING_FEE_PER_SHOP_MINOR)}`,
+      text: `Free over ${formatNPR(FREE_SHIPPING_THRESHOLD_MINOR)}`,
     },
     {
       icon: RotateCcwIcon,

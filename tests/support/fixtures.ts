@@ -45,17 +45,17 @@ export async function createShop(fields: Partial<Shop> = {}) {
 }
 
 /*
- * A listed product with one variant. `price` is in rupees, as v1 stores it.
+ * A listed product with one variant. `priceMinor` is paisa (docs/04 §18.1).
  */
 export async function createVariant(
   shop: Shop,
   {
-    price = 1000,
+    priceMinor = 100_000,
     quantity = 5,
     product: productFields = {},
     variant: variantFields = {},
   }: {
-    price?: number
+    priceMinor?: number
     quantity?: number
     product?: Partial<Product>
     variant?: Partial<ProductVariant>
@@ -76,7 +76,7 @@ export async function createVariant(
   return ProductVariant.create({
     productId: product.id,
     sku: unique('SKU').toUpperCase(),
-    price: price.toFixed(2),
+    priceMinor,
     quantity,
     status: VariantStatus.ACTIVE,
     ...variantFields,

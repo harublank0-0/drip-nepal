@@ -44,6 +44,7 @@ type DemoProduct = {
   brand?: string
   description: string
   photos: string[]
+  // Whole rupees, for reading; stored as paisa.
   price: number
   comparePrice?: number
   sizes?: string[]
@@ -428,8 +429,8 @@ export default class extends BaseSeeder {
                 {
                   productId: product.id,
                   sku: `DEMO-${String(skuCounter++).padStart(4, '0')}`,
-                  price: demo.price.toFixed(2),
-                  comparePrice: demo.comparePrice ? demo.comparePrice.toFixed(2) : null,
+                  priceMinor: demo.price * 100,
+                  comparePriceMinor: demo.comparePrice ? demo.comparePrice * 100 : null,
                   // A few sold-out variants to exercise the UI.
                   quantity: skuCounter % 7 === 0 ? 0 : 5 + (skuCounter % 20),
                   status: VariantStatus.ACTIVE,

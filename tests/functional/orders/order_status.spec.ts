@@ -33,7 +33,7 @@ async function stockOf(variant: ProductVariant) {
 async function placedOrder(quantity = 2) {
   const customer = await createCustomer()
   const shop = await createShop()
-  const variant = await createVariant(shop, { price: 1000, quantity: 5 })
+  const variant = await createVariant(shop, { priceMinor: 100_000, quantity: 5 })
   await fillCart({ userId: customer.id }, [{ variant, quantity }])
   const { orderNumbers } = await new CheckoutService().placeOrders(
     { user: customer },

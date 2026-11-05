@@ -117,9 +117,9 @@ test.group('Cart: totals [v1]', (group) => {
     const shopA = await createShop()
     const shopB = await createShop()
     const cart = new CartService()
-    const shirt = await createVariant(shopA, { price: 1200, quantity: 5 })
-    const sold = await createVariant(shopA, { price: 700, quantity: 1 })
-    const scarf = await createVariant(shopB, { price: 300, quantity: 5 })
+    const shirt = await createVariant(shopA, { priceMinor: 120_000, quantity: 5 })
+    const sold = await createVariant(shopA, { priceMinor: 70_000, quantity: 1 })
+    const scarf = await createVariant(shopB, { priceMinor: 30_000, quantity: 5 })
     await cart.add(owner, shirt.id, 2)
     await cart.add(owner, sold.id, 1)
     await cart.add(owner, scarf.id, 1)
@@ -131,9 +131,10 @@ test.group('Cart: totals [v1]', (group) => {
     const summary = cart.summarize(await cart.items(owner))
 
     assert.isTrue(summary.hasUnavailableItems)
-    assert.equal(summary.subtotal, 2400)
-    assert.equal(summary.shippingTotal, 100)
-    assert.equal(summary.total, 2500)
+    // Paisa: Rs 2,400 of shirts, Rs 100 delivery.
+    assert.strictEqual(summary.subtotalMinor, 240_000)
+    assert.strictEqual(summary.shippingTotalMinor, 10_000)
+    assert.strictEqual(summary.totalMinor, 250_000)
     const problems = summary.shops.flatMap((shopGroup) =>
       shopGroup.items.map((line) => [line.variant.id, line.problem])
     )

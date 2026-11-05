@@ -1,4 +1,4 @@
-import { formatPrice } from '~/lib/format'
+import { formatNPR } from '@shared/format/money'
 import { cn, getDiscountPercentage } from '~/lib/utils'
 import type { PriceSummary } from '../hooks/use_variant_selection'
 
@@ -11,9 +11,9 @@ type PriceTagProps = {
 export function PriceTag({ price, size = 'lg', className }: PriceTagProps) {
   if (!price) return null
 
-  const { comparePrice } = price
-  const hasDiscount = comparePrice !== null && comparePrice > price.price
-  const discount = hasDiscount ? getDiscountPercentage(comparePrice, price.price) : 0
+  const { comparePriceMinor } = price
+  const hasDiscount = comparePriceMinor !== null && comparePriceMinor > price.priceMinor
+  const discount = hasDiscount ? getDiscountPercentage(comparePriceMinor, price.priceMinor) : 0
 
   return (
     <div className={cn('flex flex-wrap items-baseline gap-x-3 gap-y-1', className)}>
@@ -33,7 +33,7 @@ export function PriceTag({ price, size = 'lg', className }: PriceTagProps) {
             From
           </span>
         )}
-        {formatPrice(price.price)}
+        {formatNPR(price.priceMinor)}
       </span>
       {hasDiscount && (
         <>
@@ -44,7 +44,7 @@ export function PriceTag({ price, size = 'lg', className }: PriceTagProps) {
             )}
           >
             <span className="sr-only">Was </span>
-            {formatPrice(comparePrice)}
+            {formatNPR(comparePriceMinor)}
           </span>
           {discount > 0 && size === 'lg' && (
             <span className="rounded-md bg-primary px-2 py-0.5 text-sm font-semibold text-primary-foreground">

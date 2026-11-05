@@ -44,16 +44,16 @@ export function CartShopGroup({ group, children }: CartShopGroupProps) {
 
       <ul className="divide-y divide-border/50 px-4">{children}</ul>
 
-      {group.subtotal > 0 && (
+      {group.subtotalMinor > 0 && (
         <footer className="space-y-3 border-t border-border/60 px-4 py-3">
           <FreeShippingProgress
             shopName={group.shop.name}
-            subtotal={group.subtotal}
-            shipping={group.shipping}
+            subtotalMinor={group.subtotalMinor}
+            shippingMinor={group.shippingMinor}
           />
           <dl className="flex items-baseline justify-between text-sm">
             <dt className="text-muted-foreground">Delivery from this shop</dt>
-            <dd className="tabular-nums">{deliveryFee(group.shipping)}</dd>
+            <dd className="tabular-nums">{deliveryFee(group.shippingMinor)}</dd>
           </dl>
         </footer>
       )}

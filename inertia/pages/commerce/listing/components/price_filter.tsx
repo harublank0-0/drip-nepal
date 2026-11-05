@@ -2,10 +2,11 @@ import { useId, useState, type SubmitEvent } from 'react'
 import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
 import { Label } from '~/components/ui/label'
-import { formatPrice } from '~/lib/format'
+import { formatNPR } from '@shared/format/money'
 
 type PriceFilterProps = {
-  bounds: { min: number; max: number }
+  // Whole rupees, like the URL's min and max.
+  bounds: { minRupees: number; maxRupees: number }
   min: number | null
   max: number | null
   onApply: (min: number | null, max: number | null) => void
@@ -78,11 +79,11 @@ export function PriceFilter({ bounds, min, max, onApply }: PriceFilterProps) {
           />
         </div>
       </div>
-      {bounds.max > 0 && (
+      {bounds.maxRupees > 0 && (
         <p className="text-xs text-muted-foreground">
           Prices here range from{' '}
-          <span className="whitespace-nowrap">{formatPrice(bounds.min)}</span> to{' '}
-          <span className="whitespace-nowrap">{formatPrice(bounds.max)}</span>
+          <span className="whitespace-nowrap">{formatNPR(bounds.minRupees * 100)}</span> to{' '}
+          <span className="whitespace-nowrap">{formatNPR(bounds.maxRupees * 100)}</span>
         </p>
       )}
       <Button type="submit" variant="outline" size="lg" className="w-full" disabled={isUnchanged}>

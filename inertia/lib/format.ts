@@ -1,13 +1,4 @@
-const priceFormatter = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 })
-
-/*
- * Formats an amount in Nepali rupees with South Asian digit grouping,
- * e.g. 125000 -> "Rs. 1,25,000". Uses Latin digits so the server render
- * and the browser render match.
- */
-export function formatPrice(amount: number) {
-  return `Rs. ${priceFormatter.format(amount)}`
-}
+// Money is formatted by formatNPR (shared/format/money.ts), from paisa.
 
 /*
  * Dates are shown in Nepal time (docs/01: times are in Asia/Kathmandu).

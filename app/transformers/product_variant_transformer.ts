@@ -15,8 +15,9 @@ export default class ProductVariantTransformer extends BaseTransformer<ProductVa
   toObject() {
     return {
       ...this.pick(this.resource, ['id', 'productId', 'sku', 'quantity', 'status']),
-      price: Number(this.resource.price),
-      comparePrice: this.resource.comparePrice === null ? null : Number(this.resource.comparePrice),
+      // Paisa (docs/04 §18.1).
+      priceMinor: this.resource.priceMinor,
+      comparePriceMinor: this.resource.comparePriceMinor,
       size: this.#option(VariantAttributes.SIZE.slug),
       color: this.#option(VariantAttributes.COLOR.slug),
     }

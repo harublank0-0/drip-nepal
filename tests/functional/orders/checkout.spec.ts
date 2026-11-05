@@ -58,8 +58,8 @@ test.group('Checkout: placing orders [v1]', (group) => {
     const customer = await createCustomer()
     const owner = { userId: customer.id }
     const shop = await createShop()
-    const shirt = await createVariant(shop, { price: 1200, quantity: 5 })
-    const cap = await createVariant(shop, { price: 450.5, quantity: 3 })
+    const shirt = await createVariant(shop, { priceMinor: 120_000, quantity: 5 })
+    const cap = await createVariant(shop, { priceMinor: 45_050, quantity: 3 })
     await fillCart(owner, [
       { variant: shirt, quantity: 2 },
       { variant: cap, quantity: 1 },
@@ -83,27 +83,40 @@ test.group('Checkout: placing orders [v1]', (group) => {
     assert.equal(order.status, OrderStatus.PENDING)
     assert.equal(order.paymentStatus, PaymentStatus.PENDING)
 
-    // 2 × 1,200 + 450.50 = 2,850.50: under Rs 5,000, so Rs 100 delivery.
-    assert.equal(Number(order.subtotal), 2850.5)
-    assert.equal(Number(order.shippingTotal), 100)
-    assert.equal(Number(order.grandTotal), 2950.5)
+    // In paisa: 2 × 1,200 + 450.50 = 2,850.50, under Rs 5,000, so Rs 100
+    // delivery. The amounts are numbers, not strings.
+    assert.strictEqual(order.subtotalMinor, 285_050)
+    assert.strictEqual(order.shippingTotalMinor, 10_000)
+    assert.strictEqual(order.grandTotalMinor, 295_050)
 
     const lines = order.items.map((item) => ({
       variant: item.productVariantId,
-      unitPrice: Number(item.unitPrice),
+      unitPriceMinor: item.unitPriceMinor,
       quantity: item.quantity,
-      subTotal: Number(item.subTotal),
+      subTotalMinor: item.subTotalMinor,
       shop: item.shopId,
     }))
     assert.sameDeepMembers(lines, [
-      { variant: shirt.id, unitPrice: 1200, quantity: 2, subTotal: 2400, shop: shop.id },
-      { variant: cap.id, unitPrice: 450.5, quantity: 1, subTotal: 450.5, shop: shop.id },
+      {
+        variant: shirt.id,
+        unitPriceMinor: 120_000,
+        quantity: 2,
+        subTotalMinor: 240_000,
+        shop: shop.id,
+      },
+      {
+        variant: cap.id,
+        unitPriceMinor: 45_050,
+        quantity: 1,
+        subTotalMinor: 45_050,
+        shop: shop.id,
+      },
     ])
 
     assert.lengthOf(order.payments, 1)
     assert.equal(order.payments[0].provider, PaymentProvider.CASH_ON_DELIVERY)
     assert.equal(order.payments[0].status, PaymentStatus.PENDING)
-    assert.equal(Number(order.payments[0].amount), 2950.5)
+    assert.strictEqual(order.payments[0].amountMinor, 295_050)
 
     assert.equal(await stockOf(shirt), 3)
     assert.equal(await stockOf(cap), 2)
@@ -124,8 +137,8 @@ test.group('Checkout: placing orders [v1]', (group) => {
     const shopA = await createShop()
     const shopB = await createShop()
     // Rs 5,000 exactly ships free; Rs 4,999 pays the fee.
-    const jacket = await createVariant(shopA, { price: 2500, quantity: 4 })
-    const kurta = await createVariant(shopB, { price: 4999, quantity: 1 })
+    const jacket = await createVariant(shopA, { priceMinor: 250_000, quantity: 4 })
+    const kurta = await createVariant(shopB, { priceMinor: 499_900, quantity: 1 })
     await fillCart({ userId: customer.id }, [
       { variant: jacket, quantity: 2 },
       { variant: kurta, quantity: 1 },
@@ -151,12 +164,12 @@ test.group('Checkout: placing orders [v1]', (group) => {
     const orderB = byShop.get(shopB.id)!
 
     assert.deepEqual(
-      [Number(orderA.subtotal), Number(orderA.shippingTotal), Number(orderA.grandTotal)],
-      [5000, 0, 5000]
+      [orderA.subtotalMinor, orderA.shippingTotalMinor, orderA.grandTotalMinor],
+      [500_000, 0, 500_000]
     )
     assert.deepEqual(
-      [Number(orderB.subtotal), Number(orderB.shippingTotal), Number(orderB.grandTotal)],
-      [4999, 100, 5099]
+      [orderB.subtotalMinor, orderB.shippingTotalMinor, orderB.grandTotalMinor],
+      [499_900, 10_000, 509_900]
     )
 
     // Each order holds only its own shop's lines and its own payment.
@@ -169,8 +182,8 @@ test.group('Checkout: placing orders [v1]', (group) => {
       [kurta.id]
     )
     assert.deepEqual(
-      orders.map((order) => order.payments.map((payment) => Number(payment.amount))),
-      orders.map((order) => [Number(order.grandTotal)])
+      orders.map((order) => order.payments.map((payment) => payment.amountMinor)),
+      orders.map((order) => [order.grandTotalMinor])
     )
 
     assert.equal(await stockOf(jacket), 2)
@@ -180,7 +193,7 @@ test.group('Checkout: placing orders [v1]', (group) => {
   test('a guest order has no user and saves no address', async ({ assert }) => {
     const owner = guestOwner()
     const shop = await createShop()
-    const variant = await createVariant(shop, { price: 800, quantity: 2 })
+    const variant = await createVariant(shop, { priceMinor: 80_000, quantity: 2 })
     await fillCart(owner, [{ variant, quantity: 1 }])
     const before = await UserAddress.all()
 
@@ -203,7 +216,7 @@ test.group('Checkout: placing orders [v1]', (group) => {
     const customer = await createCustomer()
     const address = await new CheckoutService().saveAddress(customer, addressPayload())
     const shop = await createShop()
-    const variant = await createVariant(shop, { price: 1500, quantity: 3 })
+    const variant = await createVariant(shop, { priceMinor: 150_000, quantity: 3 })
     await fillCart({ userId: customer.id }, [{ variant, quantity: 1 }])
 
     const { checkoutId } = await new CheckoutService().placeOrders(
@@ -213,7 +226,7 @@ test.group('Checkout: placing orders [v1]', (group) => {
 
     address.streetAddress = 'Somewhere else 99'
     await address.save()
-    variant.price = '2500.00'
+    variant.priceMinor = 250_000
     await variant.save()
 
     const order = await Order.query()
@@ -222,8 +235,8 @@ test.group('Checkout: placing orders [v1]', (group) => {
       .firstOrFail()
     assert.equal(order.userAddressId, address.id)
     assert.equal(order.shippingAddress.streetAddress, 'Thamel Marg 12')
-    assert.equal(Number(order.items[0].unitPrice), 1500)
-    assert.equal(Number(order.grandTotal), 1600)
+    assert.strictEqual(order.items[0].unitPriceMinor, 150_000)
+    assert.strictEqual(order.grandTotalMinor, 160_000)
   })
 })
 

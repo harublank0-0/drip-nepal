@@ -1,6 +1,6 @@
 import { X } from 'lucide-react'
 import { Button } from '~/components/ui/button'
-import { formatPrice } from '~/lib/format'
+import { formatNPR } from '@shared/format/money'
 import type { FacetOption, ListingFacets, ListingFilters } from '../types'
 
 type AppliedFiltersProps = {
@@ -15,10 +15,12 @@ function labelFor(options: FacetOption[], slug: string) {
   return options.find((option) => option.slug === slug)?.label ?? slug
 }
 
+// The URL's bounds are whole rupees.
 function priceLabel(min: number | null, max: number | null) {
-  if (min !== null && max !== null) return `${formatPrice(min)} – ${formatPrice(max)}`
-  if (min !== null) return `From ${formatPrice(min)}`
-  return `Up to ${formatPrice(max ?? 0)}`
+  const rupees = (value: number) => formatNPR(value * 100)
+  if (min !== null && max !== null) return `${rupees(min)} – ${rupees(max)}`
+  if (min !== null) return `From ${rupees(min)}`
+  return `Up to ${rupees(max ?? 0)}`
 }
 
 /*

@@ -3,7 +3,7 @@ import { Link } from '@adonisjs/inertia/react'
 import { ImageIcon } from 'lucide-react'
 import type { Data } from '@generated/data'
 import { cn, getDiscountPercentage } from '~/lib/utils'
-import { formatPrice } from '~/lib/format'
+import { formatNPR } from '@shared/format/money'
 
 type CatalogProductCardProps = {
   product: Data.ProductCard
@@ -17,8 +17,8 @@ type CatalogProductCardProps = {
 export function CatalogProductCard({ product, className }: CatalogProductCardProps) {
   const [isHovered, setIsHovered] = useState(false)
   const image = isHovered && product.hoverImage ? product.hoverImage : product.image
-  const discount = product.comparePrice
-    ? getDiscountPercentage(product.comparePrice, product.price)
+  const discount = product.comparePriceMinor
+    ? getDiscountPercentage(product.comparePriceMinor, product.priceMinor)
     : 0
 
   return (
@@ -64,10 +64,10 @@ export function CatalogProductCard({ product, className }: CatalogProductCardPro
           {product.name}
         </h3>
         <div className="mt-auto flex items-baseline gap-2 pt-1">
-          <span className="text-sm font-semibold">{formatPrice(product.price)}</span>
-          {product.comparePrice && (
+          <span className="text-sm font-semibold">{formatNPR(product.priceMinor)}</span>
+          {product.comparePriceMinor && (
             <span className="text-xs text-muted-foreground line-through">
-              {formatPrice(product.comparePrice)}
+              {formatNPR(product.comparePriceMinor)}
             </span>
           )}
         </div>

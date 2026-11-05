@@ -3,6 +3,7 @@ import { useForm, usePage } from '@inertiajs/react'
 import { Link } from '@adonisjs/inertia/react'
 import { ArrowLeftIcon, ImagePlusIcon, PlusIcon, Trash2Icon, XIcon } from 'lucide-react'
 import type { Data } from '@generated/data'
+import { minorToRupeesText, parseRupeesToMinor } from '@shared/format/money'
 import RootLayout from '~/layouts/root_layout'
 import { ShopDashboardLayout } from '~/layouts/shop_dashboard_layout'
 import { Button } from '~/components/ui/button'
@@ -29,6 +30,7 @@ type VariantRow = {
   size: string
   color: string
   sku: string
+  // Rupees as typed; sent as paisa (`priceMinor`, docs/04 §18.1).
   price: string
   comparePrice: string
   quantity: string
@@ -49,6 +51,8 @@ type ProductFormData = {
 }
 
 const MAX_IMAGES = 8
+
+const RUPEES_HINT = 'Enter an amount in rupees, such as 1299 or 1299.50'
 
 const GENDERS = [
   { value: 'men', label: 'Men' },
@@ -71,8 +75,9 @@ function toVariantRow(variant: Data.ProductVariant): VariantRow {
     size: variant.size ?? '',
     color: variant.color ?? '',
     sku: variant.sku,
-    price: String(variant.price),
-    comparePrice: variant.comparePrice === null ? '' : String(variant.comparePrice),
+    price: minorToRupeesText(variant.priceMinor),
+    comparePrice:
+      variant.comparePriceMinor === null ? '' : minorToRupeesText(variant.comparePriceMinor),
     quantity: String(variant.quantity),
     expectedQuantity: String(variant.quantity),
   }
@@ -184,6 +189,30 @@ export default function ShopProductFormPage({ product, categories }: PageProps) 
       ? `/api/v1/shops/${currentShop?.slug}/products/${product.id}`
       : `/api/v1/shops/${currentShop?.slug}/products`
 
+    // Prices go as whole paisa, converted from the rupees typed without a
+    // float (docs/04 §18.1). One that can't be read is refused here.
+    const unreadable: Record<string, string> = {}
+    const rows = form.data.variants.map((row, index) => {
+      const priceMinor = parseRupeesToMinor(row.price)
+      const comparePriceMinor =
+        row.comparePrice.trim() === '' ? null : parseRupeesToMinor(row.comparePrice)
+      if (priceMinor === null) {
+        unreadable[`variants.${index}.priceMinor`] =
+          row.price.trim() === '' ? 'Enter a price' : RUPEES_HINT
+      }
+      if (row.comparePrice.trim() !== '' && comparePriceMinor === null) {
+        unreadable[`variants.${index}.comparePriceMinor`] = RUPEES_HINT
+      }
+      const { price, comparePrice, ...rest } = row
+      return { ...rest, priceMinor, comparePriceMinor: comparePriceMinor ?? '' }
+    })
+    form.clearErrors()
+    if (Object.keys(unreadable).length > 0) {
+      form.setError(unreadable as Partial<Record<keyof ProductFormData, string>>)
+      return
+    }
+
+    form.transform((data) => ({ ...data, variants: rows }))
     form.post(url, { forceFormData: true, preserveScroll: true })
   }
 
@@ -369,7 +398,7 @@ export default function ShopProductFormPage({ product, categories }: PageProps) 
                         />
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-xs">Price (Rs.)</Label>
+                        <Label className="text-xs">Price (Rs)</Label>
                         <Input
                           type="number"
                           inputMode="decimal"
@@ -378,7 +407,7 @@ export default function ShopProductFormPage({ product, categories }: PageProps) 
                           value={variant.price}
                           onChange={(event) => updateVariant(index, 'price', event.target.value)}
                           placeholder="2500"
-                          aria-invalid={Boolean(error('price'))}
+                          aria-invalid={Boolean(error('priceMinor'))}
                         />
                       </div>
                       <div className="space-y-1">
@@ -393,7 +422,7 @@ export default function ShopProductFormPage({ product, categories }: PageProps) 
                             updateVariant(index, 'comparePrice', event.target.value)
                           }
                           placeholder="Optional"
-                          aria-invalid={Boolean(error('comparePrice'))}
+                          aria-invalid={Boolean(error('comparePriceMinor'))}
                         />
                       </div>
                       <div className="space-y-1">
@@ -439,8 +468,8 @@ export default function ShopProductFormPage({ product, categories }: PageProps) 
                     {[
                       'size',
                       'color',
-                      'price',
-                      'comparePrice',
+                      'priceMinor',
+                      'comparePriceMinor',
                       'quantity',
                       'expectedQuantity',
                       'sku',

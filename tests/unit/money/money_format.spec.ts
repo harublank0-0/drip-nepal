@@ -6,7 +6,7 @@ import { formatNPR, minorToRupeesText, parseRupeesToMinor } from '#shared/format
  * (docs/08 §5.11) and the parsing part of T-ARCH-013 (docs/04 §18.4).
  */
 
-const NBSP = ' '
+const NBSP = String.fromCharCode(0xa0)
 
 test.group('T-UI-020 money formatter [v1]', (group) => {
   group.tap((t) => t.tags(['@v1']))

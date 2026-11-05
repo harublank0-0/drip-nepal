@@ -6,7 +6,8 @@ import RootLayout from '~/layouts/root_layout'
 import { ShopDashboardLayout } from '~/layouts/shop_dashboard_layout'
 import { Pager } from '~/components/dashboard/pager'
 import { OrderStatusBadge } from '~/components/dashboard/order_status_badge'
-import { formatDate, formatPrice } from '~/lib/format'
+import { formatDate } from '~/lib/format'
+import { formatNPR } from '@shared/format/money'
 import { cn } from '~/lib/utils'
 import type { InertiaProps } from '~/types'
 import type { Paginated } from '~/types/pagination'
@@ -115,7 +116,9 @@ export default function ShopOrdersPage({ orders, filters, counts }: PageProps) {
                     </p>
                   </td>
                   <td className="px-4 py-3">{order.itemCount}</td>
-                  <td className="px-4 py-3 whitespace-nowrap">{formatPrice(order.grandTotal)}</td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    {formatNPR(order.grandTotalMinor)}
+                  </td>
                   <td className="px-4 py-3">
                     <OrderStatusBadge status={order.status} />
                   </td>

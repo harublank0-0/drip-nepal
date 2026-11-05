@@ -1,5 +1,6 @@
 /* eslint-disable react/no-unknown-property -- Inertia's <Head> replaces tags by their head-key */
 import { Head, usePage } from '@inertiajs/react'
+import { minorToRupeesText } from '@shared/format/money'
 import type { Data } from '@generated/data'
 
 const DEFAULT_DESCRIPTION =
@@ -11,8 +12,8 @@ type SocialMetaProps = {
   /* A path on this site or a full URL. */
   image?: string | null
   type?: 'website' | 'product'
-  /* Price in rupees, for product pages. */
-  price?: number
+  /* Price in paisa, for product pages. */
+  priceMinor?: number
 }
 
 /*
@@ -25,7 +26,7 @@ export function SocialMeta({
   description = DEFAULT_DESCRIPTION,
   image,
   type = 'website',
-  price,
+  priceMinor,
 }: SocialMetaProps) {
   const { props, url } = usePage<Data.SharedProps>()
   const absolute = (path: string) => (/^https?:\/\//.test(path) ? path : `${props.appUrl}${path}`)
@@ -42,14 +43,14 @@ export function SocialMeta({
       <meta head-key="og:url" property="og:url" content={absolute(url)} />
       <meta head-key="og:image" property="og:image" content={imageUrl} />
       <meta head-key="twitter:card" name="twitter:card" content="summary_large_image" />
-      {price !== undefined && (
+      {priceMinor !== undefined && (
         <meta
           head-key="product:price:amount"
           property="product:price:amount"
-          content={String(price)}
+          content={minorToRupeesText(priceMinor)}
         />
       )}
-      {price !== undefined && (
+      {priceMinor !== undefined && (
         <meta head-key="product:price:currency" property="product:price:currency" content="NPR" />
       )}
     </Head>
