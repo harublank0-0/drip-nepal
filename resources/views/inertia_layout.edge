@@ -1,7 +1,41 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en" class="{{ themeClass || 'light' }}">
   <head>
     <meta charset="utf-8" />
+    {{-- Resolves "system" and migrates old preferences before the first paint. --}}
+    <script nonce="{{ cspNonce || '' }}">
+      (function () {
+        try {
+          function cookie(name) {
+            var match = document.cookie.match(new RegExp('(?:^|;\\s*)' + name + '=([^;]*)(?:;|$)'))
+            return match ? match[1] : null
+          }
+          function valid(theme) {
+            return theme === 'light' || theme === 'dark' || theme === 'system'
+          }
+          var theme = cookie('dn_theme')
+          if (theme === null) {
+            var legacy = cookie('drip_theme')
+            if (!valid(legacy)) {
+              try { legacy = localStorage.getItem('drip-ui-theme') } catch (error) {}
+            }
+            if (valid(legacy)) {
+              theme = legacy
+              var secure = location.protocol === 'https:' ? '; Secure' : ''
+              document.cookie = 'dn_theme=' + theme + '; Path=/; Max-Age=31536000; SameSite=Lax' + secure
+              document.cookie = 'drip_theme=; Path=/; Max-Age=0; SameSite=Lax' + secure
+              try { localStorage.removeItem('drip-ui-theme') } catch (error) {}
+            }
+          }
+          if (!valid(theme)) theme = 'light'
+          if (theme === 'system') {
+            theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+          }
+          document.documentElement.classList.remove('light', 'dark')
+          document.documentElement.classList.add(theme)
+        } catch (error) {}
+      })()
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#000000" />
     <link rel="icon" type="image/png" href="/favicon.png" />

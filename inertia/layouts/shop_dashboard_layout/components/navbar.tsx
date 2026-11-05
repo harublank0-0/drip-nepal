@@ -3,9 +3,6 @@ import { usePage } from '@inertiajs/react'
 import { Link, useRouter } from '@adonisjs/inertia/react'
 import {
   PlusIcon,
-  SunIcon,
-  MoonIcon,
-  MonitorIcon,
   ChevronDownIcon,
   LogOutIcon,
   StoreIcon,
@@ -28,12 +25,11 @@ import {
   DropdownMenuTrigger,
 } from '~/components/ui/dropdown-menu'
 import { useDashboard } from './dashboard_context'
-import { useTheme } from '~/components/providers/theme_provider'
+import { ThemeMenu } from '~/components/theme_toggle'
 
 export function Navbar() {
   const { toggleSidebar, setMobileNavOpen, orderAlerts } = useDashboard()
   const { pending, alertsOn, notificationsAllowed, enableAlerts, disableAlerts } = orderAlerts
-  const { theme, setTheme } = useTheme()
   const [scrolled, setScrolled] = useState(false)
   const { user, shops, currentShop } = usePage<Data.SharedProps>().props
   const router = useRouter()
@@ -156,33 +152,7 @@ export function Navbar() {
         </DropdownMenu>
       )}
 
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon-sm" aria-label="Toggle theme">
-            {theme === 'dark' ? (
-              <MoonIcon className="size-4" />
-            ) : theme === 'light' ? (
-              <SunIcon className="size-4" />
-            ) : (
-              <MonitorIcon className="size-4" />
-            )}
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={() => setTheme('light')}>
-            <SunIcon className="mr-2 size-4" />
-            Light
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setTheme('dark')}>
-            <MoonIcon className="mr-2 size-4" />
-            Dark
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setTheme('system')}>
-            <MonitorIcon className="mr-2 size-4" />
-            System
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <ThemeMenu />
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>

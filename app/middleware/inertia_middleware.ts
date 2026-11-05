@@ -8,6 +8,18 @@ import { guestToken } from '#modules/orders/customer'
 import { shopRegistrationOpen } from '#config/marketplace'
 import { appUrl, support } from '#config/storefront'
 
+/*
+ * The theme the visitor picked, from the `dn_theme` cookie the theme
+ * toggle writes (inertia/components/providers/theme_provider.tsx).
+ */
+const THEMES = ['light', 'dark', 'system'] as const
+type Theme = (typeof THEMES)[number]
+
+function chosenTheme(ctx: HttpContext): Theme {
+  const value = ctx.request.plainCookie('dn_theme', { encoded: false })
+  return THEMES.includes(value) ? (value as Theme) : 'light'
+}
+
 export default class InertiaMiddleware extends BaseInertiaMiddleware {
   async share(ctx: HttpContext) {
     /**
@@ -68,6 +80,10 @@ export default class InertiaMiddleware extends BaseInertiaMiddleware {
       support,
       appUrl,
       /*
+       * The saved theme, so the page renders the toggle in the right state.
+       */
+      theme: ctx.inertia.always(chosenTheme(ctx)),
+      /*
        * The shop whose dashboard is open. Only set on routes that use the
        * `shopAccess` middleware.
        */
@@ -81,6 +97,11 @@ export default class InertiaMiddleware extends BaseInertiaMiddleware {
 
   async handle(ctx: HttpContext, next: NextFn) {
     await this.init(ctx)
+
+    // The <html> class the page is sent with, so it paints in the saved
+    // theme from the start. "system" is resolved in the browser by the
+    // script in inertia_layout.edge.
+    ctx.view.share({ themeClass: chosenTheme(ctx) === 'dark' ? 'dark' : 'light' })
 
     const output = await next()
     this.dispose(ctx)

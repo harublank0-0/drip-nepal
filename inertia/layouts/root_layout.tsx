@@ -2,9 +2,14 @@ import { type Data } from '@generated/data'
 import { toast, Toaster } from 'sonner'
 import { Head, usePage } from '@inertiajs/react'
 import { type ReactElement, useEffect } from 'react'
-import { ThemeProvider } from '~/components/providers/theme_provider'
+import { ThemeProvider, useTheme } from '~/components/providers/theme_provider'
 import { TooltipProvider } from '~/components/ui/tooltip'
 import { SocialMeta } from '~/components/seo/social_meta'
+
+function ThemedToaster() {
+  const { theme } = useTheme()
+  return <Toaster theme={theme} position="top-center" richColors />
+}
 
 export default function RootLayout({ children }: { children: ReactElement<Data.SharedProps> }) {
   const { url } = usePage()
@@ -26,10 +31,10 @@ export default function RootLayout({ children }: { children: ReactElement<Data.S
       {/* Default title; a page's own <Head title> overrides it. */}
       <Head title="" />
       <SocialMeta />
-      <ThemeProvider defaultTheme="dark">
+      <ThemeProvider initialTheme={children.props.theme}>
         <TooltipProvider>
           {children}
-          <Toaster position="top-center" richColors />
+          <ThemedToaster />
         </TooltipProvider>
       </ThemeProvider>
     </>

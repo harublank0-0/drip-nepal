@@ -11,7 +11,7 @@ const shieldConfig = defineConfig({
      * Enforced in production only: the dev server injects an inline React
      * refresh script and a websocket for hot reload (RF-34).
      *
-     * Scripts: only this origin (the built Vite bundles; no inline scripts).
+     * Scripts: this origin's Vite bundles and the nonce-bearing theme script.
      * Styles: inline allowed, because Radix and framer-motion set style
      * attributes and sonner injects a <style> element (OD-52 option a).
      * Images: this origin and uploads, data: and blob: for previews in the
@@ -20,7 +20,9 @@ const shieldConfig = defineConfig({
     enabled: app.inProduction,
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'"],
+      // '@nonce' admits the one inline script in inertia_layout.edge, which
+      // applies the saved theme before the first paint.
+      scriptSrc: ["'self'", '@nonce'],
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", 'data:', 'blob:', 'https://images.unsplash.com'],
       fontSrc: ["'self'", 'data:'],

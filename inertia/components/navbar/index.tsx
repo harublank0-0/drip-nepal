@@ -26,6 +26,7 @@ import { Dialog, DialogContent, DialogTitle } from '~/components/ui/dialog'
 import { VisuallyHidden } from 'radix-ui'
 import { motion, AnimatePresence } from 'framer-motion'
 import { SearchModal } from '~/components/search/search_modal'
+import { ThemeMenu, ThemeSwitch } from '~/components/theme_toggle'
 import type { Data } from '@generated/data'
 import { Show } from '~/components/ui/show'
 import { Typography } from '~/components/ui/typography'
@@ -191,6 +192,11 @@ export const NavBar = () => {
                   )}
                 </Link>
               </Button>
+            </li>
+
+            {/* Theme (in the menu on phones) */}
+            <li className="hidden md:block">
+              <ThemeMenu className="size-8" />
             </li>
 
             {/* Profile */}
@@ -427,12 +433,22 @@ export const NavBar = () => {
                       <Button asChild className="h-11 rounded-xl">
                         <Link route="ui.auth.user_session.create">Log in</Link>
                       </Button>
-                      <Button asChild variant="outline" className="h-11 rounded-xl">
+                      {/* The menu is black in both themes, so its colours are fixed. */}
+                      <Button
+                        asChild
+                        variant="outline"
+                        className="h-11 rounded-xl border-white/20 bg-transparent text-white hover:bg-white/10 hover:text-white dark:bg-transparent"
+                      >
                         <Link route="ui.auth.user_registration.create">Create account</Link>
                       </Button>
                     </div>
                   </>
                 )}
+              </div>
+
+              <div className="mx-5 mt-4">
+                <p className="mb-2 px-1 text-xs text-white/50">Theme</p>
+                <ThemeSwitch className="rounded-xl bg-white/5 p-1" />
               </div>
 
               <nav aria-label="Help" className="mx-5 mt-4 mb-8">

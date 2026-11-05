@@ -44,7 +44,7 @@ jobs:
           node ace build
           test -f build/ssr/ssr.js
 
-  # The unit, functional and concurrency suites against PostgreSQL 18.4, the
+  # The unit, functional, concurrency and browser suites against PostgreSQL 18.4, the
   # production version (docs/10 §3.2). The test runner rebuilds the
   # dripnepal_test database at the start of every run.
   tests:
@@ -91,7 +91,9 @@ jobs:
       # A throwaway key for this run only; it signs nothing that outlives it.
       - name: App key for the test run
         run: echo "APP_KEY=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
-      - name: Unit, functional and concurrency suites
+      - name: Chromium for browser tests
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Unit, functional, concurrency and browser suites
         run: pnpm test
 
   image:

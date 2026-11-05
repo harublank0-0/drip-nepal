@@ -9,14 +9,14 @@ How to get a test database, run the suites, and write tests that prove something
 
 ## What is already here
 
-| Piece          | Where                                                                               | What it does                                                                                                                                                          |
-| -------------- | ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Suites         | `adonisrc.ts`                                                                       | `unit` (no database), `functional` (database, each test rolled back), `concurrency` (database, real commits), `browser` (configured, no specs yet)                    |
-| Database setup | `tests/support/database.ts`, called from `configureSuite` in `tests/bootstrap.ts`   | Once per run: `db:wipe`, `migration:run --no-schema-generate`, then the reference seeders (categories, shop categories, attributes, roles)                            |
-| Isolation      | `tests/bootstrap.ts`                                                                | Every `functional` test runs inside a global transaction that is rolled back; service `db.transaction()` calls become savepoints. `concurrency` tests commit for real |
-| Fixtures       | `tests/support/fixtures.ts`                                                         | `createCustomer`, `createShop`, `createVariant`, `fillCart`, `guestOwner`, `addressPayload`; every call makes unique rows                                             |
-| Examples       | `tests/functional/orders/*.spec.ts`, `tests/concurrency/orders/stock_races.spec.ts` | Checkout, order status, cart, and the stock and status races                                                                                                          |
-| Safety guard   | `start/env_policy.ts`                                                               | Under `NODE_ENV=test`, boot refuses any `DB_DATABASE` that doesn't end in `_test`, so a test run can only ever wipe a test database                                   |
+| Piece          | Where                                                                               | What it does                                                                                                                                                           |
+| -------------- | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Suites         | `adonisrc.ts`                                                                       | `unit` (no database), `functional` (database, each test rolled back), `concurrency` (database, real commits), `browser` (theme SSR, hydration and preference controls) |
+| Database setup | `tests/support/database.ts`, called from `configureSuite` in `tests/bootstrap.ts`   | Once per run: `db:wipe`, `migration:run --no-schema-generate`, then the reference seeders (categories, shop categories, attributes, roles)                             |
+| Isolation      | `tests/bootstrap.ts`                                                                | Every `functional` test runs inside a global transaction that is rolled back; service `db.transaction()` calls become savepoints. `concurrency` tests commit for real  |
+| Fixtures       | `tests/support/fixtures.ts`                                                         | `createCustomer`, `createShop`, `createVariant`, `fillCart`, `guestOwner`, `addressPayload`; every call makes unique rows                                              |
+| Examples       | `tests/functional/orders/*.spec.ts`, `tests/concurrency/orders/stock_races.spec.ts` | Checkout, order status, cart, and the stock and status races                                                                                                           |
+| Safety guard   | `start/env_policy.ts`                                                               | Under `NODE_ENV=test`, boot refuses any `DB_DATABASE` that doesn't end in `_test`, so a test run can only ever wipe a test database                                    |
 
 ## 1. Get a database
 
