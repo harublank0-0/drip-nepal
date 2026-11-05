@@ -2329,7 +2329,7 @@ The ADR line is the checkbox [ADR-0001](adr/0001-record-architecture-decisions.m
 | `.husky/pre-push`                  | `pnpm lint` (fails today)                                     | **Rewrite**: `pnpm typecheck` + `node ace test unit`                                   | A5-02, IAM-29       | M0        |
 | Typecheck                          | Not run anywhere; 1 server and 38 client errors               | **Fix** the errors; run in pre-push and CI                                             | A5-02               | M0        |
 | `.github/pull_request_template.md` | Does not exist                                                | **Create** (§11.5)                                                                     | RF-09               | M0        |
-| Branch protection on `main`        | Direct commits in history                                     | **Configure** (§11.6) once OD-56 makes it available [Open OD-56]                       | A5-04               | M0        |
+| Branch protection on `main`        | Direct commits in history                                     | **Configure** (§11.6) if OD-56 makes it available [Open OD-56]                         | A5-04               | M0        |
 | `.prettierignore`                  | `.adonisjs`, `node_modules`, `build`                          | **Fix**: add `database/schema.ts`, `pnpm-lock.yaml`                                    | —                   | M0        |
 
 ---
