@@ -14,7 +14,8 @@ import RootLayout from '~/layouts/root_layout'
 import { ShopDashboardLayout } from '~/layouts/shop_dashboard_layout'
 import { Button } from '~/components/ui/button'
 import { OrderStatusBadge } from '~/components/dashboard/order_status_badge'
-import { formatDate, formatPrice } from '~/lib/format'
+import { formatDate } from '~/lib/format'
+import { formatNPR } from '@shared/format/money'
 import type { InertiaProps } from '~/types'
 
 type PageProps = InertiaProps<{
@@ -22,7 +23,7 @@ type PageProps = InertiaProps<{
     ordersToConfirm: number
     ordersToShip: number
     deliveredOrders: number
-    revenue: number
+    revenueMinor: number
     activeProducts: number
     draftProducts: number
   }
@@ -127,7 +128,7 @@ export default function ShopDashboardPage({ stats, lowStock, recentOrders }: Pag
         />
         <StatCard
           label="Collected (COD)"
-          value={formatPrice(stats.revenue)}
+          value={formatNPR(stats.revenueMinor)}
           hint={`${stats.deliveredOrders} delivered orders`}
           icon={WalletIcon}
         />
@@ -167,7 +168,9 @@ export default function ShopDashboardPage({ stats, lowStock, recentOrders }: Pag
                       </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-3">
-                      <span className="text-sm font-medium">{formatPrice(order.grandTotal)}</span>
+                      <span className="text-sm font-medium">
+                        {formatNPR(order.grandTotalMinor)}
+                      </span>
                       <OrderStatusBadge status={order.status} />
                     </div>
                   </Link>

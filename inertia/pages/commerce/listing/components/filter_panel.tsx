@@ -57,7 +57,7 @@ export function FilterPanel({
   onCategoryChange,
 }: FilterPanelProps) {
   const showCategories = kind !== 'category' && facets.categories.length > 0
-  const showPrice = facets.price.max > 0 || filters.min !== null || filters.max !== null
+  const showPrice = facets.price.maxRupees > 0 || filters.min !== null || filters.max !== null
 
   if (
     kind === 'search' &&

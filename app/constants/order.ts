@@ -40,15 +40,6 @@ export const PaymentProvider = {
   CASH_ON_DELIVERY: 'cod',
 } as const
 
-/*
- * Each shop ships its part of a checkout separately, so the delivery fee is
- * per shop. Orders at or above the threshold ship free.
- */
-export const SHIPPING_FEE_PER_SHOP = 100
-export const FREE_SHIPPING_THRESHOLD = 5000
+// The delivery fee and free-delivery threshold: shared/constants/delivery.ts.
 
 export const MAX_QUANTITY_PER_ITEM = 10
-
-export function shippingFeeFor(subtotal: number) {
-  return subtotal >= FREE_SHIPPING_THRESHOLD ? 0 : SHIPPING_FEE_PER_SHOP
-}

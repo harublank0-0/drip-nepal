@@ -1,7 +1,7 @@
 import { Link } from '@adonisjs/inertia/react'
 import type { Data } from '@generated/data'
 import { ProductThumb } from '~/components/commerce/product_thumb'
-import { formatPrice } from '~/lib/format'
+import { formatNPR } from '@shared/format/money'
 
 /*
  * The lines of a placed order. Names and prices are the snapshot taken at
@@ -29,10 +29,12 @@ export function OrderItemsList({ items }: { items: Data.Order['items'] }) {
               <p className="text-xs text-muted-foreground">{item.variantLabel}</p>
             )}
             <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">
-              {item.quantity} × {formatPrice(item.unitPrice)}
+              {item.quantity} × {formatNPR(item.unitPriceMinor)}
             </p>
           </div>
-          <p className="shrink-0 text-sm font-medium tabular-nums">{formatPrice(item.subTotal)}</p>
+          <p className="shrink-0 text-sm font-medium tabular-nums">
+            {formatNPR(item.subTotalMinor)}
+          </p>
         </li>
       ))}
     </ul>

@@ -3,7 +3,7 @@ import { AlertCircleIcon, StoreIcon } from 'lucide-react'
 import type { Data } from '@generated/data'
 import { PriceRow, deliveryFee } from '~/components/commerce/price_rows'
 import { ProductThumb } from '~/components/commerce/product_thumb'
-import { formatPrice } from '~/lib/format'
+import { formatNPR } from '@shared/format/money'
 import { orderableQuantity, pluralize } from '~/lib/order'
 import { cn } from '~/lib/utils'
 
@@ -49,7 +49,7 @@ export function CheckoutReview({ cart }: { cart: Data.CartSummary }) {
                     <p className="text-xs text-muted-foreground">{line.variant.label}</p>
                   )}
                   <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">
-                    {line.quantity} × {formatPrice(line.variant.price)}
+                    {line.quantity} × {formatNPR(line.variant.priceMinor)}
                   </p>
                   {line.problem && (
                     <p className="mt-1 flex items-center gap-1 text-xs font-medium text-destructive">
@@ -64,19 +64,19 @@ export function CheckoutReview({ cart }: { cart: Data.CartSummary }) {
                     !line.available && 'text-muted-foreground line-through'
                   )}
                 >
-                  {formatPrice(line.lineTotal)}
+                  {formatNPR(line.lineTotalMinor)}
                 </p>
               </li>
             ))}
           </ul>
 
-          {group.subtotal > 0 && (
+          {group.subtotalMinor > 0 && (
             <dl className="space-y-1 border-t border-border/60 px-4 py-2.5 text-sm">
               <PriceRow
                 label={`Subtotal (${pluralize(orderableQuantity(group.items), 'item')})`}
-                value={formatPrice(group.subtotal)}
+                value={formatNPR(group.subtotalMinor)}
               />
-              <PriceRow label="Delivery" value={deliveryFee(group.shipping)} />
+              <PriceRow label="Delivery" value={deliveryFee(group.shippingMinor)} />
             </dl>
           )}
         </div>

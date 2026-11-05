@@ -33,7 +33,7 @@ async function payload(rows: Row[], name = 'Cotton kurta') {
     categoryId: category.id,
     gender: ProductGender.UNISEX,
     status: ProductStatus.ACTIVE,
-    variants: rows.map((row) => ({ price: 1000, quantity: 5, ...row })),
+    variants: rows.map((row) => ({ priceMinor: 100_000, quantity: 5, ...row })),
     keepMediaIds: [],
   } as ProductPayload
 }

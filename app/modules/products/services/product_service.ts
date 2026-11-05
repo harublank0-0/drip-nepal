@@ -249,8 +249,8 @@ export default class ProductService {
       variant.merge({
         productId: product.id,
         sku: input.sku ?? variant.sku ?? this.#makeSku(shop),
-        price: input.price.toFixed(2),
-        comparePrice: typeof input.comparePrice === 'number' ? input.comparePrice.toFixed(2) : null,
+        priceMinor: input.priceMinor,
+        comparePriceMinor: input.comparePriceMinor ?? null,
         status: VariantStatus.ACTIVE,
       })
       variant.quantity = stored ? this.#stockToSave(stored, input, index) : input.quantity
@@ -351,9 +351,12 @@ export default class ProductService {
         fieldError(`variants.${index}.id`, 'This variant does not belong to the product')
       }
 
-      if (typeof input.comparePrice === 'number' && input.comparePrice <= input.price) {
+      if (
+        typeof input.comparePriceMinor === 'number' &&
+        input.comparePriceMinor <= input.priceMinor
+      ) {
         fieldError(
-          `variants.${index}.comparePrice`,
+          `variants.${index}.comparePriceMinor`,
           'The compare-at price must be higher than the price'
         )
       }

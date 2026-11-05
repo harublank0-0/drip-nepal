@@ -20,7 +20,7 @@ type PageProps = InertiaProps<{
 }>
 
 function lowestPrice(product: Data.Product) {
-  const prices = (product.variants ?? []).map((variant) => variant.price)
+  const prices = (product.variants ?? []).map((variant) => variant.priceMinor)
   return prices.length > 0 ? Math.min(...prices) : undefined
 }
 
@@ -56,7 +56,7 @@ export default function ProductDetailPage({ product, related }: PageProps) {
           `${product.name} from ${product.shop?.name ?? 'Drip Nepal'}. Cash on delivery across Nepal.`
         }
         image={product.media?.[0]?.url}
-        price={lowestPrice(product)}
+        priceMinor={lowestPrice(product)}
       />
 
       <div className="mx-auto max-w-7xl px-4 pt-6 pb-8 md:px-8 md:pt-10 md:pb-16">

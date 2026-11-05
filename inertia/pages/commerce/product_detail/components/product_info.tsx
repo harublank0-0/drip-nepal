@@ -5,8 +5,11 @@ import { Button } from '~/components/ui/button'
 import { Separator } from '~/components/ui/separator'
 import { Spinner } from '~/components/ui/spinner'
 import { cn } from '~/lib/utils'
-import { formatPrice } from '~/lib/format'
-import { FREE_SHIPPING_THRESHOLD, SHIPPING_FEE_PER_SHOP } from '~/lib/order'
+import { formatNPR } from '@shared/format/money'
+import {
+  FREE_SHIPPING_THRESHOLD_MINOR,
+  SHIPPING_FEE_PER_SHOP_MINOR,
+} from '@shared/constants/delivery'
 import { RETURN_DAYS } from '~/lib/policies'
 import {
   LOW_STOCK_THRESHOLD,
@@ -167,8 +170,8 @@ function DeliveryInfo() {
     },
     {
       icon: Truck,
-      title: `Delivery ${formatPrice(SHIPPING_FEE_PER_SHOP)}`,
-      text: `Free when your order from this shop is ${formatPrice(FREE_SHIPPING_THRESHOLD)} or more.`,
+      title: `Delivery ${formatNPR(SHIPPING_FEE_PER_SHOP_MINOR)}`,
+      text: `Free when your order from this shop is ${formatNPR(FREE_SHIPPING_THRESHOLD_MINOR)} or more.`,
     },
     {
       icon: RotateCcw,

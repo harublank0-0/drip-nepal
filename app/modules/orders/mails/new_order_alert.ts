@@ -1,16 +1,8 @@
 import { BaseMail } from '@adonisjs/mail'
 import env from '#start/env'
 import type Order from '#models/order'
-
-const rupees = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 })
-
-/*
- * The storefront's format (formatPrice in inertia/lib/format.ts), e.g.
- * "Rs. 1,25,000".
- */
-function formatRupees(amount: number) {
-  return `Rs. ${rupees.format(amount)}`
-}
+// The storefront's money format, so the email reads as the pages do.
+import { formatNPR } from '#shared/format/money'
 
 function escapeHtml(text: string) {
   return text
@@ -43,17 +35,17 @@ export default class NewOrderAlert extends BaseMail {
   prepare() {
     const order = this.order
     const shop = order.shop
-    const total = formatRupees(Number(order.grandTotal))
+    const total = formatNPR(order.grandTotalMinor)
     const link = new URL(`/shops/${shop.slug}/orders/${order.orderNumber}`, env.get('APP_URL'))
     const items = order.items.map((item) => {
       const options = item.productVariantSnapshot ? ` (${item.productVariantSnapshot})` : ''
-      return `${item.productNameSnapshot} × ${item.quantity}${options}: ${formatRupees(Number(item.subTotal))}`
+      return `${item.productNameSnapshot} × ${item.quantity}${options}: ${formatNPR(item.subTotalMinor)}`
     })
     const who = order.userId
       ? 'Placed from a customer account.'
       : 'Guest order: call the customer to confirm it.'
     const summary = [
-      `Delivery: ${formatRupees(Number(order.shippingTotal))}`,
+      `Delivery: ${formatNPR(order.shippingTotalMinor)}`,
       `Total: ${total} (cash on delivery)`,
     ]
 

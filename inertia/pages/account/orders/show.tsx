@@ -34,7 +34,8 @@ import {
 } from '~/components/ui/dialog'
 import { Spinner } from '~/components/ui/spinner'
 import { ContactOptions, hasContact, useSupport } from '~/components/support/contact_options'
-import { formatDate, formatPrice } from '~/lib/format'
+import { formatDate } from '~/lib/format'
+import { formatNPR } from '@shared/format/money'
 import { cancelOrderUrl, pluralize, trackCancelUrl } from '~/lib/order'
 import type { InertiaProps } from '~/types'
 
@@ -52,7 +53,7 @@ function statusMessage(order: Data.Order) {
     case 'confirmed':
       return `${shop} confirmed your order and is getting it ready.`
     case 'shipped':
-      return `Your order is on its way. Keep ${formatPrice(order.grandTotal)} ready in cash.`
+      return `Your order is on its way. Keep ${formatNPR(order.grandTotalMinor)} ready in cash.`
     case 'delivered':
       return `Delivered. Thanks for shopping with ${shop}.`
     default:
@@ -67,7 +68,7 @@ function paymentMessage(order: Data.Order) {
     case 'voided':
       return 'The order was cancelled before delivery, so there is nothing to pay.'
     default:
-      return `Pay ${formatPrice(order.grandTotal)} in cash when your order arrives.`
+      return `Pay ${formatNPR(order.grandTotalMinor)} in cash when your order arrives.`
   }
 }
 
@@ -121,7 +122,7 @@ export default function AccountOrderPage({ order, guest = false }: PageProps) {
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
               Placed {formatDate(order.placedAt ?? order.createdAt)} ·{' '}
-              {pluralize(order.itemCount, 'item')} · {formatPrice(order.grandTotal)}
+              {pluralize(order.itemCount, 'item')} · {formatNPR(order.grandTotalMinor)}
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               <OrderStatusBadge status={order.status} />
@@ -191,10 +192,10 @@ export default function AccountOrderPage({ order, guest = false }: PageProps) {
             </div>
             <div className="border-t border-border/60 px-4 py-4">
               <PriceRows
-                subtotal={order.subtotal}
-                shipping={order.shippingTotal}
-                discount={order.discountTotal}
-                total={order.grandTotal}
+                subtotalMinor={order.subtotalMinor}
+                shippingMinor={order.shippingTotalMinor}
+                discountMinor={order.discountTotalMinor}
+                totalMinor={order.grandTotalMinor}
               />
             </div>
           </section>

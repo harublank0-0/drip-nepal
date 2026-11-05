@@ -10,7 +10,7 @@ import { OrderStatusBadge } from '~/components/commerce/orders/order_status_badg
 import { PriceRows } from '~/components/commerce/price_rows'
 import { Button } from '~/components/ui/button'
 import { OrderIds } from '~/components/commerce/orders/order_ids'
-import { formatPrice } from '~/lib/format'
+import { formatNPR } from '@shared/format/money'
 import { pluralize } from '~/lib/order'
 import type { InertiaProps } from '~/types'
 
@@ -22,7 +22,7 @@ type PageProps = InertiaProps<{
 
 export default function CheckoutSuccessPage({ orders, guest = false }: PageProps) {
   const count = orders.length
-  const total = orders.reduce((sum, order) => sum + order.grandTotal, 0)
+  const total = orders.reduce((sum, order) => sum + order.grandTotalMinor, 0)
   /* All orders of a checkout go to the same address with the same note. */
   const address = orders[0]?.shippingAddress
   const notes = orders[0]?.notes
@@ -57,7 +57,7 @@ export default function CheckoutSuccessPage({ orders, guest = false }: PageProps
           <BanknoteIcon className="mt-0.5 size-5 shrink-0 text-primary" aria-hidden="true" />
           <div className="text-sm">
             <p className="font-medium">
-              Cash on delivery · <span className="tabular-nums">{formatPrice(total)}</span>
+              Cash on delivery · <span className="tabular-nums">{formatNPR(total)}</span>
             </p>
             <p className="mt-0.5 text-muted-foreground">
               {count > 1
@@ -101,10 +101,10 @@ export default function CheckoutSuccessPage({ orders, guest = false }: PageProps
               </div>
               <div className="border-t border-border/60 px-4 py-3">
                 <PriceRows
-                  subtotal={order.subtotal}
-                  shipping={order.shippingTotal}
-                  discount={order.discountTotal}
-                  total={order.grandTotal}
+                  subtotalMinor={order.subtotalMinor}
+                  shippingMinor={order.shippingTotalMinor}
+                  discountMinor={order.discountTotalMinor}
+                  totalMinor={order.grandTotalMinor}
                   totalLabel="To pay on delivery"
                 />
               </div>

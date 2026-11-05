@@ -11,7 +11,7 @@ import { CartSummary } from '~/components/commerce/cart/cart_summary'
 import { EmptyCart } from '~/components/commerce/cart/empty_cart'
 import { Alert, AlertDescription, AlertTitle } from '~/components/ui/alert'
 import { Button } from '~/components/ui/button'
-import { formatPrice } from '~/lib/format'
+import { formatNPR } from '@shared/format/money'
 import { CART_ITEMS_URL, pluralize } from '~/lib/order'
 import type { InertiaProps } from '~/types'
 
@@ -122,7 +122,7 @@ export default function CartPage({ cart }: PageProps) {
         <div className="mx-auto flex max-w-lg items-center gap-4">
           <div className="min-w-0 flex-1">
             <p className="text-xs text-muted-foreground">Total</p>
-            <p className="text-base font-semibold tabular-nums">{formatPrice(cart.total)}</p>
+            <p className="text-base font-semibold tabular-nums">{formatNPR(cart.totalMinor)}</p>
           </div>
           {cart.hasUnavailableItems ? (
             <Button size="lg" className="h-11 flex-1 rounded-xl" disabled>

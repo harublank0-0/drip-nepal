@@ -8,6 +8,7 @@ import Category from '#models/category'
 import Product from '#models/product'
 import ProductMedia from '#models/product_media'
 import ProductVariant from '#models/product_variant'
+import { parseRupeesToMinor } from '#shared/format/money'
 import Shop from '#models/shop'
 import ShopAddress from '#models/shop_address'
 import User from '#models/user'
@@ -37,6 +38,16 @@ const PHOTOS = {
   men: photo('1500648767791-00dcc994a43e'),
 }
 
+/*
+ * A demo price in rupees as paisa, by text as docs/04 §18.1 requires
+ * (1299.99 * 100 is 129998.99999999999).
+ */
+function paisaOf(rupees: number) {
+  const minor = parseRupeesToMinor(String(rupees))
+  if (minor === null) throw new Error(`Demo price ${rupees} is not an amount in rupees`)
+  return minor
+}
+
 type DemoProduct = {
   name: string
   category: string
@@ -44,6 +55,7 @@ type DemoProduct = {
   brand?: string
   description: string
   photos: string[]
+  // Whole rupees, for reading; stored as paisa.
   price: number
   comparePrice?: number
   sizes?: string[]
@@ -428,8 +440,8 @@ export default class extends BaseSeeder {
                 {
                   productId: product.id,
                   sku: `DEMO-${String(skuCounter++).padStart(4, '0')}`,
-                  price: demo.price.toFixed(2),
-                  comparePrice: demo.comparePrice ? demo.comparePrice.toFixed(2) : null,
+                  priceMinor: paisaOf(demo.price),
+                  comparePriceMinor: demo.comparePrice ? paisaOf(demo.comparePrice) : null,
                   // A few sold-out variants to exercise the UI.
                   quantity: skuCounter % 7 === 0 ? 0 : 5 + (skuCounter % 20),
                   status: VariantStatus.ACTIVE,

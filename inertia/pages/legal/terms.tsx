@@ -2,8 +2,11 @@ import { Link } from '@adonisjs/inertia/react'
 import { LegalPage, LegalSection } from '~/components/legal/legal_page'
 import CustomersLayout from '~/layouts/customers_layout'
 import RootLayout from '~/layouts/root_layout'
-import { formatPrice } from '~/lib/format'
-import { FREE_SHIPPING_THRESHOLD, SHIPPING_FEE_PER_SHOP } from '~/lib/order'
+import { formatNPR } from '@shared/format/money'
+import {
+  FREE_SHIPPING_THRESHOLD_MINOR,
+  SHIPPING_FEE_PER_SHOP_MINOR,
+} from '@shared/constants/delivery'
 
 export default function Terms() {
   return (
@@ -49,9 +52,9 @@ export default function Terms() {
         <ul>
           <li>You pay in cash when the order is delivered.</li>
           <li>
-            Delivery costs {formatPrice(SHIPPING_FEE_PER_SHOP)} per shop and is free when your items
-            from that shop add up to {formatPrice(FREE_SHIPPING_THRESHOLD)} or more. The fee is
-            shown before you place the order.
+            Delivery costs {formatNPR(SHIPPING_FEE_PER_SHOP_MINOR)} per shop and is free when your
+            items from that shop add up to {formatNPR(FREE_SHIPPING_THRESHOLD_MINOR)} or more. The
+            fee is shown before you place the order.
           </li>
           <li>
             Delivery times depend on where you are. Someone needs to be at the address to receive

@@ -14,8 +14,9 @@ export type OptionValue = {
 }
 
 export type PriceSummary = {
-  price: number
-  comparePrice: number | null
+  // Paisa.
+  priceMinor: number
+  comparePriceMinor: number | null
   /* Prices differ across the variants still in play, so show "From". */
   isFrom: boolean
 }
@@ -56,7 +57,7 @@ function initialSelection(variants: ProductVariant[], sizes: string[], colors: s
 
 function cheapestOf(variants: ProductVariant[]) {
   return variants.reduce<ProductVariant | null>(
-    (min, variant) => (!min || variant.price < min.price ? variant : min),
+    (min, variant) => (!min || variant.priceMinor < min.priceMinor ? variant : min),
     null
   )
 }
@@ -121,9 +122,9 @@ export function useVariantSelection(allVariants: ProductVariant[] | undefined) {
   const cheapest = cheapestOf(pricePool)
   const price: PriceSummary | null = cheapest
     ? {
-        price: cheapest.price,
-        comparePrice: cheapest.comparePrice,
-        isFrom: pricePool.some((variant) => variant.price !== cheapest.price),
+        priceMinor: cheapest.priceMinor,
+        comparePriceMinor: cheapest.comparePriceMinor,
+        isFrom: pricePool.some((variant) => variant.priceMinor !== cheapest.priceMinor),
       }
     : null
 

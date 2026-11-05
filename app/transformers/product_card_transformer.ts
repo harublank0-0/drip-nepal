@@ -11,7 +11,7 @@ export default class ProductCardTransformer extends BaseTransformer<Product> {
     const media = this.resource.media ?? []
     const variants = this.resource.variants ?? []
     const cheapest = variants.reduce<(typeof variants)[number] | null>(
-      (min, variant) => (!min || Number(variant.price) < Number(min.price) ? variant : min),
+      (min, variant) => (!min || variant.priceMinor < min.priceMinor ? variant : min),
       null
     )
 
@@ -19,8 +19,9 @@ export default class ProductCardTransformer extends BaseTransformer<Product> {
       ...this.pick(this.resource, ['id', 'name', 'slug', 'brand', 'gender']),
       image: smallPhotoUrl(media[0]),
       hoverImage: smallPhotoUrl(media[1]),
-      price: cheapest ? Number(cheapest.price) : 0,
-      comparePrice: cheapest?.comparePrice ? Number(cheapest.comparePrice) : null,
+      // Paisa (docs/04 §18.1).
+      priceMinor: cheapest?.priceMinor ?? 0,
+      comparePriceMinor: cheapest?.comparePriceMinor ?? null,
       inStock: variants.some((variant) => variant.quantity > 0),
       shop: this.resource.shop
         ? { name: this.resource.shop.name, slug: this.resource.shop.slug }

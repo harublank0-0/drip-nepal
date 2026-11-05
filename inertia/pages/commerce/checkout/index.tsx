@@ -21,7 +21,7 @@ import { Button } from '~/components/ui/button'
 import { Field, FieldDescription, FieldError, FieldLabel } from '~/components/ui/field'
 import { Spinner } from '~/components/ui/spinner'
 import { Textarea } from '~/components/ui/textarea'
-import { formatPrice } from '~/lib/format'
+import { formatNPR } from '@shared/format/money'
 import { CHECKOUT_URL, orderableQuantity, pluralize } from '~/lib/order'
 import type { InertiaProps } from '~/types'
 
@@ -83,7 +83,7 @@ export default function CheckoutPage({ cart, addresses }: PageProps) {
   const cartError = errorText(fieldErrors?.cart)
   const notesError = errorText(fieldErrors?.notes)
   const blocked = cart.hasUnavailableItems
-  const packages = cart.shops.filter((group) => group.subtotal > 0)
+  const packages = cart.shops.filter((group) => group.subtotalMinor > 0)
   const orderable = orderableQuantity(cart.shops.flatMap((group) => group.items))
   const canSubmit = !blocked && !processing && (mode === 'new' || addressId !== '')
 
@@ -293,7 +293,7 @@ export default function CheckoutPage({ cart, addresses }: PageProps) {
                               {group.shop.name}
                             </span>
                             <span className="tabular-nums">
-                              {formatPrice(group.subtotal + group.shipping)}
+                              {formatNPR(group.subtotalMinor + group.shippingMinor)}
                             </span>
                           </li>
                         ))}
@@ -316,13 +316,13 @@ export default function CheckoutPage({ cart, addresses }: PageProps) {
                   Order summary
                 </h2>
                 <PriceRows
-                  subtotal={cart.subtotal}
+                  subtotalMinor={cart.subtotalMinor}
                   subtotalLabel={`Subtotal (${pluralize(orderable, 'item')})`}
-                  shipping={cart.shippingTotal}
+                  shippingMinor={cart.shippingTotalMinor}
                   shippingLabel={
                     packages.length > 1 ? `Delivery (${packages.length} shops)` : 'Delivery'
                   }
-                  total={cart.total}
+                  totalMinor={cart.totalMinor}
                   totalLabel="To pay on delivery"
                 />
                 <div className="mt-5 hidden lg:block">
@@ -341,7 +341,7 @@ export default function CheckoutPage({ cart, addresses }: PageProps) {
           <div className="mx-auto flex max-w-lg items-center gap-4">
             <div className="min-w-0 flex-1">
               <p className="text-xs text-muted-foreground">To pay on delivery</p>
-              <p className="text-base font-semibold tabular-nums">{formatPrice(cart.total)}</p>
+              <p className="text-base font-semibold tabular-nums">{formatNPR(cart.totalMinor)}</p>
             </div>
             {placeOrderButton('h-11 flex-1 rounded-xl')}
           </div>

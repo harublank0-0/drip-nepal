@@ -8,7 +8,8 @@ import type User from '#models/user'
 import type { CartOwner } from '#modules/orders/customer'
 import { ShopStatus } from '#constants/shop_status'
 import { ProductStatus, VariantAttributes, VariantStatus } from '#constants/product'
-import { MAX_QUANTITY_PER_ITEM, shippingFeeFor } from '#constants/order'
+import { MAX_QUANTITY_PER_ITEM } from '#constants/order'
+import { shippingFeeMinorFor } from '#shared/constants/delivery'
 import { smallPhotoUrl } from '#modules/products/photo_urls'
 
 export type CartSummary = ReturnType<CartService['summarize']>
@@ -245,7 +246,8 @@ export default class CartService {
 
   /*
    * The cart grouped by shop, the way checkout splits it into orders.
-   * Unavailable lines are listed but excluded from the totals.
+   * Unavailable lines are listed but excluded from the totals. Amounts are
+   * paisa.
    */
   summarize(items: CartItem[]) {
     const groups = new Map<
@@ -253,8 +255,8 @@ export default class CartService {
       {
         shop: { id: string; name: string; slug: string }
         items: ReturnType<CartService['line']>[]
-        subtotal: number
-        shipping: number
+        subtotalMinor: number
+        shippingMinor: number
       }
     >()
 
@@ -264,31 +266,31 @@ export default class CartService {
         groups.set(shop.id, {
           shop: { id: shop.id, name: shop.name, slug: shop.slug },
           items: [],
-          subtotal: 0,
-          shipping: 0,
+          subtotalMinor: 0,
+          shippingMinor: 0,
         })
       }
 
       const line = this.line(item)
       const group = groups.get(shop.id)!
       group.items.push(line)
-      if (line.available) group.subtotal += line.lineTotal
+      if (line.available) group.subtotalMinor += line.lineTotalMinor
     }
 
     const shops = [...groups.values()].map((group) => ({
       ...group,
-      shipping: group.subtotal > 0 ? shippingFeeFor(group.subtotal) : 0,
+      shippingMinor: group.subtotalMinor > 0 ? shippingFeeMinorFor(group.subtotalMinor) : 0,
     }))
 
-    const subtotal = shops.reduce((sum, group) => sum + group.subtotal, 0)
-    const shippingTotal = shops.reduce((sum, group) => sum + group.shipping, 0)
+    const subtotalMinor = shops.reduce((sum, group) => sum + group.subtotalMinor, 0)
+    const shippingTotalMinor = shops.reduce((sum, group) => sum + group.shippingMinor, 0)
 
     return {
       shops,
       itemCount: items.reduce((sum, item) => sum + item.quantity, 0),
-      subtotal,
-      shippingTotal,
-      total: subtotal + shippingTotal,
+      subtotalMinor,
+      shippingTotalMinor,
+      totalMinor: subtotalMinor + shippingTotalMinor,
       hasUnavailableItems: shops.some((group) => group.items.some((line) => !line.available)),
     }
   }
@@ -296,7 +298,6 @@ export default class CartService {
   line(item: CartItem) {
     const variant = item.productVariant
     const product = variant.product
-    const price = Number(variant.price)
     const purchasable = isPurchasable(variant)
     const inStock = variant.quantity >= item.quantity
 
@@ -311,11 +312,11 @@ export default class CartService {
       variant: {
         id: variant.id,
         label: optionLabel(variant),
-        price,
-        comparePrice: variant.comparePrice ? Number(variant.comparePrice) : null,
+        priceMinor: variant.priceMinor,
+        comparePriceMinor: variant.comparePriceMinor,
         stock: variant.quantity,
       },
-      lineTotal: price * item.quantity,
+      lineTotalMinor: variant.priceMinor * item.quantity,
       available: purchasable && inStock,
       problem: !purchasable
         ? 'No longer available'

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { formatPrice } from '~/lib/format'
+import { formatNPR } from '@shared/format/money'
 import { cn } from '~/lib/utils'
 
 export function PriceRow({
@@ -19,43 +19,43 @@ export function PriceRow({
   )
 }
 
-export function deliveryFee(amount: number) {
-  return amount === 0 ? 'Free' : formatPrice(amount)
+export function deliveryFee(amountMinor: number) {
+  return amountMinor === 0 ? 'Free' : formatNPR(amountMinor)
 }
 
 type PriceRowsProps = {
-  subtotal: number
+  subtotalMinor: number
   subtotalLabel?: ReactNode
-  shipping: number
+  shippingMinor: number
   shippingLabel?: ReactNode
-  discount?: number
-  total: number
+  discountMinor?: number
+  totalMinor: number
   totalLabel?: ReactNode
   className?: string
 }
 
 /*
  * Subtotal, delivery, discount and total, for the cart, checkout and
- * order summaries.
+ * order summaries. Amounts are paisa.
  */
 export function PriceRows({
-  subtotal,
+  subtotalMinor,
   subtotalLabel = 'Subtotal',
-  shipping,
+  shippingMinor,
   shippingLabel = 'Delivery',
-  discount = 0,
-  total,
+  discountMinor = 0,
+  totalMinor,
   totalLabel = 'Total',
   className,
 }: PriceRowsProps) {
   return (
     <dl className={cn('space-y-2 text-sm', className)}>
-      <PriceRow label={subtotalLabel} value={formatPrice(subtotal)} />
-      <PriceRow label={shippingLabel} value={deliveryFee(shipping)} />
-      {discount > 0 && <PriceRow label="Discount" value={`− ${formatPrice(discount)}`} />}
+      <PriceRow label={subtotalLabel} value={formatNPR(subtotalMinor)} />
+      <PriceRow label={shippingLabel} value={deliveryFee(shippingMinor)} />
+      {discountMinor > 0 && <PriceRow label="Discount" value={`− ${formatNPR(discountMinor)}`} />}
       <div className="flex items-baseline justify-between gap-4 border-t border-border/60 pt-3">
         <dt className="font-semibold">{totalLabel}</dt>
-        <dd className="text-base font-semibold tabular-nums">{formatPrice(total)}</dd>
+        <dd className="text-base font-semibold tabular-nums">{formatNPR(totalMinor)}</dd>
       </div>
     </dl>
   )

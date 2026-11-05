@@ -25,7 +25,8 @@ export type ListingFacets = {
   sizes: FacetOption[]
   colors: FacetOption[]
   categories: { name: string; slug: string; productCount: number }[]
-  price: { min: number; max: number }
+  // Whole rupees, like the URL's min and max.
+  price: { minRupees: number; maxRupees: number }
 }
 
 export type ListingFilters = {

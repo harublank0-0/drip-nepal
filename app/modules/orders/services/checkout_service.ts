@@ -12,7 +12,8 @@ import ProductVariant from '#models/product_variant'
 import UserAddress from '#models/user_address'
 import type User from '#models/user'
 import { randomCode } from '#utils/random'
-import { OrderStatus, PaymentProvider, PaymentStatus, shippingFeeFor } from '#constants/order'
+import { OrderStatus, PaymentProvider, PaymentStatus } from '#constants/order'
+import { shippingFeeMinorFor } from '#shared/constants/delivery'
 import CartService, { isPurchasable } from '#modules/orders/services/cart_service'
 import OrderAlerts from '#modules/orders/services/order_alerts'
 import type { AddressPayload, CheckoutPayload } from '#modules/orders/validators/checkout'
@@ -122,12 +123,14 @@ export default class CheckoutService {
         const shopItems = items.filter(
           (item) => item.productVariant.product.shopId === group.shop.id
         )
-        const subtotal = shopItems.reduce(
-          (sum, item) => sum + Number(item.productVariant.price) * item.quantity,
+        // Paisa: whole numbers, so a shop's part worth exactly the free
+        // delivery threshold is never a fraction short of it.
+        const subtotalMinor = shopItems.reduce(
+          (sum, item) => sum + item.productVariant.priceMinor * item.quantity,
           0
         )
-        const shipping = shippingFeeFor(subtotal)
-        const grandTotal = subtotal + shipping
+        const shippingMinor = shippingFeeMinorFor(subtotalMinor)
+        const grandTotalMinor = subtotalMinor + shippingMinor
 
         const order = await Order.create(
           {
@@ -139,10 +142,10 @@ export default class CheckoutService {
             orderNumber: this.#orderNumber(),
             status: OrderStatus.PENDING,
             paymentStatus: PaymentStatus.PENDING,
-            subtotal: subtotal.toFixed(2),
-            discountTotal: '0.00',
-            shippingTotal: shipping.toFixed(2),
-            grandTotal: grandTotal.toFixed(2),
+            subtotalMinor,
+            discountTotalMinor: 0,
+            shippingTotalMinor: shippingMinor,
+            grandTotalMinor,
             notes: payload.notes ?? null,
             placedAt: DateTime.now(),
           },
@@ -162,9 +165,9 @@ export default class CheckoutService {
               productNameSnapshot: variant.product.name.slice(0, 100),
               productVariantSnapshot: line.variant.label ? line.variant.label.slice(0, 100) : null,
               skuSnapshot: variant.sku,
-              unitPrice: Number(variant.price).toFixed(2),
+              unitPriceMinor: variant.priceMinor,
               quantity: item.quantity,
-              subTotal: (Number(variant.price) * item.quantity).toFixed(2),
+              subTotalMinor: variant.priceMinor * item.quantity,
             },
             { client: trx }
           )
@@ -179,7 +182,7 @@ export default class CheckoutService {
             orderId: order.id,
             provider: PaymentProvider.CASH_ON_DELIVERY,
             status: PaymentStatus.PENDING,
-            amount: grandTotal.toFixed(2),
+            amountMinor: grandTotalMinor,
           },
           { client: trx }
         )

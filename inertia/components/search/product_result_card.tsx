@@ -1,7 +1,7 @@
 import { Link } from '@adonisjs/inertia/react'
 import type { Data } from '@generated/data'
 import { ImageIcon } from 'lucide-react'
-import { formatPrice } from '~/lib/format'
+import { formatNPR } from '@shared/format/money'
 import { cn } from '~/lib/utils'
 import type { OptionRowProps } from './types'
 
@@ -45,10 +45,10 @@ export function ProductResultCard({
         {meta && <p className="truncate text-xs text-muted-foreground">{meta}</p>}
       </div>
       <div className="shrink-0 text-right">
-        <p className="text-sm font-semibold">{formatPrice(product.price)}</p>
-        {product.comparePrice && (
+        <p className="text-sm font-semibold">{formatNPR(product.priceMinor)}</p>
+        {product.comparePriceMinor && (
           <p className="text-xs text-muted-foreground line-through">
-            {formatPrice(product.comparePrice)}
+            {formatNPR(product.comparePriceMinor)}
           </p>
         )}
       </div>

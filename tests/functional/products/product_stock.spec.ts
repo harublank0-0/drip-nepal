@@ -28,7 +28,7 @@ import {
 
 async function productWithStock(quantity: number) {
   const shop = await createShop()
-  const variant = await createVariant(shop, { price: 1000, quantity })
+  const variant = await createVariant(shop, { priceMinor: 100_000, quantity })
   const product = await Product.findOrFail(variant.productId)
   return { shop, variant, product }
 }
@@ -52,7 +52,7 @@ async function formSave(
     categoryId: category.id,
     gender: ProductGender.UNISEX,
     status: ProductStatus.ACTIVE,
-    variants: [{ id: variant.id, sku: variant.sku, price: 1000, ...stock }],
+    variants: [{ id: variant.id, sku: variant.sku, priceMinor: 100_000, ...stock }],
     keepMediaIds: [],
   } as ProductPayload
   return new ProductService().update(shop, product, payload)
@@ -153,8 +153,8 @@ test.group('Product form stock [v1]', (group) => {
       gender: ProductGender.UNISEX,
       status: ProductStatus.ACTIVE,
       variants: [
-        { id: variant.id, sku: variant.sku, price: 1000, quantity: 5, expectedQuantity: 5 },
-        { size: 'XL', price: 1200, quantity: 7 },
+        { id: variant.id, sku: variant.sku, priceMinor: 100_000, quantity: 5, expectedQuantity: 5 },
+        { size: 'XL', priceMinor: 120_000, quantity: 7 },
       ],
       keepMediaIds: [],
     } as ProductPayload)
