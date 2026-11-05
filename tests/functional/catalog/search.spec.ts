@@ -167,8 +167,9 @@ test.group('Search category refinements [v1]', (group) => {
     )
     assert.equal(narrowed.context.query, '')
 
+    // Other tests' products may share the catalog: assert on this shop's only.
     const all = await search({})
-    assert.sameMembers(
+    assert.includeMembers(
       all.products.data.map((item) => item.id),
       [cargoId, hoodieId]
     )
