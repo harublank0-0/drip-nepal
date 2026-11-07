@@ -35,6 +35,21 @@ const EXAMPLES: Record<string, string[]> = {
   'user_addresses.recipient_phone_enc': [CIPHERTEXT],
   'user_addresses.area_tole_enc': [CIPHERTEXT],
   'user_addresses.street_landmark_enc': [CIPHERTEXT],
+  // docs/04a §6 (slugs per docs/04 §2.8; a mobile and a Kathmandu landline)
+  'shops.slug': ['thulo-pasal', 'abc'],
+  'shops.contact_phone_e164': ['+9779812345678', '+97714412345'],
+  'shops.pan_vat_number': ['123456789'],
+  'shops.grievance_contact_phone_enc': [CIPHERTEXT],
+  'shop_agreements.agreement_version': ['2026-11-01'],
+  'shop_addresses.contact_phone_enc': [CIPHERTEXT],
+  'shop_addresses.area_tole_enc': [CIPHERTEXT],
+  'shop_addresses.street_landmark_enc': [CIPHERTEXT],
+  'shop_payout_accounts.account_number_enc': [CIPHERTEXT],
+  'shop_payout_accounts.account_number_last4': ['4567'],
+  'shop_categories.code': ['mens-fashion', 'footwear'],
+  'slug_redirects.old_slug': ['thulo-pasal'],
+  // docs/04a §9.9
+  'logistics_accounts.credentials_enc': [CIPHERTEXT],
   // docs/04a §15
   'idempotency_keys.actor_scope': [
     '01a1b452-a64a-7a4f-93a2-be6932153cde',
