@@ -109,8 +109,7 @@ export default class extends BaseSchema {
       CREATE INDEX shop_memberships_user_active_idx ON shop_memberships (user_id) WHERE status = 'active'
     `)
 
-    // docs/04a §6.3. docs: 04a names none of these foreign keys; the names
-    // follow docs/04 §2.14 and shop_agreements_accepted_by_fkey (§6.4).
+    // docs/04a §6.3
     this.schema.raw(String.raw`
       CREATE TABLE shop_invitations (
         id uuid NOT NULL DEFAULT uuidv7(),
@@ -183,8 +182,7 @@ export default class extends BaseSchema {
         EXECUTE FUNCTION shops_require_agreement()
     `)
 
-    // docs/04a §6.5. docs: 04a names neither foreign key; the names follow
-    // docs/04 §2.14.
+    // docs/04a §6.5
     this.schema.raw(String.raw`
       CREATE TABLE shop_review_decisions (
         id uuid NOT NULL DEFAULT uuidv7(),
@@ -210,8 +208,6 @@ export default class extends BaseSchema {
 
     // docs/04a §6.6. The location keys and postal_code are those of §5.5;
     // postal_code is STORED explicitly (PostgreSQL 18 defaults to VIRTUAL).
-    // docs: 04a gives `label` "at most 30 characters" but, unlike §5.5
-    // (user_addresses_label_check), lists no CHECK for it, so none is added.
     this.schema.raw(String.raw`
       CREATE TABLE shop_addresses (
         id uuid NOT NULL DEFAULT uuidv7(),
@@ -241,6 +237,7 @@ export default class extends BaseSchema {
           REFERENCES local_levels (code, district_code) ON DELETE RESTRICT,
         CONSTRAINT shop_addresses_purpose_check CHECK (purpose IN ('pickup','return')),
         CONSTRAINT shop_addresses_ward_no_check CHECK (ward_no BETWEEN 1 AND 40),
+        CONSTRAINT shop_addresses_label_check CHECK (label IS NULL OR char_length(label) BETWEEN 1 AND 30),
         CONSTRAINT shop_addresses_contact_name_check CHECK (char_length(contact_name) BETWEEN 2 AND 100),
         CONSTRAINT shop_addresses_default_not_archived_check CHECK (NOT (is_default AND archived_at IS NOT NULL)),
         CONSTRAINT shop_addresses_contact_phone_enc_check CHECK (contact_phone_enc ~ '^v[0-9]+\.[A-Za-z0-9_-]{1,32}\.[A-Za-z0-9_-]{16}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{22}$'),
@@ -254,8 +251,7 @@ export default class extends BaseSchema {
       CREATE INDEX shop_addresses_shop_idx ON shop_addresses (shop_id, purpose) WHERE archived_at IS NULL
     `)
 
-    // docs/04a §6.7. docs: 04a names none of these foreign keys; the names
-    // follow docs/04 §2.14.
+    // docs/04a §6.7
     this.schema.raw(String.raw`
       CREATE TABLE shop_payout_accounts (
         id uuid NOT NULL DEFAULT uuidv7(),

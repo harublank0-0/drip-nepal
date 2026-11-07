@@ -385,7 +385,7 @@ Email invitations to join a shop ([03 §7.6](03-system-architecture.md), FR-SHOP
 
 **Keys and constraints**
 
-- `shop_invitations_pkey PRIMARY KEY (id)`; FKs to `shops (id)` and `users (id)` (`invited_by`, `accepted_by_user_id`), all `ON DELETE RESTRICT`.
+- `shop_invitations_pkey PRIMARY KEY (id)`; `shop_invitations_shop_fkey` to `shops (id)`, and `shop_invitations_invited_by_fkey` (`invited_by`) and `shop_invitations_accepted_by_fkey` (`accepted_by_user_id`) to `users (id)`, all `ON DELETE RESTRICT`.
 - `shop_invitations_token_hash_key UNIQUE (token_hash)`; `shop_invitations_token_hash_check CHECK (octet_length(token_hash) = 32)`.
 - `shop_invitations_role_check CHECK (role IN ('manager','catalog_editor','order_fulfiller','viewer'))`.
 - `shop_invitations_email_check CHECK (char_length(email::text) BETWEEN 3 AND 254 AND email::text = lower(email::text))`.
@@ -449,7 +449,7 @@ Staff decisions on a shop: application approval or rejection, suspension and rei
 
 **Keys and constraints**
 
-- `shop_review_decisions_pkey PRIMARY KEY (id)`; FKs to `shops (id)` and `users (id)` (`decided_by`), `ON DELETE RESTRICT`.
+- `shop_review_decisions_pkey PRIMARY KEY (id)`; `shop_review_decisions_shop_fkey` to `shops (id)` and `shop_review_decisions_decided_by_fkey` (`decided_by`) to `users (id)`, `ON DELETE RESTRICT`.
 - `shop_review_decisions_decision_check CHECK (decision IN ('approved','rejected','suspended','reinstated'))`.
 - `shop_review_decisions_reason_check CHECK (decision NOT IN ('rejected','suspended') OR (reason IS NOT NULL AND char_length(reason) BETWEEN 20 AND 2000))` (AC-FR-SHOP-002-3 for a rejection, AC-FR-SHOP-007-1 for a suspension).
 - `shop_review_decisions_suspension_mode_check CHECK ((decision = 'suspended' AND suspension_mode IS NOT NULL AND suspension_mode IN ('fulfill_existing','frozen')) OR (decision <> 'suspended' AND suspension_mode IS NULL))`.
@@ -486,7 +486,7 @@ Pickup and return addresses. The layout matches `user_addresses` (§5.5), so the
 
 - `shop_addresses_pkey PRIMARY KEY (id)`; `shop_addresses_shop_fkey FOREIGN KEY (shop_id) REFERENCES shops (id) ON DELETE RESTRICT`; `shop_addresses_id_shop_id_key UNIQUE (id, shop_id)`, the target of `shipments_pickup_address_fkey` (§11.5).
 - The three location keys of §5.5, named `shop_addresses_province_fkey`, `shop_addresses_district_fkey` and `shop_addresses_local_level_fkey`.
-- `shop_addresses_purpose_check CHECK (purpose IN ('pickup','return'))`; `shop_addresses_ward_no_check CHECK (ward_no BETWEEN 1 AND 40)`; `shop_addresses_contact_name_check CHECK (char_length(contact_name) BETWEEN 2 AND 100)`; `shop_addresses_default_not_archived_check CHECK (NOT (is_default AND archived_at IS NOT NULL))`.
+- `shop_addresses_purpose_check CHECK (purpose IN ('pickup','return'))`; `shop_addresses_ward_no_check CHECK (ward_no BETWEEN 1 AND 40)`; `shop_addresses_label_check CHECK (label IS NULL OR char_length(label) BETWEEN 1 AND 30)`, as §5.5; `shop_addresses_contact_name_check CHECK (char_length(contact_name) BETWEEN 2 AND 100)`; `shop_addresses_default_not_archived_check CHECK (NOT (is_default AND archived_at IS NOT NULL))`.
 - `shop_addresses_one_default_key UNIQUE (shop_id, purpose) WHERE is_default AND archived_at IS NULL` (partial; fixes A1-12).
 - Ciphertext format CHECKs (INV-25, pattern of §5.1): `shop_addresses_contact_phone_enc_check`, `shop_addresses_area_tole_enc_check` and `shop_addresses_street_landmark_enc_check` (the last allows null).
 - Application-enforced: approval needs a default pickup address; if no return address exists, returns go to the default pickup address. A shop has at most one active `return` address, which is its default, and one or more active `pickup` addresses, exactly one of which is the default (OD-56, changed 2026-11-05 from one per purpose). Several pickup addresses serve courier bookings from more than one place ([ADR-0019](adr/0019-courier-integration-in-r1.md) decision 4). `applyForShop` inserts the pickup address. `updateShopProfile` (`shop.profile.manage`) takes optional `pickup_address` and `return_address` objects with the §5.5 fields, and `resubmitShopApplication` a `pickup_address` (proposed inputs, [06 §13.4 and §13.5](06-api-design.md)); each updates the active row of that purpose in place, or inserts it as the default when there is none. From M6 the pickup-address operations (proposed with M6, `shop.shipping.manage`) add, edit and archive further pickup addresses and move the default. **A pickup address that a shipment references is never edited in place:** an edit archives that row and inserts the edited copy, which takes over its default flag, so a shipment always shows the address its parcel left from (INV-30). A `return_address` of `null` archives the return address, so returns go to the default pickup address again. A shop always keeps one live default pickup address: an edit replaces it, and no operation archives it without a replacement, so an approved shop (`active`, `suspended` or `closed`) keeps the default pickup address its approval required until the retention command deletes a closed shop's configuration rows, 7 years after `closed_at` (§6.1); the addresses of a never-approved application go in its 1-year purge (§6.1).
@@ -520,7 +520,7 @@ The bank or wallet account the platform pays the shop's balance to (FR-SHOP-010)
 
 **Keys and constraints**
 
-- `shop_payout_accounts_pkey PRIMARY KEY (id)`; `shop_payout_accounts_id_shop_id_key UNIQUE (id, shop_id)`, the target of `payouts_account_fkey` (§13.2), so a payout can only go to an account of its own shop ([04 §2.5](04-domain-model-and-data-dictionary.md)); FKs to `shops (id)` and `users (id)` (`created_by`, `verified_by`), `ON DELETE RESTRICT`.
+- `shop_payout_accounts_pkey PRIMARY KEY (id)`; `shop_payout_accounts_id_shop_id_key UNIQUE (id, shop_id)`, the target of `payouts_account_fkey` (§13.2), so a payout can only go to an account of its own shop ([04 §2.5](04-domain-model-and-data-dictionary.md)); `shop_payout_accounts_shop_fkey` to `shops (id)`, and `shop_payout_accounts_created_by_fkey` (`created_by`) and `shop_payout_accounts_verified_by_fkey` (`verified_by`) to `users (id)`, `ON DELETE RESTRICT`.
 - `shop_payout_accounts_account_number_enc_check`: the ciphertext format CHECK of §5.1 (INV-25), allowing null; `shop_payout_accounts_account_number_check CHECK (account_number_enc IS NOT NULL OR replaced_at IS NOT NULL OR retired_at IS NOT NULL)`: only a replaced or retired account may lose its number.
 - `shop_payout_accounts_method_check CHECK (method IN ('bank_transfer','wallet'))`; `shop_payout_accounts_last4_check CHECK (account_number_last4 ~ '^[0-9]{4}$')`; `shop_payout_accounts_account_name_check CHECK (char_length(account_name) BETWEEN 2 AND 100)`.
 - `shop_payout_accounts_verification_check CHECK ((verified_at IS NULL) = (verified_by IS NULL) AND (verified_by IS NULL OR verified_by <> created_by))`: the verifier is never the person who entered the account (AC-FR-SHOP-010-3). This check is not relaxed by `single_operator_mode`, because an owner verifying their own bank account defeats the point of verifying.
