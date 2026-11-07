@@ -244,6 +244,8 @@ Ruling: The E4 baseline is built on the integration branch `feat/e4-schema-basel
         the 2026-11-04 entry and note 24.
 Evidence: The baseline deletes the v1 migrations and replaces the models under the same names, and over
           60 files import `#models`, so a partial baseline on `main` would break the v1 store and its CI.
+          The team has reached Linear's free-tier issue limit, so the baseline has no Linear issues and its
+          branches are named outside the Linear rule (09 §11.6).
 ADR: none.
 Docs updated: the 2026-11-04 entry (dated note), notes 24 and 26, 09 (§8.1, §11.6, note 80), 12 (§4.1,
               note 21), AGENTS.md  |  Status: Decided
