@@ -10,6 +10,8 @@ Product photos live in the `uploads` volume.
 
 A 2 GB / 1 vCPU VPS is enough to start. Pick a region close to Nepal, such as Singapore or Mumbai.
 
+**Status (2026-11-07).** Nothing is hosted yet: no server runs this guide, and every row in any database is seed data. The M0 schema baseline ([ADR-0011](docs/adr/0011-schema-rebaseline-before-production.md)) replaces the current migrations and moves no data (OD-55 in [docs/risks-and-open-decisions.md §2.3](docs/risks-and-open-decisions.md#23-decision-log)). A server set up from this guide before the baseline lands is rebuilt from the baseline and the seeders, not migrated.
+
 ## 1. Prepare the server
 
 ```bash
