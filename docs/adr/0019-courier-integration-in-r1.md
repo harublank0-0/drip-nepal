@@ -8,7 +8,9 @@ Status: Draft v1 (2026-11-05)
 - **Date:** 2026-11-05
 - **Deciders:** product owner (OD-56), lead developer
 - **Supersedes / superseded by:** — / —. Reverses the R1 part of Q5 ("no courier API at MVP") and the "Courier API integrations" non-goal of [01 §5.4](../01-product-requirements.md#54-explicit-non-goals).
-- **Related open items:** OD-58 (COD on platform-owned accounts), VX-16 (NCM API), VX-17 (pickups from many vendors on one account), VX-18 (COD remittance), OD-07 and OD-30 (who bears courier costs and lost parcels), OD-55 (v1 data into the baseline)
+- **Related open items:** OD-58 (COD on platform-owned accounts), VX-16 (NCM API), VX-17 (pickups from many vendors on one account), VX-18 (COD remittance), OD-07 and OD-30 (who bears courier costs and lost parcels); OD-55 was decided on 2026-11-07 (no import)
+
+Edited 2026-11-07: OD-55 was decided with no import ([risks §2.3](../risks-and-open-decisions.md#23-decision-log)). The v1 store was never hosted and holds only seed data, so no v1 data moves to the baseline. The decision is otherwise unchanged.
 
 ## Context
 
@@ -24,7 +26,7 @@ Status: Draft v1 (2026-11-05)
 
 **Secrets.** Courier credentials are long-lived merchant secrets. Hosting is one VPS with managed PostgreSQL and no secret manager ([ADR-0016](0016-hosting-single-region-portable.md)). Sensitive columns are already encrypted by the application with the `DATA_ENCRYPTION_KEYS` ring ([04 §2.9](../04-domain-model-and-data-dictionary.md#29-sensitive-column-encryption-and-blind-indexes)).
 
-**Repository** [Verified-repo `database/migrations`, 2026-11-05]: the v1 schema has no shipment, courier or pickup tables; `orders` holds one row per shop, grouped by `checkout_id`. The E4 baseline ([ADR-0011](0011-schema-rebaseline-before-production.md)) replaces it, and OD-55 decides how v1 data moves.
+**Repository** [Verified-repo `database/migrations`, 2026-11-05]: the v1 schema has no shipment, courier or pickup tables; `orders` holds one row per shop, grouped by `checkout_id`. The E4 baseline ([ADR-0011](0011-schema-rebaseline-before-production.md)) replaces it, and OD-55 decides how v1 data moves (Edited 2026-11-07: decided with no import, because v1 holds only seed data).
 
 ## Decision
 

@@ -156,7 +156,7 @@ To roll back, check out the previous tag and run the same `up` command. Rolling 
 
 Some releases need a command run once after deploying them. Take a backup first (next section).
 
-- **The release that adds photo resizing.** Photos uploaded earlier are still the full-size originals, with any GPS location the phone saved. Convert them to the resized WebP files and delete the originals:
+- **The release that adds photo resizing.** Only on a server that ran a release from before photo resizing. Photos uploaded earlier are still the full-size originals, with any GPS location the phone saved. Convert them to the resized WebP files and delete the originals:
 
   ```bash
   docker compose -f docker-compose.prod.yml --env-file .env.production exec app \
