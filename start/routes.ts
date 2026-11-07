@@ -23,7 +23,6 @@ const uuid = {
 }
 router.where('id', uuid)
 
-
 if (!app.inProduction) {
   router
     .get('/design-system', ({ inertia }) => {
