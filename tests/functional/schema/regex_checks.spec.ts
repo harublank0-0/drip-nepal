@@ -46,11 +46,27 @@ const EXAMPLES: Record<string, string[]> = {
   'audit_logs.action': ['shop.suspend', 'platform_setting.update'],
 }
 
-type RegexCheck = { table: string; constraint: string; column: string; pattern: string }
+type Operator = '~' | '~*' | '!~' | '!~*'
+type RegexCheck = {
+  table: string
+  constraint: string
+  column: string
+  operator: Operator
+  pattern: string
+}
 
-// `col ~ 'pattern'::text`, with an optional cast on the column, as
+// The example must satisfy the CHECK whatever its operator, so a negated
+// operator (`!~`) expects a non-match. Fixed statements, no interpolation.
+const MATCHES: Record<Operator, string> = {
+  '~': 'SELECT ?::text ~ ?::text AS ok',
+  '~*': 'SELECT ?::text ~* ?::text AS ok',
+  '!~': 'SELECT ?::text !~ ?::text AS ok',
+  '!~*': 'SELECT ?::text !~* ?::text AS ok',
+}
+
+// `col ~ 'pattern'::text` (or `~*`, `!~`, `!~*`), with an optional cast on the column, as
 // pg_get_constraintdef prints it. Quotes inside a literal are doubled.
-const REGEX_TERM = /\(*([a-z_][a-z0-9_]*)\)?(?:::[a-z ]+)?\s+~\s+'((?:[^']|'')*)'::text/g
+const REGEX_TERM = /\(*([a-z_][a-z0-9_]*)\)?(?:::[a-z ]+)?\s+(!?~\*?)\s+'((?:[^']|'')*)'::text/g
 
 async function regexChecks(): Promise<RegexCheck[]> {
   const result = await db.rawQuery(`
@@ -58,7 +74,7 @@ async function regexChecks(): Promise<RegexCheck[]> {
       FROM pg_constraint con
       JOIN pg_class rel ON rel.oid = con.conrelid
       JOIN pg_namespace nsp ON nsp.oid = rel.relnamespace
-     WHERE con.contype = 'c' AND nsp.nspname = 'public' AND pg_get_constraintdef(con.oid) LIKE '% ~ %'
+     WHERE con.contype = 'c' AND nsp.nspname = 'public' AND pg_get_constraintdef(con.oid) LIKE '%~%'
      ORDER BY 1, 2
   `)
   const checks: RegexCheck[] = []
@@ -73,7 +89,8 @@ async function regexChecks(): Promise<RegexCheck[]> {
         table: row.table,
         constraint: row.constraint,
         column: match[1],
-        pattern: match[2].replaceAll("''", "'"),
+        operator: match[2] as Operator,
+        pattern: match[3].replaceAll("''", "'"),
       })
     }
   }
@@ -90,10 +107,10 @@ test.group('T-ARCH-022 regular-expression CHECKs', () => {
       const examples = EXAMPLES[key]
       assert.isDefined(examples, `${check.constraint}: add a documented example for ${key}`)
       for (const example of examples!) {
-        const result = await db.rawQuery('SELECT ?::text ~ ?::text AS ok', [example, check.pattern])
+        const result = await db.rawQuery(MATCHES[check.operator], [example, check.pattern])
         assert.isTrue(
           result.rows[0].ok,
-          `${check.constraint} rejects its example ${example} (stored pattern ${check.pattern})`
+          `${check.constraint} rejects its example ${example} (stored pattern ${check.operator} ${check.pattern})`
         )
       }
     }

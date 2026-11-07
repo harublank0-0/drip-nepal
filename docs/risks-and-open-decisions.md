@@ -242,7 +242,7 @@ Ruling: The E4 baseline files are written before the uuidv7() and pg-boss spikes
 Evidence: No managed cluster exists (the project is not hosted). Neither spike can change the tables
           of the files already written.
 ADR: none.
-Docs updated: 04 (§20.2.1, note 13)  |  Status: Decided
+Docs updated: 04 (§20.2.1, note 13), 12 (§4.1, note 22)  |  Status: Decided
 ```
 
 ```text
