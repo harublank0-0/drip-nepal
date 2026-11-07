@@ -25,9 +25,14 @@ const dbConfig = defineConfig({
       migrations: {
         naturalSort: true,
         paths: ['database/migrations'],
+        // down() is for development and CI only (docs/09 §8.2, ADR-0011)
+        disableRollbacksInProduction: true,
       },
       schemaGeneration: {
-        rulesPaths: ['./database/schema_rules.js'],
+        enabled: true,
+        outputPath: 'database/schema.ts',
+        rulesPaths: ['#database/schema_rules'],
+        excludeTables: ['sessions', 'rate_limits'],
       },
       debug: app.inDev,
     },
