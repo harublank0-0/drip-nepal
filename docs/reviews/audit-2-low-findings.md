@@ -578,6 +578,7 @@ Findings located in [04a-data-dictionary-tables.md](../04a-data-dictionary-table
 - **Text:** 04a:470 '`label` | text | yes | | At most 30 characters'
 - **Problem:** §6.6 says its layout matches `user_addresses` and that one validator serves both. Its constraint list, however, has no label CHECK, while §5.5 defines `user_addresses_label_check`. A label longer than 30 characters (or an empty one) is stored if the validator is bypassed. 04 §2.8 requires a named length CHECK on every string with a rule.
 - **Suggested fix:** Add to the 04a §6.6 constraints: '`shop_addresses_label_check CHECK (label IS NULL OR char_length(label) BETWEEN 1 AND 30)`'.
+- **Fixed (E4 baseline, 2026-11-07):** 04a §6.6 lists `shop_addresses_label_check` as suggested, and baseline file 5 creates it (04 note 14).
 
 ### A2-133: slug_redirects is given two owning modules in 04a; 03 §4.4, which owns module boundaries, assigns it to shops only
 
