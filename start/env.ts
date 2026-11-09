@@ -49,6 +49,9 @@ const env = await Env.create(new URL('../', import.meta.url), {
   DB_USER: Env.schema.string(),
   DB_PASSWORD: Env.schema.string(),
   DB_DATABASE: Env.schema.string(),
+  // The migrator role for the `pg_migrator` connection: tests only (docs/09 §6.1 "Test roles")
+  DB_MIGRATOR_USER: Env.schema.string.optionalWhen(() => process.env.NODE_ENV !== 'test'),
+  DB_MIGRATOR_PASSWORD: Env.schema.secret.optionalWhen(() => process.env.NODE_ENV !== 'test'),
 
   /*
   |----------------------------------------------------------
