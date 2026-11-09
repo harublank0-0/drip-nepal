@@ -10,7 +10,7 @@ import {
   refused,
   type Row,
   type ShopOrderRef,
-} from '#tests/support/order_rows'
+} from '#tests/support/schema_rows'
 
 /*
  * Constraint tests of `shipments`, `shipment_events` and `shipment_items`

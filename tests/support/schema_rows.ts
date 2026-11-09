@@ -3,8 +3,9 @@ import type { Assert } from '@japa/assert'
 import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
 
 /*
- * Row builders for the constraint tests of the orders tables (docs/04a §11).
- * Rows are inserted directly, as the runtime would, with the smallest set of
+ * Row builders for the schema constraint tests (tests/functional/schema/):
+ * users, shops and locations, and the orders tables of docs/04a §11. Rows
+ * are inserted directly, as the runtime would, with the smallest set of
  * columns each table's CHECKs accept. Every call makes unique rows; the
  * functional suite rolls each test back.
  */

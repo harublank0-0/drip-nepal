@@ -134,9 +134,14 @@ async function regexChecks(): Promise<RegexCheck[]> {
   const checks: RegexCheck[] = []
   for (const row of result.rows as { table: string; constraint: string; definition: string }[]) {
     const terms = [...row.definition.matchAll(REGEX_TERM)]
-    // A definition the parser cannot read must fail loudly, not be skipped.
-    if (terms.length === 0) {
-      throw new Error(`${row.constraint}: cannot parse ${row.definition}`)
+    // Every regex operator outside a string literal must yield a parsed term:
+    // a definition the parser cannot read, in whole or in part, fails loudly.
+    const operators =
+      row.definition.replaceAll(/'(?:[^']|'')*'/g, "''").match(/\s!?~\*?\s/g)?.length ?? 0
+    if (terms.length === 0 || terms.length !== operators) {
+      throw new Error(
+        `${row.constraint}: parsed ${terms.length} of ${operators} regex terms in ${row.definition}`
+      )
     }
     for (const match of terms) {
       checks.push({

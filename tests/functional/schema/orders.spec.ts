@@ -7,7 +7,7 @@ import {
   orderValues,
   refused,
   type Row,
-} from '#tests/support/order_rows'
+} from '#tests/support/schema_rows'
 
 /*
  * T-ORD-109 (docs/10 §6.4, note 35): the OD-57 verification columns of
