@@ -4,8 +4,9 @@ import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
 
 /*
  * Row builders for the schema constraint tests (tests/functional/schema/):
- * users, shops and locations, the orders tables of docs/04a §11, stock
- * (§8.1) and COD payments (§12.1, §12.2). Rows
+ * users, shops and locations, payout accounts (docs/04a §6.7), products
+ * (§7.6), courier accounts and pickup addresses (§9.9, §9.10, §6.6), the
+ * orders tables of §11, stock (§8.1) and COD payments (§12.1, §12.2). Rows
  * are inserted directly, as the runtime would, with the smallest set of
  * columns each table's CHECKs accept. Every call makes unique rows; the
  * functional suite rolls each test back.
@@ -45,20 +46,50 @@ export async function insertUser() {
   return row.id as string
 }
 
-export async function insertShop() {
+// A member of platform staff (docs/04a §5.4), for columns that reference one.
+export async function insertStaff(role = 'finance_officer') {
+  const userId = await insertUser()
+  await db.table('platform_staff').insert({ user_id: userId, role })
+  return userId
+}
+
+// A pending shop of `ownerUserId` (docs/04a §6.1); `values` overrides columns.
+export function shopValues(ownerUserId: string, values: Row = {}): Row {
   const n = next()
+  return {
+    owner_user_id: ownerUserId,
+    name: `Thulo Pasal ${n}`,
+    slug: `thulo-pasal-${n}`,
+    contact_email: `shop-${n}@example.com`,
+    contact_phone_e164: '+9779812345678',
+    return_policy_text: 'Returns within 7 days, unworn and with tags.',
+    business_type: 'individual',
+    grievance_contact_name: 'Sita Shrestha',
+    grievance_contact_phone_enc: CIPHERTEXT,
+    ...values,
+  }
+}
+
+export async function insertShop() {
   const [row] = await db
     .table('shops')
+    .insert(shopValues(await insertUser()))
+    .returning('id')
+  return row.id as string
+}
+
+// A bank account of `shopId` for payouts (docs/04a §6.7).
+export async function insertPayoutAccount(shopId: string) {
+  const [row] = await db
+    .table('shop_payout_accounts')
     .insert({
-      owner_user_id: await insertUser(),
-      name: `Thulo Pasal ${n}`,
-      slug: `thulo-pasal-${n}`,
-      contact_email: `shop-${n}@example.com`,
-      contact_phone_e164: '+9779812345678',
-      return_policy_text: 'Returns within 7 days, unworn and with tags.',
-      business_type: 'individual',
-      grievance_contact_name: 'Sita Shrestha',
-      grievance_contact_phone_enc: CIPHERTEXT,
+      shop_id: shopId,
+      method: 'bank_transfer',
+      account_name: 'Thulo Pasal Pvt Ltd',
+      bank_name: 'Nabil Bank',
+      account_number_enc: CIPHERTEXT,
+      account_number_last4: '4567',
+      created_by: await insertUser(),
     })
     .returning('id')
   return row.id as string
@@ -132,7 +163,33 @@ export async function insertOrder(values: Row = {}) {
   return { id: row.id as string, number: row.number as string, customerUserId }
 }
 
-export type ShopOrderRef = { id: string; orderId: string; shopId: string; number: string }
+export type ShopOrderRef = {
+  id: string
+  orderId: string
+  shopId: string
+  number: string
+  customerUserId: string
+}
+
+// The shop order `number` of order `orderId` for `shopId`, awaiting acceptance.
+export function shopOrderValues(orderId: string, shopId: string, number: string, values: Row = {}) {
+  return {
+    order_id: orderId,
+    shop_id: shopId,
+    number,
+    status: 'awaiting_acceptance',
+    items_subtotal_minor: 100000,
+    shipping_fee_minor: 10000,
+    total_minor: 110000,
+    commission_total_minor: 10000,
+    delivery_zone_code_snapshot: 'ktm_valley',
+    est_min_days_snapshot: 1,
+    est_max_days_snapshot: 3,
+    shop_name_snapshot: 'Thulo Pasal',
+    acceptance_due_at: db.raw(`now() + interval '1 day'`),
+    ...values,
+  }
+}
 
 // A new order with one shop order of `shopId`, awaiting acceptance.
 export async function insertShopOrder(shopId: string, values: Row = {}): Promise<ShopOrderRef> {
@@ -140,43 +197,41 @@ export async function insertShopOrder(shopId: string, values: Row = {}): Promise
   const number = `${order.number}-1`
   const [row] = await db
     .table('shop_orders')
-    .insert({
-      order_id: order.id,
-      shop_id: shopId,
-      number,
-      status: 'awaiting_acceptance',
-      items_subtotal_minor: 100000,
-      shipping_fee_minor: 10000,
-      total_minor: 110000,
-      commission_total_minor: 10000,
-      delivery_zone_code_snapshot: 'ktm_valley',
-      est_min_days_snapshot: 1,
-      est_max_days_snapshot: 3,
-      shop_name_snapshot: 'Thulo Pasal',
-      acceptance_due_at: db.raw(`now() + interval '1 day'`),
-      ...values,
-    })
+    .insert(shopOrderValues(order.id, shopId, number, values))
     .returning('id')
-  return { id: row.id as string, orderId: order.id, shopId, number }
+  return {
+    id: row.id as string,
+    orderId: order.id,
+    shopId,
+    number,
+    customerUserId: order.customerUserId,
+  }
 }
 
-// A draft product of `shopId` with its default variant.
-export async function insertVariant(shopId: string) {
+// The columns of a draft product of `shopId` in a new leaf category (docs/04a §7.6).
+export async function productValues(shopId: string, values: Row = {}): Promise<Row> {
   const n = next()
   const [category] = await db
     .table('categories')
     .insert({ slug: `kurta-${n}`, name: `Kurta ${n}`, path: `/kurta-${n}/`, depth: 1 })
     .returning('id')
+  return {
+    shop_id: shopId,
+    public_id: orderNumber().slice(3) + '0',
+    slug: 'kurta-suruwal',
+    title: 'Kurta suruwal',
+    category_id: category.id,
+    created_by: await insertUser(),
+    ...values,
+  }
+}
+
+// A draft product of `shopId` with its default variant.
+export async function insertVariant(shopId: string) {
+  const n = next()
   const [product] = await db
     .table('products')
-    .insert({
-      shop_id: shopId,
-      public_id: orderNumber().slice(3) + '0',
-      slug: 'kurta-suruwal',
-      title: 'Kurta suruwal',
-      category_id: category.id,
-      created_by: await insertUser(),
-    })
+    .insert(await productValues(shopId))
     .returning('id')
   const [variant] = await db
     .table('product_variants')
@@ -253,6 +308,101 @@ export async function insertCodPayment(shopOrder: ShopOrderRef, collected: boole
     captured_minor: capturedMinor,
   })
   return row.id as string
+}
+
+// A courier account of `shopId` that the shop may book through (docs/04a §9.9, §9.10).
+export async function insertCourierAccount(shopId: string) {
+  // Test-only code: `ncm` itself comes from the reference seeder (04a §9.8).
+  await db
+    .table('logistics_providers')
+    .insert({ code: 'test_courier', name: 'Test Courier' })
+    .onConflict('code')
+    .ignore()
+  const [row] = await db
+    .table('logistics_accounts')
+    .insert({
+      provider_code: 'test_courier',
+      name: 'Test Courier Kathmandu',
+      environment: 'sandbox',
+      owner_type: 'shop',
+      shop_id: shopId,
+    })
+    .returning('id')
+  await db.table('logistics_account_shops').insert({
+    account_id: row.id,
+    shop_id: shopId,
+    account_owner_type: 'shop',
+    owner_shop_id: shopId,
+  })
+  return row.id as string
+}
+
+// A pickup address of `shopId` (docs/04a §6.6) in Kathmandu.
+export async function insertPickupAddress(shopId: string) {
+  const [row] = await db
+    .table('shop_addresses')
+    .insert({
+      shop_id: shopId,
+      purpose: 'pickup',
+      contact_name: 'Ram Thapa',
+      contact_phone_enc: CIPHERTEXT,
+      province_code: '3',
+      district_code: '306',
+      local_level_code: '30608',
+      ward_no: 10,
+      area_tole_enc: CIPHERTEXT,
+    })
+    .returning('id')
+  return row.id as string
+}
+
+export type Courier = { shopId: string; accountId: string; addressId: string }
+
+// A shop with a courier account and a pickup address.
+export async function courierShop(): Promise<Courier> {
+  const shopId = await insertShop()
+  await insertLocation()
+  return {
+    shopId,
+    accountId: await insertCourierAccount(shopId),
+    addressId: await insertPickupAddress(shopId),
+  }
+}
+
+// A return request of the customer of `shopOrder` (docs/04a §11.7), still `requested`.
+export async function insertReturnRequest(shopOrder: ShopOrderRef, values: Row = {}) {
+  const [row] = await db
+    .table('return_requests')
+    .insert({
+      number: `RT-${orderNumber().slice(3)}`,
+      order_id: shopOrder.orderId,
+      shop_order_id: shopOrder.id,
+      shop_id: shopOrder.shopId,
+      requested_by_user_id: shopOrder.customerUserId,
+      reason_code: 'size_issue',
+      ...values,
+    })
+    .returning('id')
+  return row.id as string
+}
+
+// Runs `write` in a savepoint that is rolled back, and checks that PostgreSQL accepted it.
+export async function accepted(
+  assert: Assert,
+  write: (trx: TransactionClientContract) => Promise<unknown>,
+  label: string
+) {
+  const rollback = new Error('rollback')
+  const error = await db
+    .transaction(async (trx) => {
+      await write(trx)
+      throw rollback
+    })
+    .then(
+      () => null,
+      (e: PgError | Error) => (e === rollback ? null : e)
+    )
+  assert.isNull(error, `${label}: ${error?.message}`)
 }
 
 // Runs `write` in a savepoint and checks that PostgreSQL refused it.
