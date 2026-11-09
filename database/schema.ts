@@ -366,6 +366,171 @@ export class IdempotencyKeySchema extends BaseModel {
   declare status: string
 }
 
+export class InventoryItemSchema extends BaseModel {
+  static $columns = [
+    'createdAt',
+    'onHand',
+    'reserved',
+    'shopId',
+    'updatedAt',
+    'variantId',
+    'version',
+  ] as const
+  $columns = InventoryItemSchema.$columns
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare onHand: number
+  @column()
+  declare reserved: number
+  @column()
+  declare shopId: string
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
+  @column({ isPrimary: true })
+  declare variantId: string
+  @column()
+  declare version: number
+}
+
+export class InventoryMovementSchema extends BaseModel {
+  static $columns = [
+    'actorUserId',
+    'createdAt',
+    'id',
+    'kind',
+    'note',
+    'onHandDelta',
+    'reasonCode',
+    'referenceId',
+    'referenceType',
+    'requestId',
+    'reservedDelta',
+    'shopId',
+    'variantId',
+  ] as const
+  $columns = InventoryMovementSchema.$columns
+  @column()
+  declare actorUserId: string | null
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare kind: string
+  @column()
+  declare note: string | null
+  @column()
+  declare onHandDelta: number
+  @column()
+  declare reasonCode: string
+  @column()
+  declare referenceId: string
+  @column()
+  declare referenceType: string
+  @column()
+  declare requestId: string | null
+  @column()
+  declare reservedDelta: number
+  @column()
+  declare shopId: string
+  @column()
+  declare variantId: string
+}
+
+export class InventoryReservationSchema extends BaseModel {
+  static $columns = [
+    'createdAt',
+    'expiresAt',
+    'id',
+    'orderId',
+    'orderItemId',
+    'quantity',
+    'resolvedAt',
+    'shopId',
+    'status',
+    'updatedAt',
+    'variantId',
+  ] as const
+  $columns = InventoryReservationSchema.$columns
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column.dateTime()
+  declare expiresAt: DateTime | null
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare orderId: string
+  @column()
+  declare orderItemId: string
+  @column()
+  declare quantity: number
+  @column.dateTime()
+  declare resolvedAt: DateTime | null
+  @column()
+  declare shopId: string
+  @column()
+  declare status: string
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
+  @column()
+  declare variantId: string
+}
+
+export class LedgerEntrySchema extends BaseModel {
+  static $columns = [
+    'amountMinor',
+    'availableAt',
+    'createdAt',
+    'createdBy',
+    'currency',
+    'dedupeKey',
+    'description',
+    'entryType',
+    'id',
+    'orderItemId',
+    'payoutId',
+    'refundId',
+    'remittanceId',
+    'reversesEntryId',
+    'shopId',
+    'shopOrderId',
+  ] as const
+  $columns = LedgerEntrySchema.$columns
+  @column()
+  declare amountMinor: number
+  @column.dateTime()
+  declare availableAt: DateTime
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare createdBy: string | null
+  @column()
+  declare currency: string
+  @column()
+  declare dedupeKey: string
+  @column()
+  declare description: string
+  @column()
+  declare entryType: string
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare orderItemId: string | null
+  @column()
+  declare payoutId: string | null
+  @column()
+  declare refundId: string | null
+  @column()
+  declare remittanceId: string | null
+  @column()
+  declare reversesEntryId: string | null
+  @column()
+  declare shopId: string
+  @column()
+  declare shopOrderId: string | null
+}
+
 export class LocalLevelSchema extends BaseModel {
   static $columns = [
     'code',
@@ -761,6 +926,187 @@ export class OrderSchema extends BaseModel {
   declare verifiedAt: DateTime | null
 }
 
+export class PaymentAllocationSchema extends BaseModel {
+  static $columns = [
+    'amountMinor',
+    'capturedMinor',
+    'createdAt',
+    'currency',
+    'orderId',
+    'paymentId',
+    'refundedMinor',
+    'shopOrderId',
+    'updatedAt',
+  ] as const
+  $columns = PaymentAllocationSchema.$columns
+  @column()
+  declare amountMinor: number
+  @column()
+  declare capturedMinor: number
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare currency: string
+  @column()
+  declare orderId: string
+  @column({ isPrimary: true })
+  declare paymentId: string
+  @column()
+  declare refundedMinor: number
+  @column()
+  declare shopOrderId: string
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
+}
+
+export class PaymentSchema extends BaseModel {
+  static $columns = [
+    'amountMinor',
+    'attemptNo',
+    'capturedAt',
+    'capturedMinor',
+    'createdAt',
+    'currency',
+    'expiresAt',
+    'id',
+    'isLateCapture',
+    'lastProviderStatus',
+    'method',
+    'nextVerificationAt',
+    'orderId',
+    'providerPaymentId',
+    'providerReference',
+    'refundedMinor',
+    'shopOrderId',
+    'status',
+    'updatedAt',
+    'verificationAttempts',
+    'version',
+  ] as const
+  $columns = PaymentSchema.$columns
+  @column()
+  declare amountMinor: number
+  @column()
+  declare attemptNo: number
+  @column.dateTime()
+  declare capturedAt: DateTime | null
+  @column()
+  declare capturedMinor: number
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare currency: string
+  @column.dateTime()
+  declare expiresAt: DateTime | null
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare isLateCapture: boolean
+  @column()
+  declare lastProviderStatus: string | null
+  @column()
+  declare method: string
+  @column.dateTime()
+  declare nextVerificationAt: DateTime | null
+  @column()
+  declare orderId: string
+  @column()
+  declare providerPaymentId: string | null
+  @column()
+  declare providerReference: string | null
+  @column()
+  declare refundedMinor: number
+  @column()
+  declare shopOrderId: string | null
+  @column()
+  declare status: string
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
+  @column()
+  declare verificationAttempts: number
+  @column()
+  declare version: number
+}
+
+export class PayoutEntrySchema extends BaseModel {
+  static $columns = ['createdAt', 'ledgerEntryId', 'payoutId', 'shopId'] as const
+  $columns = PayoutEntrySchema.$columns
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare ledgerEntryId: string
+  @column({ isPrimary: true })
+  declare payoutId: string
+  @column()
+  declare shopId: string
+}
+
+export class PayoutSchema extends BaseModel {
+  static $columns = [
+    'amountMinor',
+    'approvedAt',
+    'approvedBy',
+    'bankReference',
+    'cancelledAt',
+    'createdAt',
+    'createdBy',
+    'currency',
+    'failedAt',
+    'failureReason',
+    'id',
+    'isSingleOperatorApproval',
+    'paidAt',
+    'payoutAccountId',
+    'periodEnd',
+    'periodStart',
+    'shopId',
+    'status',
+    'updatedAt',
+    'version',
+  ] as const
+  $columns = PayoutSchema.$columns
+  @column()
+  declare amountMinor: number
+  @column.dateTime()
+  declare approvedAt: DateTime | null
+  @column()
+  declare approvedBy: string | null
+  @column()
+  declare bankReference: string | null
+  @column.dateTime()
+  declare cancelledAt: DateTime | null
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare createdBy: string
+  @column()
+  declare currency: string
+  @column.dateTime()
+  declare failedAt: DateTime | null
+  @column()
+  declare failureReason: string | null
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare isSingleOperatorApproval: boolean
+  @column.dateTime()
+  declare paidAt: DateTime | null
+  @column()
+  declare payoutAccountId: string
+  @column.dateTime()
+  declare periodEnd: DateTime
+  @column.dateTime()
+  declare periodStart: DateTime
+  @column()
+  declare shopId: string
+  @column()
+  declare status: string
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
+  @column()
+  declare version: number
+}
+
 export class PlatformSettingSchema extends BaseModel {
   static $columns = ['createdAt', 'key', 'updatedAt', 'updatedBy', 'value'] as const
   $columns = PlatformSettingSchema.$columns
@@ -1098,6 +1444,54 @@ export class ProductSchema extends BaseModel {
   declare warrantyText: string | null
 }
 
+export class ProviderEventSchema extends BaseModel {
+  static $columns = [
+    'error',
+    'id',
+    'kind',
+    'payload',
+    'paymentId',
+    'processedAt',
+    'processingStatus',
+    'provider',
+    'providerEventKey',
+    'rawBodySha256',
+    'receivedAt',
+    'refundId',
+    'requestId',
+    'signatureValid',
+  ] as const
+  $columns = ProviderEventSchema.$columns
+  @column()
+  declare error: string | null
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare kind: string
+  @column()
+  declare payload: unknown
+  @column()
+  declare paymentId: string | null
+  @column.dateTime()
+  declare processedAt: DateTime | null
+  @column()
+  declare processingStatus: string
+  @column()
+  declare provider: string
+  @column()
+  declare providerEventKey: string
+  @column()
+  declare rawBodySha256: Buffer | null
+  @column.dateTime()
+  declare receivedAt: DateTime
+  @column()
+  declare refundId: string | null
+  @column()
+  declare requestId: string | null
+  @column()
+  declare signatureValid: boolean | null
+}
+
 export class ProvinceSchema extends BaseModel {
   static $columns = ['code', 'createdAt', 'isActive', 'nameEn', 'nameNe', 'updatedAt'] as const
   $columns = ProvinceSchema.$columns
@@ -1113,6 +1507,135 @@ export class ProvinceSchema extends BaseModel {
   declare nameNe: string
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime
+}
+
+export class RefundItemSchema extends BaseModel {
+  static $columns = [
+    'amountMinor',
+    'commissionReversalMinor',
+    'createdAt',
+    'currency',
+    'orderItemId',
+    'quantity',
+    'refundId',
+    'shopOrderId',
+    'vendorAmountMinor',
+  ] as const
+  $columns = RefundItemSchema.$columns
+  @column()
+  declare amountMinor: number
+  @column()
+  declare commissionReversalMinor: number
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare currency: string
+  @column()
+  declare orderItemId: string
+  @column()
+  declare quantity: number
+  @column({ isPrimary: true })
+  declare refundId: string
+  @column()
+  declare shopOrderId: string
+  @column()
+  declare vendorAmountMinor: number
+}
+
+export class RefundSchema extends BaseModel {
+  static $columns = [
+    'affectsVendorLedger',
+    'amountMinor',
+    'approvedAt',
+    'approvedBy',
+    'attempts',
+    'createdAt',
+    'createdBy',
+    'currency',
+    'dueAt',
+    'id',
+    'isSingleOperatorApproval',
+    'method',
+    'nextVerificationAt',
+    'note',
+    'orderId',
+    'paidReference',
+    'paymentId',
+    'providerIdempotencyKey',
+    'providerRefundId',
+    'reasonCode',
+    'recipientDetailsEnc',
+    'replacesRefundId',
+    'returnRequestId',
+    'shopId',
+    'shopOrderId',
+    'status',
+    'succeededAt',
+    'updatedAt',
+    'verificationAttempts',
+    'version',
+  ] as const
+  $columns = RefundSchema.$columns
+  @column()
+  declare affectsVendorLedger: boolean
+  @column()
+  declare amountMinor: number
+  @column.dateTime()
+  declare approvedAt: DateTime | null
+  @column()
+  declare approvedBy: string | null
+  @column()
+  declare attempts: number
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare createdBy: string | null
+  @column()
+  declare currency: string
+  @column.dateTime()
+  declare dueAt: DateTime
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare isSingleOperatorApproval: boolean
+  @column()
+  declare method: string
+  @column.dateTime()
+  declare nextVerificationAt: DateTime | null
+  @column()
+  declare note: string | null
+  @column()
+  declare orderId: string
+  @column()
+  declare paidReference: string | null
+  @column()
+  declare paymentId: string
+  @column()
+  declare providerIdempotencyKey: string
+  @column()
+  declare providerRefundId: string | null
+  @column()
+  declare reasonCode: string
+  @column()
+  declare recipientDetailsEnc: string | null
+  @column()
+  declare replacesRefundId: string | null
+  @column()
+  declare returnRequestId: string | null
+  @column()
+  declare shopId: string
+  @column()
+  declare shopOrderId: string
+  @column()
+  declare status: string
+  @column.dateTime()
+  declare succeededAt: DateTime | null
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
+  @column()
+  declare verificationAttempts: number
+  @column()
+  declare version: number
 }
 
 export class ReturnItemSchema extends BaseModel {
@@ -2062,4 +2585,40 @@ export class VariantOptionValueSchema extends BaseModel {
   declare productId: string
   @column({ isPrimary: true })
   declare variantId: string
+}
+
+export class VendorRemittanceSchema extends BaseModel {
+  static $columns = [
+    'amountMinor',
+    'createdAt',
+    'currency',
+    'id',
+    'method',
+    'note',
+    'receivedAt',
+    'recordedBy',
+    'reference',
+    'shopId',
+  ] as const
+  $columns = VendorRemittanceSchema.$columns
+  @column()
+  declare amountMinor: number
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare currency: string
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare method: string
+  @column()
+  declare note: string | null
+  @column.dateTime()
+  declare receivedAt: DateTime
+  @column()
+  declare recordedBy: string
+  @column()
+  declare reference: string
+  @column()
+  declare shopId: string
 }
