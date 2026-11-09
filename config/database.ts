@@ -10,6 +10,16 @@ const migrations = {
   // down() is for development and CI only (docs/09 §8.2, ADR-0011)
   disableRollbacksInProduction: true,
 }
+/*
+ * Reference data first, then development data (docs/09 §8.8): `db:seed`
+ * runs the paths in this order and sorts each folder naturally, so the
+ * numbered reference files run in dependency order. Helpers live in
+ * database/support/, outside both paths, so they are never loaded as seeders.
+ */
+const seeders = {
+  paths: ['./database/seeders/reference', './database/seeders/dev'],
+  naturalSort: true,
+}
 const schemaGeneration = {
   enabled: true,
   outputPath: 'database/schema.ts',
@@ -39,6 +49,7 @@ const migratorConnection = (): Record<string, PostgreConfig> => {
         database: env.get('DB_DATABASE'),
       },
       migrations,
+      seeders,
       schemaGeneration,
       debug: app.inDev,
     },
@@ -66,6 +77,7 @@ const dbConfig = defineConfig({
         database: env.get('DB_DATABASE'),
       },
       migrations,
+      seeders,
       schemaGeneration,
       debug: app.inDev,
     },

@@ -7,6 +7,13 @@ import { type SchemaRules } from '@adonisjs/lucid/types/schema_generator'
 const column = [{ name: '@column' }]
 // Secret columns never serialize (Lucid's built-in rule covers only a column named `password`)
 const secret = [{ name: '@column', args: { serializeAs: null } }]
+// A column whose name ends in digits needs its name spelled out: Lucid's
+// snake_case naming strategy maps `phoneLast4` back to `phone_last_4`
+// (docs/04 §2.15), so reads and writes of the column would miss it.
+const named = (columnName: string, tsType: string) => ({
+  tsType,
+  decorators: [{ name: '@column', args: { columnName } }],
+})
 
 export default {
   types: {
@@ -32,6 +39,16 @@ export default {
     credentials_enc: { tsType: 'string', decorators: secret },
   },
   tables: {
+    media_assets: { columns: { sha256: named('sha256', 'Buffer') } },
+    provider_events: { columns: { raw_body_sha256: named('raw_body_sha256', 'Buffer') } },
+    shop_payout_accounts: {
+      columns: { account_number_last4: named('account_number_last4', 'string') },
+    },
+    shops: { columns: { contact_phone_e164: named('contact_phone_e164', 'string') } },
+    user_addresses: {
+      columns: { recipient_phone_last4: named('recipient_phone_last4', 'string') },
+    },
+    users: { columns: { phone_last4: named('phone_last4', 'string') } },
     // uuid[] facet columns of the read model
     product_listings: { types: { ARRAY: { tsType: 'string[]', decorators: column } } },
     // the primary-key rule would type this bigint key as `bigint | number` (docs/04 §20.3)

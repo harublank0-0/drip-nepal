@@ -707,7 +707,7 @@ export class MediaAssetSchema extends BaseModel {
   declare processedAt: DateTime | null
   @column()
   declare rejectionReason: string | null
-  @column()
+  @column({ columnName: 'sha256' })
   declare sha256: Buffer | null
   @column()
   declare shopId: string
@@ -1528,7 +1528,7 @@ export class ProviderEventSchema extends BaseModel {
   declare provider: string
   @column()
   declare providerEventKey: string
-  @column()
+  @column({ columnName: 'raw_body_sha256' })
   declare rawBodySha256: Buffer | null
   @column.dateTime()
   declare receivedAt: DateTime
@@ -2265,7 +2265,7 @@ export class ShopPayoutAccountSchema extends BaseModel {
   declare accountName: string
   @column()
   declare accountNumberEnc: string | null
-  @column()
+  @column({ columnName: 'account_number_last4' })
   declare accountNumberLast4: string
   @column()
   declare bankName: string
@@ -2401,7 +2401,7 @@ export class ShopSchema extends BaseModel {
   declare commissionRateBp: number | null
   @column()
   declare contactEmail: string
-  @column()
+  @column({ columnName: 'contact_phone_e164' })
   declare contactPhoneE164: string
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
@@ -2590,7 +2590,7 @@ export class UserAddressSchema extends BaseModel {
   declare recipientNameEnc: string
   @column()
   declare recipientPhoneEnc: string
-  @column()
+  @column({ columnName: 'recipient_phone_last4' })
   declare recipientPhoneLast4: string
   @column()
   declare streetLandmarkEnc: string | null
@@ -2689,7 +2689,7 @@ export class UserSchema extends BaseModel {
   declare phoneEnc: string | null
   @column()
   declare phoneHash: Buffer | null
-  @column()
+  @column({ columnName: 'phone_last4' })
   declare phoneLast4: string | null
   @column.dateTime()
   declare phoneVerifiedAt: DateTime | null
