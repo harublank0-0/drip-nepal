@@ -43,13 +43,14 @@ The documents describe the target. If the code differs, the code is wrong unless
 
 Skills live in `.agents/skills/` and are tracked; each has a symlink in `.claude/skills/`, where Claude Code loads project skills ([09 §1.5](docs/09-code-structure-and-engineering-standards.md#15-current-code--target-structure)).
 
-| Skill                                                                                | Use it to                                                                        |
-| ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
-| [`dripnepal-docs`](.agents/skills/dripnepal-docs/SKILL.md)                           | Find the document that owns a fact, and change the docs correctly                |
-| [`dripnepal-testing`](.agents/skills/dripnepal-testing/SKILL.md)                     | Get a test database, run the suites, and write tests that can fail               |
-| [`dripnepal-run`](.agents/skills/dripnepal-run/SKILL.md)                             | Start the app with demo data and check pages in a headless browser               |
-| [`shadcn`](.agents/skills/shadcn/SKILL.md)                                           | Work with shadcn/ui components (patched to ADR-0015; see its `LOCAL_CHANGES.md`) |
-| [`vercel-react-best-practices`](.agents/skills/vercel-react-best-practices/SKILL.md) | Review React code for performance; its Next.js server rules don't apply here     |
+| Skill                                                                                | Use it to                                                                                        |
+| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| [`dripnepal-docs`](.agents/skills/dripnepal-docs/SKILL.md)                           | Find the document that owns a fact, and change the docs correctly                                |
+| [`dripnepal-testing`](.agents/skills/dripnepal-testing/SKILL.md)                     | Get a test database, run the suites, and write tests that can fail                               |
+| [`dripnepal-run`](.agents/skills/dripnepal-run/SKILL.md)                             | Start the app with demo data and check pages in a headless browser                               |
+| [`shadcn`](.agents/skills/shadcn/SKILL.md)                                           | Work with shadcn/ui components (patched to ADR-0015; see its `LOCAL_CHANGES.md`)                 |
+| [`vercel-react-best-practices`](.agents/skills/vercel-react-best-practices/SKILL.md) | Review React code for performance; its Next.js server rules don't apply here                     |
+| [`ncm-integration`](.agents/skills/ncm-integration/SKILL.md)                         | Plan the Nepal Can Move adapter (M6); its NCM API facts are unverified (VX-16), and the docs win |
 
 A new project skill goes in `.agents/skills/dripnepal-<name>/` with a `.claude/skills/` symlink. A third-party skill is committed only after a licence check and a read-through for scripts, commands it runs on load, and remote instructions it fetches; record it in `skills-lock.json` and the risks decision log.
 

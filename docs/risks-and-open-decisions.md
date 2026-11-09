@@ -235,6 +235,29 @@ OD-28 to OD-54 register the owner decisions that the three deep audits left open
 Newest first. The entry format is in §1.5. A ruling that is not an OD but changes an owning document or an ADR is logged in the same format, headed "Not an OD".
 
 ```text
+Not an OD — Decided 2026-11-09 by product owner: commit the reviewed ncm-integration skill
+Ruling: The ncm-integration skill that commit bd23da5 added to main under .claude/skills/ is tracked as
+        a third-party skill, unchanged: it moves to .agents/skills/ncm-integration/ with a
+        .claude/skills/ symlink, is ignored by Prettier, and is listed in skills-lock.json and AGENTS.md.
+        A NOTICE.md beside it records its source and that the documents win where it disagrees. It
+        guides the M6 NCM adapter; it decides nothing.
+Evidence: Licence: MIT (its LICENSE, copyright 2026 harublank0-0). Read-through of SKILL.md and the four
+          references/*.md files: no scripts, no `!` command run on load, no allowed-tools, no hooks, and
+          no instruction to fetch remote content; its URLs are NCM's demo host and an example domain.
+          Its API facts cite NCM documents (an API PDF dated 251222, a webhook doc v1.1) and one
+          production integration, none of which is in this repository, and label them [doc],
+          [observed], [reported], [inferred] or [unknown]. They are not verified here: VX-16 stays
+          open and ADR-0019 decision 6 stays Proposed. Where it differs from the documents (its stage
+          names against 05 §6.3, decimal-string money against ADR-0007, its decisions D1 to D11
+          against OD-56, OD-58 and ADR-0019), the documents win. skills-lock.json records commit
+          bd23da5 of this repository as its source, because no upstream repository is known; its
+          computedHash is SHA-256 over the sorted relative paths and contents of the six skill files,
+          which may not be the algorithm of the two older entries (never checked, 2026-11-04 entry).
+ADR: none.
+Docs updated: 09 (§1.5, note 85), AGENTS.md, note 28  |  Status: Decided
+```
+
+```text
 Not an OD — Decided 2026-11-09 by product owner: the reference seeders land without the locations dataset
 Ruling: The E4 and E8 reference seeders that need no location data (zones, shop categories,
         categories, attributes, category rules, brands, settings, the ncm courier row), the factories
@@ -817,3 +840,4 @@ This matrix is authoritative for decision gates. [12 §3](12-roadmap-and-backlog
 25. **Courier integration and order verification (2026-11-05).** §2.3 logs OD-56 (courier integration in R1, reduced scope) and OD-57 (a verification flag on `orders`, no hold), and §2.2 opens OD-58 (COD on platform-owned courier accounts). §3.1 adds VX-16 to VX-18 for Nepal Can Move, §4.2 adds R-33, and §5 adds the M6 items. The §2 and §3 headings keep their old ranges (OD-54, VX-15) because other documents link to their anchors; the intro gives the current ranges. R-12 fired: the product owner moved nothing out of R1 for this addition, which the OD-56 entry records; the M6 effort in [12 §5.6](12-roadmap-and-backlog.md#56-m6-order-processing--fulfillment-r1) grows instead. FR-FUL-004 is Must, so VX-16 is also an M7 launch-gate item. Still open: (a) the M6 effort estimate, revisited at M6 planning. (b) Done the same day in the data-model change: the data model (04, 04a), the shipment machine and dispatch rule (05 §6.3), the permission and credential rules (07, with the proposed `shop.courier_accounts.manage` and `platform.logistics.manage`), the journeys (02 J-12, J-13) and the test IDs (10 §6). Still open: the operations, jobs and courier inbox, which M6 specifies.
 26. **v1 holds only seed data (2026-11-07).** The product owner confirmed that the project is not live: the web app is not hosted and every row in any database is seed data. §2.3 logs OD-55 as Decided, option (a) with no import, and adds dated notes to the 2026-11-04 and 2026-11-03 entries, whose "live store" and "real data" premise did not come true. §2.2 and §5 follow: the M0 exit no longer waits on an import. Notes 22 and 24 record the outcome. Other documents updated in the same change: 00 (A-01, §7.2, §7.3), 04 (§20.2.1: no hosted database to export), ADR-0011 (dated note: no import, no cutover rehearsal), ADR-0019 (dated note), 12 (§3, §4.1) and DEPLOY.md. The same day §2.3 logs that the baseline lands through the integration branch `feat/e4-schema-baseline`, which closes the staging question of note 24; 09 §8.1 and §11.6 and AGENTS.md follow.
 27. **Reference seeders without the locations dataset (2026-11-09).** §2.3 logs the product owner's split of the E4 and E8 seeders. VX-10 stays open and still blocks the M1 and M2 exits as §5 says; the locations seeder it feeds is now a separate pull request, and the M0 exit waits for it and `T-SHOP-108` through [12 §4.3](12-roadmap-and-backlog.md#43-exit-criteria) item 6. §2.2 opens OD-59 for the demo seeder that 09 §9.4 schedules in M0 but that calls M1 to M6 actions, and §5 lists it under the M0 exit with its safe default.
+28. **The `ncm-integration` skill (2026-11-09).** §2.3 logs the product owner's decision to track the skill that commit `bd23da5` added to `main`, after the licence check and read-through that [AGENTS.md](../AGENTS.md) requires. It changes no OD, VX or risk: the skill's NCM API facts are unverified, so VX-16, VX-17 and VX-18 stay open and R-33 is unchanged.
