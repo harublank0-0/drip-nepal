@@ -460,7 +460,9 @@ const CASES: Case[] = [
       const n = next()
       const [parent] = await db
         .table('categories')
-        .insert({ slug: `clothing-${n}`, name: 'Clothing', path: `/clothing-${n}/`, depth: 1 })
+        // A unique name: the seeded tree already has a top-level "Clothing"
+        // (categories_parent_name_key, docs/04a §7.1).
+        .insert({ slug: `clothing-${n}`, name: `Clothing ${n}`, path: `/clothing-${n}/`, depth: 1 })
         .returning('id')
       return {
         slug: `kurta-${n}`,
