@@ -115,6 +115,12 @@ jobs:
           GRANT pg_read_all_stats TO dripnepal_readonly;
           ALTER DATABASE dripnepal_test OWNER TO dripnepal_migrator;
           SQL
+      # T-ARCH-017 (docs/09 §8.4, §8.2): migration file names and first
+      # statements. database/migrations.lock does not exist until the first
+      # production deploy, so the script runs in file-name mode (docs/12
+      # §4.3 item 2); from then on it also compares checksums.
+      - name: T-ARCH-017 migration lock (file-name mode)
+        run: node scripts/check_migrations_lock.mjs
       # docs/04 §2.1: the baseline's keys default to uuidv7(), built into
       # PostgreSQL 18; this records that the CI image has it.
       - name: uuidv7() on postgres:18.4
