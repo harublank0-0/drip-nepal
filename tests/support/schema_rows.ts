@@ -4,7 +4,8 @@ import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
 
 /*
  * Row builders for the schema constraint tests (tests/functional/schema/):
- * users, shops and locations, and the orders tables of docs/04a §11. Rows
+ * users, shops and locations, the orders tables of docs/04a §11, stock
+ * (§8.1) and COD payments (§12.1, §12.2). Rows
  * are inserted directly, as the runtime would, with the smallest set of
  * columns each table's CHECKs accept. Every call makes unique rows; the
  * functional suite rolls each test back.
@@ -191,8 +192,14 @@ export async function insertVariant(shopId: string) {
   return { productId: product.id as string, variantId: variant.id as string }
 }
 
-// Two units at Rs 500 on `shopOrder`; returns the order_items id.
+// Two units at Rs 500 of a new variant on `shopOrder`; returns the order_items id.
 export async function insertOrderItem(shopOrder: ShopOrderRef) {
+  const line = await insertOrderLine(shopOrder)
+  return line.id
+}
+
+// As insertOrderItem, and also returns the line's variant.
+export async function insertOrderLine(shopOrder: ShopOrderRef) {
   const { productId, variantId } = await insertVariant(shopOrder.shopId)
   const [row] = await db
     .table('order_items')
@@ -214,6 +221,37 @@ export async function insertOrderItem(shopOrder: ShopOrderRef) {
       commission_minor: 10000,
     })
     .returning('id')
+  return { id: row.id as string, variantId }
+}
+
+// The stock row of a variant of `shopId` (docs/04a §8.1), empty unless `values` say otherwise.
+export async function insertInventoryItem(shopId: string, variantId: string, values: Row = {}) {
+  await db.table('inventory_items').insert({ variant_id: variantId, shop_id: shopId, ...values })
+}
+
+// The COD payment of `shopOrder` for its Rs 1,100 total, with its one
+// allocation (docs/04a §12.1, §12.2): `collected`, or still awaiting collection.
+export async function insertCodPayment(shopOrder: ShopOrderRef, collected: boolean) {
+  const capturedMinor = collected ? 110000 : 0
+  const [row] = await db
+    .table('payments')
+    .insert({
+      order_id: shopOrder.orderId,
+      shop_order_id: shopOrder.id,
+      method: 'cod',
+      status: collected ? 'collected' : 'awaiting_collection',
+      amount_minor: 110000,
+      captured_minor: capturedMinor,
+      captured_at: collected ? db.raw('now()') : null,
+    })
+    .returning('id')
+  await db.table('payment_allocations').insert({
+    payment_id: row.id,
+    shop_order_id: shopOrder.id,
+    order_id: shopOrder.orderId,
+    amount_minor: 110000,
+    captured_minor: capturedMinor,
+  })
   return row.id as string
 }
 
