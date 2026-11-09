@@ -3,6 +3,7 @@ import { belongsTo, hasMany } from '@adonisjs/lucid/orm'
 import type { BelongsTo, HasMany } from '@adonisjs/lucid/types/relations'
 import Shop from './shop.js'
 import User from './user.js'
+import PlatformStaff from './platform_staff.js'
 import Payment from './payment.js'
 import ProviderEvent from './provider_event.js'
 import LedgerEntry from './ledger_entry.js'
@@ -30,8 +31,8 @@ export default class Refund extends RefundSchema {
   declare createdByUser: BelongsTo<typeof User>
 
   // a platform staff member (`platform_staff.user_id`)
-  @belongsTo(() => User, { foreignKey: 'approvedBy' })
-  declare approvedByUser: BelongsTo<typeof User>
+  @belongsTo(() => PlatformStaff, { foreignKey: 'approvedBy' })
+  declare approvedByStaff: BelongsTo<typeof PlatformStaff>
 
   @hasMany(() => ProviderEvent)
   declare providerEvents: HasMany<typeof ProviderEvent>

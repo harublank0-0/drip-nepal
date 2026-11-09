@@ -60,7 +60,7 @@ test.group('T-ORD-104 cross-shop reservation rows', () => {
       status: 'committed',
       ...values,
     })
-    const cases: [string, Row, string | undefined][] = [
+    const cases: [string, Row, string | string[]][] = [
       [
         "shop B's variant and stock held against shop A's order line",
         { shop_id: shopB, variant_id: variantB },
@@ -70,13 +70,13 @@ test.group('T-ORD-104 cross-shop reservation rows', () => {
         "shop A's order line held for shop A with shop B's variant",
         { variant_id: variantB },
         // Both keys refuse it; PostgreSQL reports whichever runs first.
-        undefined,
+        ['inventory_reservations_stock_fkey', 'inventory_reservations_order_item_fkey'],
       ],
       [
         "shop A's order line held for shop B",
         { shop_id: shopB },
         // Both keys refuse it, as above.
-        undefined,
+        ['inventory_reservations_stock_fkey', 'inventory_reservations_order_item_fkey'],
       ],
       [
         "the line under another order's id",
@@ -111,7 +111,9 @@ test.group('T-ORD-104 cross-shop reservation rows', () => {
  * T-INV-001 (docs/10 §6: "Missing stock guard gives 23514, never
  * oversell"), the test docs/04a §8.1 gives the stock CHECK. ADR-0011 named it
  * T-INV-003, which is the concurrency test of docs/05 §4.9 and comes with
- * checkout (dated note in ADR-0011). `inventory_items_reserved_check` refuses a
+ * checkout (dated note in ADR-0011). The action-level form of T-INV-001 (the
+ * guard removed in a test double, docs/04a §8.1) comes with checkout in M5;
+ * this group is its schema part. `inventory_items_reserved_check` refuses a
  * promise of more units than are on hand when a code path skips the guard
  * `WHERE on_hand - reserved >= :qty` (docs/04a §8.1, docs/05 §4.5).
  */
