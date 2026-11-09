@@ -2658,7 +2658,8 @@ CONSTRAINT provider_events_processing_check
   AND (processing_status = 'pending') = (processed_at IS NULL)),
 CONSTRAINT provider_events_key_check CHECK (char_length(provider_event_key) BETWEEN 8 AND 200),
 CONSTRAINT provider_events_payload_check CHECK (jsonb_typeof(payload) = 'object'),
-CONSTRAINT provider_events_hash_check CHECK (raw_body_sha256 IS NULL OR octet_length(raw_body_sha256) = 32)
+CONSTRAINT provider_events_hash_check CHECK (raw_body_sha256 IS NULL OR octet_length(raw_body_sha256) = 32),
+CONSTRAINT provider_events_error_check CHECK (error IS NULL OR char_length(error) <= 2000)
 ```
 
 The handler inserts with `ON CONFLICT (provider, provider_event_key) DO NOTHING` and responds 200 after the durable insert; processing runs in a job. The same provider event (a return, a webhook or a lookup result) delivered N times, concurrently or not, yields one row and one state change (T-PAY-005).
@@ -2756,7 +2757,8 @@ CONSTRAINT refunds_recipient_details_enc_check CHECK (recipient_details_enc IS N
   OR recipient_details_enc ~ '^v[0-9]+\.[A-Za-z0-9_-]{1,32}\.[A-Za-z0-9_-]{16}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{22}$'),
 CONSTRAINT refunds_attempts_check CHECK (attempts >= 0),
 CONSTRAINT refunds_verification_check CHECK (verification_attempts >= 0
-  AND (next_verification_at IS NULL OR status = 'processing'))
+  AND (next_verification_at IS NULL OR status = 'processing')),
+CONSTRAINT refunds_note_check CHECK (note IS NULL OR char_length(note) <= 2000)
 ```
 
 - `refunds_allocation_fkey` targets the allocation's primary key: a refund can only be drawn from the payment that actually paid this shop order.
@@ -3025,6 +3027,8 @@ CREATE TRIGGER payout_entries_guard BEFORE INSERT OR DELETE ON payout_entries
   FOR EACH ROW EXECUTE FUNCTION payout_entries_guard();
 REVOKE UPDATE, TRUNCATE ON payout_entries FROM dripnepal_app;
 ```
+
+Baseline file 12 runs the `REVOKE` inside the per-role guard of file 14 (`DO $$ BEGIN IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'dripnepal_app') THEN … END IF; END $$`), so a database without the role still migrates, and file 14 repeats it after its blanket grant ([04 §20.2.2](04-domain-model-and-data-dictionary.md#2022-baseline-files-and-their-order)).
 
 The only delete in the money tables is cancelling a draft payout, which removes its links so the entries become eligible again ([05 §6.8](05-order-payment-and-inventory-lifecycles.md#68-payout-and-settlement-r11)). Once approved, links are permanent. The `FOR SHARE` lock makes the check race-free against a concurrent approval. T-LED-102 (proposed) deletes a link of an approved payout and inserts a `payout` entry into a draft, and expects P0001 both times.
 
