@@ -1,27 +1,28 @@
 import { ProductVariantSchema } from '#database/schema'
-import { belongsTo, hasMany, manyToMany } from '@adonisjs/lucid/orm'
+import { belongsTo, manyToMany } from '@adonisjs/lucid/orm'
+import type { BelongsTo, ManyToMany } from '@adonisjs/lucid/types/relations'
+import Shop from './shop.js'
 import Product from './product.js'
-import type { BelongsTo, HasMany, ManyToMany } from '@adonisjs/lucid/types/relations'
 import AttributeValue from './attribute_value.js'
-import ProductMedia from './product_media.js'
-import CartItem from './cart_item.js'
-import OrderItem from './order_item.js'
 
+/*
+ * docs/04a §7.9 (catalog). Stock is in `inventory_items` (§8.1), a higher
+ * module, so it has no relation here.
+ */
 export default class ProductVariant extends ProductVariantSchema {
+  @belongsTo(() => Shop)
+  declare shop: BelongsTo<typeof Shop>
+
   @belongsTo(() => Product)
   declare product: BelongsTo<typeof Product>
 
+  // docs/04a §7.10, a composite-key table (docs/04 §2.15)
   @manyToMany(() => AttributeValue, {
-    pivotTable: 'product_variant_attribute_values',
+    pivotTable: 'variant_option_values',
+    pivotForeignKey: 'variant_id',
+    pivotRelatedForeignKey: 'attribute_value_id',
+    pivotColumns: ['product_id', 'attribute_id'],
+    pivotTimestamps: { createdAt: 'created_at', updatedAt: false },
   })
-  declare attributeValues: ManyToMany<typeof AttributeValue>
-
-  @hasMany(() => ProductMedia)
-  declare media: HasMany<typeof ProductMedia>
-
-  @hasMany(() => CartItem)
-  declare cartItems: HasMany<typeof CartItem>
-
-  @hasMany(() => OrderItem)
-  declare orderItems: HasMany<typeof OrderItem>
+  declare optionValues: ManyToMany<typeof AttributeValue>
 }

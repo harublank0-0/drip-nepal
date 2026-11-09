@@ -1,13 +1,25 @@
 import { UserAddressSchema } from '#database/schema'
-import { belongsTo, hasMany } from '@adonisjs/lucid/orm'
+import { belongsTo } from '@adonisjs/lucid/orm'
+import type { BelongsTo } from '@adonisjs/lucid/types/relations'
 import User from './user.js'
-import type { BelongsTo, HasMany } from '@adonisjs/lucid/types/relations'
-import Order from './order.js'
+import Province from './province.js'
+import District from './district.js'
+import LocalLevel from './local_level.js'
 
+/*
+ * docs/04a §5.5 (identity). `postal_code` is a generated column: code never
+ * assigns it.
+ */
 export default class UserAddress extends UserAddressSchema {
   @belongsTo(() => User)
   declare user: BelongsTo<typeof User>
 
-  @hasMany(() => Order)
-  declare orders: HasMany<typeof Order>
+  @belongsTo(() => Province, { foreignKey: 'provinceCode', localKey: 'code' })
+  declare province: BelongsTo<typeof Province>
+
+  @belongsTo(() => District, { foreignKey: 'districtCode', localKey: 'code' })
+  declare district: BelongsTo<typeof District>
+
+  @belongsTo(() => LocalLevel, { foreignKey: 'localLevelCode', localKey: 'code' })
+  declare localLevel: BelongsTo<typeof LocalLevel>
 }

@@ -1,5 +1,9 @@
-# CI for the store. Runs on pushes to main and on pull requests into it:
-# production deploys release tags cut from main (DEPLOY.md, "Releasing").
+# CI for the repository (docs/10 §5). Runs on pushes to main and on pull
+# requests into it. Nothing is deployed yet; docs/11 §5 is the release path.
+# It also runs on pull requests into feat/e4-schema-baseline, the E4
+# integration branch (docs/12 §4.1, docs/09 §8.1), and on demand
+# (workflow_dispatch): retargeting a stacked pull request onto that branch
+# starts no run, so a run can be started by hand for the branch.
 # Actions are pinned by commit SHA; the release tag is in the comment. No
 # secrets are used.
 name: ci
@@ -8,7 +12,8 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    branches: [main, feat/e4-schema-baseline]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -46,7 +51,9 @@ jobs:
 
   # The unit, functional and concurrency suites against PostgreSQL 18.4, the
   # production version (docs/10 §3.2). The test runner rebuilds the
-  # dripnepal_test database at the start of every run.
+  # dripnepal_test database at the start of every run, as dripnepal_migrator,
+  # and the suites run as dripnepal_app (docs/07 §4.10). The image's
+  # superuser, postgres, only creates those roles.
   tests:
     name: Tests
     runs-on: ubuntu-24.04
@@ -55,13 +62,13 @@ jobs:
       postgres:
         image: docker.io/postgres:18.4
         env:
-          POSTGRES_USER: dripnepal
+          POSTGRES_USER: postgres
           POSTGRES_PASSWORD: secret
           POSTGRES_DB: dripnepal_test
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U dripnepal -d dripnepal_test"
+          --health-cmd "pg_isready -U postgres -d dripnepal_test"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 12
@@ -76,9 +83,11 @@ jobs:
       LIMITER_STORE: database
       DB_HOST: localhost
       DB_PORT: 5432
-      DB_USER: dripnepal
+      DB_USER: dripnepal_app
       DB_PASSWORD: secret
       DB_DATABASE: dripnepal_test
+      DB_MIGRATOR_USER: dripnepal_migrator
+      DB_MIGRATOR_PASSWORD: secret
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
@@ -91,6 +100,47 @@ jobs:
       # A throwaway key for this run only; it signs nothing that outlives it.
       - name: App key for the test run
         run: echo "APP_KEY=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+      # docs/07 §4.10 and docs/09 §6.1 "Test roles": the migrator owns the
+      # test database, so it holds CREATE on it for the CREATE EXTENSION of
+      # baseline file 1 (docs/04 §20.2.2) and owns schema public through
+      # pg_database_owner; dripnepal_app gets only what baseline_grants grants.
+      - name: Database roles
+        env:
+          PGPASSWORD: secret
+        run: |
+          psql -v ON_ERROR_STOP=1 -h "$DB_HOST" -p "$DB_PORT" -U postgres -d "$DB_DATABASE" <<'SQL'
+          CREATE ROLE dripnepal_migrator LOGIN PASSWORD 'secret' NOSUPERUSER NOCREATEDB NOCREATEROLE;
+          CREATE ROLE dripnepal_app LOGIN PASSWORD 'secret' NOSUPERUSER NOCREATEDB NOCREATEROLE;
+          CREATE ROLE dripnepal_readonly LOGIN PASSWORD 'secret' NOSUPERUSER NOCREATEDB NOCREATEROLE;
+          GRANT pg_read_all_stats TO dripnepal_readonly;
+          ALTER DATABASE dripnepal_test OWNER TO dripnepal_migrator;
+          SQL
+      # T-ARCH-017 (docs/09 §8.4, §8.2): migration file names and first
+      # statements. database/migrations.lock does not exist until the first
+      # production deploy, so the script runs in file-name mode (docs/12
+      # §4.3 item 2); from then on it also compares checksums.
+      - name: T-ARCH-017 migration lock (file-name mode)
+        run: node scripts/check_migrations_lock.mjs
+      # T-ARCH-034 (ADR-0016 decision 2, docs/11 §1.9): no CREATE EXTENSION
+      # outside citext, pg_trgm and pgcrypto. The functional suite checks the
+      # migrated database's pg_extension against the same list.
+      - name: T-ARCH-034 extension allow-list
+        run: node scripts/check_migration_extensions.mjs
+      # docs/04 §2.1: the baseline's keys default to uuidv7(), built into
+      # PostgreSQL 18; this records that the CI image has it.
+      - name: uuidv7() on postgres:18.4
+        run: psql "postgresql://$DB_USER:$DB_PASSWORD@$DB_HOST:$DB_PORT/$DB_DATABASE" -c 'SELECT uuidv7()'
+      # T-ARCH-010 (docs/10 §6.2): a fresh migration regenerates
+      # database/schema.ts; the committed file (Prettier-formatted, as
+      # lint-staged commits it) must match it and must contain no `any`.
+      # It migrates as the migrator, on the pg_migrator connection that
+      # exists only under NODE_ENV=test (config/database.ts).
+      - name: T-ARCH-010 database/schema.ts matches the migrations
+        run: |
+          NODE_ENV=test node ace migration:fresh --connection=pg_migrator
+          pnpm exec prettier --write database/schema.ts
+          git diff --exit-code database/schema.ts
+          if grep -nE '\bany\b' database/schema.ts; then exit 1; fi
       - name: Unit, functional and concurrency suites
         run: pnpm test
 

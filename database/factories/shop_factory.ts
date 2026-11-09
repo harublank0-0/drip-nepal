@@ -1,19 +1,78 @@
+import { randomBytes, randomUUID } from 'node:crypto'
+import { DateTime } from 'luxon'
 import factory from '@adonisjs/lucid/factories'
 import Shop from '#models/shop'
-import { ShopStatusValues } from '#constants/shop_status'
+import type { BusinessType } from '#modules/shops/domain/business_type'
+import type { ShopStatus } from '#modules/shops/domain/shop_status'
+import { UserFactory } from '#database/factories/user_factory'
+import { placeholderCiphertext } from '#database/factories/placeholder_ciphertext'
+
+/*
+ * Shops (docs/04a §6.1) for tests and development seeders (docs/04 §20.3).
+ * The default is a `pending_review` application of an individual, owned by
+ * a new user unless the caller merges `ownerUserId`.
+ *
+ * State `active` creates the aggregate whole: the shop is inserted
+ * `pending_review`, then its `shop_agreements` row (docs/04a §6.4), then it
+ * is approved and activated, because the `shops_require_agreement` trigger
+ * (INV-18) refuses an active shop without an agreement. The approver is a
+ * new user; no staff factory exists yet.
+ */
+
+/** A version in the `shop_agreements_version_check` format; agreement texts live in code (04a §6.4). */
+export const FACTORY_AGREEMENT_VERSION = '2026-01-01'
+
+const status = (value: ShopStatus) => value
+const businessType = (value: BusinessType) => value
+
+// Shops the `active` state applied to, activated after insert.
+const toActivate = new WeakSet<Shop>()
+
+let sequence = 0
 
 export const ShopFactory = factory
-  .define(Shop, async ({ faker }) => {
-    const name = faker.company.name()
+  .define(Shop, ({ faker }) => {
+    sequence += 1
+    const suffix = faker.string.alphanumeric({ length: 6, casing: 'lower' })
     return {
-      name,
-      slug: faker.helpers.slugify(name),
-      description: faker.company.catchPhraseDescriptor(),
-      logo: faker.image.avatar(),
-      banner: faker.image.urlPicsumPhotos(),
-      email: faker.internet.email(),
-      phone: faker.phone.number({ style: 'international' }),
-      status: faker.helpers.arrayElement(ShopStatusValues),
+      name: `Thulo Pasal ${sequence}`,
+      slug: `shop-${sequence}-${suffix}`,
+      status: status('pending_review'),
+      contactEmail: `shop-${sequence}-${suffix}@example.com`,
+      contactPhoneE164: `+97798${faker.string.numeric(8)}`,
+      returnPolicyText: 'Returns within 7 days, unworn and with tags.',
+      businessType: businessType('individual'),
+      grievanceContactName: faker.person.fullName().slice(0, 100),
+      grievanceContactPhoneEnc: placeholderCiphertext(),
     }
+  })
+  .state('active', (shop) => {
+    toActivate.add(shop)
+  })
+  .before('create', async (_, shop, ctx) => {
+    if (!shop.ownerUserId) {
+      const owner = await UserFactory.useCtx(ctx).create()
+      shop.ownerUserId = owner.id
+    }
+  })
+  .after('create', async (_, shop, ctx) => {
+    if (!toActivate.has(shop)) return
+    await ctx
+      .$trx!.insertQuery()
+      .table('shop_agreements')
+      .insert({
+        shop_id: shop.id,
+        agreement_version: FACTORY_AGREEMENT_VERSION,
+        accepted_by_user_id: shop.ownerUserId,
+        ip_hash: randomBytes(32),
+        request_id: randomUUID(),
+      })
+    const approver = await UserFactory.useCtx(ctx).create()
+    shop.merge({
+      status: status('active'),
+      approvedAt: DateTime.now(),
+      approvedBy: approver.id,
+    })
+    await shop.save()
   })
   .build()

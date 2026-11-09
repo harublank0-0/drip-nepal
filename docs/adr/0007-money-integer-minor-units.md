@@ -75,7 +75,7 @@ Worked examples (a two-shop order, per-line commission, an R2 coupon split) are 
 
 **Risks**
 
-- _Float arithmetic slips into business code._ Mitigation: a lint rule bans `parseFloat`, `toFixed` and division by 100 on money outside the formatter and parser files, and T-ARCH-014 (proposed) checks the money columns.
+- _Float arithmetic slips into business code._ Mitigation: a lint rule bans `parseFloat`, `toFixed` and division by 100 on money outside the formatter and parser files, and T-ARCH-014 (proposed) checks the money columns. Edited 2026-11-09: the lint rule is the money block of [09 §11.2](../09-code-structure-and-engineering-standards.md#112-eslintconfigjs): `parseFloat`, `Number.parseFloat`, `toFixed` and `toLocaleString` are errors in `app/modules/**`, `shared/format/**` and `inertia/**`, except in `shared/format/money.ts`, which holds both the formatter and `parseRupeesToMinor`. Lint cannot tell a division of money from any other division by 100, so that part is a review rule: the money item of the [09 §11.5](../09-code-structure-and-engineering-standards.md#115-pull-request-template-and-review-checklist) checklist (integer paisa only). The mitigation is otherwise unchanged.
 - _A raw `SUM(amount_minor)` returns a string._ Mitigation: `sumMinor` and T-ARCH-013 (proposed).
 - _VAT must later be shown per line (OD-26)._ `tax_minor`, `tax_rate_bp` and half-up line rounding already allow it. The 13/113 inclusive fraction is [Verify-external VX-05].
 

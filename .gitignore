@@ -42,6 +42,7 @@ storage
 !.agents/skills/dripnepal-*/
 !.agents/skills/shadcn/
 !.agents/skills/vercel-react-best-practices/
+!.agents/skills/ncm-integration/
 
 # Claude Code agent worktrees: temporary full copies of the repository
 .claude/worktrees/

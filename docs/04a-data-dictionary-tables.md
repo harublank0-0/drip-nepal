@@ -28,7 +28,7 @@ Editor notes for these sections are consolidated at the end of [04](04-domain-mo
 
 Owned by the `identity` module ([03 §4.4](03-system-architecture.md)). Other modules read these tables only through `app/modules/identity/queries.ts`. Permission slugs and role maps are in [07](07-security-threat-model-and-permissions.md). Session timeouts and TOTP parameters are in [07](07-security-threat-model-and-permissions.md) and [ADR-0005](adr/0005-session-auth-server-side-revocation.md).
 
-Two general notes for this section and the next two. First, a CHECK passes when its expression evaluates to NULL, not only when it is true [Verified-doc <https://www.postgresql.org/docs/18/ddl-constraints.html>]. Every CHECK below that must reject a missing value therefore tests `IS NOT NULL` explicitly; `CHECK (x IN ('a','b'))` alone lets a null `x` through. T-ARCH-015 (proposed) inserts, for each state-dependent CHECK, a row whose required column is null and expects SQLSTATE 23514. Second, on indexes: PostgreSQL does not index referencing columns automatically. An index on a foreign key column only speeds up joins and deletes of the referenced row. Reference rows (locations, categories, attributes) and users are never deleted, so foreign keys to them get an index only when a named query needs one.
+Two general notes for this section and the next two. First, a CHECK passes when its expression evaluates to NULL, not only when it is true [Verified-doc <https://www.postgresql.org/docs/18/ddl-constraints.html>]. Every CHECK below that must reject a missing value therefore tests `IS NOT NULL` explicitly; `CHECK (x IN ('a','b'))` alone lets a null `x` through. T-ARCH-015 (proposed) inserts, for each state-dependent CHECK, a row whose required column is null and expects SQLSTATE 23514. A state-dependent CHECK makes a value required when another column has some value or state: it tests `IS NOT NULL`, or it compares an `IS NULL` with another condition, as `(accepted_at IS NULL) = (accepted_by_user_id IS NULL)` does, a comparison that is never NULL itself. The test reads these CHECKs from `pg_constraint`, so a new one fails it until it has a case. A CHECK that tests `IS NOT NULL` only to forbid a value, such as `user_addresses_default_not_archived_check`, requires none. Second, on indexes: PostgreSQL does not index referencing columns automatically. An index on a foreign key column only speeds up joins and deletes of the referenced row. Reference rows (locations, categories, attributes) and users are never deleted, so foreign keys to them get an index only when a named query needs one.
 
 ### 5.1 `users`
 
@@ -385,7 +385,7 @@ Email invitations to join a shop ([03 §7.6](03-system-architecture.md), FR-SHOP
 
 **Keys and constraints**
 
-- `shop_invitations_pkey PRIMARY KEY (id)`; FKs to `shops (id)` and `users (id)` (`invited_by`, `accepted_by_user_id`), all `ON DELETE RESTRICT`.
+- `shop_invitations_pkey PRIMARY KEY (id)`; `shop_invitations_shop_fkey` to `shops (id)`, and `shop_invitations_invited_by_fkey` (`invited_by`) and `shop_invitations_accepted_by_fkey` (`accepted_by_user_id`) to `users (id)`, all `ON DELETE RESTRICT`.
 - `shop_invitations_token_hash_key UNIQUE (token_hash)`; `shop_invitations_token_hash_check CHECK (octet_length(token_hash) = 32)`.
 - `shop_invitations_role_check CHECK (role IN ('manager','catalog_editor','order_fulfiller','viewer'))`.
 - `shop_invitations_email_check CHECK (char_length(email::text) BETWEEN 3 AND 254 AND email::text = lower(email::text))`.
@@ -449,7 +449,7 @@ Staff decisions on a shop: application approval or rejection, suspension and rei
 
 **Keys and constraints**
 
-- `shop_review_decisions_pkey PRIMARY KEY (id)`; FKs to `shops (id)` and `users (id)` (`decided_by`), `ON DELETE RESTRICT`.
+- `shop_review_decisions_pkey PRIMARY KEY (id)`; `shop_review_decisions_shop_fkey` to `shops (id)` and `shop_review_decisions_decided_by_fkey` (`decided_by`) to `users (id)`, `ON DELETE RESTRICT`.
 - `shop_review_decisions_decision_check CHECK (decision IN ('approved','rejected','suspended','reinstated'))`.
 - `shop_review_decisions_reason_check CHECK (decision NOT IN ('rejected','suspended') OR (reason IS NOT NULL AND char_length(reason) BETWEEN 20 AND 2000))` (AC-FR-SHOP-002-3 for a rejection, AC-FR-SHOP-007-1 for a suspension).
 - `shop_review_decisions_suspension_mode_check CHECK ((decision = 'suspended' AND suspension_mode IS NOT NULL AND suspension_mode IN ('fulfill_existing','frozen')) OR (decision <> 'suspended' AND suspension_mode IS NULL))`.
@@ -486,7 +486,7 @@ Pickup and return addresses. The layout matches `user_addresses` (§5.5), so the
 
 - `shop_addresses_pkey PRIMARY KEY (id)`; `shop_addresses_shop_fkey FOREIGN KEY (shop_id) REFERENCES shops (id) ON DELETE RESTRICT`; `shop_addresses_id_shop_id_key UNIQUE (id, shop_id)`, the target of `shipments_pickup_address_fkey` (§11.5).
 - The three location keys of §5.5, named `shop_addresses_province_fkey`, `shop_addresses_district_fkey` and `shop_addresses_local_level_fkey`.
-- `shop_addresses_purpose_check CHECK (purpose IN ('pickup','return'))`; `shop_addresses_ward_no_check CHECK (ward_no BETWEEN 1 AND 40)`; `shop_addresses_contact_name_check CHECK (char_length(contact_name) BETWEEN 2 AND 100)`; `shop_addresses_default_not_archived_check CHECK (NOT (is_default AND archived_at IS NOT NULL))`.
+- `shop_addresses_purpose_check CHECK (purpose IN ('pickup','return'))`; `shop_addresses_ward_no_check CHECK (ward_no BETWEEN 1 AND 40)`; `shop_addresses_label_check CHECK (label IS NULL OR char_length(label) BETWEEN 1 AND 30)`, as §5.5; `shop_addresses_contact_name_check CHECK (char_length(contact_name) BETWEEN 2 AND 100)`; `shop_addresses_default_not_archived_check CHECK (NOT (is_default AND archived_at IS NOT NULL))`.
 - `shop_addresses_one_default_key UNIQUE (shop_id, purpose) WHERE is_default AND archived_at IS NULL` (partial; fixes A1-12).
 - Ciphertext format CHECKs (INV-25, pattern of §5.1): `shop_addresses_contact_phone_enc_check`, `shop_addresses_area_tole_enc_check` and `shop_addresses_street_landmark_enc_check` (the last allows null).
 - Application-enforced: approval needs a default pickup address; if no return address exists, returns go to the default pickup address. A shop has at most one active `return` address, which is its default, and one or more active `pickup` addresses, exactly one of which is the default (OD-56, changed 2026-11-05 from one per purpose). Several pickup addresses serve courier bookings from more than one place ([ADR-0019](adr/0019-courier-integration-in-r1.md) decision 4). `applyForShop` inserts the pickup address. `updateShopProfile` (`shop.profile.manage`) takes optional `pickup_address` and `return_address` objects with the §5.5 fields, and `resubmitShopApplication` a `pickup_address` (proposed inputs, [06 §13.4 and §13.5](06-api-design.md)); each updates the active row of that purpose in place, or inserts it as the default when there is none. From M6 the pickup-address operations (proposed with M6, `shop.shipping.manage`) add, edit and archive further pickup addresses and move the default. **A pickup address that a shipment references is never edited in place:** an edit archives that row and inserts the edited copy, which takes over its default flag, so a shipment always shows the address its parcel left from (INV-30). A `return_address` of `null` archives the return address, so returns go to the default pickup address again. A shop always keeps one live default pickup address: an edit replaces it, and no operation archives it without a replacement, so an approved shop (`active`, `suspended` or `closed`) keeps the default pickup address its approval required until the retention command deletes a closed shop's configuration rows, 7 years after `closed_at` (§6.1); the addresses of a never-approved application go in its 1-year purge (§6.1).
@@ -520,7 +520,7 @@ The bank or wallet account the platform pays the shop's balance to (FR-SHOP-010)
 
 **Keys and constraints**
 
-- `shop_payout_accounts_pkey PRIMARY KEY (id)`; `shop_payout_accounts_id_shop_id_key UNIQUE (id, shop_id)`, the target of `payouts_account_fkey` (§13.2), so a payout can only go to an account of its own shop ([04 §2.5](04-domain-model-and-data-dictionary.md)); FKs to `shops (id)` and `users (id)` (`created_by`, `verified_by`), `ON DELETE RESTRICT`.
+- `shop_payout_accounts_pkey PRIMARY KEY (id)`; `shop_payout_accounts_id_shop_id_key UNIQUE (id, shop_id)`, the target of `payouts_account_fkey` (§13.2), so a payout can only go to an account of its own shop ([04 §2.5](04-domain-model-and-data-dictionary.md)); `shop_payout_accounts_shop_fkey` to `shops (id)`, and `shop_payout_accounts_created_by_fkey` (`created_by`) and `shop_payout_accounts_verified_by_fkey` (`verified_by`) to `users (id)`, `ON DELETE RESTRICT`.
 - `shop_payout_accounts_account_number_enc_check`: the ciphertext format CHECK of §5.1 (INV-25), allowing null; `shop_payout_accounts_account_number_check CHECK (account_number_enc IS NOT NULL OR replaced_at IS NOT NULL OR retired_at IS NOT NULL)`: only a replaced or retired account may lose its number.
 - `shop_payout_accounts_method_check CHECK (method IN ('bank_transfer','wallet'))`; `shop_payout_accounts_last4_check CHECK (account_number_last4 ~ '^[0-9]{4}$')`; `shop_payout_accounts_account_name_check CHECK (char_length(account_name) BETWEEN 2 AND 100)`.
 - `shop_payout_accounts_verification_check CHECK ((verified_at IS NULL) = (verified_by IS NULL) AND (verified_by IS NULL OR verified_by <> created_by))`: the verifier is never the person who entered the account (AC-FR-SHOP-010-3). This check is not relaxed by `single_operator_mode`, because an owner verifying their own bank account defeats the point of verifying.
@@ -628,7 +628,7 @@ The garment-type tree ([04 §3.6](04-domain-model-and-data-dictionary.md)).
 - `categories_slug_key UNIQUE (slug)`; `categories_slug_check CHECK (slug::text ~ '^[a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])$')` (3–40 characters, the shop slug rule of [04 §2.8](04-domain-model-and-data-dictionary.md)).
 - `categories_parent_name_key UNIQUE NULLS NOT DISTINCT (parent_id, name)`: "T-Shirts" may exist under two parents but not twice under one, and not twice at top level. Without `NULLS NOT DISTINCT`, nulls count as distinct in a unique constraint, so two top-level rows with the same name would pass [Verified-doc <https://www.postgresql.org/docs/18/sql-createtable.html>].
 - `categories_path_key UNIQUE (path)`; `categories_path_check CHECK (path ~ '^/([a-z0-9]+(-[a-z0-9]+)*/)+$')`.
-- `categories_depth_check CHECK (depth BETWEEN 1 AND 4 AND (parent_id IS NULL) = (depth = 1))`; `categories_not_own_parent_check CHECK (parent_id IS NULL OR parent_id <> id)`.
+- `categories_depth_check CHECK (depth BETWEEN 1 AND 4 AND (parent_id IS NULL) = (depth = 1))`; `categories_not_own_parent_check CHECK (parent_id IS NULL OR parent_id <> id)`; `categories_name_check CHECK (char_length(name) BETWEEN 2 AND 60)`.
 - Seeder-enforced, because they span rows: `path` = parent's `path` + `slug` + `/`, and `depth` = parent's `depth` + 1, computed top-down, which also makes a cycle impossible; a category that has products cannot receive a child until its products move ([04 §3.6](04-domain-model-and-data-dictionary.md)); a category that has products that are not `archived` cannot be deactivated either, because the product actions accept only an active category ([04 §3.6](04-domain-model-and-data-dictionary.md)) and every edit of such a product would then fail until it is moved (the seeder moves the products first, [04 §21.1](04-domain-model-and-data-dictionary.md)); a slug or parent change rewrites the paths of the whole subtree in one statement (`UPDATE categories SET path = :new || substr(path, length(:old) + 1) WHERE path LIKE :old || '%'`), inserts a `slug_redirects` row and queues `catalog.rebuild_listings`.
 
 **Indexes.** Unique indexes only. The tree has on the order of 100 rows and is loaded whole by `catalog/queries.ts categoryTree()` and cached in each process until the next deploy or seeder run. Subtree and ancestor queries run against that cache, or against `product_listings.category_path` (§7.12).
@@ -695,7 +695,7 @@ Which attributes apply to a category and its descendants, and how ([04 §3.7](04
 | `is_required`  | boolean  | no   | `false` | Required at submit and publish                                                                  |
 | `position`     | smallint | no   | `0`     | Form order                                                                                      |
 
-**Keys and constraints.** `category_attributes_pkey PRIMARY KEY (category_id, attribute_id)`; FKs to `categories (id)` and `attributes (id)`, `ON DELETE RESTRICT`; `category_attributes_usage_check CHECK (usage IN ('product','variant_axis'))`. The usage/scope match is a seeder check covered by T-CAT-104 (proposed). Written with the query builder ([04 §2.15](04-domain-model-and-data-dictionary.md)).
+**Keys and constraints.** `category_attributes_pkey PRIMARY KEY (category_id, attribute_id)`; `category_attributes_category_fkey FOREIGN KEY (category_id) REFERENCES categories (id)` and `category_attributes_attribute_fkey FOREIGN KEY (attribute_id) REFERENCES attributes (id)`, both `ON DELETE RESTRICT`; `category_attributes_usage_check CHECK (usage IN ('product','variant_axis'))`. The usage/scope match is a seeder check covered by T-CAT-104 (proposed). Written with the query builder ([04 §2.15](04-domain-model-and-data-dictionary.md)).
 
 Effective rules for a leaf, deepest row winning:
 
@@ -728,7 +728,7 @@ Trademarks products are sold under ([04 §3.10](04-domain-model-and-data-diction
 | `requires_moderation`      | boolean     | no   | `false`    | Watch-listed brand: products always need moderator approval (AC-FR-CAT-008-3) [Open OD-21] |
 | `created_at`, `updated_at` | timestamptz | no   | `now()`    |                                                                                            |
 
-**Keys and constraints.** `brands_pkey PRIMARY KEY (id)`; `brands_slug_key UNIQUE (slug)`; `brands_slug_check` with the shop slug pattern (3–40 characters); `brands_name_lower_key UNIQUE (lower(name))` (unique index); `brands_name_check CHECK (char_length(name) BETWEEN 1 AND 80)`; `brands_status_check CHECK (status IN ('active','pending','rejected'))`.
+**Keys and constraints.** `brands_pkey PRIMARY KEY (id)`; `brands_slug_key UNIQUE (slug)`; `brands_slug_check CHECK (slug::text ~ '^[a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])$')`, the shop slug pattern (3–40 characters); `brands_name_lower_key UNIQUE (lower(name))` (unique index); `brands_name_check CHECK (char_length(name) BETWEEN 1 AND 80)`; `brands_status_check CHECK (status IN ('active','pending','rejected'))`.
 
 **Indexes.** `brands_slug_key` for filter URLs; `brands_name_lower_key` stops "Nike" and "NIKE" coexisting. The brand picker loads all active brands (hundreds of rows) once and filters on the client.
 
@@ -825,7 +825,7 @@ The variant attributes a product varies by: none, one or two in R1 (AC-FR-CAT-00
 | `position`     | smallint    | no   | App     | 1 or 2: picker order on the product page                           |
 | `created_at`   | timestamptz | no   | `now()` |                                                                    |
 
-**Keys and constraints.** `product_option_axes_pkey PRIMARY KEY (product_id, attribute_id)`, the target of `variant_option_values_axis_fkey`; `product_option_axes_position_key UNIQUE (product_id, position) DEFERRABLE INITIALLY IMMEDIATE`; `product_option_axes_position_check CHECK (position BETWEEN 1 AND 2)`; FKs to `products (id)` and `attributes (id)`, `ON DELETE RESTRICT`. A unique constraint that is not deferrable is checked row by row, so an `UPDATE` that swaps positions 1 and 2 would fail with 23505, and the CHECK leaves no free position to swap through; declared `DEFERRABLE INITIALLY IMMEDIATE`, it is checked at the end of the statement [Verified-doc <https://www.postgresql.org/docs/18/sql-createtable.html>, "Non-Deferred Uniqueness Constraints"]. That is allowed here because the constraint is neither a foreign-key target nor an `ON CONFLICT` arbiter.
+**Keys and constraints.** `product_option_axes_pkey PRIMARY KEY (product_id, attribute_id)`, the target of `variant_option_values_axis_fkey`; `product_option_axes_position_key UNIQUE (product_id, position) DEFERRABLE INITIALLY IMMEDIATE`; `product_option_axes_position_check CHECK (position BETWEEN 1 AND 2)`; `product_option_axes_product_fkey FOREIGN KEY (product_id) REFERENCES products (id)` and `product_option_axes_attribute_fkey FOREIGN KEY (attribute_id) REFERENCES attributes (id)`, both `ON DELETE RESTRICT`. A unique constraint that is not deferrable is checked row by row, so an `UPDATE` that swaps positions 1 and 2 would fail with 23505, and the CHECK leaves no free position to swap through; declared `DEFERRABLE INITIALLY IMMEDIATE`, it is checked at the end of the statement [Verified-doc <https://www.postgresql.org/docs/18/sql-createtable.html>, "Non-Deferred Uniqueness Constraints"]. That is allowed here because the constraint is neither a foreign-key target nor an `ON CONFLICT` arbiter.
 
 **Axes freeze.** Once any variant of the product has an inventory movement or an order line, its axis set is fixed. Such variants can only be archived or re-activated (§7.9), and their option values still reference the axes, so `RESTRICT` blocks removing an axis anyway. `replaceProductVariants` answers 409 `CONFLICT` (axis set frozen) with an explanation instead of letting the 23001 (`restrict_violation`) surface. Adding values on an existing axis (a new colour) is always allowed, and so is reordering the axes (the same set in the other order): `replaceProductVariants` updates `position` in one statement, `UPDATE product_option_axes SET position = CASE attribute_id WHEN :a THEN 1 WHEN :b THEN 2 END WHERE product_id = :p`, and never deletes axis rows to reorder them. Option signatures do not change, because they are sorted by attribute code ([04 §3.5](04-domain-model-and-data-dictionary.md)). T-CAT-106 (proposed) swaps the two axes of a stocked product. To change axes later, the vendor archives the product (which archives its variants and frees their SKUs, §7.6) and creates a new one.
 
@@ -2658,7 +2658,8 @@ CONSTRAINT provider_events_processing_check
   AND (processing_status = 'pending') = (processed_at IS NULL)),
 CONSTRAINT provider_events_key_check CHECK (char_length(provider_event_key) BETWEEN 8 AND 200),
 CONSTRAINT provider_events_payload_check CHECK (jsonb_typeof(payload) = 'object'),
-CONSTRAINT provider_events_hash_check CHECK (raw_body_sha256 IS NULL OR octet_length(raw_body_sha256) = 32)
+CONSTRAINT provider_events_hash_check CHECK (raw_body_sha256 IS NULL OR octet_length(raw_body_sha256) = 32),
+CONSTRAINT provider_events_error_check CHECK (error IS NULL OR char_length(error) <= 2000)
 ```
 
 The handler inserts with `ON CONFLICT (provider, provider_event_key) DO NOTHING` and responds 200 after the durable insert; processing runs in a job. The same provider event (a return, a webhook or a lookup result) delivered N times, concurrently or not, yields one row and one state change (T-PAY-005).
@@ -2756,7 +2757,8 @@ CONSTRAINT refunds_recipient_details_enc_check CHECK (recipient_details_enc IS N
   OR recipient_details_enc ~ '^v[0-9]+\.[A-Za-z0-9_-]{1,32}\.[A-Za-z0-9_-]{16}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{22}$'),
 CONSTRAINT refunds_attempts_check CHECK (attempts >= 0),
 CONSTRAINT refunds_verification_check CHECK (verification_attempts >= 0
-  AND (next_verification_at IS NULL OR status = 'processing'))
+  AND (next_verification_at IS NULL OR status = 'processing')),
+CONSTRAINT refunds_note_check CHECK (note IS NULL OR char_length(note) <= 2000)
 ```
 
 - `refunds_allocation_fkey` targets the allocation's primary key: a refund can only be drawn from the payment that actually paid this shop order.
@@ -3025,6 +3027,8 @@ CREATE TRIGGER payout_entries_guard BEFORE INSERT OR DELETE ON payout_entries
   FOR EACH ROW EXECUTE FUNCTION payout_entries_guard();
 REVOKE UPDATE, TRUNCATE ON payout_entries FROM dripnepal_app;
 ```
+
+Baseline file 12 runs the `REVOKE` inside the per-role guard of file 14 (`DO $$ BEGIN IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'dripnepal_app') THEN … END IF; END $$`), so a database without the role still migrates, and file 14 repeats it after its blanket grant ([04 §20.2.2](04-domain-model-and-data-dictionary.md#2022-baseline-files-and-their-order)). T-ARCH-012 (proposed) checks that `dripnepal_app` still gets SQLSTATE 42501 on `UPDATE` and `TRUNCATE` after that grant.
 
 The only delete in the money tables is cancelling a draft payout, which removes its links so the entries become eligible again ([05 §6.8](05-order-payment-and-inventory-lifecycles.md#68-payout-and-settlement-r11)). Once approved, links are permanent. The `FOR SHARE` lock makes the check race-free against a concurrent approval. T-LED-102 (proposed) deletes a link of an approved payout and inserts a `payout` entry into a draft, and expects P0001 both times.
 
