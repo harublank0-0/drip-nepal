@@ -7,10 +7,12 @@ import OrderItem from './order_item.js'
 import OrderEvent from './order_event.js'
 import Shipment from './shipment.js'
 import ReturnRequest from './return_request.js'
+import Refund from './refund.js'
 
 /*
  * docs/04a §11.2 (orders). `Shop` does not relate back (docs/09 §3.10).
  * `shipments` holds the live shipment and its cancelled bookings (§11.5).
+ * `refunds` relates downward to the payments module, which `orders` may use.
  */
 export default class ShopOrder extends ShopOrderSchema {
   @belongsTo(() => Order)
@@ -30,4 +32,7 @@ export default class ShopOrder extends ShopOrderSchema {
 
   @hasMany(() => ReturnRequest)
   declare returnRequests: HasMany<typeof ReturnRequest>
+
+  @hasMany(() => Refund)
+  declare refunds: HasMany<typeof Refund>
 }
