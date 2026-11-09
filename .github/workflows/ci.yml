@@ -121,6 +121,11 @@ jobs:
       # §4.3 item 2); from then on it also compares checksums.
       - name: T-ARCH-017 migration lock (file-name mode)
         run: node scripts/check_migrations_lock.mjs
+      # T-ARCH-034 (ADR-0016 decision 2, docs/11 §1.9): no CREATE EXTENSION
+      # outside citext, pg_trgm and pgcrypto. The functional suite checks the
+      # migrated database's pg_extension against the same list.
+      - name: T-ARCH-034 extension allow-list
+        run: node scripts/check_migration_extensions.mjs
       # docs/04 §2.1: the baseline's keys default to uuidv7(), built into
       # PostgreSQL 18; this records that the CI image has it.
       - name: uuidv7() on postgres:18.4
