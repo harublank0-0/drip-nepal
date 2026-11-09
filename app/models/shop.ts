@@ -23,7 +23,7 @@ import ShopCategory from './shop_category.js'
  * The composite-key tables (docs/04 §2.15) have no model of their own: they
  * are read through the `manyToMany` relations below and written with the
  * query builder or the pivot helpers. `logistics_account_shops` (§9.10) is
- * composite too, although 04 §2.15 does not list it yet.
+ * composite too (04 §2.15).
  */
 export default class Shop extends ShopSchema {
   @belongsTo(() => User, { foreignKey: 'ownerUserId' })

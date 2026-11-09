@@ -60,7 +60,8 @@ async function insertShop() {
 
 async function insertProviders() {
   await db.table('logistics_providers').multiInsert([
-    { code: 'ncm', name: 'Nepal Can Move' },
+    // Test-only codes: `ncm` itself comes from the reference seeder (04a §9.8).
+    { code: 'test_courier', name: 'Test Courier' },
     { code: 'other_courier', name: 'Other Courier' },
   ])
 }
@@ -68,7 +69,12 @@ async function insertProviders() {
 async function insertAccount(values: Row) {
   const [row] = await db
     .table('logistics_accounts')
-    .insert({ provider_code: 'ncm', name: 'NCM Kathmandu', environment: 'sandbox', ...values })
+    .insert({
+      provider_code: 'test_courier',
+      name: 'Test Courier Kathmandu',
+      environment: 'sandbox',
+      ...values,
+    })
     .returning('id')
   return row.id as string
 }
@@ -166,8 +172,8 @@ test.group('T-SHOP-111 logistics_accounts constraints', () => {
         assert,
         (trx) =>
           trx.table('logistics_accounts').insert({
-            provider_code: 'ncm',
-            name: 'NCM Kathmandu',
+            provider_code: 'test_courier',
+            name: 'Test Courier Kathmandu',
             environment: 'sandbox',
             ...values,
           }),
