@@ -102,7 +102,7 @@ jobs:
       # lint-staged commits it) must match it and must contain no `any`.
       - name: T-ARCH-010 database/schema.ts matches the migrations
         run: |
-          node ace migration:fresh
+          NODE_ENV=test node ace migration:fresh
           pnpm exec prettier --write database/schema.ts
           git diff --exit-code database/schema.ts
           if grep -nE '\bany\b' database/schema.ts; then exit 1; fi
