@@ -725,6 +725,54 @@ export class MediaAssetSchema extends BaseModel {
   declare width: number | null
 }
 
+export class NotificationDeliverySchema extends BaseModel {
+  static $columns = [
+    'attempts',
+    'channel',
+    'createdAt',
+    'dedupeKey',
+    'id',
+    'lastError',
+    'providerMessageId',
+    'recipientUserId',
+    'sentAt',
+    'shopId',
+    'status',
+    'template',
+    'toAddressHash',
+    'updatedAt',
+  ] as const
+  $columns = NotificationDeliverySchema.$columns
+  @column()
+  declare attempts: number
+  @column()
+  declare channel: string
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare dedupeKey: string
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare lastError: string | null
+  @column()
+  declare providerMessageId: string | null
+  @column()
+  declare recipientUserId: string | null
+  @column.dateTime()
+  declare sentAt: DateTime | null
+  @column()
+  declare shopId: string | null
+  @column()
+  declare status: string
+  @column()
+  declare template: string
+  @column()
+  declare toAddressHash: Buffer | null
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
+}
+
 export class OrderEventSchema extends BaseModel {
   static $columns = [
     'actorType',
@@ -2408,6 +2456,93 @@ export class SlugRedirectSchema extends BaseModel {
   declare entityType: string
   @column()
   declare oldSlug: string
+}
+
+export class SupportCaseMessageSchema extends BaseModel {
+  static $columns = [
+    'authorType',
+    'authorUserId',
+    'body',
+    'caseId',
+    'createdAt',
+    'id',
+    'visibility',
+  ] as const
+  $columns = SupportCaseMessageSchema.$columns
+  @column()
+  declare authorType: string
+  @column()
+  declare authorUserId: string | null
+  @column()
+  declare body: string
+  @column()
+  declare caseId: string
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare visibility: string
+}
+
+export class SupportCaseSchema extends BaseModel {
+  static $columns = [
+    'assignedToUserId',
+    'category',
+    'closedAt',
+    'createdAt',
+    'customerUserId',
+    'dueAt',
+    'id',
+    'number',
+    'openedByUserId',
+    'orderId',
+    'resolutionSummary',
+    'resolvedAt',
+    'shopId',
+    'shopOrderId',
+    'status',
+    'subject',
+    'updatedAt',
+    'version',
+  ] as const
+  $columns = SupportCaseSchema.$columns
+  @column()
+  declare assignedToUserId: string | null
+  @column()
+  declare category: string
+  @column.dateTime()
+  declare closedAt: DateTime | null
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare customerUserId: string | null
+  @column.dateTime()
+  declare dueAt: DateTime
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare number: string
+  @column()
+  declare openedByUserId: string | null
+  @column()
+  declare orderId: string | null
+  @column()
+  declare resolutionSummary: string | null
+  @column.dateTime()
+  declare resolvedAt: DateTime | null
+  @column()
+  declare shopId: string | null
+  @column()
+  declare shopOrderId: string | null
+  @column()
+  declare status: string
+  @column()
+  declare subject: string
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
+  @column()
+  declare version: number
 }
 
 export class UserAddressSchema extends BaseModel {

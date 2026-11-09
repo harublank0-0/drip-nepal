@@ -3028,7 +3028,7 @@ CREATE TRIGGER payout_entries_guard BEFORE INSERT OR DELETE ON payout_entries
 REVOKE UPDATE, TRUNCATE ON payout_entries FROM dripnepal_app;
 ```
 
-Baseline file 12 runs the `REVOKE` inside the per-role guard of file 14 (`DO $$ BEGIN IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'dripnepal_app') THEN … END IF; END $$`), so a database without the role still migrates, and file 14 repeats it after its blanket grant ([04 §20.2.2](04-domain-model-and-data-dictionary.md#2022-baseline-files-and-their-order)).
+Baseline file 12 runs the `REVOKE` inside the per-role guard of file 14 (`DO $$ BEGIN IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'dripnepal_app') THEN … END IF; END $$`), so a database without the role still migrates, and file 14 repeats it after its blanket grant ([04 §20.2.2](04-domain-model-and-data-dictionary.md#2022-baseline-files-and-their-order)). T-ARCH-012 (proposed) checks that `dripnepal_app` still gets SQLSTATE 42501 on `UPDATE` and `TRUNCATE` after that grant.
 
 The only delete in the money tables is cancelling a draft payout, which removes its links so the entries become eligible again ([05 §6.8](05-order-payment-and-inventory-lifecycles.md#68-payout-and-settlement-r11)). Once approved, links are permanent. The `FOR SHARE` lock makes the check race-free against a concurrent approval. T-LED-102 (proposed) deletes a link of an approved payout and inserts a `payout` entry into a draft, and expects P0001 both times.
 

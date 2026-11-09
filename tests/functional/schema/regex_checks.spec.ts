@@ -104,6 +104,9 @@ const EXAMPLES: Record<string, string[]> = {
     'delivery:01a1b452-a64a-7a4f-93a2-be6932153cde:sale',
     'remittance:01a1b452-a64a-7a4f-93a2-be6932153cde',
   ],
+  // docs/04a §14.1 (the case number of docs/04 §2.1) and §14.3 (its two template examples)
+  'support_cases.number': ['SC-4K7Q2M9'],
+  'notification_deliveries.template': ['order.placed.customer', 'shop_order.placed.shop'],
   // docs/04a §15
   'idempotency_keys.actor_scope': [
     '01a1b452-a64a-7a4f-93a2-be6932153cde',
