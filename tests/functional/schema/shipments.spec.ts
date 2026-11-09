@@ -2,12 +2,14 @@ import { test } from '@japa/runner'
 import db from '@adonisjs/lucid/services/db'
 import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
 import {
-  CIPHERTEXT,
-  insertLocation,
+  courierShop,
+  insertCourierAccount,
   insertOrderItem,
+  insertPickupAddress,
   insertShop,
   insertShopOrder,
   refused,
+  type Courier,
   type Row,
   type ShopOrderRef,
 } from '#tests/support/schema_rows'
@@ -22,64 +24,6 @@ import {
  * SQLSTATE and, where PostgreSQL reports one, the constraint name. Valid rows
  * are accepted first, so each refusal is about the one thing it breaks.
  */
-
-// A courier account of `shopId` that the shop may book through (§9.9, §9.10).
-async function insertAccount(shopId: string) {
-  // Test-only code: `ncm` itself comes from the reference seeder (04a §9.8).
-  await db
-    .table('logistics_providers')
-    .insert({ code: 'test_courier', name: 'Test Courier' })
-    .onConflict('code')
-    .ignore()
-  const [row] = await db
-    .table('logistics_accounts')
-    .insert({
-      provider_code: 'test_courier',
-      name: 'Test Courier Kathmandu',
-      environment: 'sandbox',
-      owner_type: 'shop',
-      shop_id: shopId,
-    })
-    .returning('id')
-  await db.table('logistics_account_shops').insert({
-    account_id: row.id,
-    shop_id: shopId,
-    account_owner_type: 'shop',
-    owner_shop_id: shopId,
-  })
-  return row.id as string
-}
-
-// A pickup address of `shopId` (§6.6) in Kathmandu.
-async function insertPickupAddress(shopId: string) {
-  const [row] = await db
-    .table('shop_addresses')
-    .insert({
-      shop_id: shopId,
-      purpose: 'pickup',
-      contact_name: 'Ram Thapa',
-      contact_phone_enc: CIPHERTEXT,
-      province_code: '3',
-      district_code: '306',
-      local_level_code: '30608',
-      ward_no: 10,
-      area_tole_enc: CIPHERTEXT,
-    })
-    .returning('id')
-  return row.id as string
-}
-
-type Courier = { shopId: string; accountId: string; addressId: string }
-
-async function courierShop(): Promise<Courier> {
-  const shopId = await insertShop()
-  await insertLocation()
-  return {
-    shopId,
-    accountId: await insertAccount(shopId),
-    addressId: await insertPickupAddress(shopId),
-  }
-}
 
 let bookings = 0
 
@@ -403,7 +347,7 @@ test.group('T-FUL-103 shipments_booking_guard', () => {
     assert,
   }) => {
     const courier = await courierShop()
-    const secondAccountId = await insertAccount(courier.shopId)
+    const secondAccountId = await insertCourierAccount(courier.shopId)
     const secondAddressId = await insertPickupAddress(courier.shopId)
     const so = await insertShopOrder(courier.shopId)
     const id = await insertShipment(so, { ...booking(courier, so), status: 'booking_requested' })
@@ -493,7 +437,7 @@ test.group('T-FUL-104 shipments unique keys', () => {
 
   test('T-FUL-104 the same courier ID twice on one account gives 23505', async ({ assert }) => {
     const courier = await courierShop()
-    const otherAccountId = await insertAccount(courier.shopId)
+    const otherAccountId = await insertCourierAccount(courier.shopId)
     const first = await insertShopOrder(courier.shopId)
     const second = await insertShopOrder(courier.shopId)
     const third = await insertShopOrder(courier.shopId)
