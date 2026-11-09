@@ -1,7 +1,9 @@
 # CI for the store. Runs on pushes to main and on pull requests into it:
 # production deploys release tags cut from main (DEPLOY.md, "Releasing").
 # It also runs on pull requests into feat/e4-schema-baseline, the E4
-# integration branch (docs/12 §4.1, docs/09 §8.1).
+# integration branch (docs/12 §4.1, docs/09 §8.1), and on demand
+# (workflow_dispatch): retargeting a stacked pull request onto that branch
+# starts no run, so a run can be started by hand for the branch.
 # Actions are pinned by commit SHA; the release tag is in the comment. No
 # secrets are used.
 name: ci
@@ -11,6 +13,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main, feat/e4-schema-baseline]
+  workflow_dispatch:
 
 permissions:
   contents: read
