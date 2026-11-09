@@ -10,11 +10,12 @@ Customers browse clothing, shoes and accessories from many local shops and buy f
 
 ## Project status
 
-**Planning is complete; building starts with milestone M0.**
+**Milestone M0 is under way. There is no working storefront.**
 
 - The [documentation](docs/README.md) describes the target system: requirements, journeys, architecture, data model, lifecycles, API, security, UI, code standards, tests, operations and the roadmap. It is the source of truth.
-- The code in this repository is an **exploratory prototype**. Its known defects are listed as RF-01 to RF-47 in [docs/00 §4.6](docs/00-context-assumptions-and-questions.md#46-consolidated-repository-findings-rf-01--rf-47). It is not ready for real orders.
-- **Next: M0 Foundation hardening** ([docs/12 §4](docs/12-roadmap-and-backlog.md#4-m0-foundation-hardening-r0-ready-to-start)): a CI gate, the test harness, the error contract, session revocation, a re-baselined schema and a safe production bootstrap, before any feature work.
+- **M0 Foundation hardening** ([docs/12 §4](docs/12-roadmap-and-backlog.md#4-m0-foundation-hardening-r0-ready-to-start)) is in progress: a CI gate, the test harness, the error contract, session revocation, a re-baselined schema and a safe production bootstrap, before any feature work. The re-baselined schema (epic E4) is built: 14 migrations, the models, the reference seeders and the schema tests ([database/README.md](database/README.md)).
+- The single-seller v1 store that the exploratory prototype grew into was removed with the baseline. It was never hosted and held only seed data. The storefront, seller dashboard and admin pages come back as M1 to M7 rebuild them; until then the app serves only a development design-system page and its health endpoints. Nothing is deployed ([DEPLOY.md](DEPLOY.md)).
+- The prototype's known defects are listed as RF-01 to RF-47 in [docs/00 §4.6](docs/00-context-assumptions-and-questions.md#46-consolidated-repository-findings-rf-01--rf-47); M0 closes or guards them.
 
 ## Roadmap
 
@@ -31,7 +32,7 @@ Customers browse clothing, shoes and accessories from many local shops and buy f
 | M8        | Gateway payments                         | R1.1      | One wallet gateway, gateway refunds, reconciliation, vendor payouts                           |
 | M9        | Returns, reviews, wishlist, coupons, SMS | R2        | Self-serve returns, reviews, wishlist, platform coupons, SMS and phone OTP                    |
 
-R1 is cash on delivery only, in English, with vendors shipping their own parcels. Scope, exit criteria and the decisions each milestone needs are in [docs/12](docs/12-roadmap-and-backlog.md) and [docs/01 §5](docs/01-product-requirements.md#51-release-phases).
+R1 is cash on delivery only, in English, with vendors shipping their own parcels or booking Nepal Can Move through a courier account ([ADR-0019](docs/adr/0019-courier-integration-in-r1.md)). Scope, exit criteria and the decisions each milestone needs are in [docs/12](docs/12-roadmap-and-backlog.md) and [docs/01 §5](docs/01-product-requirements.md#51-release-phases).
 
 ## Architecture (target)
 
@@ -56,9 +57,9 @@ Exact versions are in [docs/00 §4.2](docs/00-context-assumptions-and-questions.
 
 Start at [docs/README.md](docs/README.md): it lists every document, what it owns and a reading order for each role. Coding agents and contributors should also read [AGENTS.md](AGENTS.md).
 
-## Running the prototype
+## Running it locally
 
-The steps below run the current prototype. M0 replaces them with the target setup of [docs/11 §4.4](docs/11-deployment-and-operations.md#44-local-setup-in-five-commands).
+The steps below run what exists today. M0 brings them to the target setup of [docs/11 §4.4](docs/11-deployment-and-operations.md#44-local-setup-in-five-commands).
 
 Prerequisites: Node.js 24 or later, pnpm 11 (enforced by `packageManager`), Docker.
 
@@ -67,16 +68,16 @@ git clone https://github.com/harublank0-0/drip-nepal.git
 cd drip-nepal
 pnpm install
 
-cp .env.example .env
-node ace generate:key
-# add the database settings to .env, matching docker-compose.yml:
-# DB_HOST=localhost DB_PORT=5432 DB_USER=dripnepal DB_PASSWORD=secret DB_DATABASE=dripnepal
+cp .env.example .env     # the database settings already match docker-compose.yml
+node ace generate:key --show   # paste the key after APP_KEY= in .env
 
-docker compose up -d     # PostgreSQL 18, Redis and Mailpit (the app uses only PostgreSQL)
-node ace migration:run
-node ace db:seed
-pnpm dev                 # http://localhost:3333
+docker compose up -d     # PostgreSQL 18 with the three database roles, Redis and Mailpit (the app uses only PostgreSQL)
+node ace migration:run --no-schema-generate   # the 14 baseline files; leaves the generated database/schema.ts alone
+node ace db:seed         # reference data only: no demo shops, products, orders or logins yet (OD-59)
+pnpm dev                 # http://localhost:3333/design-system and /health/live
 ```
+
+Every other path answers 404 until M1 to M7 add the pages. The `dripnepal-run` and `dripnepal-testing` skills in `.agents/skills/` have the details, including a setup without Docker.
 
 | Script           | What it does                                    |
 | ---------------- | ----------------------------------------------- |

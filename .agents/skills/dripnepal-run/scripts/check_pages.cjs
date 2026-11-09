@@ -5,22 +5,22 @@
  * reviewer needs: HTTP status, console errors (hydration and CSP problems
  * show up there), page errors, and failed requests.
  *
- *   node .agents/skills/dripnepal-run/scripts/check_pages.cjs / /men /products/<slug>
- *   node .agents/skills/dripnepal-run/scripts/check_pages.cjs --login demo@dripnepal.com:dripnepal \
- *     /shops/thamel-threads/dashboard
+ *   node .agents/skills/dripnepal-run/scripts/check_pages.cjs              # /design-system
+ *   node .agents/skills/dripnepal-run/scripts/check_pages.cjs --widths 390 /design-system
  *
  * Options:
  *   --base <url>        Server to check (default http://localhost:3333)
  *   --widths 390,1280   Viewport widths in pixels (default 390,1280)
  *   --themes light,dark Themes to render (default light,dark)
  *   --out <dir>         Screenshot folder (default tmp/page-checks, gitignored)
- *   --login email:pass  Log in through /auth/login before visiting the pages
+ *   --login email:pass  Log in through the form at /auth/login before visiting the
+ *                       pages (no login page exists until M1; check its path then)
  *   --full              Whole-page screenshots (clipped to the screen width) instead of the first screen
  *   --scale 2           Device scale factor (default 1; use 2 for screenshots a person will see)
  *
  * Exits 1 if any page answers 4xx/5xx, throws, logs a console error, or a
  * request to the app's own host fails. Failed requests to other hosts (remote
- * product photos, fonts) are listed separately and don't fail the run,
+ * images, fonts) are listed separately and don't fail the run,
  * because a cloud session's network policy often blocks them.
  */
 'use strict'
@@ -69,7 +69,8 @@ function parseArgs(argv) {
     else if (arg.startsWith('--')) throw new Error(`Unknown option ${arg}`)
     else options.paths.push(arg)
   }
-  if (options.paths.length === 0) options.paths = ['/']
+  // The one page today (development only); the storefront returns with M4.
+  if (options.paths.length === 0) options.paths = ['/design-system']
   return options
 }
 

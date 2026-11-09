@@ -235,6 +235,30 @@ OD-28 to OD-54 register the owner decisions that the three deep audits left open
 Newest first. The entry format is in §1.5. A ruling that is not an OD but changes an owning document or an ADR is logged in the same format, headed "Not an OD".
 
 ```text
+Not an OD — Decided 2026-11-09 by product owner: commit the reviewed ncm-integration skill
+Ruling: The ncm-integration skill that commit bd23da5 added to main under .claude/skills/ is tracked as
+        a third-party skill, unchanged: it moves to .agents/skills/ncm-integration/ with a
+        .claude/skills/ symlink, is ignored by Prettier, and is listed in skills-lock.json and AGENTS.md.
+        A NOTICE.md beside it records its source and that the documents win where it disagrees. It
+        guides the M6 NCM adapter; it decides nothing.
+Evidence: Licence: MIT (its LICENSE, copyright 2026 harublank0-0). Read-through of SKILL.md and the four
+          references/*.md files: no scripts, no `!` command run on load, no allowed-tools, no hooks, and
+          no instruction to fetch remote content; its URLs are NCM's demo host and an example domain.
+          Its API facts cite NCM documents (an API PDF dated 251222, a webhook doc v1.1) and one
+          production integration, none of which is in this repository, and label them [doc],
+          [observed], [reported], [inferred] or [unknown]. They are not verified here: VX-16 stays
+          open and ADR-0019 decision 6 stays Proposed. Where it differs from the documents (its stage
+          names against 05 §6.3, decimal-string money against ADR-0007, its decisions D1 to D11
+          against OD-56, OD-58 and ADR-0019), the documents win. skills-lock.json records this
+          repository as its source, because no upstream repository is known, and NOTICE.md names
+          commit bd23da5; its
+          computedHash is SHA-256 over the sorted relative paths and contents of the six skill files,
+          which may not be the algorithm of the two older entries (never checked, 2026-11-04 entry).
+ADR: none.
+Docs updated: 09 (§1.5, note 85), 12 (E12, note 24), AGENTS.md, note 28  |  Status: Decided
+```
+
+```text
 Not an OD — Decided 2026-11-09 by product owner: the reference seeders land without the locations dataset
 Ruling: The E4 and E8 reference seeders that need no location data (zones, shop categories,
         categories, attributes, category rules, brands, settings, the ncm courier row), the factories
@@ -276,6 +300,11 @@ Evidence: The baseline deletes the v1 migrations and replaces the models under t
 ADR: none.
 Docs updated: the 2026-11-04 entry (dated note), notes 24 and 26, 09 (§8.1, §11.6, note 80), 12 (§4.1,
               note 21), AGENTS.md  |  Status: Decided
+Edited 2026-11-09: both conditions now hold on the branch. The 14 baseline files are in (#166 to #172),
+        and the v1 code was removed rather than adapted: the store in #166, the files it left without
+        importers before the merge. The branch also took in main's two later commits (#165 and the
+        ncm-integration skill). It merges into `main` in the next pull request, after which `main` has
+        no working storefront until M1 to M7 rebuild the flows. The rest of M0 is in 12 §4.1 and §4.3.
 ```
 
 ```text
@@ -382,6 +411,9 @@ Edited 2026-11-07: there is no live store to cut over. v1 was never hosted and e
         data (OD-55 entry above), so the baseline release carries no data import, and "the live store's
         cutover" above describes a store that never went live. M0 pull requests still keep the v1 store's
         code on `main` working: the baseline lands through an integration branch (entry above, 2026-11-07).
+Edited 2026-11-09: the integration branch removed the v1 store's code (#166). When it merges into
+        `main`, `main` carries no store and nothing to release until M1 to M7 rebuild the flows; DEPLOY.md
+        says so, and the release path is 11 §5.
 ```
 
 ```text
@@ -813,7 +845,9 @@ This matrix is authoritative for decision gates. [12 §3](12-roadmap-and-backlog
 21. **Final review of the consistency review (2026-09-30, with the decision of 2026-10-04).** §2.3 logs, as a "Not an OD" entry, the product owner and tech lead decision of 2026-10-04 that `approveShopApplication` and `rejectShopApplication` are ⟳ on `shops.version`, with the documents it changes and the dated note on [ADR-0004](adr/0004-inertia-reads-json-api-writes.md) decision 3. The five ADR notes of 2026-10-01 that align an ADR with its owning document (ADR-0006 Risks, ADR-0012 decisions 5 and 9, ADR-0013 decision 3 and the ADR-0018 503 row) are relabelled "Edited 2026-10-01 (cross-doc check)", because none of them is one of the 17 rulings logged here; they need no entry. Checked, no change needed: the OD-48 row already says that 06 §4.4 and 08 §2.5 carry the rule, labelled (proposed, OD-48), as 06 note 37 asks.
 22. **v1 launch (2026-11-03).** The product owner decided to sell from a single-seller v1 before M0 (§2.3). OD-55 is new and blocks the M0 exit (§5). A-01 in [00 §6](00-context-assumptions-and-questions.md#6-proposed-defaults-and-assumptions-register) and ADR-0011's Status now say that A-01 stops holding when v1 goes live. Still open: OD-55, and whether R1's launch gate (12 §5.7) treats v1 customers as existing users. Done 2026-11-07 (note 26): OD-55 is Decided with no import, A-01 holds again, and v1 has no customers, so the launch-gate question does not arise.
 23. **Agent skills (2026-11-04).** §2.3 logs the product owner's decision to commit reviewed agent skills and load them in Claude Code through `.claude/skills/`. It partly reverses the RF-42 removal in [09 §1.5](09-code-structure-and-engineering-standards.md#15-current-code--target-structure), which 09 note 77 records; no OD was open on it.
-24. **Deploying from `main` (2026-11-04).** §2.3 logs that production deploys release tags cut from `main`, after #142 merged `v1` into `main`. The 2026-11-03 entry stays in the log as history; its "main stays the documented system (v2) and M0 continues there" no longer holds, because `main` is also the live store. Open on 2026-11-04, for E4 with OD-55: how the breaking M0 steps are staged before the cutover release. 2026-11-07 (note 26): `main` carries the v1 store's code but no live store, and the release that carries the baseline moves no data, because v1 was never hosted. Done 2026-11-07: the baseline is built on the integration branch `feat/e4-schema-baseline` and merges into `main` once it is complete (§2.3).
+24. **Deploying from `main` (2026-11-04).** §2.3 logs that production deploys release tags cut from `main`, after #142 merged `v1` into `main`. The 2026-11-03 entry stays in the log as history; its "main stays the documented system (v2) and M0 continues there" no longer holds, because `main` is also the live store. Open on 2026-11-04, for E4 with OD-55: how the breaking M0 steps are staged before the cutover release. 2026-11-07 (note 26): `main` carries the v1 store's code but no live store, and the release that carries the baseline moves no data, because v1 was never hosted. Done 2026-11-07: the baseline is built on the integration branch `feat/e4-schema-baseline` and merges into `main` once it is complete (§2.3). 2026-11-09: the integration branch no longer carries the v1 store's code (#166 and the merge preparation), so its merge removes the store from `main`; nothing is released from `main` until M1 to M7 rebuild the flows (§2.3, the 2026-11-04 and 2026-11-07 entries).
 25. **Courier integration and order verification (2026-11-05).** §2.3 logs OD-56 (courier integration in R1, reduced scope) and OD-57 (a verification flag on `orders`, no hold), and §2.2 opens OD-58 (COD on platform-owned courier accounts). §3.1 adds VX-16 to VX-18 for Nepal Can Move, §4.2 adds R-33, and §5 adds the M6 items. The §2 and §3 headings keep their old ranges (OD-54, VX-15) because other documents link to their anchors; the intro gives the current ranges. R-12 fired: the product owner moved nothing out of R1 for this addition, which the OD-56 entry records; the M6 effort in [12 §5.6](12-roadmap-and-backlog.md#56-m6-order-processing--fulfillment-r1) grows instead. FR-FUL-004 is Must, so VX-16 is also an M7 launch-gate item. Still open: (a) the M6 effort estimate, revisited at M6 planning. (b) Done the same day in the data-model change: the data model (04, 04a), the shipment machine and dispatch rule (05 §6.3), the permission and credential rules (07, with the proposed `shop.courier_accounts.manage` and `platform.logistics.manage`), the journeys (02 J-12, J-13) and the test IDs (10 §6). Still open: the operations, jobs and courier inbox, which M6 specifies.
 26. **v1 holds only seed data (2026-11-07).** The product owner confirmed that the project is not live: the web app is not hosted and every row in any database is seed data. §2.3 logs OD-55 as Decided, option (a) with no import, and adds dated notes to the 2026-11-04 and 2026-11-03 entries, whose "live store" and "real data" premise did not come true. §2.2 and §5 follow: the M0 exit no longer waits on an import. Notes 22 and 24 record the outcome. Other documents updated in the same change: 00 (A-01, §7.2, §7.3), 04 (§20.2.1: no hosted database to export), ADR-0011 (dated note: no import, no cutover rehearsal), ADR-0019 (dated note), 12 (§3, §4.1) and DEPLOY.md. The same day §2.3 logs that the baseline lands through the integration branch `feat/e4-schema-baseline`, which closes the staging question of note 24; 09 §8.1 and §11.6 and AGENTS.md follow.
 27. **Reference seeders without the locations dataset (2026-11-09).** §2.3 logs the product owner's split of the E4 and E8 seeders. VX-10 stays open and still blocks the M1 and M2 exits as §5 says; the locations seeder it feeds is now a separate pull request, and the M0 exit waits for it and `T-SHOP-108` through [12 §4.3](12-roadmap-and-backlog.md#43-exit-criteria) item 6. §2.2 opens OD-59 for the demo seeder that 09 §9.4 schedules in M0 but that calls M1 to M6 actions, and §5 lists it under the M0 exit with its safe default.
+28. **The `ncm-integration` skill (2026-11-09).** §2.3 logs the product owner's decision to track the skill that commit `bd23da5` added to `main`, after the licence check and read-through that [AGENTS.md](../AGENTS.md) requires. It changes no OD, VX or risk: the skill's NCM API facts are unverified, so VX-16, VX-17 and VX-18 stay open and R-33 is unchanged.
+29. **Preparing the E4 merge (2026-11-09).** §2.3 adds dated notes to the 2026-11-07 integration-branch entry (both of its conditions hold) and the 2026-11-04 entry (the merge removes the v1 store from `main`), and note 24 follows. Nothing here says the merge into `main` has happened. Outside this register the same change updates DEPLOY.md, README.md, `database/README.md`, the `dripnepal-run` and `dripnepal-testing` skills, 10 (§3.1, §5, notes 29, 31, 33, 40) and 12 (§4.1, note 24).

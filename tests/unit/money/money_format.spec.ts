@@ -2,15 +2,13 @@ import { test } from '@japa/runner'
 import { formatNPR, minorToRupeesText, parseRupeesToMinor } from '#shared/format/money'
 
 /*
- * Money is whole paisa in v1 (docs/04 §18.1). T-UI-020 for the formatter
+ * Money is whole paisa (docs/04 §18.1). T-UI-020 for the formatter
  * (docs/08 §5.11) and the parsing part of T-ARCH-013 (docs/04 §18.1, §18.4).
  */
 
 const NBSP = String.fromCharCode(0xa0)
 
-test.group('T-UI-020 money formatter [v1]', (group) => {
-  group.tap((t) => t.tags(['@v1']))
-
+test.group('T-UI-020 money formatter', () => {
   test('{minor} paisa reads {shown}')
     .with([
       { minor: 0, shown: `Rs${NBSP}0` },
