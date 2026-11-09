@@ -270,7 +270,10 @@ test.group('T-FUL-102 shipments courier-path CHECKs and keys', () => {
       status: 'cancelled',
       cancelled_at: db.raw('now()'),
     })
-    await insertShipment(so, { status: 'packed', pickup_address_id: courier.addressId })
+    await insertShipment(await insertShopOrder(courier.shopId), {
+      status: 'packed',
+      pickup_address_id: courier.addressId,
+    })
 
     const requested = { ...booking(courier, so, 2), status: 'booking_requested' }
     const cases: [string, Row, string][] = [
@@ -357,7 +360,7 @@ test.group('T-FUL-102 shipments courier-path CHECKs and keys', () => {
       ],
     ]
     for (const [label, values, constraint] of cases) {
-      // The live slot of `so` is taken by the packed row; a refused CHECK never reaches the index.
+      // `so` has no live shipment, so a row these CHECKs let through would be accepted.
       await refused(assert, insertInto(so, values), { code: '23514', constraint }, label)
     }
   })
@@ -403,12 +406,15 @@ test.group('T-FUL-103 shipments_booking_guard', () => {
     const secondAccountId = await insertAccount(courier.shopId)
     const secondAddressId = await insertPickupAddress(courier.shopId)
     const so = await insertShopOrder(courier.shopId)
-    const cancelledId = await insertShipment(so, {
-      ...booking(courier, so, 1),
+    const id = await insertShipment(so, { ...booking(courier, so), status: 'booking_requested' })
+    // A cancelled booking on a shop order with no live shipment, so that leaving
+    // `cancelled` meets only the guard.
+    const cancelledSo = await insertShopOrder(courier.shopId)
+    const cancelledId = await insertShipment(cancelledSo, {
+      ...booking(courier, cancelledSo),
       status: 'cancelled',
       cancelled_at: db.raw('now()'),
     })
-    const id = await insertShipment(so, { ...booking(courier, so, 2), status: 'booking_requested' })
 
     // What the guard allows: the courier's ID written once, then the parcel moving.
     await db
