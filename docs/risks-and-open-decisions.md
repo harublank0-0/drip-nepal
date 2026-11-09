@@ -249,12 +249,13 @@ Evidence: Licence: MIT (its LICENSE, copyright 2026 harublank0-0). Read-through 
           [observed], [reported], [inferred] or [unknown]. They are not verified here: VX-16 stays
           open and ADR-0019 decision 6 stays Proposed. Where it differs from the documents (its stage
           names against 05 §6.3, decimal-string money against ADR-0007, its decisions D1 to D11
-          against OD-56, OD-58 and ADR-0019), the documents win. skills-lock.json records commit
-          bd23da5 of this repository as its source, because no upstream repository is known; its
+          against OD-56, OD-58 and ADR-0019), the documents win. skills-lock.json records this
+          repository as its source, because no upstream repository is known, and NOTICE.md names
+          commit bd23da5; its
           computedHash is SHA-256 over the sorted relative paths and contents of the six skill files,
           which may not be the algorithm of the two older entries (never checked, 2026-11-04 entry).
 ADR: none.
-Docs updated: 09 (§1.5, note 85), AGENTS.md, note 28  |  Status: Decided
+Docs updated: 09 (§1.5, note 85), 12 (E12, note 24), AGENTS.md, note 28  |  Status: Decided
 ```
 
 ```text
@@ -409,7 +410,8 @@ Docs updated: DEPLOY.md (Releasing, Updating), .github/workflows/ci.yml, 10 §5 
 Edited 2026-11-07: there is no live store to cut over. v1 was never hosted and every database row is seed
         data (OD-55 entry above), so the baseline release carries no data import, and "the live store's
         cutover" above describes a store that never went live. M0 pull requests still keep the v1 store's
-        code on `main` working: the baseline lands through an integration branch (entry above, 2026-11-07).Edited 2026-11-09: the integration branch removed the v1 store's code (#166). When it merges into
+        code on `main` working: the baseline lands through an integration branch (entry above, 2026-11-07).
+Edited 2026-11-09: the integration branch removed the v1 store's code (#166). When it merges into
         `main`, `main` carries no store and nothing to release until M1 to M7 rebuild the flows; DEPLOY.md
         says so, and the release path is 11 §5.
 ```

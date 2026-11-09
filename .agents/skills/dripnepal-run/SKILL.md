@@ -19,7 +19,7 @@ The v1 store (storefront, seller dashboard, admin pages, demo logins) was remove
 | `/uploads/*`     | every mode       | Files in `./storage`, served by the `fs` disk of `config/drive.ts`; nothing uploads yet                                             |
 | anything else    | every mode       | 404, with Adonis's plain default answer until E5 adds the error pages                                                               |
 
-There is no demo data and no login: the demo seeder waits for OD-59 and the actions of M1 to M6, and the first platform admin comes from `node ace platform:create-admin`, which E8 builds. `node ace list:routes` lists the routes that exist, one JSON line per route.
+There is no demo data and no login: the demo seeder waits for OD-59 and the actions of M1 to M6, and the first platform admin comes from `node ace platform:create-admin`, which E8 builds. `node ace list:routes` lists the routes that exist (one JSON line per route in a non-interactive shell, a table in a terminal).
 
 ## 1. Database and environment
 
