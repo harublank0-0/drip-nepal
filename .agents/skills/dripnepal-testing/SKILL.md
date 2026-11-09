@@ -12,7 +12,7 @@ How to get a test database, run the suites, and write tests that prove something
 | Piece          | Where                                                                               | What it does                                                                                                                                                          |
 | -------------- | ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Suites         | `adonisrc.ts`                                                                       | `unit` (no database), `functional` (database, each test rolled back), `concurrency` (database, real commits), `browser` (configured, no specs yet)                    |
-| Database setup | `tests/support/database.ts`, called from `configureSuite` in `tests/bootstrap.ts`   | Once per run: `db:wipe`, `migration:run --no-schema-generate`, then the reference seeders (categories, shop categories, attributes, roles)                            |
+| Database setup | `tests/support/database.ts`, called from `configureSuite` in `tests/bootstrap.ts`   | Once per run, as `dripnepal_migrator` on the `pg_migrator` connection: `db:wipe`, `migration:run --no-schema-generate`. The suites then run as `dripnepal_app`        |
 | Isolation      | `tests/bootstrap.ts`                                                                | Every `functional` test runs inside a global transaction that is rolled back; service `db.transaction()` calls become savepoints. `concurrency` tests commit for real |
 | Fixtures       | `tests/support/fixtures.ts`                                                         | `createCustomer`, `createShop`, `createVariant`, `fillCart`, `guestOwner`, `addressPayload`; every call makes unique rows                                             |
 | Examples       | `tests/functional/orders/*.spec.ts`, `tests/concurrency/orders/stock_races.spec.ts` | Checkout, order status, cart, and the stock and status races                                                                                                          |
@@ -24,7 +24,9 @@ A fresh checkout has no `node_modules`: run `pnpm install` first (pnpm 11; `pack
 
 Check first: `pg_isready -h localhost`. If it answers, skip to step 2.
 
-**With Docker (a developer laptop):** `docker compose up -d`. Check for a running daemon with `docker info`, not `which docker`: a cloud session can have the command without the daemon. The init script in `docker/postgres/init/` creates `dripnepal_test` on a fresh volume. On an older volume, create it once: `docker compose exec postgres createdb -U dripnepal dripnepal_test`.
+Tests use two database roles, as production does (docs/10 §3.2, docs/07 §4.10): the run setup migrates as `dripnepal_migrator`, which owns the test database, and the tests connect as `dripnepal_app`, which has no `UPDATE` or `DELETE` on the append-only tables. A third role, `dripnepal_readonly`, receives the incident-read grants. All three must exist before the first run.
+
+**With Docker (a developer laptop):** `docker compose up -d`. Check for a running daemon with `docker info`, not `which docker`: a cloud session can have the command without the daemon. The init scripts in `docker/postgres/init/` create the three roles and `dripnepal_test`, owned by the migrator, on a fresh volume. On an older volume, run the two commands in the header of `docker/postgres/init/00_create_roles.sql` once, or create the database with `docker compose exec postgres createdb -U dripnepal -O dripnepal_migrator dripnepal_test` if it does not exist yet.
 
 **Without Docker (a Claude Code cloud session):** there is no Docker daemon, but the image (Ubuntu) has PostgreSQL server packages with Debian's cluster tools. Run these one at a time; each is safe to repeat:
 
@@ -33,10 +35,13 @@ pg_lsclusters
 pg_createcluster 16 driptest -p 5432 -e UTF8 --locale C.UTF-8 -- --auth=trust
 pg_ctlcluster 16 driptest start
 psql -h localhost -U postgres -c "create role dripnepal login password 'secret' superuser"
-psql -h localhost -U postgres -c "create database dripnepal_test owner dripnepal encoding 'UTF8' template template0"
+psql -h localhost -U postgres -f docker/postgres/init/00_create_roles.sql
+psql -h localhost -U postgres -c "create database dripnepal_test owner dripnepal_migrator encoding 'UTF8' template template0"
 ```
 
-- Use the newest version `pg_lsclusters` or `ls /usr/lib/postgresql` shows in place of `16`. If `pg_lsclusters` already lists `driptest`, skip `pg_createcluster`; "already exists" errors from the two `psql` lines are fine.
+- Use the newest version `pg_lsclusters` or `ls /usr/lib/postgresql` shows in place of `16`. If `pg_lsclusters` already lists `driptest`, skip `pg_createcluster`; "already exists" errors from the `psql` lines are fine.
+- A `dripnepal_test` made before the two roles is owned by `dripnepal`, and the migrator cannot drop its tables. Hand it over once: `psql -h localhost -U postgres -c "alter database dripnepal_test owner to dripnepal_migrator"`, then drop the old tables as `postgres` (or drop and recreate the database as above).
+- On PostgreSQL older than 18 the baseline needs a `uuidv7()` function, which 18 has built in. Create it in the test database as the migrator (`psql -h localhost -U dripnepal_migrator -d dripnepal_test`); it is local only and never committed. `db:wipe` drops tables, not functions, so it survives each run.
 - Spell out UTF8. Without a locale in the environment, the server picks `SQL_ASCII`, which accepts invalid text that CI's UTF8 database rejects, so Nepali product text would behave differently.
 - Another cluster (usually `16/main`, stopped) may also be set to port 5432. Leave it stopped.
 - A restart of the session's worker stops the server; `pg_ctlcluster 16 driptest start` brings it back with its data.
@@ -54,7 +59,9 @@ node ace generate:key --show
 
 Paste the printed key after `APP_KEY=` in `.env`. Plain `node ace generate:key` would write it for you, but it also rewrites `.env.example`, which you'd then have to restore.
 
-`.env.test` (committed) switches to `NODE_ENV=test`, `SESSION_DRIVER=memory` and `DB_DATABASE=dripnepal_test`. CI has no `.env`: the "Tests" job in `.github/workflows/ci.yml` sets the same variables in its `env:` block.
+`.env.test` (committed) switches to `NODE_ENV=test`, `SESSION_DRIVER=memory` and `DB_DATABASE=dripnepal_test`, connects as `DB_USER=dripnepal_app`, and sets `DB_MIGRATOR_USER` and `DB_MIGRATOR_PASSWORD` for the `pg_migrator` connection, which exists only under `NODE_ENV=test`. `DB_PASSWORD` comes from `.env`; all three roles use the docker-compose password. CI has no `.env`: the "Tests" job in `.github/workflows/ci.yml` creates the roles in a step and sets the same variables in its `env:` block.
+
+To regenerate `database/schema.ts` after a migration change, migrate as the migrator: `NODE_ENV=test node ace migration:fresh --connection=pg_migrator`, then `pnpm exec prettier --write database/schema.ts` (this is the `T-ARCH-010` CI step).
 
 ## 3. Run
 
@@ -83,7 +90,7 @@ After a run, `git status` must show only your own changes. If `database/schema.t
 
 - **unit**: pure functions with no database, such as `start/env_policy.ts`.
 - **functional**: behaviour through a service (or over HTTP once `@japa/api-client` is added in M0). Nothing persists, so tests never see each other's rows.
-- **concurrency**: anything about locks, races or double submits. A global transaction would put every "parallel" call on one connection, so the second call would never wait for the first and the test would pass with the lock removed. Here each call commits on its own pool connection, and each round creates its own shop and products.
+- **concurrency**: anything about locks, races or double submits. A global transaction would put every "parallel" call on one connection, so the second call would never wait for the first and the test would pass with the lock removed. Here each call commits on its own pool connection, and each round creates its own shop and products. Tests of triggers and grants that need the second role go here too: `db.connection('pg_migrator')` runs as the migrator (`MIGRATOR_CONNECTION` in `tests/support/database.ts`), as `tests/concurrency/schema/append_only.spec.ts` (`T-ARCH-012`) does.
 
 ### Conventions
 
