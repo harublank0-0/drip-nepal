@@ -54,6 +54,7 @@ test.group('T-ARCH-014 money columns', () => {
     const { rows } = await owner().rawQuery(String.raw`
       SELECT DISTINCT money.table_name AS table,
              currency.data_type AS currency_type,
+             currency.character_maximum_length AS currency_length,
              pg_get_constraintdef(con.oid) AS currency_check
         FROM information_schema.columns money
         JOIN information_schema.tables t
@@ -68,10 +69,16 @@ test.group('T-ARCH-014 money columns', () => {
        WHERE money.table_schema = 'public' AND money.column_name LIKE '%\_minor%'
        ORDER BY 1
     `)
-    const tables = rows as { table: string; currency_type: string; currency_check: string }[]
+    const tables = rows as {
+      table: string
+      currency_type: string
+      currency_length: number
+      currency_check: string
+    }[]
     assert.isNotEmpty(tables)
     for (const row of tables) {
       assert.equal(row.currency_type, 'character', `${row.table}.currency is char(3)`)
+      assert.equal(row.currency_length, 3, `${row.table}.currency is char(3)`)
       assert.equal(
         row.currency_check,
         "CHECK ((currency = 'NPR'::bpchar))",

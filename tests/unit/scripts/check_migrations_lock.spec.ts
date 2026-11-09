@@ -73,6 +73,8 @@ const BASELINE = {
 }
 
 test.group('T-ARCH-017 migration-lock script, file-name mode', (group) => {
+  // Each test starts node one or more times; the unit suite's default is 2 s.
+  group.each.timeout(10_000)
   const roots: string[] = []
   group.each.teardown(async () => {
     for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true })
@@ -87,11 +89,20 @@ test.group('T-ARCH-017 migration-lock script, file-name mode', (group) => {
     const { root, check } = await fixture({
       ...BASELINE,
       '1794300000000_index_things_name.ts': CONCURRENT,
+      // Typed signatures, with and without a space before the parameter list
+      '1794300000001_add_things_name.ts': TRANSACTIONAL.replace(
+        'async up()',
+        'async up(): Promise<void>'
+      ),
+      '1794300000002_add_things_size.ts': TRANSACTIONAL.replace(
+        'async up()',
+        'async up (): Promise<void>'
+      ),
     })
     roots.push(root)
     const result = await check()
     assert.equal(result.code, 0, result.stderr)
-    assert.match(result.stdout, /3 migration file\(s\) pass \(file-name mode\)/)
+    assert.match(result.stdout, /5 migration file\(s\) pass \(file-name mode\)/)
   })
 
   test('T-ARCH-017 refuses the file name {name}')
@@ -152,6 +163,7 @@ test.group('T-ARCH-017 migration-lock script, file-name mode', (group) => {
 })
 
 test.group('T-ARCH-017 migration-lock script, checksum mode', (group) => {
+  group.each.timeout(10_000)
   const roots: string[] = []
   group.each.teardown(async () => {
     for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true })

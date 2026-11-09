@@ -1230,17 +1230,30 @@ async function orderCustomer(orderId: string) {
   return order.customer_user_id as string
 }
 
+// `IS NOT NULL`, or an `IS NULL` compared with something else, on either side
+// (`=`, `<>`, `IS [NOT] DISTINCT FROM`); the operand of a right-hand `IS NULL`
+// may be one parenthesised expression such as `(shipping_address ->> 'x'::text)`.
+const COMPARE = String.raw`(=|<>|IS (NOT )?DISTINCT FROM)`
+const COMPARED_IS_NULL = [
+  'IS NOT NULL',
+  String.raw`IS NULL\) ${COMPARE} `,
+  String.raw` ${COMPARE} \((\([^()]*\)|[^()])* IS NULL\)`,
+].join('|')
+
 // Every state-dependent CHECK (docs/04a §5), by name.
 async function stateDependentChecks(): Promise<string[]> {
-  const { rows } = await db.rawQuery(String.raw`
+  const { rows } = await db.rawQuery(
+    String.raw`
     SELECT con.conname AS constraint
       FROM pg_constraint con
       JOIN pg_class rel ON rel.oid = con.conrelid
       JOIN pg_namespace nsp ON nsp.oid = rel.relnamespace
      WHERE con.contype = 'c' AND nsp.nspname = 'public'
-       AND pg_get_constraintdef(con.oid) ~ 'IS NOT NULL|IS NULL\) = |= \([a-z_]+ IS NULL\)'
+       AND pg_get_constraintdef(con.oid) ~ ?
      ORDER BY 1
-  `)
+  `,
+    [COMPARED_IS_NULL]
+  )
   return (rows as { constraint: string }[]).map((row) => row.constraint)
 }
 

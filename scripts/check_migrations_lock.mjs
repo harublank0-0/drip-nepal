@@ -48,9 +48,9 @@ const sha256 = (name) =>
  */
 function firstStatementError(name) {
   const source = readFileSync(join(args.dir, name), 'utf8')
-  const up = source.indexOf('async up()')
-  if (up === -1) return `${name}: no up() method`
-  const call = /this\.schema\.(\w+)\(\s*(?:String\.raw`([^`]*)`)?/.exec(source.slice(up))
+  const up = /\basync\s+up\s*\(/.exec(source)
+  if (!up) return `${name}: no up() method`
+  const call = /this\.schema\.(\w+)\(\s*(?:String\.raw`([^`]*)`)?/.exec(source.slice(up.index))
   if (!call) return `${name}: up() runs no statement`
   const sql = call[1] === 'raw' && call[2] !== undefined ? call[2].trim() : null
   const concurrent = /static\s+disableTransactions\s*=\s*true/.test(source)
