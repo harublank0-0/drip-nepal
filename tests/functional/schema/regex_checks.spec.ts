@@ -73,6 +73,20 @@ const EXAMPLES: Record<string, string[]> = {
   ],
   // docs/04a §9.9
   'logistics_accounts.credentials_enc': [CIPHERTEXT],
+  // docs/04a §11 (human numbers per docs/04 §2.1; a shop order's position
+  // and a shipment's count run from 1 to 99)
+  'orders.number': ['DN-4K7Q2M9'],
+  'orders.shipping_address.recipient_name_enc': [CIPHERTEXT],
+  'orders.shipping_address.recipient_phone_enc': [CIPHERTEXT],
+  'orders.shipping_address.area_tole_enc': [CIPHERTEXT],
+  'orders.shipping_address.street_landmark_enc': [CIPHERTEXT],
+  'orders.request_id': ['01a1b452-a64a-7a4f-93a2-be6932153cde', 'req-12345678'],
+  'shop_orders.number': ['DN-4K7Q2M9-1', 'DN-4K7Q2M9-12'],
+  'order_items.image_url_snapshot': ['https://media.example.com/p/7K3M9QXA/800.webp'],
+  'order_events.type': ['order.placed', 'shop_order.items_rejected'],
+  'shipments.merchant_reference': ['DN-4K7Q2M9-1-S1', 'DN-4K7Q2M9-12-S10'],
+  'shipments.tracking_url': ['https://track.example.com/TC1001NP'],
+  'return_requests.number': ['RT-4K7Q2M9'],
   // docs/04a §15
   'idempotency_keys.actor_scope': [
     '01a1b452-a64a-7a4f-93a2-be6932153cde',
@@ -103,8 +117,10 @@ const MATCHES: Record<Operator, string> = {
 }
 
 // `col ~ 'pattern'::text` (or `~*`, `!~`, `!~*`), with an optional cast on the column, as
-// pg_get_constraintdef prints it. Quotes inside a literal are doubled.
-const REGEX_TERM = /\(*([a-z_][a-z0-9_]*)\)?(?:::[a-z ]+)?\s+(!?~\*?)\s+'((?:[^']|'')*)'::text/g
+// pg_get_constraintdef prints it. Quotes inside a literal are doubled. A jsonb member,
+// `(col ->> 'member'::text) ~ 'pattern'::text`, is keyed `<table>.<column>.<member>`.
+const REGEX_TERM =
+  /\(*([a-z_][a-z0-9_]*)(?: ->> '([a-z_][a-z0-9_]*)'::text)?\)?(?:::[a-z ]+)?\s+(!?~\*?)\s+'((?:[^']|'')*)'::text/g
 
 async function regexChecks(): Promise<RegexCheck[]> {
   const result = await db.rawQuery(`
@@ -126,9 +142,9 @@ async function regexChecks(): Promise<RegexCheck[]> {
       checks.push({
         table: row.table,
         constraint: row.constraint,
-        column: match[1],
-        operator: match[2] as Operator,
-        pattern: match[3].replaceAll("''", "'"),
+        column: match[2] ? `${match[1]}.${match[2]}` : match[1],
+        operator: match[3] as Operator,
+        pattern: match[4].replaceAll("''", "'"),
       })
     }
   }
