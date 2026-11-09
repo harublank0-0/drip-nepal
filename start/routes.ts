@@ -22,13 +22,6 @@ const uuid = {
   cast: (value: string) => value.toLowerCase(),
 }
 router.where('id', uuid)
-router.where('checkoutId', uuid)
-
-import '#modules/auth/routes'
-import '#modules/shops/routes'
-import '#modules/catalog/routes'
-import '#modules/orders/routes'
-import '#modules/admin/routes'
 
 if (!app.inProduction) {
   router

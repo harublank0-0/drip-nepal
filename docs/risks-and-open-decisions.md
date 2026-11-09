@@ -234,6 +234,18 @@ OD-28 to OD-54 register the owner decisions that the three deep audits left open
 Newest first. The entry format is in §1.5. A ruling that is not an OD but changes an owning document or an ADR is logged in the same format, headed "Not an OD".
 
 ```text
+Not an OD — Decided 2026-11-07 by product owner: the baseline files are written before the M0 spikes end
+Ruling: The E4 baseline files are written before the uuidv7() and pg-boss spikes (T-ARCH-004) end,
+        which 04 §20.2.1 item 3 had made a precondition. uuidv7() is checked on postgres:18.4 in CI;
+        the managed-cluster check runs when the cluster is provisioned. If the pg-boss spike fails,
+        the outbox_events fallback of ADR-0010 is one new table in a later file.
+Evidence: No managed cluster exists (the project is not hosted). Neither spike can change the tables
+          of the files already written.
+ADR: none.
+Docs updated: 04 (§20.2.1, note 13), 12 (§4.1, note 22)  |  Status: Decided
+```
+
+```text
 Not an OD — Decided 2026-11-07 by product owner: the E4 baseline lands through an integration branch
 Ruling: The E4 baseline is built on the integration branch `feat/e4-schema-baseline`. Its parts (the
         baseline files, the models and the constraint tests) arrive there in small pull requests, each
