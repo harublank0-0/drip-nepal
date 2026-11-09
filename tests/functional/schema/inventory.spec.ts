@@ -14,7 +14,7 @@ import {
  * Constraint tests of `inventory_items` and `inventory_reservations`
  * (docs/04a §8.1, §8.2), the baseline constraint tests that ADR-0011
  * "Verification" lists for these tables: T-ORD-104 (composite FK) and the
- * stock CHECK under T-INV-003.
+ * stock CHECK, T-INV-001 (docs/04a §8.1).
  *
  * Rows are inserted directly, as the runtime would, and each test is rolled
  * back. Every expected refusal runs in its own savepoint and asserts the
@@ -108,15 +108,15 @@ test.group('T-ORD-104 cross-shop reservation rows', () => {
 })
 
 /*
- * The stock CHECK that ADR-0011 "Verification" names T-INV-003. The docs/10
- * §6 row of T-INV-003 is the concurrency test of docs/05 §4.9 (twenty
- * checkouts for the last unit), which comes with checkout in M4. This group
- * is only its CHECK backstop: `inventory_items_reserved_check` refuses a
+ * T-INV-001 (docs/10 §6: "Missing stock guard gives 23514, never
+ * oversell"), the test docs/04a §8.1 gives the stock CHECK. ADR-0011 named it
+ * T-INV-003, which is the concurrency test of docs/05 §4.9 and comes with
+ * checkout (dated note in ADR-0011). `inventory_items_reserved_check` refuses a
  * promise of more units than are on hand when a code path skips the guard
  * `WHERE on_hand - reserved >= :qty` (docs/04a §8.1, docs/05 §4.5).
  */
-test.group('T-INV-003 inventory_items stock CHECK backstop', () => {
-  test('T-INV-003 more reserved than on hand, or negative stock, gives 23514', async ({
+test.group('T-INV-001 inventory_items stock CHECK', () => {
+  test('T-INV-001 more reserved than on hand, or negative stock, gives 23514', async ({
     assert,
   }) => {
     const shopId = await insertShop()
