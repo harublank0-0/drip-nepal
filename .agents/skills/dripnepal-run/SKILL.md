@@ -44,7 +44,7 @@ node ace db:seed
 ```
 
 - `--no-schema-generate` stops `migration:run` from rewriting `database/schema.ts`, a generated file whose output depends on the database it ran against. Leave it off only when you changed a migration and mean to commit the regenerated file.
-- `db:seed` runs the reference seeders `02_` to `09_` of `database/seeders/reference/` (delivery zones, shop categories, categories, attributes, brands, settings, the `ncm` courier; no locations yet). `database/seeders/dev/` is empty. Running it again is safe.
+- `db:seed` runs the reference seeders `02_` to `09_` of `database/seeders/reference/` (delivery zones, shop categories, categories, attributes, brands, settings, the `ncm` courier; no locations yet). `database/seeders/dev/` does not exist yet. Running it again is safe.
 - Development logs every SQL query, so the output is long. Each seeder ends with a `❯ completed …` line; `node ace db:seed 2>&1 | grep ❯` shows just those.
 
 ## 3. Start the app
