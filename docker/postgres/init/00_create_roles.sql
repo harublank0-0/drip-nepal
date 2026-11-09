@@ -3,10 +3,13 @@
 -- dripnepal_migrator and run as dripnepal_app, as in production (docs/10
 -- §3.2). Development only: the password is the docker-compose one. The
 -- postgres image runs the files in this folder in name order, and only when
--- its data volume is empty. For an existing volume, run this file and the
--- next one once by hand:
+-- its data volume is empty. For an existing volume, create the roles once by
+-- hand, then drop and recreate the test database owned by the migrator. A
+-- test database migrated before the roles keeps functions owned by its old
+-- owner, which the migrator cannot replace, so it is recreated, not handed over:
 --   docker compose exec -T postgres psql -U dripnepal -d dripnepal < docker/postgres/init/00_create_roles.sql
---   docker compose exec postgres psql -U dripnepal -d dripnepal -c 'ALTER DATABASE dripnepal_test OWNER TO dripnepal_migrator'
+--   docker compose exec postgres dropdb -U dripnepal --if-exists dripnepal_test
+--   docker compose exec postgres createdb -U dripnepal -O dripnepal_migrator dripnepal_test
 
 -- Owns the test database, so it holds CREATE on it for the CREATE EXTENSION
 -- of baseline file 1 (docs/04 §20.2.2), and owns schema public through
