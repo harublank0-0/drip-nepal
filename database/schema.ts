@@ -192,6 +192,87 @@ export class LocalLevelSchema extends BaseModel {
   declare wardCount: number
 }
 
+export class LogisticsAccountShopSchema extends BaseModel {
+  static $columns = [
+    'accountId',
+    'accountOwnerType',
+    'createdAt',
+    'disabledAt',
+    'enabledAt',
+    'isActive',
+    'ownerShopId',
+    'shopId',
+    'updatedAt',
+  ] as const
+  $columns = LogisticsAccountShopSchema.$columns
+  @column({ isPrimary: true })
+  declare accountId: string
+  @column()
+  declare accountOwnerType: string
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column.dateTime()
+  declare disabledAt: DateTime | null
+  @column.dateTime()
+  declare enabledAt: DateTime
+  @column()
+  declare isActive: boolean
+  @column()
+  declare ownerShopId: string | null
+  @column()
+  declare shopId: string
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
+}
+
+export class LogisticsAccountSchema extends BaseModel {
+  static $columns = [
+    'createdAt',
+    'credentialsEnc',
+    'disabledAt',
+    'environment',
+    'externalAccountRef',
+    'id',
+    'name',
+    'ownerType',
+    'providerCode',
+    'shopId',
+    'status',
+    'updatedAt',
+    'verifiedAt',
+    'version',
+  ] as const
+  $columns = LogisticsAccountSchema.$columns
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column({ serializeAs: null })
+  declare credentialsEnc: string | null
+  @column.dateTime()
+  declare disabledAt: DateTime | null
+  @column()
+  declare environment: string
+  @column()
+  declare externalAccountRef: string | null
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare name: string
+  @column()
+  declare ownerType: string
+  @column()
+  declare providerCode: string
+  @column()
+  declare shopId: string | null
+  @column()
+  declare status: string
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
+  @column.dateTime()
+  declare verifiedAt: DateTime | null
+  @column()
+  declare version: number
+}
+
 export class LogisticsProviderSchema extends BaseModel {
   static $columns = ['capabilities', 'code', 'createdAt', 'isActive', 'name', 'updatedAt'] as const
   $columns = LogisticsProviderSchema.$columns
@@ -207,6 +288,69 @@ export class LogisticsProviderSchema extends BaseModel {
   declare name: string
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime
+}
+
+export class MediaAssetSchema extends BaseModel {
+  static $columns = [
+    'bytes',
+    'createdAt',
+    'derivedKeys',
+    'documentType',
+    'height',
+    'id',
+    'kind',
+    'mime',
+    'originalKey',
+    'processedAt',
+    'rejectionReason',
+    'sha256',
+    'shopId',
+    'status',
+    'updatedAt',
+    'uploadBytes',
+    'uploadEtag',
+    'uploadedBy',
+    'width',
+  ] as const
+  $columns = MediaAssetSchema.$columns
+  @column()
+  declare bytes: number
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare derivedKeys: unknown | null
+  @column()
+  declare documentType: string | null
+  @column()
+  declare height: number | null
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare kind: string
+  @column()
+  declare mime: string
+  @column()
+  declare originalKey: string
+  @column.dateTime()
+  declare processedAt: DateTime | null
+  @column()
+  declare rejectionReason: string | null
+  @column()
+  declare sha256: Buffer | null
+  @column()
+  declare shopId: string
+  @column()
+  declare status: string
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
+  @column()
+  declare uploadBytes: number | null
+  @column()
+  declare uploadEtag: string | null
+  @column()
+  declare uploadedBy: string
+  @column()
+  declare width: number | null
 }
 
 export class PlatformSettingSchema extends BaseModel {
@@ -269,6 +413,463 @@ export class ProvinceSchema extends BaseModel {
   declare nameNe: string
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime
+}
+
+export class ShopAddressSchema extends BaseModel {
+  static $columns = [
+    'archivedAt',
+    'areaToleEnc',
+    'contactName',
+    'contactPhoneEnc',
+    'createdAt',
+    'districtCode',
+    'id',
+    'isDefault',
+    'label',
+    'localLevelCode',
+    'postalCode',
+    'provinceCode',
+    'purpose',
+    'shopId',
+    'streetLandmarkEnc',
+    'updatedAt',
+    'wardNo',
+  ] as const
+  $columns = ShopAddressSchema.$columns
+  @column.dateTime()
+  declare archivedAt: DateTime | null
+  @column()
+  declare areaToleEnc: string
+  @column()
+  declare contactName: string
+  @column()
+  declare contactPhoneEnc: string
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare districtCode: string
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare isDefault: boolean
+  @column()
+  declare label: string | null
+  @column()
+  declare localLevelCode: string
+  @column()
+  declare postalCode: string
+  @column()
+  declare provinceCode: string
+  @column()
+  declare purpose: string
+  @column()
+  declare shopId: string
+  @column()
+  declare streetLandmarkEnc: string | null
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
+  @column()
+  declare wardNo: number
+}
+
+export class ShopAgreementSchema extends BaseModel {
+  static $columns = [
+    'acceptedAt',
+    'acceptedByUserId',
+    'agreementVersion',
+    'id',
+    'ipHash',
+    'requestId',
+    'shopId',
+  ] as const
+  $columns = ShopAgreementSchema.$columns
+  @column.dateTime()
+  declare acceptedAt: DateTime
+  @column()
+  declare acceptedByUserId: string
+  @column()
+  declare agreementVersion: string
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare ipHash: Buffer
+  @column()
+  declare requestId: string
+  @column()
+  declare shopId: string
+}
+
+export class ShopCategorySchema extends BaseModel {
+  static $columns = [
+    'code',
+    'createdAt',
+    'description',
+    'icon',
+    'isActive',
+    'label',
+    'position',
+    'updatedAt',
+  ] as const
+  $columns = ShopCategorySchema.$columns
+  @column({ isPrimary: true })
+  declare code: string
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare description: string | null
+  @column()
+  declare icon: string | null
+  @column()
+  declare isActive: boolean
+  @column()
+  declare label: string
+  @column()
+  declare position: number
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
+}
+
+export class ShopCategoryAssignmentSchema extends BaseModel {
+  static $columns = ['createdAt', 'shopCategoryCode', 'shopId'] as const
+  $columns = ShopCategoryAssignmentSchema.$columns
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare shopCategoryCode: string
+  @column({ isPrimary: true })
+  declare shopId: string
+}
+
+export class ShopDeliveryCoverageSchema extends BaseModel {
+  static $columns = ['createdAt', 'districtCode', 'shopId'] as const
+  $columns = ShopDeliveryCoverageSchema.$columns
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare districtCode: string
+  @column({ isPrimary: true })
+  declare shopId: string
+}
+
+export class ShopInvitationSchema extends BaseModel {
+  static $columns = [
+    'acceptedAt',
+    'acceptedByUserId',
+    'createdAt',
+    'email',
+    'expiresAt',
+    'id',
+    'invitedBy',
+    'revokedAt',
+    'role',
+    'shopId',
+    'tokenHash',
+  ] as const
+  $columns = ShopInvitationSchema.$columns
+  @column.dateTime()
+  declare acceptedAt: DateTime | null
+  @column()
+  declare acceptedByUserId: string | null
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare email: string
+  @column.dateTime()
+  declare expiresAt: DateTime
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare invitedBy: string
+  @column.dateTime()
+  declare revokedAt: DateTime | null
+  @column()
+  declare role: string
+  @column()
+  declare shopId: string
+  @column({ serializeAs: null })
+  declare tokenHash: Buffer
+}
+
+export class ShopLogisticsSettingSchema extends BaseModel {
+  static $columns = [
+    'createdAt',
+    'defaultAccountId',
+    'defaultAccountOwnerType',
+    'fulfillmentMode',
+    'isEnabled',
+    'shopId',
+    'updatedAt',
+    'version',
+  ] as const
+  $columns = ShopLogisticsSettingSchema.$columns
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare defaultAccountId: string | null
+  @column()
+  declare defaultAccountOwnerType: string | null
+  @column()
+  declare fulfillmentMode: string
+  @column()
+  declare isEnabled: boolean
+  @column({ isPrimary: true })
+  declare shopId: string
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
+  @column()
+  declare version: number
+}
+
+export class ShopMembershipSchema extends BaseModel {
+  static $columns = [
+    'createdAt',
+    'id',
+    'invitedBy',
+    'removedAt',
+    'removedBy',
+    'role',
+    'shopId',
+    'status',
+    'updatedAt',
+    'userId',
+  ] as const
+  $columns = ShopMembershipSchema.$columns
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare invitedBy: string | null
+  @column.dateTime()
+  declare removedAt: DateTime | null
+  @column()
+  declare removedBy: string | null
+  @column()
+  declare role: string
+  @column()
+  declare shopId: string
+  @column()
+  declare status: string
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
+  @column()
+  declare userId: string
+}
+
+export class ShopPayoutAccountSchema extends BaseModel {
+  static $columns = [
+    'accountName',
+    'accountNumberEnc',
+    'accountNumberLast4',
+    'bankName',
+    'branchName',
+    'createdAt',
+    'createdBy',
+    'id',
+    'method',
+    'replacedAt',
+    'retiredAt',
+    'shopId',
+    'updatedAt',
+    'verifiedAt',
+    'verifiedBy',
+  ] as const
+  $columns = ShopPayoutAccountSchema.$columns
+  @column()
+  declare accountName: string
+  @column()
+  declare accountNumberEnc: string | null
+  @column()
+  declare accountNumberLast4: string
+  @column()
+  declare bankName: string
+  @column()
+  declare branchName: string | null
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare createdBy: string
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare method: string
+  @column.dateTime()
+  declare replacedAt: DateTime | null
+  @column.dateTime()
+  declare retiredAt: DateTime | null
+  @column()
+  declare shopId: string
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
+  @column.dateTime()
+  declare verifiedAt: DateTime | null
+  @column()
+  declare verifiedBy: string | null
+}
+
+export class ShopReviewDecisionSchema extends BaseModel {
+  static $columns = [
+    'createdAt',
+    'decidedBy',
+    'decision',
+    'id',
+    'reason',
+    'shopId',
+    'suspensionMode',
+  ] as const
+  $columns = ShopReviewDecisionSchema.$columns
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare decidedBy: string
+  @column()
+  declare decision: string
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare reason: string | null
+  @column()
+  declare shopId: string
+  @column()
+  declare suspensionMode: string | null
+}
+
+export class ShopShippingRateSchema extends BaseModel {
+  static $columns = [
+    'createdAt',
+    'currency',
+    'estMaxDays',
+    'estMinDays',
+    'feeMinor',
+    'shopId',
+    'updatedAt',
+    'zoneCode',
+  ] as const
+  $columns = ShopShippingRateSchema.$columns
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare currency: string
+  @column()
+  declare estMaxDays: number
+  @column()
+  declare estMinDays: number
+  @column()
+  declare feeMinor: number
+  @column({ isPrimary: true })
+  declare shopId: string
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
+  @column()
+  declare zoneCode: string
+}
+
+export class ShopSchema extends BaseModel {
+  static $columns = [
+    'approvedAt',
+    'approvedBy',
+    'bannerMediaId',
+    'businessRegistrationAuthority',
+    'businessRegistrationNumber',
+    'businessType',
+    'closedAt',
+    'commissionRateBp',
+    'contactEmail',
+    'contactPhoneE164',
+    'createdAt',
+    'description',
+    'grievanceContactName',
+    'grievanceContactPhoneEnc',
+    'id',
+    'isVatRegistered',
+    'logoMediaId',
+    'name',
+    'ownerUserId',
+    'panVatNumber',
+    'personalDataRedactedAt',
+    'productReviewMode',
+    'returnPolicyText',
+    'slug',
+    'status',
+    'submittedAt',
+    'suspensionMode',
+    'updatedAt',
+    'version',
+  ] as const
+  $columns = ShopSchema.$columns
+  @column.dateTime()
+  declare approvedAt: DateTime | null
+  @column()
+  declare approvedBy: string | null
+  @column()
+  declare bannerMediaId: string | null
+  @column()
+  declare businessRegistrationAuthority: string | null
+  @column()
+  declare businessRegistrationNumber: string | null
+  @column()
+  declare businessType: string
+  @column.dateTime()
+  declare closedAt: DateTime | null
+  @column()
+  declare commissionRateBp: number | null
+  @column()
+  declare contactEmail: string
+  @column()
+  declare contactPhoneE164: string
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare description: string | null
+  @column()
+  declare grievanceContactName: string | null
+  @column()
+  declare grievanceContactPhoneEnc: string | null
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare isVatRegistered: boolean
+  @column()
+  declare logoMediaId: string | null
+  @column()
+  declare name: string
+  @column()
+  declare ownerUserId: string
+  @column()
+  declare panVatNumber: string | null
+  @column.dateTime()
+  declare personalDataRedactedAt: DateTime | null
+  @column()
+  declare productReviewMode: string
+  @column()
+  declare returnPolicyText: string
+  @column()
+  declare slug: string
+  @column()
+  declare status: string
+  @column.dateTime()
+  declare submittedAt: DateTime
+  @column()
+  declare suspensionMode: string | null
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
+  @column()
+  declare version: number
+}
+
+export class SlugRedirectSchema extends BaseModel {
+  static $columns = ['createdAt', 'createdBy', 'entityId', 'entityType', 'oldSlug'] as const
+  $columns = SlugRedirectSchema.$columns
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare createdBy: string | null
+  @column()
+  declare entityId: string
+  @column({ isPrimary: true })
+  declare entityType: string
+  @column()
+  declare oldSlug: string
 }
 
 export class UserAddressSchema extends BaseModel {

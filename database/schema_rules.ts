@@ -27,6 +27,8 @@ export default {
     mfa_totp_secret_enc: { tsType: 'string', decorators: secret },
     token_hash: { tsType: 'Buffer', decorators: secret },
     guest_token_hash: { tsType: 'Buffer', decorators: secret },
+    // courier credentials: Secret, never serialised (docs/04 §19.3, docs/04a §9.9)
+    credentials_enc: { tsType: 'string', decorators: secret },
   },
   tables: {
     // uuid[] facet columns of the read model
