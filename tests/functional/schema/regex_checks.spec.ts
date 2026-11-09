@@ -12,6 +12,12 @@ import db from '@adonisjs/lucid/services/db'
  * `pg_constraint`, as PostgreSQL stored them, and matches each documented
  * example against them. It is catalogue-driven: a new regex CHECK without an
  * example here fails the test, so every pattern gets one.
+ *
+ * A column whose CHECK ORs two patterns (`inventory_movements.reference_id`)
+ * has examples for each alternative, so the rule is per column: every
+ * pattern accepts at least one of the column's examples, and every example
+ * is accepted by at least one of its patterns. For a column with one pattern
+ * that means every example matches it.
  */
 
 // A ciphertext in the docs/04 §2.9 format: version, key id, 16-character IV,
@@ -87,6 +93,17 @@ const EXAMPLES: Record<string, string[]> = {
   'shipments.merchant_reference': ['DN-4K7Q2M9-1-S1', 'DN-4K7Q2M9-12-S10'],
   'shipments.tracking_url': ['https://track.example.com/TC1001NP'],
   'return_requests.number': ['RT-4K7Q2M9'],
+  // docs/04a §8.3 (reasons per docs/05 §5.2). `reference_id` has two OR-ed
+  // patterns: a UUID, or an `audit_logs.id` for a correction.
+  'inventory_movements.reference_id': ['01a1b452-a64a-7a4f-93a2-be6932153cde', '4567'],
+  'inventory_movements.reason_code': ['checkout', 'received_stock', 'stocktake', 'drift_repair'],
+  // docs/04a §12.4
+  'refunds.recipient_details_enc': [CIPHERTEXT],
+  // docs/04a §13.1 (the dedupe key of docs/05 §7.2, with and without a suffix)
+  'ledger_entries.dedupe_key': [
+    'delivery:01a1b452-a64a-7a4f-93a2-be6932153cde:sale',
+    'remittance:01a1b452-a64a-7a4f-93a2-be6932153cde',
+  ],
   // docs/04a §15
   'idempotency_keys.actor_scope': [
     '01a1b452-a64a-7a4f-93a2-be6932153cde',
@@ -161,16 +178,26 @@ test.group('T-ARCH-022 regular-expression CHECKs', () => {
     const checks = await regexChecks()
     assert.isAbove(checks.length, 0, 'the catalogue query finds the regex CHECKs')
 
+    // Which examples each pattern accepts, per column.
+    const accepted = new Map<string, Set<string>>()
     for (const check of checks) {
       const key = `${check.table}.${check.column}`
       const examples = EXAMPLES[key]
       assert.isDefined(examples, `${check.constraint}: add a documented example for ${key}`)
+      const ok: string[] = []
       for (const example of examples!) {
         const result = await db.rawQuery(MATCHES[check.operator], [example, check.pattern])
-        assert.isTrue(
-          result.rows[0].ok,
-          `${check.constraint} rejects its example ${example} (stored pattern ${check.operator} ${check.pattern})`
-        )
+        if (result.rows[0].ok) ok.push(example)
+      }
+      assert.isNotEmpty(
+        ok,
+        `${check.constraint} rejects every example of ${key} (stored pattern ${check.operator} ${check.pattern})`
+      )
+      accepted.set(key, new Set([...(accepted.get(key) ?? []), ...ok]))
+    }
+    for (const [key, ok] of accepted) {
+      for (const example of EXAMPLES[key]) {
+        assert.isTrue(ok.has(example), `no regex CHECK of ${key} accepts its example ${example}`)
       }
     }
   })

@@ -8,13 +8,15 @@ import ShopOrder from './shop_order.js'
 import OrderItem from './order_item.js'
 import OrderEvent from './order_event.js'
 import ReturnRequest from './return_request.js'
+import Payment from './payment.js'
 
 /*
  * docs/04a §11.1 (orders). Relations point downward only (docs/09 §2.2,
  * §3.10): to identity, logistics and platform models and to the orders
  * module's own tables; `User` does not relate back. `shipping_address` is a
  * snapshot read through the module's typed parser (docs/04 §2.11), never a
- * reference to `user_addresses`.
+ * reference to `user_addresses`. `payments` relates downward to the
+ * payments module, which `orders` may use.
  */
 export default class Order extends OrderSchema {
   @belongsTo(() => User, { foreignKey: 'customerUserId' })
@@ -37,4 +39,7 @@ export default class Order extends OrderSchema {
 
   @hasMany(() => ReturnRequest)
   declare returnRequests: HasMany<typeof ReturnRequest>
+
+  @hasMany(() => Payment)
+  declare payments: HasMany<typeof Payment>
 }
