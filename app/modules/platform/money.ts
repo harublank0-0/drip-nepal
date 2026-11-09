@@ -10,6 +10,14 @@ import type { ModelQueryBuilderContract, LucidModel } from '@adonisjs/lucid/type
 export type Minor = number
 
 /*
+ * The one currency (ADR-0007, docs/04 §2.3): `currency char(3)` beside the
+ * amounts of every money table, with `<table>_currency_check` holding
+ * `currency = 'NPR'`. T-ARCH-011 maps every `currency` column to this list.
+ */
+export const CURRENCIES = ['NPR'] as const
+export type Currency = (typeof CURRENCIES)[number]
+
+/*
  * Paisa that don't come through the int8 parser: a safe integer number, a
  * bigint in range, or a string of digits. Anything else throws.
  */
