@@ -28,7 +28,11 @@ test.group('T-ORD-109 orders verification columns', () => {
     // Each consistent state is accepted, so the refusals below are about the flag alone.
     const valid: Row[] = [
       {},
-      { verification_status: 'verified', verification_method: 'phone_call', verified_at: db.raw('now()') },
+      {
+        verification_status: 'verified',
+        verification_method: 'phone_call',
+        verified_at: db.raw('now()'),
+      },
       { verification_status: 'review_required', verification_method: 'manual' },
       {
         verification_status: 'failed',
@@ -50,7 +54,10 @@ test.group('T-ORD-109 orders verification columns', () => {
         },
       ],
       ['verified_at while pending', { verified_at: db.raw('now()') }],
-      ['verified without verified_at', { verification_status: 'verified', verification_method: 'manual' }],
+      [
+        'verified without verified_at',
+        { verification_status: 'verified', verification_method: 'manual' },
+      ],
       ['a method while pending', { verification_method: 'phone_call' }],
       [
         'no method after a check (verified)',
@@ -83,10 +90,13 @@ test.group('T-ORD-109 orders verification columns', () => {
       verification_method: 'phone_call',
       verification_notes: 'Recipient asked to call back.',
     })
-    await db.from('orders').where('id', order.id).update({
-      verification_status: 'verified',
-      verified_at: db.raw('now()'),
-    })
+    await db
+      .from('orders')
+      .where('id', order.id)
+      .update({
+        verification_status: 'verified',
+        verified_at: db.raw('now()'),
+      })
     const row = await db.from('orders').where('id', order.id).firstOrFail()
     assert.equal(row.verification_status, 'verified')
     assert.equal(row.verification_method, 'phone_call')
