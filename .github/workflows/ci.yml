@@ -1,5 +1,5 @@
-# CI for the store. Runs on pushes to main and on pull requests into it:
-# production deploys release tags cut from main (DEPLOY.md, "Releasing").
+# CI for the repository (docs/10 §5). Runs on pushes to main and on pull
+# requests into it. Nothing is deployed yet; docs/11 §5 is the release path.
 # It also runs on pull requests into feat/e4-schema-baseline, the E4
 # integration branch (docs/12 §4.1, docs/09 §8.1), and on demand
 # (workflow_dispatch): retargeting a stacked pull request onto that branch

@@ -47,7 +47,7 @@ Skills live in `.agents/skills/` and are tracked; each has a symlink in `.claude
 | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
 | [`dripnepal-docs`](.agents/skills/dripnepal-docs/SKILL.md)                           | Find the document that owns a fact, and change the docs correctly                                |
 | [`dripnepal-testing`](.agents/skills/dripnepal-testing/SKILL.md)                     | Get a test database, run the suites, and write tests that can fail                               |
-| [`dripnepal-run`](.agents/skills/dripnepal-run/SKILL.md)                             | Start the app with demo data and check pages in a headless browser                               |
+| [`dripnepal-run`](.agents/skills/dripnepal-run/SKILL.md)                             | Start the app and check its pages in a headless browser                                          |
 | [`shadcn`](.agents/skills/shadcn/SKILL.md)                                           | Work with shadcn/ui components (patched to ADR-0015; see its `LOCAL_CHANGES.md`)                 |
 | [`vercel-react-best-practices`](.agents/skills/vercel-react-best-practices/SKILL.md) | Review React code for performance; its Next.js server rules don't apply here                     |
 | [`ncm-integration`](.agents/skills/ncm-integration/SKILL.md)                         | Plan the Nepal Can Move adapter (M6); its NCM API facts are unverified (VX-16), and the docs win |
