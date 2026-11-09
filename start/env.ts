@@ -23,11 +23,8 @@ const env = await Env.create(new URL('../', import.meta.url), {
   APP_KEY: Env.schema.secret(),
   APP_URL: Env.schema.string({ format: 'url', tld: false }),
 
-  // Lets anyone register a shop (v1 has one seller, so it defaults to closed)
-  SHOP_REGISTRATION_OPEN: Env.schema.boolean.optional(),
-
-  // How customers reach the store, shown in the footer and on order pages
-  // (config/storefront.ts). Each is optional; unset ones are hidden.
+  // How customers reach the store, shared with every page (config/storefront.ts).
+  // Each is optional; unset ones are hidden.
   SUPPORT_PHONE: Env.schema.string.optional(),
   SUPPORT_EMAIL: Env.schema.string.optional({ format: 'email' }),
   INSTAGRAM_URL: Env.schema.string.optional({ format: 'url' }),
