@@ -1,5 +1,6 @@
 import { test } from '@japa/runner'
 import db from '@adonisjs/lucid/services/db'
+import { ATTRIBUTES, seedAttributes } from '#database/seeders/reference/05_attributes_seeder'
 import PlatformSettingsSeeder from '#database/seeders/reference/08_platform_settings_seeder'
 import { MIGRATOR_CONNECTION, runReferenceSeeders } from '#tests/support/database'
 
@@ -79,6 +80,39 @@ test.group('T-ARCH-018 reference seeders are idempotent', () => {
         { key: 'checkout_enabled', value: false },
         { key: 'maintenance_banner', value: '' },
       ])
+    } finally {
+      await trx.rollback()
+    }
+  })
+
+  test('T-ARCH-018 a value retired with active: false is deactivated once and then left alone', async ({
+    assert,
+  }) => {
+    // A reviewed seeder change retires `printed` (docs/04a §7.3: deactivated,
+    // never deleted); seeding twice must give the same rows.
+    const retired = ATTRIBUTES.map((attribute) => ({
+      ...attribute,
+      values: attribute.values.map((value) =>
+        attribute.code === 'color' && value.code === 'printed'
+          ? { ...value, active: false as const }
+          : value
+      ),
+    }))
+    const rows = `SELECT md5(string_agg(v::text, '|' ORDER BY v::text)) AS digest,
+                         count(*) FILTER (WHERE NOT is_active)::int AS inactive
+                    FROM attribute_values v`
+    const trx = await db.connection(MIGRATOR_CONNECTION).transaction()
+    const valuesNow = async () => {
+      const result = await trx.rawQuery(rows)
+      return result.rows[0]
+    }
+    try {
+      await seedAttributes(trx, retired)
+      const first = await valuesNow()
+      assert.equal(first.inactive, 1)
+      await seedAttributes(trx, retired)
+      const second = await valuesNow()
+      assert.deepEqual(second, first)
     } finally {
       await trx.rollback()
     }

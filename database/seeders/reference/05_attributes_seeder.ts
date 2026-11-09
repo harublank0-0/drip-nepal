@@ -1,4 +1,5 @@
 import { BaseSeeder } from '@adonisjs/lucid/seeders'
+import type { QueryClientContract } from '@adonisjs/lucid/types/database'
 import type { AttributeInput } from '#modules/catalog/domain/attribute_input'
 import type { AttributeScope } from '#modules/catalog/domain/attribute_scope'
 
@@ -6,7 +7,9 @@ import type { AttributeScope } from '#modules/catalog/domain/attribute_scope'
  * The attribute catalogue of docs/04 §21.2 [Assumption; Open OD-15]:
  * `attributes` upserted by `code`, `attribute_values` by `(attribute, code)`
  * (docs/04a §7.2, §7.3, docs/09 §8.8). `position` follows the order of the
- * tables. `kids_age` is R2 and not seeded (docs/04 §3.8). Never deletes.
+ * tables. `kids_age` is R2 and not seeded (docs/04 §3.8). Never deletes: a
+ * value is retired by marking it `active: false` here, which leaves it out
+ * of pickers while products and order snapshots keep it (docs/04a §7.3).
  *
  * `code`, `scope` and `input` are immutable once seeded: option signatures
  * and filter URLs use the code, and existing values depend on the scope and
@@ -14,8 +17,8 @@ import type { AttributeScope } from '#modules/catalog/domain/attribute_scope'
  * swatch (a seeder rule, docs/04a §7.3).
  */
 
-type Value = { code: string; label: string; swatch?: string }
-type AttributeRow = {
+type Value = { code: string; label: string; swatch?: string; active?: false }
+export type AttributeRow = {
   code: string
   name: string
   scope: AttributeScope
@@ -158,59 +161,64 @@ export const ATTRIBUTES: AttributeRow[] = [
   },
 ]
 
-export default class AttributesSeeder extends BaseSeeder {
-  async run() {
-    for (const attribute of ATTRIBUTES) {
-      if (attribute.code !== 'color' && attribute.values.some((v) => v.swatch !== undefined)) {
-        throw new Error(`only color values carry a swatch; ${attribute.code} has one`)
+/** Upserts `attributes` in one transaction; exported so a test can seed another list. */
+export async function seedAttributes(client: QueryClientContract, attributes = ATTRIBUTES) {
+  for (const attribute of attributes) {
+    if (attribute.code !== 'color' && attribute.values.some((v) => v.swatch !== undefined)) {
+      throw new Error(`only color values carry a swatch; ${attribute.code} has one`)
+    }
+  }
+
+  await client.transaction(async (trx) => {
+    for (const [index, attribute] of attributes.entries()) {
+      await trx.rawQuery(
+        `INSERT INTO attributes (code, name, scope, input, is_filterable, position)
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT (code) DO UPDATE
+            SET name = EXCLUDED.name, is_filterable = EXCLUDED.is_filterable,
+                position = EXCLUDED.position
+          WHERE (attributes.name, attributes.is_filterable, attributes.position)
+                IS DISTINCT FROM (EXCLUDED.name, EXCLUDED.is_filterable, EXCLUDED.position)`,
+        [
+          attribute.code,
+          attribute.name,
+          attribute.scope,
+          attribute.input,
+          attribute.filterable,
+          index + 1,
+        ]
+      )
+      const result = await trx.rawQuery('SELECT id, scope, input FROM attributes WHERE code = ?', [
+        attribute.code,
+      ])
+      const stored = result.rows[0] as { id: string; scope: string; input: string }
+      if (stored.scope !== attribute.scope || stored.input !== attribute.input) {
+        throw new Error(
+          `attribute ${attribute.code} is seeded as ${stored.scope}/${stored.input}; its scope and input cannot change`
+        )
+      }
+
+      for (const [position, item] of attribute.values.entries()) {
+        await trx.rawQuery(
+          `INSERT INTO attribute_values (attribute_id, code, label, position, swatch_hex, is_active)
+           VALUES (?, ?, ?, ?, NULLIF(?, ''), ?)
+           ON CONFLICT (attribute_id, code) DO UPDATE
+              SET label = EXCLUDED.label, position = EXCLUDED.position,
+                  swatch_hex = EXCLUDED.swatch_hex, is_active = EXCLUDED.is_active
+            WHERE (attribute_values.label, attribute_values.position,
+                   attribute_values.swatch_hex, attribute_values.is_active)
+                  IS DISTINCT FROM (EXCLUDED.label, EXCLUDED.position, EXCLUDED.swatch_hex,
+                                    EXCLUDED.is_active)`,
+          // '' stands for no swatch: NULLIF stores it as null
+          [stored.id, item.code, item.label, position + 1, item.swatch ?? '', item.active ?? true]
+        )
       }
     }
+  })
+}
 
-    await this.client.transaction(async (trx) => {
-      for (const [index, attribute] of ATTRIBUTES.entries()) {
-        await trx.rawQuery(
-          `INSERT INTO attributes (code, name, scope, input, is_filterable, position)
-           VALUES (?, ?, ?, ?, ?, ?)
-           ON CONFLICT (code) DO UPDATE
-              SET name = EXCLUDED.name, is_filterable = EXCLUDED.is_filterable,
-                  position = EXCLUDED.position
-            WHERE (attributes.name, attributes.is_filterable, attributes.position)
-                  IS DISTINCT FROM (EXCLUDED.name, EXCLUDED.is_filterable, EXCLUDED.position)`,
-          [
-            attribute.code,
-            attribute.name,
-            attribute.scope,
-            attribute.input,
-            attribute.filterable,
-            index + 1,
-          ]
-        )
-        const result = await trx.rawQuery(
-          'SELECT id, scope, input FROM attributes WHERE code = ?',
-          [attribute.code]
-        )
-        const stored = result.rows[0] as { id: string; scope: string; input: string }
-        if (stored.scope !== attribute.scope || stored.input !== attribute.input) {
-          throw new Error(
-            `attribute ${attribute.code} is seeded as ${stored.scope}/${stored.input}; its scope and input cannot change`
-          )
-        }
-
-        for (const [position, item] of attribute.values.entries()) {
-          await trx.rawQuery(
-            `INSERT INTO attribute_values (attribute_id, code, label, position, swatch_hex, is_active)
-             VALUES (?, ?, ?, ?, NULLIF(?, ''), true)
-             ON CONFLICT (attribute_id, code) DO UPDATE
-                SET label = EXCLUDED.label, position = EXCLUDED.position,
-                    swatch_hex = EXCLUDED.swatch_hex, is_active = true
-              WHERE (attribute_values.label, attribute_values.position,
-                     attribute_values.swatch_hex, attribute_values.is_active)
-                    IS DISTINCT FROM (EXCLUDED.label, EXCLUDED.position, EXCLUDED.swatch_hex, true)`,
-            // '' stands for no swatch: NULLIF stores it as null
-            [stored.id, item.code, item.label, position + 1, item.swatch ?? '']
-          )
-        }
-      }
-    })
+export default class AttributesSeeder extends BaseSeeder {
+  async run() {
+    await seedAttributes(this.client)
   }
 }
