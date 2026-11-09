@@ -234,6 +234,20 @@ OD-28 to OD-54 register the owner decisions that the three deep audits left open
 Newest first. The entry format is in §1.5. A ruling that is not an OD but changes an owning document or an ADR is logged in the same format, headed "Not an OD".
 
 ```text
+Not an OD — Decided 2026-11-09 by product owner: the reference seeders land without the locations dataset
+Ruling: The E4 and E8 reference seeders that need no location data (zones, shop categories,
+        categories, attributes, category rules, brands, settings, the ncm courier row), the factories
+        and the DevSeeder guard are built now. The locations seeder, data/locations.csv, the
+        zone-to-district mapping and its 77-district assertion follow in their own pull request.
+Evidence: database/seeders/reference/data/locations.csv does not exist; its sources (the Nepal Post PDF
+          on giwmscdnone.gov.np and the MoFAGA pages) could not be fetched from the building session;
+          VX-10 is open. Nothing else in the seeders depends on the locations.
+ADR: none.
+Docs updated: 04 (§20.3, §21.4, §21.5, §21.6, note 20), 09 (§1.2, §8.8, §9.3, note 84), 10 (§3.4,
+              note 39), 12 (§4.1, note 23)  |  Status: Decided
+```
+
+```text
 Not an OD — Decided 2026-11-07 by product owner: the baseline files are written before the M0 spikes end
 Ruling: The E4 baseline files are written before the uuidv7() and pg-boss spikes (T-ARCH-004) end,
         which 04 §20.2.1 item 3 had made a precondition. uuidv7() is checked on postgres:18.4 in CI;
@@ -801,3 +815,4 @@ This matrix is authoritative for decision gates. [12 §3](12-roadmap-and-backlog
 24. **Deploying from `main` (2026-11-04).** §2.3 logs that production deploys release tags cut from `main`, after #142 merged `v1` into `main`. The 2026-11-03 entry stays in the log as history; its "main stays the documented system (v2) and M0 continues there" no longer holds, because `main` is also the live store. Open on 2026-11-04, for E4 with OD-55: how the breaking M0 steps are staged before the cutover release. 2026-11-07 (note 26): `main` carries the v1 store's code but no live store, and the release that carries the baseline moves no data, because v1 was never hosted. Done 2026-11-07: the baseline is built on the integration branch `feat/e4-schema-baseline` and merges into `main` once it is complete (§2.3).
 25. **Courier integration and order verification (2026-11-05).** §2.3 logs OD-56 (courier integration in R1, reduced scope) and OD-57 (a verification flag on `orders`, no hold), and §2.2 opens OD-58 (COD on platform-owned courier accounts). §3.1 adds VX-16 to VX-18 for Nepal Can Move, §4.2 adds R-33, and §5 adds the M6 items. The §2 and §3 headings keep their old ranges (OD-54, VX-15) because other documents link to their anchors; the intro gives the current ranges. R-12 fired: the product owner moved nothing out of R1 for this addition, which the OD-56 entry records; the M6 effort in [12 §5.6](12-roadmap-and-backlog.md#56-m6-order-processing--fulfillment-r1) grows instead. FR-FUL-004 is Must, so VX-16 is also an M7 launch-gate item. Still open: (a) the M6 effort estimate, revisited at M6 planning. (b) Done the same day in the data-model change: the data model (04, 04a), the shipment machine and dispatch rule (05 §6.3), the permission and credential rules (07, with the proposed `shop.courier_accounts.manage` and `platform.logistics.manage`), the journeys (02 J-12, J-13) and the test IDs (10 §6). Still open: the operations, jobs and courier inbox, which M6 specifies.
 26. **v1 holds only seed data (2026-11-07).** The product owner confirmed that the project is not live: the web app is not hosted and every row in any database is seed data. §2.3 logs OD-55 as Decided, option (a) with no import, and adds dated notes to the 2026-11-04 and 2026-11-03 entries, whose "live store" and "real data" premise did not come true. §2.2 and §5 follow: the M0 exit no longer waits on an import. Notes 22 and 24 record the outcome. Other documents updated in the same change: 00 (A-01, §7.2, §7.3), 04 (§20.2.1: no hosted database to export), ADR-0011 (dated note: no import, no cutover rehearsal), ADR-0019 (dated note), 12 (§3, §4.1) and DEPLOY.md. The same day §2.3 logs that the baseline lands through the integration branch `feat/e4-schema-baseline`, which closes the staging question of note 24; 09 §8.1 and §11.6 and AGENTS.md follow.
+27. **Reference seeders without the locations dataset (2026-11-09).** §2.3 logs the product owner's split of the E4 and E8 seeders. VX-10 stays open and still blocks the M1 and M2 exits as §5 says; the locations seeder it feeds is now a separate pull request, and the M0 exit waits for it through the bootstrap row counts of [09 §9.3](09-code-structure-and-engineering-standards.md#93-bootstrap-checklist-first-deploy-of-an-environment) step 4 ([12 §4.1](12-roadmap-and-backlog.md#41-epics-and-order)).
