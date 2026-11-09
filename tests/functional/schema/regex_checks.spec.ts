@@ -48,6 +48,29 @@ const EXAMPLES: Record<string, string[]> = {
   'shop_payout_accounts.account_number_last4': ['4567'],
   'shop_categories.code': ['mens-fashion', 'footwear'],
   'slug_redirects.old_slug': ['thulo-pasal'],
+  // docs/04a §7 (slugs per docs/04 §2.8 and the tree of docs/04 §21.1;
+  // attribute and colour values per docs/04 §21.2; the public id, SKU and
+  // option signatures per docs/04 §2.1, §3.5 and docs/04a §7.9)
+  'categories.slug': ['kurta-suruwal', 't-shirts'],
+  'categories.path': ['/clothing/', '/clothing/tops/t-shirts/'],
+  'attributes.code': ['apparel_size', 'shoe_size_eu', 'color'],
+  'attribute_values.code': ['m', '42', '42-5', 'black', 'off_white'],
+  'attribute_values.swatch_hex': ['#111111', '#f5f1e6'],
+  'brands.slug': ['nike', 'thulo-brand'],
+  'products.public_id': ['7K3M9QXA'],
+  'products.slug': ['kurta-suruwal', 'product'],
+  'products.country_of_origin': ['NP', 'IN'],
+  'products.description': ['Hand-stitched cotton kurta.', 'सुती कुर्ता'],
+  'products.manufacturer_name': ['Thulo Pasal Garments'],
+  'products.warranty_text': ['No warranty'],
+  'products.care_and_precautions': ['Hand wash cold; dry in shade.'],
+  'product_variants.sku': ['DN-7K3M9QXA', 'KS-001/M.blk_2'],
+  'product_variants.option_signature': [
+    '',
+    'color:black',
+    'apparel_size:m|color:black',
+    'shoe_size_eu:42-5',
+  ],
   // docs/04a §9.9
   'logistics_accounts.credentials_enc': [CIPHERTEXT],
   // docs/04a §15

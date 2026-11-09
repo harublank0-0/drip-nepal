@@ -21,6 +21,7 @@ export default {
     slug: { tsType: 'string', decorators: column },
     old_slug: { tsType: 'string', decorators: column },
     shop_slug: { tsType: 'string', decorators: column },
+    brand_slug: { tsType: 'string', decorators: column },
     // Secret columns (docs/04 §19.1)
     password_hash: { tsType: 'string', decorators: secret },
     security_stamp: { tsType: 'string', decorators: secret },
