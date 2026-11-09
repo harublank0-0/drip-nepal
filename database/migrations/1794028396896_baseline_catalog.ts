@@ -37,7 +37,8 @@ export default class extends BaseSchema {
         CONSTRAINT categories_path_key UNIQUE (path),
         CONSTRAINT categories_path_check CHECK (path ~ '^/([a-z0-9]+(-[a-z0-9]+)*/)+$'),
         CONSTRAINT categories_depth_check CHECK (depth BETWEEN 1 AND 4 AND (parent_id IS NULL) = (depth = 1)),
-        CONSTRAINT categories_not_own_parent_check CHECK (parent_id IS NULL OR parent_id <> id)
+        CONSTRAINT categories_not_own_parent_check CHECK (parent_id IS NULL OR parent_id <> id),
+        CONSTRAINT categories_name_check CHECK (char_length(name) BETWEEN 2 AND 60)
       )
     `)
 
