@@ -3,7 +3,7 @@ import { formatNPR, minorToRupeesText, parseRupeesToMinor } from '#shared/format
 
 /*
  * Money is whole paisa in v1 (docs/04 §18.1). T-UI-020 for the formatter
- * (docs/08 §5.11) and the parsing part of T-ARCH-013 (docs/04 §18.4).
+ * (docs/08 §5.11) and the parsing part of T-ARCH-013 (docs/04 §18.1, §18.4).
  */
 
 const NBSP = String.fromCharCode(0xa0)
@@ -54,11 +54,10 @@ test.group('T-UI-020 money formatter [v1]', (group) => {
   })
 })
 
-test.group('T-ARCH-013 rupees typed by people [v1]', (group) => {
-  group.tap((t) => t.tags(['@v1']))
-
-  test('{typed} is {minor} paisa')
+test.group('T-ARCH-013 rupees typed by people and reported by eSewa', () => {
+  test('T-ARCH-013 {typed} is {minor} paisa')
     .with([
+      // docs/04 §18.4
       { typed: '1299', minor: 129900 },
       { typed: '1299.5', minor: 129950 },
       { typed: '1299.50', minor: 129950 },
@@ -72,8 +71,9 @@ test.group('T-ARCH-013 rupees typed by people [v1]', (group) => {
       assert.strictEqual(parseRupeesToMinor(row.typed), row.minor)
     })
 
-  test('{typed} is refused')
+  test('T-ARCH-013 {typed} is refused')
     .with([
+      // docs/04 §18.4
       { typed: '1299.' },
       { typed: '1.005' },
       { typed: '-1' },
@@ -85,4 +85,18 @@ test.group('T-ARCH-013 rupees typed by people [v1]', (group) => {
     .run(({ assert }, row) => {
       assert.isNull(parseRupeesToMinor(row.typed))
     })
+
+  // docs/04 §18.1 "Provider formats": eSewa reports rupees, a JSON number
+  // or a string; the adapter passes the string as received, or String(n)
+  // for a number, to parseRupeesToMinor, and never multiplies by 100.
+  test('T-ARCH-013 eSewa total_amount 6348.0 as a number and as a string is 634800 paisa', ({
+    assert,
+  }) => {
+    const reported: (number | string)[] = [6348.0, '6348.0', '6348.00']
+    for (const amount of reported) {
+      assert.strictEqual(parseRupeesToMinor(String(amount)), 634800, `eSewa ${amount}`)
+    }
+    // An exponent form fails the pattern: an amount that differs (needs_review).
+    assert.isNull(parseRupeesToMinor(String(1e21)))
+  })
 })
