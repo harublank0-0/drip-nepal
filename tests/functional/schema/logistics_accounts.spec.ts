@@ -1,7 +1,6 @@
 import { test } from '@japa/runner'
 import db from '@adonisjs/lucid/services/db'
-import type { Assert } from '@japa/assert'
-import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
+import { CIPHERTEXT, insertShop, refused, type Row } from '#tests/support/schema_rows'
 
 /*
  * Constraint tests of the courier tables (OD-56, ADR-0019): T-SHOP-111
@@ -13,50 +12,6 @@ import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
  * does not abort the rest of the test, and asserts the SQLSTATE and, where
  * PostgreSQL reports one, the constraint name.
  */
-
-// A ciphertext in the docs/04 §2.9 format.
-const CIPHERTEXT = 'v1.k2026.AAAAAAAAAAAAAAAA.c2VhbGVkLXZhbHVl.BBBBBBBBBBBBBBBBBBBBBB'
-
-type PgError = { code?: string; constraint?: string; message: string }
-type Row = Record<string, unknown>
-
-let sequence = 0
-function next() {
-  sequence += 1
-  return sequence
-}
-
-async function insertUser() {
-  const n = next()
-  const [row] = await db
-    .table('users')
-    .insert({
-      email: `courier-owner-${n}@example.com`,
-      full_name: 'Sita Shrestha',
-      password_hash: 'x',
-    })
-    .returning('id')
-  return row.id as string
-}
-
-async function insertShop() {
-  const n = next()
-  const [row] = await db
-    .table('shops')
-    .insert({
-      owner_user_id: await insertUser(),
-      name: `Thulo Pasal ${n}`,
-      slug: `thulo-pasal-${n}`,
-      contact_email: `shop-${n}@example.com`,
-      contact_phone_e164: '+9779812345678',
-      return_policy_text: 'Returns within 7 days, unworn and with tags.',
-      business_type: 'individual',
-      grievance_contact_name: 'Sita Shrestha',
-      grievance_contact_phone_enc: CIPHERTEXT,
-    })
-    .returning('id')
-  return row.id as string
-}
 
 async function insertProviders() {
   await db.table('logistics_providers').multiInsert([
@@ -77,27 +32,6 @@ async function insertAccount(values: Row) {
     })
     .returning('id')
   return row.id as string
-}
-
-// Runs `write` in a savepoint and checks that PostgreSQL refused it.
-async function refused(
-  assert: Assert,
-  write: (trx: TransactionClientContract) => Promise<unknown>,
-  expected: { code: string; constraint?: string; message?: RegExp },
-  label: string
-) {
-  const error: PgError | null = await db.transaction(write).then(
-    () => null,
-    (e: PgError) => e
-  )
-  assert.isNotNull(error, `${label}: the write was accepted`)
-  assert.equal(error!.code, expected.code, `${label}: ${error!.message}`)
-  if (expected.constraint) {
-    assert.equal(error!.constraint, expected.constraint, `${label}: ${error!.message}`)
-  }
-  if (expected.message) {
-    assert.match(error!.message, expected.message, label)
-  }
 }
 
 test.group('T-SHOP-111 logistics_accounts constraints', () => {

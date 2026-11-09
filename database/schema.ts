@@ -560,6 +560,207 @@ export class MediaAssetSchema extends BaseModel {
   declare width: number | null
 }
 
+export class OrderEventSchema extends BaseModel {
+  static $columns = [
+    'actorType',
+    'actorUserId',
+    'createdAt',
+    'data',
+    'id',
+    'orderId',
+    'shopOrderId',
+    'type',
+    'visibility',
+  ] as const
+  $columns = OrderEventSchema.$columns
+  @column()
+  declare actorType: string
+  @column()
+  declare actorUserId: string | null
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare data: unknown
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare orderId: string
+  @column()
+  declare shopOrderId: string | null
+  @column()
+  declare type: string
+  @column()
+  declare visibility: string
+}
+
+export class OrderItemSchema extends BaseModel {
+  static $columns = [
+    'brandNameSnapshot',
+    'cancelledQuantity',
+    'categoryPathSnapshot',
+    'commissionMinor',
+    'commissionRateBp',
+    'compareAtPriceMinorSnapshot',
+    'createdAt',
+    'currency',
+    'discountMinor',
+    'id',
+    'imageUrlSnapshot',
+    'lineSubtotalMinor',
+    'lineTotalMinor',
+    'orderId',
+    'productId',
+    'productTitleSnapshot',
+    'quantity',
+    'rejectedQuantity',
+    'returnedQuantity',
+    'shopId',
+    'shopOrderId',
+    'skuSnapshot',
+    'taxInclusive',
+    'taxMinor',
+    'taxRateBp',
+    'unitPriceMinor',
+    'updatedAt',
+    'variantId',
+    'variantLabelSnapshot',
+  ] as const
+  $columns = OrderItemSchema.$columns
+  @column()
+  declare brandNameSnapshot: string | null
+  @column()
+  declare cancelledQuantity: number
+  @column()
+  declare categoryPathSnapshot: string
+  @column()
+  declare commissionMinor: number
+  @column()
+  declare commissionRateBp: number
+  @column()
+  declare compareAtPriceMinorSnapshot: number | null
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare currency: string
+  @column()
+  declare discountMinor: number
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare imageUrlSnapshot: string | null
+  @column()
+  declare lineSubtotalMinor: number
+  @column()
+  declare lineTotalMinor: number
+  @column()
+  declare orderId: string
+  @column()
+  declare productId: string
+  @column()
+  declare productTitleSnapshot: string
+  @column()
+  declare quantity: number
+  @column()
+  declare rejectedQuantity: number
+  @column()
+  declare returnedQuantity: number
+  @column()
+  declare shopId: string
+  @column()
+  declare shopOrderId: string
+  @column()
+  declare skuSnapshot: string
+  @column()
+  declare taxInclusive: boolean
+  @column()
+  declare taxMinor: number
+  @column()
+  declare taxRateBp: number | null
+  @column()
+  declare unitPriceMinor: number
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
+  @column()
+  declare variantId: string
+  @column()
+  declare variantLabelSnapshot: string
+}
+
+export class OrderSchema extends BaseModel {
+  static $columns = [
+    'createdAt',
+    'currency',
+    'customerEmailSnapshot',
+    'customerNote',
+    'customerUserId',
+    'discountTotalMinor',
+    'grandTotalMinor',
+    'id',
+    'idempotencyKeyId',
+    'itemsSubtotalMinor',
+    'number',
+    'paymentMethod',
+    'placedAt',
+    'requestId',
+    'shippingAddress',
+    'shippingDistrictCode',
+    'shippingTotalMinor',
+    'status',
+    'updatedAt',
+    'verificationMethod',
+    'verificationNotes',
+    'verificationStatus',
+    'verifiedAt',
+  ] as const
+  $columns = OrderSchema.$columns
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare currency: string
+  @column()
+  declare customerEmailSnapshot: string | null
+  @column()
+  declare customerNote: string | null
+  @column()
+  declare customerUserId: string
+  @column()
+  declare discountTotalMinor: number
+  @column()
+  declare grandTotalMinor: number
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare idempotencyKeyId: string | null
+  @column()
+  declare itemsSubtotalMinor: number
+  @column()
+  declare number: string
+  @column()
+  declare paymentMethod: string
+  @column.dateTime()
+  declare placedAt: DateTime
+  @column()
+  declare requestId: string | null
+  @column()
+  declare shippingAddress: unknown
+  @column()
+  declare shippingDistrictCode: string
+  @column()
+  declare shippingTotalMinor: number
+  @column()
+  declare status: string
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
+  @column()
+  declare verificationMethod: string | null
+  @column()
+  declare verificationNotes: string | null
+  @column()
+  declare verificationStatus: string
+  @column.dateTime()
+  declare verifiedAt: DateTime | null
+}
+
 export class PlatformSettingSchema extends BaseModel {
   static $columns = ['createdAt', 'key', 'updatedAt', 'updatedBy', 'value'] as const
   $columns = PlatformSettingSchema.$columns
@@ -914,6 +1115,240 @@ export class ProvinceSchema extends BaseModel {
   declare updatedAt: DateTime
 }
 
+export class ReturnItemSchema extends BaseModel {
+  static $columns = [
+    'conditionNote',
+    'createdAt',
+    'orderItemId',
+    'quantity',
+    'restockQuantity',
+    'returnRequestId',
+    'shopOrderId',
+    'updatedAt',
+  ] as const
+  $columns = ReturnItemSchema.$columns
+  @column()
+  declare conditionNote: string | null
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare orderItemId: string
+  @column()
+  declare quantity: number
+  @column()
+  declare restockQuantity: number | null
+  @column({ isPrimary: true })
+  declare returnRequestId: string
+  @column()
+  declare shopOrderId: string
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
+}
+
+export class ReturnRequestSchema extends BaseModel {
+  static $columns = [
+    'approvedAt',
+    'closedAt',
+    'createdAt',
+    'createdByStaffId',
+    'customerNote',
+    'id',
+    'number',
+    'orderId',
+    'reasonCode',
+    'receivedAt',
+    'refundDueAt',
+    'requestedByUserId',
+    'resolutionNote',
+    'shopId',
+    'shopOrderId',
+    'status',
+    'supportCaseId',
+    'updatedAt',
+    'version',
+  ] as const
+  $columns = ReturnRequestSchema.$columns
+  @column.dateTime()
+  declare approvedAt: DateTime | null
+  @column.dateTime()
+  declare closedAt: DateTime | null
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare createdByStaffId: string | null
+  @column()
+  declare customerNote: string | null
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare number: string
+  @column()
+  declare orderId: string
+  @column()
+  declare reasonCode: string
+  @column.dateTime()
+  declare receivedAt: DateTime | null
+  @column.dateTime()
+  declare refundDueAt: DateTime | null
+  @column()
+  declare requestedByUserId: string
+  @column()
+  declare resolutionNote: string | null
+  @column()
+  declare shopId: string
+  @column()
+  declare shopOrderId: string
+  @column()
+  declare status: string
+  @column()
+  declare supportCaseId: string | null
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
+  @column()
+  declare version: number
+}
+
+export class ShipmentEventSchema extends BaseModel {
+  static $columns = [
+    'actorType',
+    'actorUserId',
+    'createdAt',
+    'event',
+    'id',
+    'metadata',
+    'note',
+    'occurredAt',
+    'providerEventKey',
+    'rawStatus',
+    'reasonCode',
+    'shipmentId',
+    'shopId',
+    'status',
+  ] as const
+  $columns = ShipmentEventSchema.$columns
+  @column()
+  declare actorType: string
+  @column()
+  declare actorUserId: string | null
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare event: string
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare metadata: unknown | null
+  @column()
+  declare note: string | null
+  @column.dateTime()
+  declare occurredAt: DateTime
+  @column()
+  declare providerEventKey: string | null
+  @column()
+  declare rawStatus: string | null
+  @column()
+  declare reasonCode: string | null
+  @column()
+  declare shipmentId: string
+  @column()
+  declare shopId: string
+  @column()
+  declare status: string
+}
+
+export class ShipmentItemSchema extends BaseModel {
+  static $columns = ['createdAt', 'orderItemId', 'quantity', 'shipmentId', 'shopOrderId'] as const
+  $columns = ShipmentItemSchema.$columns
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare orderItemId: string
+  @column()
+  declare quantity: number
+  @column({ isPrimary: true })
+  declare shipmentId: string
+  @column()
+  declare shopOrderId: string
+}
+
+export class ShipmentSchema extends BaseModel {
+  static $columns = [
+    'attemptCount',
+    'bookedAt',
+    'cancelledAt',
+    'codAmountMinor',
+    'courierName',
+    'createdAt',
+    'currency',
+    'deliveredAt',
+    'externalShipmentId',
+    'id',
+    'logisticsAccountId',
+    'merchantReference',
+    'pickupAddressId',
+    'providerCostMinor',
+    'returnWindowEndsAt',
+    'serviceCode',
+    'shippedAt',
+    'shopId',
+    'shopOrderId',
+    'status',
+    'trackingNumber',
+    'trackingUrl',
+    'updatedAt',
+    'version',
+  ] as const
+  $columns = ShipmentSchema.$columns
+  @column()
+  declare attemptCount: number
+  @column.dateTime()
+  declare bookedAt: DateTime | null
+  @column.dateTime()
+  declare cancelledAt: DateTime | null
+  @column()
+  declare codAmountMinor: number | null
+  @column()
+  declare courierName: string | null
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare currency: string
+  @column.dateTime()
+  declare deliveredAt: DateTime | null
+  @column()
+  declare externalShipmentId: string | null
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare logisticsAccountId: string | null
+  @column()
+  declare merchantReference: string | null
+  @column()
+  declare pickupAddressId: string | null
+  @column()
+  declare providerCostMinor: number | null
+  @column.dateTime()
+  declare returnWindowEndsAt: DateTime | null
+  @column()
+  declare serviceCode: string | null
+  @column.dateTime()
+  declare shippedAt: DateTime | null
+  @column()
+  declare shopId: string
+  @column()
+  declare shopOrderId: string
+  @column()
+  declare status: string
+  @column()
+  declare trackingNumber: string | null
+  @column()
+  declare trackingUrl: string | null
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
+  @column()
+  declare version: number
+}
+
 export class ShopAddressSchema extends BaseModel {
   static $columns = [
     'archivedAt',
@@ -1153,6 +1588,87 @@ export class ShopMembershipSchema extends BaseModel {
   declare updatedAt: DateTime
   @column()
   declare userId: string
+}
+
+export class ShopOrderSchema extends BaseModel {
+  static $columns = [
+    'acceptanceDueAt',
+    'acceptedAt',
+    'cancelReason',
+    'cancelledAt',
+    'commissionTotalMinor',
+    'completedAt',
+    'createdAt',
+    'currency',
+    'deliveryZoneCodeSnapshot',
+    'discountMinor',
+    'estMaxDaysSnapshot',
+    'estMinDaysSnapshot',
+    'id',
+    'itemsSubtotalMinor',
+    'number',
+    'orderId',
+    'rejectedAt',
+    'rejectionReason',
+    'shippingFeeMinor',
+    'shopId',
+    'shopNameSnapshot',
+    'status',
+    'totalMinor',
+    'updatedAt',
+    'version',
+  ] as const
+  $columns = ShopOrderSchema.$columns
+  @column.dateTime()
+  declare acceptanceDueAt: DateTime | null
+  @column.dateTime()
+  declare acceptedAt: DateTime | null
+  @column()
+  declare cancelReason: string | null
+  @column.dateTime()
+  declare cancelledAt: DateTime | null
+  @column()
+  declare commissionTotalMinor: number
+  @column.dateTime()
+  declare completedAt: DateTime | null
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare currency: string
+  @column()
+  declare deliveryZoneCodeSnapshot: string
+  @column()
+  declare discountMinor: number
+  @column()
+  declare estMaxDaysSnapshot: number
+  @column()
+  declare estMinDaysSnapshot: number
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare itemsSubtotalMinor: number
+  @column()
+  declare number: string
+  @column()
+  declare orderId: string
+  @column.dateTime()
+  declare rejectedAt: DateTime | null
+  @column()
+  declare rejectionReason: string | null
+  @column()
+  declare shippingFeeMinor: number
+  @column()
+  declare shopId: string
+  @column()
+  declare shopNameSnapshot: string
+  @column()
+  declare status: string
+  @column()
+  declare totalMinor: number
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
+  @column()
+  declare version: number
 }
 
 export class ShopPayoutAccountSchema extends BaseModel {
