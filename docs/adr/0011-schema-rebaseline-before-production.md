@@ -125,7 +125,7 @@ Fixing these incrementally would take dozens of ALTER migrations that convert or
 - **Constraint tests**: T-SEC-004 (refund CHECK), T-INV-003 (stock CHECK), T-ORD-104 (proposed, composite FK). Edited 2026-11-09: the stock CHECK test is T-INV-001, as [04a §8.1](../04a-data-dictionary-tables.md#81-inventory_items) and the [10 §6](../10-testing-and-quality-gates.md#6-test-id-registry) registry give it; T-INV-003 is the concurrent-checkout test of 05 §4.9.
 - **Migration immutability check** (T-ARCH-017, proposed; after launch): CI compares checksums against `database/migrations.lock`.
 - **Lint rule** (its fixtures are part of T-ARCH-021, proposed): `database/migrations/**` may not import from `#constants/*`, `#models/*` or `#modules/*`.
-- **Seeder guard test** (T-ARCH-019, proposed): a dev seeder with `NODE_ENV=production` exits non-zero.
+- **Seeder guard test** (T-ARCH-019, proposed): a dev seeder with `NODE_ENV=production` exits non-zero. Edited 2026-11-09: that described Lucid wrongly. Under `NODE_ENV=production` guard 1 (`static environment`) makes Lucid mark a dev seeder `ignored`: nothing in it runs and `db:seed` exits 0 [Verified-repo `@adonisjs/lucid` 22.4.2 `build/src/seeders/runner.js`]. Guards 2 and 3 of [09 §8.8](../09-code-structure-and-engineering-standards.md#88-seeders-reference-data-versus-development-data) (`app.inProduction`, and a database name without `_dev` or `_test`) refuse with a thrown error, so `db:seed` exits non-zero. T-ARCH-019 tests all three; the decision is unchanged.
 
 ## Related
 
