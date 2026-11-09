@@ -10,11 +10,13 @@ Reviewed: 2026-09-25 · consistency review 2026-09-30 to 2026-10-04
 - **Date:** 2026-09-25
 - **Deciders:** product owner (OD-01), lead developer
 - **Supersedes / superseded by:** — / — (after the R1 launch the forward-only rule is permanent)
-- **Related open items:** VX-10 (location dataset for reference seeders); OD-01 was decided on 2026-09-30 (re-baseline); OD-55 (v1 data into the baseline)
+- **Related open items:** VX-10 (location dataset for reference seeders); OD-01 was decided on 2026-09-30 (re-baseline); OD-55 was decided on 2026-11-07 (no import)
 
 Edited 2026-11-03: the product owner decided to sell from a single-seller v1 deployed from the prototype line before M0 ([risks §2.3](../risks-and-open-decisions.md#23-decision-log)). Once v1 holds real data, Assumption A-01 no longer holds and the first trigger under "When to revisit" fires. OD-55 decides whether this ADR is kept with a one-off import of the v1 data or superseded; the decision is otherwise unchanged.
 
 Edited 2026-11-04: PR #142 merged the `v1` branch into `main`, and production now deploys release tags cut from `main` ([risks §2.3](../risks-and-open-decisions.md#23-decision-log)). The baseline merge is therefore also the cutover of the live store: it lands together with the OD-55 data import, in one planned release. The decision is otherwise unchanged.
+
+Edited 2026-11-07: the v1 store was never hosted, and every row in any database is seed data ([risks §2.3](../risks-and-open-decisions.md#23-decision-log), OD-55). Assumption A-01 holds and the first trigger under "When to revisit" did not fire. OD-55 keeps this ADR with no import: there is no export or import script and no cutover rehearsal, and the baseline release moves no data. The decision is otherwise unchanged.
 
 ## Context
 
