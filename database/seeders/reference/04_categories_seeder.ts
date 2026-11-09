@@ -202,12 +202,19 @@ export async function seedCategories(client: QueryClientContract, tree = CATEGOR
           `category ${row.parentSlug} has products, so ${row.slug} cannot be added under it (docs/04 §3.6)`
         )
       }
-      const inserted = await trx.rawQuery(
-        `INSERT INTO categories (parent_id, slug, name, path, depth, position)
-         VALUES (?, ?, ?, ?, ?, ?) RETURNING id`,
-        [parentId, row.slug, row.name, row.path, row.depth, row.position]
-      )
-      idBySlug.set(row.slug, inserted.rows[0].id)
+      const [inserted] = await trx
+        .insertQuery()
+        .table('categories')
+        .insert({
+          parent_id: parentId,
+          slug: row.slug,
+          name: row.name,
+          path: row.path,
+          depth: row.depth,
+          position: row.position,
+        })
+        .returning('id')
+      idBySlug.set(row.slug, inserted.id)
     }
 
     for (const current of existing.values()) {

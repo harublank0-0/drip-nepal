@@ -199,14 +199,15 @@ export default class AttributesSeeder extends BaseSeeder {
         for (const [position, item] of attribute.values.entries()) {
           await trx.rawQuery(
             `INSERT INTO attribute_values (attribute_id, code, label, position, swatch_hex, is_active)
-             VALUES (?, ?, ?, ?, ?, true)
+             VALUES (?, ?, ?, ?, NULLIF(?, ''), true)
              ON CONFLICT (attribute_id, code) DO UPDATE
                 SET label = EXCLUDED.label, position = EXCLUDED.position,
                     swatch_hex = EXCLUDED.swatch_hex, is_active = true
               WHERE (attribute_values.label, attribute_values.position,
                      attribute_values.swatch_hex, attribute_values.is_active)
                     IS DISTINCT FROM (EXCLUDED.label, EXCLUDED.position, EXCLUDED.swatch_hex, true)`,
-            [stored.id, item.code, item.label, position + 1, item.swatch ?? null]
+            // '' stands for no swatch: NULLIF stores it as null
+            [stored.id, item.code, item.label, position + 1, item.swatch ?? '']
           )
         }
       }
