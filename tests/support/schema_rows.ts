@@ -259,7 +259,9 @@ export async function insertCodPayment(shopOrder: ShopOrderRef, collected: boole
 export async function refused(
   assert: Assert,
   write: (trx: TransactionClientContract) => Promise<unknown>,
-  expected: { code: string; constraint?: string; message?: RegExp },
+  // `constraint` may list several keys when more than one refuses the row and
+  // PostgreSQL reports whichever fires first.
+  expected: { code: string; constraint?: string | string[]; message?: RegExp },
   label: string
 ) {
   const error: PgError | null = await db.transaction(write).then(
@@ -268,7 +270,9 @@ export async function refused(
   )
   assert.isNotNull(error, `${label}: the write was accepted`)
   assert.equal(error!.code, expected.code, `${label}: ${error!.message}`)
-  if (expected.constraint) {
+  if (Array.isArray(expected.constraint)) {
+    assert.oneOf(error!.constraint, expected.constraint, `${label}: ${error!.message}`)
+  } else if (expected.constraint) {
     assert.equal(error!.constraint, expected.constraint, `${label}: ${error!.message}`)
   }
   if (expected.message) {

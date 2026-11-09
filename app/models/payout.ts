@@ -2,7 +2,7 @@ import { PayoutSchema } from '#database/schema'
 import { belongsTo, hasMany, manyToMany } from '@adonisjs/lucid/orm'
 import type { BelongsTo, HasMany, ManyToMany } from '@adonisjs/lucid/types/relations'
 import Shop from './shop.js'
-import User from './user.js'
+import PlatformStaff from './platform_staff.js'
 import ShopPayoutAccount from './shop_payout_account.js'
 import LedgerEntry from './ledger_entry.js'
 
@@ -21,11 +21,11 @@ export default class Payout extends PayoutSchema {
   declare payoutAccount: BelongsTo<typeof ShopPayoutAccount>
 
   // platform staff members (`platform_staff.user_id`)
-  @belongsTo(() => User, { foreignKey: 'createdBy' })
-  declare createdByUser: BelongsTo<typeof User>
+  @belongsTo(() => PlatformStaff, { foreignKey: 'createdBy' })
+  declare createdByStaff: BelongsTo<typeof PlatformStaff>
 
-  @belongsTo(() => User, { foreignKey: 'approvedBy' })
-  declare approvedByUser: BelongsTo<typeof User>
+  @belongsTo(() => PlatformStaff, { foreignKey: 'approvedBy' })
+  declare approvedByStaff: BelongsTo<typeof PlatformStaff>
 
   // docs/04a §13.3: the entries this payout settles
   @manyToMany(() => LedgerEntry, {
