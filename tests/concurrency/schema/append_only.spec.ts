@@ -52,7 +52,7 @@ type PgError = { code?: string; message: string }
  * back, optionally inside a retention batch, and returns `ok:<rows>` or the
  * SQLSTATE. Table and column names go in as `??` identifier bindings.
  */
-async function attempt(connection: string, sql: string, bindings: unknown[], purge = false) {
+async function attempt(connection: string, sql: string, bindings: string[], purge = false) {
   const trx = await db.connection(connection).transaction()
   try {
     if (purge) await trx.rawQuery(`SET LOCAL dripnepal.retention_purge = 'on'`)

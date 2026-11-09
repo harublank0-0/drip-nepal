@@ -7,13 +7,14 @@ import Shop from './shop.js'
 import User from './user.js'
 import PlatformStaff from './platform_staff.js'
 import OrderItem from './order_item.js'
+import SupportCase from './support_case.js'
 
 /*
  * docs/04a §11.7 (orders). The linked support case (`support_case_id`) is a
- * `support_cases` row (§14.1), created by a later baseline file, so it has
- * no relation here. `return_items` (§11.8) is a composite-key table
- * (docs/04 §2.15) with no model of its own: it is read through `items` and
- * written with the query builder in the owning action.
+ * `support_cases` row (§14.1) of `platform`, which sits below `orders`
+ * (docs/09 §2.2), so the relation points down. `return_items` (§11.8) is a
+ * composite-key table (docs/04 §2.15) with no model of its own: it is read
+ * through `items` and written with the query builder in the owning action.
  */
 export default class ReturnRequest extends ReturnRequestSchema {
   @belongsTo(() => Order)
@@ -30,6 +31,10 @@ export default class ReturnRequest extends ReturnRequestSchema {
 
   @belongsTo(() => PlatformStaff, { foreignKey: 'createdByStaffId' })
   declare createdByStaff: BelongsTo<typeof PlatformStaff>
+
+  // the case the return came from, of the same customer (`return_requests_case_fkey`)
+  @belongsTo(() => SupportCase)
+  declare supportCase: BelongsTo<typeof SupportCase>
 
   // docs/04a §11.8
   @manyToMany(() => OrderItem, {

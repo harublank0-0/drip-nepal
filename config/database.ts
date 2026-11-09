@@ -1,6 +1,7 @@
 import env from '#start/env'
 import app from '@adonisjs/core/services/app'
 import { defineConfig } from '@adonisjs/lucid'
+import type { PostgreConfig } from '@adonisjs/lucid/types/database'
 
 // Shared by both connections: the migration runner and schema:generate
 const migrations = {
@@ -23,13 +24,13 @@ const schemaGeneration = {
  * real in tests. Other environments have no second connection: the release
  * step injects the migrator's values into the DB_* names instead.
  */
-const migratorConnection = () => {
+const migratorConnection = (): Record<string, PostgreConfig> => {
   const user = env.get('DB_MIGRATOR_USER')
   const password = env.get('DB_MIGRATOR_PASSWORD')
   if (env.get('NODE_ENV') !== 'test' || !user || !password) return {}
   return {
     pg_migrator: {
-      client: 'pg' as const,
+      client: 'pg',
       connection: {
         host: env.get('DB_HOST'),
         port: env.get('DB_PORT'),
