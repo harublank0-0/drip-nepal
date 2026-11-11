@@ -1285,7 +1285,7 @@ pg-boss may run a job twice [Verified-doc <https://github.com/timgit/pg-boss/blo
 
 ## 9. Logistics and locations
 
-The `logistics` module owns the national location reference data, each shop's delivery configuration, and the courier tables of OD-56: the courier registry (§9.8), courier accounts (§9.9), the shops allowed to use each account (§9.10) and each shop's logistics settings (§9.11). The address tables that use the codes are §5.5 (`user_addresses`) and §6.6 (`shop_addresses`). The seed dataset and its source are [04 §21.4](04-domain-model-and-data-dictionary.md) and [04 §21.5](04-domain-model-and-data-dictionary.md).
+The `logistics` module owns the national location reference data, each shop's delivery configuration, and the courier tables of OD-56: the courier registry (§9.8), courier accounts (§9.9), the shops allowed to use each account (§9.10) and each shop's logistics settings (§9.11). M6 adds the courier's branches (§9.12), the booking calls (§9.13) and the courier event inbox (§9.14), which a migration of M6 creates after the E4 baseline ([ADR-0011](adr/0011-schema-rebaseline-before-production.md): an applied migration is never edited). The address tables that use the codes are §5.5 (`user_addresses`) and §6.6 (`shop_addresses`). The seed dataset and its source are [04 §21.4](04-domain-model-and-data-dictionary.md) and [04 §21.5](04-domain-model-and-data-dictionary.md).
 
 **Codes.** Nepal Post's federal postal codes give every local level a 5-digit code made of a province digit, a 2-digit district number and a 2-digit local-level number, and every ward a 7-digit code (the local-level code plus a 2-digit ward). Kathmandu Metropolitan City is `30608`, with wards `3060801` to `3060832` [Verified-doc <https://giwmscdnone.gov.np/media/pdf_upload/Postal%20Code_wteggid.pdf>]. DripNepal uses the first digit as the province code and the first three digits as the district code (`3` Bagmati, `306` Kathmandu, `307` Bhaktapur, `308` Lalitpur). A CHECK then proves that every code sits inside its parent. The counts to seed are 7 provinces, 77 districts and 753 local levels with 6,743 wards ([04 §21.4](04-domain-model-and-data-dictionary.md#214-locations-dataset-vx-10); [research: nepal-regulatory-locale](research/nepal-regulatory-locale.md)). Whether this list is the authoritative dataset to build on is [Verify-external VX-10].
 
@@ -1482,13 +1482,13 @@ The estimate is the "delivery date and time" disclosure of E-Commerce Act 2081 s
 
 One row per courier that DripNepal integrates with ([ADR-0019](adr/0019-courier-integration-in-r1.md) decision 1, OD-56). Nepal Can Move is the first row, code `ncm` [Assumption A-53]. It comes from the reference seeder ([04 §21.6](04-domain-model-and-data-dictionary.md#216-couriers)), never from a migration. No column here or elsewhere is specific to one courier.
 
-| Column                     | Type        | Null | Default | Notes                                                                                                                                                                                                        |
-| -------------------------- | ----------- | ---- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `code`                     | text        | no   | App     | Primary key, for example `ncm`. A code is the key, as for the other reference tables of §9                                                                                                                   |
-| `name`                     | text        | no   | App     | Display name, for example "Nepal Can Move". Copied into `shipments.courier_name` at booking (§11.5)                                                                                                          |
-| `is_active`                | boolean     | no   | `true`  | `false` retires the courier: no new account or booking uses it                                                                                                                                               |
-| `capabilities`             | jsonb       | no   | `'{}'`  | What the adapter supports, as boolean members `booking`, `cancellation`, `tracking_callback`, `tracking_poll` and `cod`, filled when VX-16 is answered. Read by the adapter and settings pages, never by SQL |
-| `created_at`, `updated_at` | timestamptz | no   | `now()` |                                                                                                                                                                                                              |
+| Column                     | Type        | Null | Default | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| -------------------------- | ----------- | ---- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `code`                     | text        | no   | App     | Primary key, for example `ncm`. A code is the key, as for the other reference tables of §9                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `name`                     | text        | no   | App     | Display name, for example "Nepal Can Move". Copied into `shipments.courier_name` at booking (§11.5)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `is_active`                | boolean     | no   | `true`  | `false` retires the courier: no new account or booking uses it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `capabilities`             | jsonb       | no   | `'{}'`  | What the adapter supports, as boolean members `booking`, `cancellation`, `tracking_callback`, `tracking_poll`, `cod`, `reference_lookup` (find a booking by `merchant_reference`), `signed_callback` (callbacks carry a signature the adapter verifies) and `branches` (a booking names origin and destination branches, §9.12), filled when VX-16 is answered. A missing member is `false`. The rules that depend on them are in [05 §6.3](05-order-payment-and-inventory-lifecycles.md#63-shipment-fulfillment). Read by the adapter, the jobs and the settings pages, never by SQL |
+| `created_at`, `updated_at` | timestamptz | no   | `now()` |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 
 **Keys and constraints.**
 
@@ -1643,6 +1643,196 @@ The two foreign keys and the CHECK make the default account one the shop may use
 **Indexes.** Primary key only: every read is by shop.
 
 **Lifecycle and retention.** The mode and default account change under `shop.shipping.manage`, `is_enabled` under `platform.logistics.manage`, with ⟳ `If-Match` on `version` and an `audit_logs` row (operations proposed with M6). Retained as the shop's other configuration ([04 §19.3](04-domain-model-and-data-dictionary.md#193-retention-schedule)).
+
+### 9.12 `logistics_branches`
+
+**Module** `logistics` · **Release** R1 (M6) · **Shop scope** none · **Lifecycle** Reference, synced from the courier · **Sensitivity** Public
+
+The branches of a courier whose bookings name branches (capability `branches`, §9.8). Nepal Can Move books from an origin branch to a destination branch, by branch name, and redirects by branch ID [Verify-external VX-16]. One row per branch the courier lists.
+
+| Column                     | Type        | Null | Default    | Notes                                                                                                                                                        |
+| -------------------------- | ----------- | ---- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `id`                       | uuid        | no   | `uuidv7()` |                                                                                                                                                              |
+| `provider_code`            | text        | no   | App        | The courier                                                                                                                                                  |
+| `name`                     | text        | no   | App        | The name the courier's booking call takes, as the courier spells it (NCM: `TINKUNE`)                                                                         |
+| `external_branch_id`       | text        | yes  | —          | The courier's own ID for the branch, when its list gives one (NCM's redirect takes it, VX-16)                                                                |
+| `code`                     | text        | yes  | —          | The courier's short code, when it has one (NCM's label data shows `TINK1`)                                                                                   |
+| `courier_district`         | text        | yes  | —          | The district as the courier names it                                                                                                                         |
+| `district_code`            | text        | yes  | —          | The matching district (§9.2), set by the sync when `courier_district` matches a district name exactly, else by staff. Used to suggest the destination branch |
+| `covered_areas`            | text        | yes  | —          | The courier's own description of the areas the branch delivers to, shown to the vendor as given                                                              |
+| `phone`                    | text        | yes  | —          | The branch's public phone number                                                                                                                             |
+| `is_active`                | boolean     | no   | `true`     | `false` once the courier's list no longer has the branch: no new booking names it                                                                            |
+| `synced_at`                | timestamptz | no   | `now()`    | Last time the courier's list had the branch                                                                                                                  |
+| `created_at`, `updated_at` | timestamptz | no   | `now()`    |                                                                                                                                                              |
+
+**Keys and constraints.**
+
+```sql
+CONSTRAINT logistics_branches_pkey PRIMARY KEY (id),
+CONSTRAINT logistics_branches_name_key UNIQUE (provider_code, name),
+CONSTRAINT logistics_branches_external_id_key UNIQUE (provider_code, external_branch_id),  -- NULLs are distinct
+CONSTRAINT logistics_branches_code_key UNIQUE (provider_code, code),                       -- NULLs are distinct
+CONSTRAINT logistics_branches_provider_fkey FOREIGN KEY (provider_code)
+  REFERENCES logistics_providers (code) ON DELETE RESTRICT,
+CONSTRAINT logistics_branches_district_fkey FOREIGN KEY (district_code)
+  REFERENCES districts (code) ON DELETE RESTRICT,
+CONSTRAINT logistics_branches_name_check CHECK (char_length(name) BETWEEN 2 AND 80),
+CONSTRAINT logistics_branches_external_id_check
+  CHECK (external_branch_id IS NULL OR char_length(external_branch_id) BETWEEN 1 AND 40),
+CONSTRAINT logistics_branches_code_check CHECK (code IS NULL OR char_length(code) BETWEEN 1 AND 20),
+CONSTRAINT logistics_branches_courier_district_check
+  CHECK (courier_district IS NULL OR char_length(courier_district) BETWEEN 1 AND 80),
+CONSTRAINT logistics_branches_covered_areas_check
+  CHECK (covered_areas IS NULL OR char_length(covered_areas) <= 2000),
+CONSTRAINT logistics_branches_phone_check CHECK (phone IS NULL OR char_length(phone) BETWEEN 3 AND 40)
+```
+
+**Indexes.** `logistics_branches_district_idx (provider_code, district_code) WHERE is_active` serves the booking form's suggestion of a destination branch for the delivery address's district. The name key serves the sync's upsert and the lookup of a branch named in a courier answer.
+
+**Lifecycle and retention.** Written only by the job `logistics.sync_branches` (proposed), which runs daily and when staff ask, reads the courier's branch list through the adapter, and upserts by `external_branch_id` when the courier gives one, else by `name`. A branch missing from the list gets `is_active = false`; one that comes back is reactivated. Staff may set `district_code` under `platform.logistics.manage`. Never deleted: shipments reference it with RESTRICT (§11.5). Which branches an account may book **from** is the courier's own setting (NCM's assigned pickup branches); the booking form reads it live through the adapter and offers only those, matched by name. T-SHOP-114 (proposed).
+
+### 9.13 `shipment_booking_attempts`
+
+**Module** `logistics` · **Release** R1 (M6) · **Shop scope** `shop_id` · **Lifecycle** Record · **Sensitivity** Internal
+
+Every call the courier adapter makes to create, cancel or look up a booking. The job inserts the attempt **before** the call and records its outcome after it, so a timeout leaves evidence, and a booking whose outcome is unknown is never sent again by itself ([05 §6.3](05-order-payment-and-inventory-lifecycles.md#63-shipment-fulfillment)). It holds no personal data: the request body is not stored.
+
+| Column                 | Type        | Null | Default     | Notes                                                                                                                                                                                                               |
+| ---------------------- | ----------- | ---- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                   | uuid        | no   | `uuidv7()`  |                                                                                                                                                                                                                     |
+| `shipment_id`          | uuid        | no   | App         |                                                                                                                                                                                                                     |
+| `shop_id`              | uuid        | no   | App         |                                                                                                                                                                                                                     |
+| `logistics_account_id` | uuid        | no   | App         | The account the call used: the shipment's                                                                                                                                                                           |
+| `kind`                 | text        | no   | App         | `book`, `cancel` or `lookup`                                                                                                                                                                                        |
+| `attempt_no`           | smallint    | no   | App         | 1, 2, … per shipment and kind                                                                                                                                                                                       |
+| `outcome`              | text        | no   | `'pending'` | `pending` (claimed; the call is in flight), `succeeded`, `refused` (the courier answered a definite no, such as invalid fields) or `unknown` (timeout, connection lost, 5xx, or a worker that died during the call) |
+| `http_status`          | smallint    | yes  | —           | The courier's HTTP status, when one came back                                                                                                                                                                       |
+| `error_code`           | text        | yes  | —           | The adapter's normalised reason, for example `invalid_branch`, `invalid_phone`, `invalid_cod_amount`, `auth_failed`, `rate_limited`, `timeout`, `courier_error`                                                     |
+| `error_detail`         | text        | yes  | —           | The courier's message, redacted: field names and the courier's own wording only, never a value DripNepal sent. At most 500 characters                                                                               |
+| `external_shipment_id` | text        | yes  | —           | The courier's ID returned by a successful `book`, or found by a `lookup`                                                                                                                                            |
+| `started_at`           | timestamptz | no   | `now()`     |                                                                                                                                                                                                                     |
+| `finished_at`          | timestamptz | yes  | —           | Set with the outcome                                                                                                                                                                                                |
+| `request_id`           | text        | yes  | —           | The job's correlation ID ([09 §7](09-code-structure-and-engineering-standards.md#7-structured-logging))                                                                                                             |
+
+**Keys and constraints.**
+
+```sql
+CONSTRAINT shipment_booking_attempts_pkey PRIMARY KEY (id),
+CONSTRAINT shipment_booking_attempts_no_key UNIQUE (shipment_id, kind, attempt_no),
+CONSTRAINT shipment_booking_attempts_shipment_fkey FOREIGN KEY (shipment_id, shop_id)
+  REFERENCES shipments (id, shop_id) ON DELETE RESTRICT,
+CONSTRAINT shipment_booking_attempts_account_fkey FOREIGN KEY (logistics_account_id)
+  REFERENCES logistics_accounts (id) ON DELETE RESTRICT,
+CONSTRAINT shipment_booking_attempts_kind_check CHECK (kind IN ('book', 'cancel', 'lookup')),
+CONSTRAINT shipment_booking_attempts_outcome_check
+  CHECK (outcome IN ('pending', 'succeeded', 'refused', 'unknown')
+  AND (outcome = 'pending') = (finished_at IS NULL)),
+CONSTRAINT shipment_booking_attempts_booked_check
+  CHECK (kind <> 'book' OR outcome <> 'succeeded' OR external_shipment_id IS NOT NULL),
+CONSTRAINT shipment_booking_attempts_attempt_no_check CHECK (attempt_no BETWEEN 1 AND 50),
+CONSTRAINT shipment_booking_attempts_http_status_check
+  CHECK (http_status IS NULL OR http_status BETWEEN 100 AND 599),
+CONSTRAINT shipment_booking_attempts_error_code_check
+  CHECK (error_code IS NULL OR error_code ~ '^[a-z][a-z0-9_]{1,39}$'),
+CONSTRAINT shipment_booking_attempts_error_detail_check
+  CHECK (error_detail IS NULL OR char_length(error_detail) <= 500),
+CONSTRAINT shipment_booking_attempts_external_id_check
+  CHECK (external_shipment_id IS NULL OR char_length(external_shipment_id) BETWEEN 1 AND 100)
+
+CREATE UNIQUE INDEX shipment_booking_attempts_in_flight_key ON shipment_booking_attempts (shipment_id)
+  WHERE outcome = 'pending';                            -- one courier call per shipment at a time
+
+CREATE TRIGGER shipment_booking_attempts_guard BEFORE UPDATE ON shipment_booking_attempts FOR EACH ROW
+  EXECUTE FUNCTION allow_only_columns('outcome', 'http_status', 'error_code', 'error_detail',
+    'external_shipment_id', 'finished_at');
+```
+
+`shipment_booking_attempts_in_flight_key` is the claim: two workers that pick up the same booking job cannot both call the courier, because the second insert gets 23505 and stops. The action that records the outcome updates with `WHERE id = :id AND outcome = 'pending'`, so an outcome is written once; `shipment_booking_attempts_guard` keeps the shipment, account, kind, number and start time as inserted. T-FUL-111 (proposed).
+
+**Indexes.**
+
+| Index                                     | Definition                                       | Query served                                                                                                                     |
+| ----------------------------------------- | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| `shipment_booking_attempts_no_key`        | UNIQUE `(shipment_id, kind, attempt_no)`         | The next attempt number, and the shipment's call history on the admin order page                                                 |
+| `shipment_booking_attempts_in_flight_key` | UNIQUE `(shipment_id) WHERE outcome = 'pending'` | The claim above                                                                                                                  |
+| `shipment_booking_attempts_stale_idx`     | `(started_at) WHERE outcome = 'pending'`         | The sweeper that marks a claim older than the call's timeout plus a margin `unknown`: the worker died during the call (03 §11.4) |
+
+**Lifecycle and retention.** Inserted by the jobs `logistics.book_shipment`, `logistics.cancel_booking` and `logistics.lookup_booking` (proposed), and by the sweeper's outcome update. Never deleted; retained as its shipment (§11.5).
+
+### 9.14 `courier_events`
+
+**Module** `logistics` · **Release** R1 (M6) · **Shop scope** `shop_id` once matched · **Lifecycle** Record · **Sensitivity** Internal; recipient data never stored
+
+The courier event inbox of [05 §6.3](05-order-payment-and-inventory-lifecycles.md#63-shipment-fulfillment): every status message from a courier, whether it came as a callback, from a scheduled poll or from a lookup. It deduplicates them, holds the updates the shipment machine refuses, and is the evidence for the admin queue. It does for couriers what `provider_events` (§12.3) does for payment providers. A callback from a courier that does not sign (capability `signed_callback` false, as for NCM) never moves a shipment by itself: it makes the job look the parcel up, and the lookup's answer is what is applied ([ADR-0019](adr/0019-courier-integration-in-r1.md) decision 6).
+
+| Column                 | Type        | Null | Default     | Notes                                                                                                                                                                                     |
+| ---------------------- | ----------- | ---- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                   | uuid        | no   | `uuidv7()`  |                                                                                                                                                                                           |
+| `provider_code`        | text        | no   | App         |                                                                                                                                                                                           |
+| `logistics_account_id` | uuid        | no   | App         | The account the message belongs to: named by the callback URL, or the account a poll or lookup ran with                                                                                   |
+| `source`               | text        | no   | App         | `callback`, `poll` or `lookup`                                                                                                                                                            |
+| `event_key`            | text        | no   | App         | Deterministic key, below                                                                                                                                                                  |
+| `external_shipment_id` | text        | no   | App         | The courier's ID of the parcel. A callback that names several parcels (NCM's bulk events) is stored as one row per parcel                                                                 |
+| `shipment_id`          | uuid        | yes  | —           | The shipment with that ID on that account; null for a poll or lookup result that matches none, which raises an alert                                                                      |
+| `shop_id`              | uuid        | yes  | —           | Set with `shipment_id`                                                                                                                                                                    |
+| `raw_event`            | text        | yes  | —           | The courier's event name, when it sends one (NCM: `pickup_completed`)                                                                                                                     |
+| `raw_status`           | text        | no   | App         | The courier's status label as received                                                                                                                                                    |
+| `mapped_status`        | text        | yes  | —           | The normalised shipment status the pure mapping function gives ([05 §6.3](05-order-payment-and-inventory-lifecycles.md#63-shipment-fulfillment)); null when it gives none                 |
+| `occurred_at`          | timestamptz | yes  | —           | The courier's own time for the event, when it gives one                                                                                                                                   |
+| `payload`              | jsonb       | no   | App         | Redacted: only the courier's documented status fields, each at most 256 characters. Never a comment, name, phone number or address                                                        |
+| `raw_body_sha256`      | bytea       | yes  | —           | SHA-256 of a callback's raw body as received                                                                                                                                              |
+| `received_at`          | timestamptz | no   | `now()`     |                                                                                                                                                                                           |
+| `processed_at`         | timestamptz | yes  | —           |                                                                                                                                                                                           |
+| `processing_status`    | text        | no   | `'pending'` | `pending`; `applied` (moved the shipment); `ignored` (no transition: the status is the shipment's own, or the mapping gives none); `held` (the machine refuses it; admin alert); `failed` |
+| `hold_reason`          | text        | yes  | —           | With `held`: `not_allowed` (the machine has no such transition), `terminal_shop_order`, `cod_collected` (05 §6.3) or `unmapped_status` (a label the mapping does not know)                |
+| `error`                | text        | yes  | —           | At most 2,000 characters, redacted                                                                                                                                                        |
+| `request_id`           | text        | yes  | —           |                                                                                                                                                                                           |
+
+**Event keys.** Callback from a courier that does not sign: stored only when its parcel ID matches a shipment of the account the URL names, keyed `callback:<external id>:<raw event or status>`, never by the body, so varying the body cannot add rows; one that matches no shipment is not stored and leaves a `logistics.callback_rejected` log line, and a courier's test event is answered 2xx and not stored. Callback from a courier that signs: the courier's event ID once the signature verifies. Poll and lookup: `<source>:<external id>:<raw status>:<occurred_at, or "none">`, so the same answer read twice is one row. An applied event writes its `shipment_events` row with the same key in `provider_event_key` (§11.6).
+
+**Keys and constraints.**
+
+```sql
+CONSTRAINT courier_events_pkey PRIMARY KEY (id),
+CONSTRAINT courier_events_key UNIQUE (logistics_account_id, event_key),
+CONSTRAINT courier_events_provider_fkey FOREIGN KEY (provider_code)
+  REFERENCES logistics_providers (code) ON DELETE RESTRICT,
+CONSTRAINT courier_events_account_fkey FOREIGN KEY (logistics_account_id)
+  REFERENCES logistics_accounts (id) ON DELETE RESTRICT,
+CONSTRAINT courier_events_shipment_fkey FOREIGN KEY (shipment_id, shop_id)
+  REFERENCES shipments (id, shop_id) ON DELETE RESTRICT,
+CONSTRAINT courier_events_source_check CHECK (source IN ('callback', 'poll', 'lookup')),
+CONSTRAINT courier_events_match_check CHECK ((shipment_id IS NULL) = (shop_id IS NULL)
+  AND (source <> 'callback' OR shipment_id IS NOT NULL)),
+CONSTRAINT courier_events_processing_check
+  CHECK (processing_status IN ('pending', 'applied', 'ignored', 'held', 'failed')
+  AND (processing_status = 'pending') = (processed_at IS NULL)
+  AND (processing_status = 'held') = (hold_reason IS NOT NULL)),
+CONSTRAINT courier_events_hold_reason_check CHECK (hold_reason IS NULL
+  OR hold_reason IN ('not_allowed', 'terminal_shop_order', 'cod_collected', 'unmapped_status')),
+CONSTRAINT courier_events_mapped_status_check CHECK (mapped_status IS NULL OR mapped_status IN ('booked',
+  'shipped', 'out_for_delivery', 'delivered', 'delivery_failed', 'returning', 'cancelled')),
+CONSTRAINT courier_events_key_check CHECK (char_length(event_key) BETWEEN 8 AND 200),
+CONSTRAINT courier_events_external_id_check CHECK (char_length(external_shipment_id) BETWEEN 1 AND 100),
+CONSTRAINT courier_events_raw_check CHECK (char_length(raw_status) BETWEEN 1 AND 100
+  AND (raw_event IS NULL OR char_length(raw_event) BETWEEN 1 AND 100)),
+CONSTRAINT courier_events_payload_check CHECK (jsonb_typeof(payload) = 'object'),
+CONSTRAINT courier_events_hash_check CHECK (raw_body_sha256 IS NULL OR octet_length(raw_body_sha256) = 32),
+CONSTRAINT courier_events_error_check CHECK (error IS NULL OR char_length(error) <= 2000)
+```
+
+The receiver inserts with `ON CONFLICT (logistics_account_id, event_key) DO NOTHING`, answers 2xx after the durable insert, and sends the processing job in the same transaction ([ADR-0010](adr/0010-postgres-jobs-pg-boss-transactional-send.md)). The same courier message delivered N times, concurrently or not, gives one row and at most one transition. T-FUL-110 (proposed).
+
+**Indexes.**
+
+| Index                         | Definition                                                       | Query served                                        |
+| ----------------------------- | ---------------------------------------------------------------- | --------------------------------------------------- |
+| `courier_events_key`          | UNIQUE `(logistics_account_id, event_key)`                       | Dedupe on insert                                    |
+| `courier_events_pending_idx`  | `(received_at) WHERE processing_status IN ('pending', 'failed')` | The sweeper for events whose job was lost           |
+| `courier_events_held_idx`     | `(received_at) WHERE processing_status = 'held'`                 | The admin queue of held courier updates             |
+| `courier_events_shipment_idx` | `(shipment_id, received_at) WHERE shipment_id IS NOT NULL`       | The courier history of a shipment on the admin page |
+
+**Lifecycle and retention.** `payload` and the identifying columns never change; only the processing columns do, and staff may move a `held` row to `applied` or `ignored` when they resolve it (through the shipment operations of [05 §6.3](05-order-payment-and-inventory-lifecycles.md#63-shipment-fulfillment), with an `audit_logs` row). Retained as its shipment (§11.5); it holds no personal data, so nothing is redacted at the end.
 
 ---
 
@@ -2151,6 +2341,8 @@ A booking that fails or is cancelled before pickup ends its row in `cancelled`; 
 | `merchant_reference`         | text        | yes  | —           | DripNepal's reference sent to the courier, `<shop order number>-S<n>`, for example `DN-4K7Q2M9-1-S1`, where `n` counts the shop order's shipment rows that have one, cancelled rows included. The same on every job retry of one booking, so a courier that checks references can refuse a duplicate (VX-16) |
 | `external_shipment_id`       | text        | yes  | —           | The courier's ID for the booking. Written once                                                                                                                                                                                                                                                               |
 | `service_code`               | text        | yes  | —           | The courier service booked (VX-16)                                                                                                                                                                                                                                                                           |
+| `origin_branch_id`           | uuid        | yes  | —           | The courier branch the parcel leaves from (§9.12), one of the account's assigned pickup branches; with an account whose courier has the `branches` capability, required from `booking_requested` (checked by the action). Added by the M6 migration; never changed once a booking is requested               |
+| `destination_branch_id`      | uuid        | yes  | —           | The courier branch that delivers to the customer (§9.12), suggested from the delivery address's district and confirmed by the vendor. As `origin_branch_id`                                                                                                                                                  |
 | `currency`                   | char(3)     | no   | `'NPR'`     |                                                                                                                                                                                                                                                                                                              |
 | `cod_amount_minor`           | bigint      | yes  | —           | The cash the courier is told to collect: the shop order's COD `payments.amount_minor` (§12.1) when the booking is requested, or `0` for a gateway order (R1.1). Null in the manual path, where the COD payment row alone holds it                                                                            |
 | `provider_cost_minor`        | bigint      | yes  | —           | What the courier charges for the parcel, once it reports it; kept for the manual COD reconciliation of OD-58. Never charged to the customer, who pays only `shop_orders.shipping_fee_minor` (§9.7)                                                                                                           |
@@ -2178,6 +2370,10 @@ CONSTRAINT shipments_account_fkey FOREIGN KEY (logistics_account_id, shop_id)
   REFERENCES logistics_account_shops (account_id, shop_id) ON DELETE RESTRICT,
 CONSTRAINT shipments_pickup_address_fkey FOREIGN KEY (pickup_address_id, shop_id)
   REFERENCES shop_addresses (id, shop_id) ON DELETE RESTRICT,
+CONSTRAINT shipments_origin_branch_fkey FOREIGN KEY (origin_branch_id)
+  REFERENCES logistics_branches (id) ON DELETE RESTRICT,                -- M6 migration
+CONSTRAINT shipments_destination_branch_fkey FOREIGN KEY (destination_branch_id)
+  REFERENCES logistics_branches (id) ON DELETE RESTRICT,                -- M6 migration
 CONSTRAINT shipments_status_check CHECK (status IN ('pending', 'packed', 'booking_requested', 'booked',
   'booking_failed', 'needs_reconciliation', 'shipped', 'out_for_delivery', 'delivered', 'delivery_failed',
   'returning', 'returned_to_origin', 'cancelled')),
@@ -2185,6 +2381,7 @@ CONSTRAINT shipments_path_check CHECK (CASE WHEN logistics_account_id IS NULL
   THEN status IN ('pending', 'packed', 'shipped', 'delivered', 'delivery_failed', 'returning', 'returned_to_origin')
     AND merchant_reference IS NULL AND external_shipment_id IS NULL AND service_code IS NULL
     AND cod_amount_minor IS NULL AND provider_cost_minor IS NULL AND booked_at IS NULL
+    AND origin_branch_id IS NULL AND destination_branch_id IS NULL      -- branch terms: M6 migration
   ELSE status NOT IN ('pending', 'packed')
     AND pickup_address_id IS NOT NULL AND merchant_reference IS NOT NULL AND cod_amount_minor IS NOT NULL END),
 CONSTRAINT shipments_booked_check CHECK ((status IN ('pending', 'packed', 'booking_requested', 'booking_failed',
@@ -2227,9 +2424,10 @@ CREATE OR REPLACE FUNCTION shipments_booking_guard() RETURNS trigger LANGUAGE pl
 BEGIN
   IF (OLD.logistics_account_id IS NOT NULL
       AND ROW(NEW.logistics_account_id, NEW.pickup_address_id, NEW.merchant_reference,
-              NEW.cod_amount_minor, NEW.service_code)
+              NEW.cod_amount_minor, NEW.service_code, NEW.origin_branch_id, NEW.destination_branch_id)
           IS DISTINCT FROM ROW(OLD.logistics_account_id, OLD.pickup_address_id, OLD.merchant_reference,
-                               OLD.cod_amount_minor, OLD.service_code))
+                               OLD.cod_amount_minor, OLD.service_code, OLD.origin_branch_id,
+                               OLD.destination_branch_id))   -- the two branches: M6 migration
      OR (OLD.external_shipment_id IS NOT NULL
          AND NEW.external_shipment_id IS DISTINCT FROM OLD.external_shipment_id)
      OR (OLD.status = 'cancelled' AND NEW.status <> 'cancelled') THEN
@@ -2244,7 +2442,7 @@ CREATE TRIGGER shipments_booking_guard BEFORE UPDATE ON shipments
 
 - `shipments_path_check` keeps the two paths apart: the courier statuses and fields exist only with an account, and an account comes with its pickup address, reference and COD amount. `shipments_booked_check` requires the courier's ID once the courier confirmed the booking, and none before; `shipments_cancelled_check` keeps `cancelled` to bookings that never left. T-FUL-101 (widened) and T-FUL-102 (proposed) set each status without its required fields and expect 23514.
 - `shipments_account_fkey` and `shipments_pickup_address_fkey` are the composite keys of INV-29: the account must be one the shop may use (§9.10), and the pickup address one of the shop's own. That the address has `purpose = 'pickup'`, that the account and its row are active, and that the account's environment fits the deployment are checked by the booking action in its transaction. T-FUL-102 (proposed) expects 23503 for another shop's account or address.
-- `shipments_booking_guard` is INV-30: once a booking is requested, its account, pickup address, reference, COD amount and service never change, the courier's ID is written once, and a `cancelled` row stays cancelled. Together with the archive-and-replace rule of §6.6, a shipment always shows the account and address its parcel used, whatever the shop changes later. T-FUL-103 (proposed) expects P0001.
+- `shipments_booking_guard` is INV-30: once a booking is requested, its account, pickup address, reference, COD amount, service and (from the M6 migration) origin and destination branches never change, the courier's ID is written once, and a `cancelled` row stays cancelled. Together with the archive-and-replace rule of §6.6, a shipment always shows the account and address its parcel used, whatever the shop changes later. T-FUL-103 (proposed) expects P0001.
 - `shipments_shop_order_key` is now a partial unique index: a shop order has one live shipment, and its cancelled bookings stay beside it as history. `shipments_external_id_key` refuses the same courier ID twice on one account. T-FUL-104 (proposed).
 - For a COD order `cod_amount_minor` equals the COD payment's `amount_minor` when the booking is requested; the two are in different tables, so the booking action copies it in one transaction (04 §16.4). A COD amount can still go down before collection only through item-level rejection, which happens before any booking (05 §6.1).
 
