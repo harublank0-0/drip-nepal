@@ -1,5 +1,6 @@
 import { databaseError } from '#exceptions/to_problem'
 import { runtime } from '#config/runtime'
+import { keyedHash } from '#modules/platform/crypto/keyed_hash'
 
 /*
  * The error-tracker hook (docs/09 §5.6, NFR-OBS-002). The exception handler
@@ -38,6 +39,12 @@ let transport: TrackerTransport | null = null
 
 export function setTrackerTransport(next: TrackerTransport | null) {
   transport = next
+}
+
+// The tracker's user reference: a keyed hash of the user ID, never the ID; null without either.
+export function userReference(userId: unknown, key: Buffer | undefined) {
+  if (userId === undefined || userId === null || !key) return null
+  return keyedHash(key, String(userId)).toString('hex')
 }
 
 export type TrackerContext = Omit<TrackerEvent['tags'], 'release' | 'environment'>

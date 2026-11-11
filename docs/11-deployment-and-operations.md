@@ -2387,4 +2387,4 @@ Still to do from §4.2:
 - removing the migrate-on-start entrypoint, which goes with the §4.5 Compose files and the release step of §5.4;
 - the image check that serves `/` with server-rendered markup (`T-ARCH-002`), once M1 has a `/` page.
 
-`.env.production.example` lists the new keys and runs the prototype stack as `APP_ENV=staging`: production requires `DB_SSL=true`, and that stack's Postgres container has no TLS.
+`.env.production.example` lists the new keys and runs the prototype stack as `APP_ENV=staging`: production requires `DB_SSL=true`, and that stack's Postgres container has no TLS. It sets no `APP_RELEASE`, because an empty value in the `env_file` would override the image's. `ARG APP_RELEASE` comes last in the runtime stage, so a new commit rebuilds only that layer; on a pull request CI bakes the branch head's commit, not the merge commit. `scripts/check_image.sh` removes its container on any exit.

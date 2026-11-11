@@ -12,6 +12,8 @@
 |
 */
 
+import { createHash } from 'node:crypto'
+
 export type EnvPolicyValues = {
   NODE_ENV: 'development' | 'production' | 'test'
   APP_ENV: 'development' | 'test' | 'staging' | 'production'
@@ -27,9 +29,34 @@ export type EnvPolicyValues = {
   DATA_ENCRYPTION_KEY_IDS: string[]
   DATA_ENCRYPTION_ACTIVE_KEY_ID: string
   SENTRY_DSN?: string
+  SMTP_USERNAME?: string
+  SMTP_PASSWORD?: boolean
   // Base64 of every key that must differ from the others in staging and prod.
   KEYS: Record<string, string | undefined>
 }
+
+/*
+ * SHA-256 of every key value committed in .env.example and .env.test,
+ * including the fixed test APP_KEY. They are public, so staging and
+ * production refuse them (the "default secrets" half of T-SEC-025, docs/09
+ * §6.5). Compared by hash so the values are not repeated here; T-ARCH-024
+ * checks that this list covers every key in those files.
+ */
+export const PUBLIC_KEY_SHA256 = new Set([
+  'f37eb54e4f00bf2b839536ea8b2ab534fc2d08f720e73698d36c9b8547875c08',
+  '8d59c08957be19c18017166c1e14f627756ef456650554f34bd1331658e6d30a',
+  'e91989969e295c6a2bb3486adda0cabac0b86930ca0f1a523c646852280ec6b4',
+  '6dabadb45cdc8c503eca4802bb883b6221993953617e7caf588637bd08bce8cb',
+  '1231c4d33a848d90e66b2d6f89d741c09eb7a9216a366fffd87b1080b586a51d',
+  '4e765632993479ce90d4b9b1c098d8e975a562ee9e0fc02f42cbefd8b234ce40',
+  'ab0f8276cb14759e05896b21e9ef3f36db5d789af1683aac45940942e8ad0d6c',
+  'f7395cfa5a8fb6aa0a92e880176b97e8f7a9306d57568e97981a3168a5fe27a4',
+  '167f93adb736fe17f5a33222aea419df2cb34529e3273b971f6a168cfcbcdbcd',
+  '7ff8c706a076eb4b7ce4cddc18ccad3f3edd1a58e564a44860c5caab9600a3de',
+  '9295bcf965636ef565cfafb190eefb3fbfb29907dab3ee5a15ae4424ea75dd0b',
+])
+
+const sha256 = (value: string) => createHash('sha256').update(value).digest('hex')
 
 const NODE_ENV_FOR = {
   development: 'development',
@@ -68,6 +95,9 @@ export function environmentPolicyViolations(values: EnvPolicyValues): string[] {
     if (values.LOG_LEVEL === 'trace' || values.LOG_LEVEL === 'debug') {
       violations.push('LOG_LEVEL must not be trace or debug in staging and production')
     }
+    if (values.SMTP_USERNAME && !values.SMTP_PASSWORD) {
+      violations.push('SMTP_PASSWORD is required with SMTP_USERNAME in staging and production')
+    }
     if (values.DB_DEBUG) {
       violations.push('DB_DEBUG must be off in staging and production (RF-26)')
     }
@@ -84,6 +114,9 @@ export function environmentPolicyViolations(values: EnvPolicyValues): string[] {
     const seen = new Map<string, string>()
     for (const [name, value] of Object.entries(values.KEYS)) {
       if (!value) continue
+      if (PUBLIC_KEY_SHA256.has(sha256(value))) {
+        violations.push(`${name} is a committed placeholder key, never for staging or production`)
+      }
       const first = seen.get(value)
       if (first) violations.push(`${name} must differ from ${first} in staging and production`)
       else seen.set(value, name)

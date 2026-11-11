@@ -1,7 +1,9 @@
 import { test } from '@japa/runner'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { createHash } from 'node:crypto'
 import { envSchema } from '#start/env_schema'
+import { PUBLIC_KEY_SHA256 } from '#start/env_policy'
 
 /*
  * T-ARCH-023: the keys of .env.example equal the keys of the env schema
@@ -71,6 +73,44 @@ test.group('T-ARCH-024 env key validators', () => {
     .run(({ assert }, { value }) => {
       assert.throws(() => envSchema.DATA_ENCRYPTION_KEYS('DATA_ENCRYPTION_KEYS', value))
     })
+
+  test('a malformed ring entry is named by position, never by its content', ({ assert }) => {
+    for (const value of [VALID_KEY, `k1=${VALID_KEY}`, `k1:${VALID_KEY},${VALID_KEY}`]) {
+      let message = ''
+      try {
+        envSchema.DATA_ENCRYPTION_KEYS('DATA_ENCRYPTION_KEYS', value)
+      } catch (error) {
+        message = (error as Error).message
+      }
+      assert.match(message, /entry \d is not id:base64/)
+      assert.notInclude(message, VALID_KEY.slice(0, 12))
+    }
+  })
+
+  test('every key committed in .env.example and .env.test is on the public list', async ({
+    assert,
+  }) => {
+    const KEY_NAMES = /^(APP_KEY|DATA_ENCRYPTION_KEYS|BLIND_INDEX_KEY|HMAC_KEY_\w+)=(.+)$/
+    const values: string[] = []
+    for (const file of ['.env.example', '.env.test']) {
+      const text = await readFile(join(process.cwd(), file), 'utf8')
+      for (const line of text.split('\n')) {
+        const match = KEY_NAMES.exec(line.trim())
+        if (!match) continue
+        if (match[1] === 'DATA_ENCRYPTION_KEYS') {
+          values.push(...match[2].split(',').map((entry) => entry.split(':')[1]))
+        } else values.push(match[2])
+      }
+    }
+    assert.isAbove(values.length, 10)
+    for (const value of values) {
+      const hash = createHash('sha256').update(value).digest('hex')
+      assert.isTrue(
+        PUBLIC_KEY_SHA256.has(hash),
+        'a committed key is missing from PUBLIC_KEY_SHA256'
+      )
+    }
+  })
 
   test('APP_NAME, APP_KEY and DB_POOL_MAX refuse bad values', ({ assert }) => {
     assert.throws(() => envSchema.APP_NAME('APP_NAME', 'Drip Nepal'))

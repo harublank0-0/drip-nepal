@@ -14,6 +14,12 @@ const PROCESS_ENV = [
     message: 'Read configuration from config/*.ts, not process.env (docs/09 §6.3)',
   },
 ]
+const PROCESS_ENV_IMPORTS = ['process', 'node:process'].map((name) => ({
+  name,
+  importNames: ['env'],
+  message: 'Read configuration from config/*.ts, not process.env (docs/09 §6.3)',
+}))
+const START_ENV_MESSAGE = 'Import typed config from #config/* (docs/09 §6.3)'
 const SERVER_AND_UI = [
   'app/**',
   'start/**',
@@ -41,24 +47,32 @@ export default configApp(
   },
   {
     // No console output: server code logs through pino, the browser logs no
-    // data at all (docs/09 §7.5, RF-26). process.env stays in start/env*.ts.
+    // data at all (docs/09 §7.5, RF-26).
     files: SERVER_AND_UI,
-    ignores: ['start/env.ts', 'start/env_schema.ts'],
     rules: {
       'no-console': 'error',
-      'no-restricted-properties': ['error', ...PROCESS_ENV],
     },
   },
   {
-    // The environment is read through config/*.ts only (docs/09 §6.3).
+    // process.env stays in start/env*.ts (docs/09 §6.3), including
+    // `import { env } from 'node:process'`.
+    files: SERVER_AND_UI,
+    ignores: ['start/env.ts', 'start/env_schema.ts'],
+    rules: {
+      'no-restricted-properties': ['error', ...PROCESS_ENV],
+      'no-restricted-imports': ['error', { paths: PROCESS_ENV_IMPORTS }],
+    },
+  },
+  {
+    // Application code reads the environment through config/*.ts only (docs/09 §6.3).
+    // This block replaces the one above's import list for these files, so it repeats it.
     files: ['app/**', 'inertia/**', 'shared/**'],
     rules: {
       'no-restricted-imports': [
         'error',
         {
-          paths: [
-            { name: '#start/env', message: 'Import typed config from #config/* (docs/09 §6.3)' },
-          ],
+          paths: [...PROCESS_ENV_IMPORTS, { name: '#start/env', message: START_ENV_MESSAGE }],
+          patterns: [{ group: ['**/start/env', '**/start/env.js'], message: START_ENV_MESSAGE }],
         },
       ],
     },

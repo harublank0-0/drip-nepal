@@ -141,6 +141,26 @@ const brokenRules: Case[] = [
     violation: 'HMAC_KEY_AUDIT_IP must differ from APP_KEY in staging and production',
   },
   {
+    rule: 'production with APP_KEY_PREVIOUS equal to APP_KEY',
+    base: validProduction,
+    values: {
+      KEYS: { ...keys('prod'), APP_KEY_PREVIOUS: 'prod-app-key-of-at-least-32-characters' },
+    },
+    violation: 'APP_KEY_PREVIOUS must differ from APP_KEY in staging and production',
+  },
+  {
+    rule: 'staging with the committed test APP_KEY [T-SEC-025]',
+    base: validStaging,
+    values: { KEYS: { ...keys('stage'), APP_KEY: 'dripnepal-test-only-app-key-not-a-secret' } },
+    violation: 'APP_KEY is a committed placeholder key, never for staging or production',
+  },
+  {
+    rule: 'staging with an SMTP user and no password',
+    base: validStaging,
+    values: { SMTP_USERNAME: 'mailer' },
+    violation: 'SMTP_PASSWORD is required with SMTP_USERNAME in staging and production',
+  },
+  {
     rule: 'production without TLS to the database',
     base: validProduction,
     values: { DB_SSL: false },

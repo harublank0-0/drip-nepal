@@ -2,6 +2,7 @@ import { test } from '@japa/runner'
 import {
   reportToTracker,
   setTrackerTransport,
+  userReference,
   type TrackerContext,
   type TrackerEvent,
 } from '#exceptions/tracker'
@@ -138,5 +139,19 @@ test.group('T-ARCH-026 reportToTracker', (group) => {
   test('without a transport nothing is sent and nothing throws', async ({ assert }) => {
     setTrackerTransport(null)
     assert.deepEqual(await reportToTracker(new Error('x'), context(500)), { outcome: 'skipped' })
+  })
+
+  test('user_ref is a keyed hash of the user ID, never the ID', ({ assert }) => {
+    const key = Buffer.alloc(32, 5)
+    const reference = userReference('01929a00-0000-7000-8000-000000000001', key)
+    assert.match(reference!, /^[0-9a-f]{64}$/)
+    assert.notInclude(reference!, '01929a00')
+    assert.equal(reference, userReference('01929a00-0000-7000-8000-000000000001', key))
+    assert.notEqual(
+      reference,
+      userReference('01929a00-0000-7000-8000-000000000001', Buffer.alloc(32, 6))
+    )
+    assert.isNull(userReference(undefined, key))
+    assert.isNull(userReference('01929a00-0000-7000-8000-000000000001', undefined))
   })
 })

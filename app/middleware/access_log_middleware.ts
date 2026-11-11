@@ -1,7 +1,7 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import type { NextFn } from '@adonisjs/core/types/http'
 import { hmacKeys } from '#config/crypto'
-import { keyedHash } from '#modules/platform/crypto/keyed_hash'
+import { ipHash } from '#modules/platform/crypto/keyed_hash'
 
 /*
  * One `http.request` line per request (docs/09 §7.4 "Access line"), the
@@ -37,7 +37,7 @@ export default class AccessLogMiddleware {
           route_name: ctx.route?.name ?? null,
           status: ctx.response.getStatus(),
           duration_ms: Number((process.hrtime.bigint() - started) / 1_000_000n),
-          ip_hash: keyedHash(hmacKeys.auditIp.release(), ctx.request.ip()).toString('hex'),
+          ip_hash: ipHash(hmacKeys.auditIp.release(), ctx.request.ip()).toString('hex'),
           ...(userId ? { user_id: userId } : {}),
           ...(cfRay && CF_RAY.test(cfRay) ? { cf_ray: cfRay } : {}),
         },

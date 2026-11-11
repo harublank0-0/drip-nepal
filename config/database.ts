@@ -32,9 +32,9 @@ const schemaGeneration = {
  * verified, against DB_SSL_CA when the provider gives one. Production
  * refuses DB_SSL=false (start/env_policy.ts).
  */
-const ssl = env.get('DB_SSL')
-  ? { rejectUnauthorized: true, ...(env.get('DB_SSL_CA') ? { ca: env.get('DB_SSL_CA') } : {}) }
-  : false
+// A PEM put on one line with literal "\n" (as secret stores often hold it) is unfolded.
+const ca = env.get('DB_SSL_CA')?.replaceAll('\\n', '\n')
+const ssl = env.get('DB_SSL') ? { rejectUnauthorized: true, ...(ca ? { ca } : {}) } : false
 
 // Query logging, without bindings, only when a developer asks for it (docs/09 §7.6).
 const debug = env.get('DB_DEBUG') ?? false

@@ -30,20 +30,22 @@ function key32(key: string, value?: string) {
 const optionalKey32 = (key: string, value?: string) => (value ? key32(key, value) : undefined)
 
 /*
- * The field-encryption key ring of docs/07 §5.5: `<id>:<base64 of 32
- * bytes>[,…]`. The active ID is checked against it by the policy.
+ * The field-encryption key ring of docs/07 §5.5: `id:base64` entries of
+ * 32-byte keys, comma-separated. The active ID is checked against it by the policy.
  */
 function keyRing(key: string, value?: string) {
   const ring = new Map<string, Buffer>()
-  for (const entry of (value ?? '').split(',').filter(Boolean)) {
+  const entries = (value ?? '').split(',').filter(Boolean)
+  for (const [index, entry] of entries.entries()) {
     const [id, material, ...rest] = entry.split(':')
+    // Named by position, never by content: a malformed entry may be a key.
     if (!/^[a-z0-9_-]{1,32}$/.test(id ?? '') || rest.length > 0 || ring.has(id)) {
-      throw new Error(`Invalid environment variable "${key}": entry "${id}" is not <id>:<base64>`)
+      throw new Error(`Invalid environment variable "${key}": entry ${index + 1} is not id:base64`)
     }
     ring.set(id, key32(`${key}[${id}]`, material).release())
   }
   if (ring.size === 0) {
-    throw new Error(`Missing environment variable "${key}": at least one <id>:<base64> entry`)
+    throw new Error(`Missing environment variable "${key}": at least one id:base64 entry`)
   }
   return new Secret(ring)
 }

@@ -10,7 +10,9 @@ import { middleware } from '#start/kernel'
 import { DomainError } from '#exceptions/domain_error'
 import { ProviderUnavailableError } from '#exceptions/provider_errors'
 import { hmacKeys } from '#config/crypto'
-import { keyedHash } from '#modules/platform/crypto/keyed_hash'
+import { ipHash, keyedHash } from '#modules/platform/crypto/keyed_hash'
+import pg from 'pg'
+import { parseInt8 } from '#start/database_types'
 
 /*
  * The error contract and request IDs over HTTP (docs/06 §5, §11; docs/09
@@ -488,6 +490,23 @@ test.group('Database errors are logged without the values they quote', () => {
     const response = await fetch(`${baseUrl()}/health/ready`)
     assert.equal(response.status, 200)
     assert.deepEqual(await response.json(), { status: 'ok' })
+  })
+
+  test('readiness answers 503 when int8 arrives as a string', async ({ assert }) => {
+    // As if start/database_types.ts were not preloaded: node-postgres's default.
+    pg.types.setTypeParser(20, (text: string) => text)
+    try {
+      const response = await fetch(`${baseUrl()}/health/ready`)
+      assert.equal(response.status, 503)
+    } finally {
+      pg.types.setTypeParser(20, parseInt8)
+    }
+  })
+
+  test('an IPv4 address mapped into IPv6 hashes as plain IPv4', ({ assert }) => {
+    const key = Buffer.alloc(32, 3)
+    assert.deepEqual(ipHash(key, '::ffff:203.0.113.7'), ipHash(key, '203.0.113.7'))
+    assert.notDeepEqual(ipHash(key, '::1'), ipHash(key, '203.0.113.7'))
   })
 
   test('health probes write no access line', async ({ assert }) => {

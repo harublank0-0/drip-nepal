@@ -27,13 +27,9 @@ RUN test -f build/ssr/ssr.js
 
 # Runtime: the compiled app and production dependencies only.
 FROM base AS production
-# The commit the image was built from; staging and production refuse to boot
-# without it (start/env_policy.ts, docs/09 §6.1).
-ARG APP_RELEASE
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
-    PORT=3333 \
-    APP_RELEASE=${APP_RELEASE}
+    PORT=3333
 COPY --from=build /app/build ./
 COPY --from=build /app/pnpm-workspace.yaml ./
 # Production dependencies only; --ignore-scripts skips husky's prepare (docs/11 §4.2).
@@ -43,6 +39,11 @@ COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh \
     && mkdir -p /app/storage /app/tmp \
     && chown -R node:node /app/storage /app/tmp
+# The commit the image was built from; staging and production refuse to boot
+# without it (start/env_policy.ts, docs/09 §6.1). Last, so each commit
+# rebuilds only this layer.
+ARG APP_RELEASE
+ENV APP_RELEASE=${APP_RELEASE}
 USER node
 EXPOSE 3333
 VOLUME ["/app/storage"]

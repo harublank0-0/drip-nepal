@@ -10,6 +10,7 @@ set -eu
 
 IMAGE="$1"
 NAME="dripnepal-image-check-$$"
+trap 'docker rm -f "$NAME" >/dev/null 2>&1 || true' EXIT
 
 fail() {
   echo "T-OPS-010: $1" >&2
