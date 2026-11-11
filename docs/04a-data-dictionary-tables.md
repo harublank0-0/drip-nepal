@@ -1642,7 +1642,7 @@ The two foreign keys and the CHECK make the default account one the shop may use
 
 **Indexes.** Primary key only: every read is by shop.
 
-**Lifecycle and retention.** The mode and default account change under `shop.shipping.manage`, the mode and default account with ⟳ `If-Match` on `version`; `is_enabled` under `platform.logistics.manage`, as a locked upsert that bumps `version` without `If-Match`; each with an `audit_logs` row (operations proposed with M6). Retained as the shop's other configuration ([04 §19.3](04-domain-model-and-data-dictionary.md#193-retention-schedule)).
+**Lifecycle and retention.** The mode and default account change under `shop.shipping.manage` with ⟳ `If-Match` on `version`; `is_enabled` under `platform.logistics.manage`, as a locked upsert that bumps `version` without `If-Match`; each with an `audit_logs` row (operations proposed with M6). Retained as the shop's other configuration ([04 §19.3](04-domain-model-and-data-dictionary.md#193-retention-schedule)).
 
 ### 9.12 `logistics_branches`
 
