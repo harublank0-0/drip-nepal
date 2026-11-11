@@ -23,7 +23,6 @@ export const JOB_APP_ROLE = 'dripnepal_app'
  *     interface JobPayloads { 'orders.acceptance_timeout': { shop_order_id: string } }
  *   }
  */
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface JobPayloads {}
 export type QueueName = keyof JobPayloads & string
 
