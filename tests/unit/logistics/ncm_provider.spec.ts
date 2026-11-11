@@ -2,7 +2,8 @@ import { test } from '@japa/runner'
 import {
   NCM_CAPABILITIES,
   NcmCourierProvider,
-  ncmErrorDetail,
+  ncmCallbackKeyEvent,
+  ncmErrorFields,
 } from '#modules/logistics/providers/ncm'
 import type {
   CourierAccount,
@@ -129,7 +130,9 @@ test.group('T-FUL-109 NCM adapter: booking', () => {
     if (outcome.outcome !== 'refused') return
     assert.equal(outcome.error.code, 'invalid_phone')
     assert.equal(outcome.error.httpStatus, 400)
-    assert.equal(outcome.error.detail, 'phone: Invalid Phone Number; branch: Invalid Branch')
+    // Field names only: NCM's messages may repeat what was sent (04a §9.13).
+    assert.deepEqual(outcome.error.fields, ['phone', 'branch'])
+    assert.notInclude(JSON.stringify(outcome), 'Invalid Phone Number')
     assert.isFalse(outcome.error.retryable)
     assertNoSecrets(assert, outcome)
   })
@@ -203,7 +206,7 @@ test.group('T-FUL-109 NCM adapter: booking', () => {
     const outcome = await ncm.book({ ...account, environment: 'production' }, bookingRequest())
     assert.deepEqual(outcome, {
       outcome: 'refused',
-      error: { code: 'not_configured', httpStatus: null, detail: null, retryable: false },
+      error: { code: 'not_configured', httpStatus: null, fields: [], retryable: false },
     })
     assert.lengthOf(sent, 0)
   })
@@ -389,22 +392,24 @@ test.group('T-FUL-109 NCM adapter: callbacks, errors and money', () => {
     }
   })
 
-  test('the four error shapes reduce to NCM wording', ({ assert }) => {
-    assert.deepEqual(ncmErrorDetail({ detail: 'Not found.' }), { detail: 'Not found.', fields: [] })
-    assert.deepEqual(ncmErrorDetail({ message: 'Order not found' }), {
-      detail: 'Order not found',
-      fields: [],
-    })
-    assert.deepEqual(ncmErrorDetail({ success: false, message: 'Please enter a valid URL' }), {
-      detail: 'Please enter a valid URL',
-      fields: [],
-    })
-    assert.deepEqual(ncmErrorDetail({ Error: { cod_charge: 'Invalid COD Amount' } }), {
-      detail: 'cod_charge: Invalid COD Amount',
-      fields: ['cod_charge'],
-    })
-    assert.deepEqual(ncmErrorDetail('<html>'), { detail: null, fields: [] })
-    assert.lengthOf(ncmErrorDetail({ detail: 'x'.repeat(2000) }).detail ?? '', 500)
+  test('only field names survive from the four error shapes', ({ assert }) => {
+    assert.deepEqual(ncmErrorFields({ detail: 'Not found.' }), [])
+    assert.deepEqual(ncmErrorFields({ message: 'Order not found' }), [])
+    assert.deepEqual(ncmErrorFields({ success: false, message: 'Please enter a valid URL' }), [])
+    assert.deepEqual(ncmErrorFields({ Error: { cod_charge: 'Invalid COD Amount' } }), [
+      'cod_charge',
+    ])
+    assert.deepEqual(ncmErrorFields('<html>'), [])
+    // A key that is not a plain identifier, and more than ten keys, are dropped.
+    const many = Object.fromEntries(Array.from({ length: 12 }, (_, n) => [`f${n}`, 'x']))
+    assert.lengthOf(ncmErrorFields({ Error: { ...many, '98000 00001': 'x' } }), 10)
+    assert.notInclude(ncmErrorFields({ Error: { '98000 00001': 'x' } }), '98000 00001')
+  })
+
+  test('callback events go into keys only when NCM documents them', ({ assert }) => {
+    assert.equal(ncmCallbackKeyEvent('pickup_completed'), 'pickup_completed')
+    assert.equal(ncmCallbackKeyEvent('pickup_completed_x'), 'unknown')
+    assert.equal(ncmCallbackKeyEvent('a'.repeat(5000)), 'unknown')
   })
 
   test('paisa format as rupees with two decimals, exactly', ({ assert }) => {
