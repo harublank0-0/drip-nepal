@@ -21,8 +21,9 @@ Ask these before writing code. Each changes the data model or money.
 | D7 | **Inventory.** Which courier states, if any, move stock; does a courier status ever override a staff decision? | Stock bugs are expensive and silent. |
 | D8 | **Customer messages.** Which courier events text or email the customer, and never twice. | Duplicate and out-of-order webhooks happen. |
 | D9 | **Status mapping.** Fill in the template in webhooks-and-statuses.md for the project's real order states. | The project's states are its own. |
-| D10 | **Branches and rates.** Live NCM calls, a cached copy, or a stored table; refresh schedule; how the destination branch is chosen (from the address, a map pin, or staff); the shop's pickup branch. | Response shapes for both endpoints are undocumented; rates are quoted by branch name; branch ids (needed to redirect) come only from the undocumented branch list. |
-| D11 | **Pickup requests.** How NCM is asked to collect: a `Pickup` ticket by hand or on a schedule, or arranged outside the system; how you avoid filing two while one is open. | NCM has no pickup endpoint, and documents no way to tell you a ticket was closed. |
+| D10 | **Branches and rates.** Live NCM calls, a cached copy, or a stored table; refresh schedule; how the destination branch is chosen (from the address, a map pin, or staff); the shop's pickup branch, from the account's assigned pickup branches. | Response shapes for the branch list and the rate are undocumented; rates are quoted by branch name; branch ids (needed to redirect) come only from the undocumented branch list; branch codes appear only in label data. |
+| D11 | **Pickup requests.** How NCM is asked to collect: a `Pickup` ticket by hand or on a schedule, or arranged outside the system; how you avoid filing two while one is open. | NCM has no pickup endpoint. A `Pickup` ticket needs one of the account's assigned pickup branches, and NCM tells you it closed a ticket only through the ticket-detail read. |
+| D12 | **Customer rating.** Whether to look up a customer's delivery record across NCM (`/api/v2/vendor/ratings`) before confirming an order, and what a poor record does: nothing, a flag for staff, or a hold. | It sends a customer's phone to NCM and returns personal data about their dealings with other vendors; privacy rules and NCM's terms decide, not the integration. |
 
 ## Implementation order
 
@@ -36,7 +37,7 @@ Each step ends with a checkpoint. Don't start the next step until it passes.
    - *Checkpoint:* a unit test proves the right token is chosen for each account, and that no token appears in logs or API responses.
 2. **One NCM HTTP client**
    - Sets the auth header and per-call timeouts.
-   - Parses all three error shapes (`detail`, `Error`, `message`) and HTML bodies.
+   - Parses all four error shapes (`detail`, `Error`, `message`, and `success: false` with `message`) and HTML bodies.
    - Maps failures to safe messages, and counts calls against the daily limits.
    - *Checkpoint:* contract tests against recorded **synthetic** responses for every endpoint you use, including 400, 401, 404, 500 and a timeout.
 3. **Data model**
@@ -63,7 +64,8 @@ Each step ends with a checkpoint. Don't start the next step until it passes.
    - Authenticate the URL secret before storing anything.
    - Write the inbox row and answer 2xx within NCM's 10 seconds; hand off to a job.
    - A `test: true` event is authenticated, recorded as a test, and answered 2xx, with no order writes.
-   - *Checkpoint:* the NCM portal's "Test Webhook" reaches you and is recorded as a test.
+   - Register the URL from configuration with `POST /api/v2/vendor/webhook` (or the portal), never by hand-typing a secret.
+   - *Checkpoint:* `POST /api/v2/vendor/webhook/test`, or the portal's "Test Webhook", reaches you and is recorded as a test.
 7. **Status processing (one function for webhook and poll)**
    - Per parcel, in its own transaction:
      1. insert the event row; a unique-key clash is an exact redelivery: stop;
@@ -81,7 +83,9 @@ Each step ends with a checkpoint. Don't start the next step until it passes.
    - A manual refresh button.
    - *Checkpoint:* with webhooks switched off, a parcel still reaches its true status within one sweep window.
 9. **Pickup requests, comments, tickets, redirect, return, exchange** (only those the user wants)
-   - Pickup requests per D11. Claim the request locally (unique per account and slot) before filing the ticket.
+   - Pickup requests per D11. Claim the request locally (unique per account and slot) before filing the ticket, and take `branch` from the assigned pickup branches.
+   - Ticket status through `GET /api/v1/tickets/<id>/detail`, so a ticket NCM closed releases the local guard.
+   - Label data fetched when a label is printed, not stored.
    - Outbound comments through a job serialized **per account**, not globally.
      - Retry automatically only when the request clearly never reached NCM (connection refused, DNS failure).
      - After a timeout or 5xx, read the order's thread and look for the text before posting again: a comment post isn't idempotent.
@@ -143,5 +147,5 @@ Use synthetic ids, names and phones only.
 - [ ] A bulk status call returns some ids under `errors` → those are flagged, not marked healthy.
 
 **Limits**
-- [ ] The reconciliation run stays within its share of 5,000 reads a day for the expected fleet size.
+- [ ] The reconciliation run stays within its share of 20,000 reads a day for the expected fleet size.
 - [ ] A rate-limit or throttling response (shape unknown) backs off instead of hammering NCM.

@@ -1,7 +1,7 @@
 .adonisjs
 node_modules
 build
-# Vendored agent skills stay as upstream wrote them (skills-lock.json)
+# Vendored agent skills keep their authors' formatting (skills-lock.json)
 .agents/skills/shadcn
 .agents/skills/vercel-react-best-practices
 .agents/skills/ncm-integration
