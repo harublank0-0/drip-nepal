@@ -271,6 +271,32 @@ x-pending-operations:
   - cancelPayout
   - revealPayoutAccount
   - revealUserContact # POST /api/v1/admin/users/{userId}/contact-reveal, R1·M1 (06 §13.8, note 41)
+  # M6 courier operations (06 §13.8, note 42; OD-56, OD-57), all proposed
+  - getLogisticsSettings
+  - replaceLogisticsSettings
+  - createPickupAddress
+  - updatePickupAddress
+  - archivePickupAddress
+  - createShopCourierAccount
+  - rekeyShopCourierAccount
+  - disableShopCourierAccount
+  - getCourierBookingOptions
+  - bookCourierShipment
+  - cancelCourierBooking
+  - adminListLogisticsAccounts
+  - adminCreateLogisticsAccount
+  - adminRekeyLogisticsAccount
+  - adminSetLogisticsAccountStatus
+  - adminAllowShopOnLogisticsAccount
+  - adminRemoveShopFromLogisticsAccount
+  - adminSetShopLogisticsEnabled
+  - adminSyncLogisticsBranches
+  - adminUpdateLogisticsBranch
+  - adminResolveCourierBooking
+  - adminListCourierEvents
+  - adminResolveCourierEvent
+  - adminRecordOrderVerification
+  - receiveCourierCallback
 
 paths:
   /api/v1/catalog/products:
