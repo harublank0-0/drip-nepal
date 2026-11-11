@@ -25,11 +25,14 @@ import type {
  *
  * Rules it keeps:
  * - Only this file talks to NCM (docs/09 §2, T-SEC-016) and only outside a
- *   transaction; every call has a total timeout [Assumption A-51].
+ *   transaction; every call has a total timeout [Assumption A-51]. The 3 s
+ *   connect timeout of docs/03 §11.4 needs an undici dispatcher, which M6
+ *   adds when it wires the adapter; until then the total covers it.
  * - A create that may have reached NCM and gave no clear answer is
  *   `unknown`, never retried here: NCM has no lookup by our reference
  *   (docs/05 §6.3, `reference_lookup`).
- * - Nothing it returns carries the token or a value DripNepal sent.
+ * - Nothing it returns carries the token, a value DripNepal sent, or the
+ *   courier's own messages (docs/04a §9.13).
  */
 
 export const NCM_CAPABILITIES: CourierCapabilities = {
@@ -50,28 +53,53 @@ export interface NcmOptions {
   fetch?: typeof globalThis.fetch
 }
 
-// 3 s connect and 10 s total in docs/03 §11.4; `fetch` takes only the total.
 const DEFAULT_TIMEOUT_MS = 10_000
+// `courier_events_raw_check` (docs/04a §9.14).
+const RAW_LIMIT = 100
 
-// The create endpoint's field errors (`{"Error": {"<field>": "<message>"}}`) by field.
-const FIELD_ERRORS: Record<string, CourierErrorCode> = {
-  cod_charge: 'invalid_cod_amount',
-  phone: 'invalid_phone',
-  phone2: 'invalid_phone',
-  branch: 'invalid_branch',
-  fbranch: 'invalid_branch',
-  name: 'invalid_name',
-  address: 'invalid_address',
-}
+// The fields of NCM's create call; a field error names one of these (api-contract.md).
+const CREATE_FIELDS: ReadonlyMap<string, CourierErrorCode> = new Map([
+  ['name', 'invalid_name'],
+  ['phone', 'invalid_phone'],
+  ['phone2', 'invalid_phone'],
+  ['cod_charge', 'invalid_cod_amount'],
+  ['address', 'invalid_address'],
+  ['fbranch', 'invalid_branch'],
+  ['branch', 'invalid_branch'],
+  ['package', 'invalid_request'],
+  ['vref_id', 'invalid_request'],
+  ['instruction', 'invalid_request'],
+  ['delivery_type', 'invalid_request'],
+  ['weight', 'invalid_request'],
+])
 
-// Errors that mean the request never reached NCM.
-const NOT_SENT_CAUSES = new Set(['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN'])
+// Errors that mean the request never reached NCM: DNS, refused or unreachable, or TLS refused.
+const NOT_SENT_CAUSES = new Set([
+  'ECONNREFUSED',
+  'ENOTFOUND',
+  'EAI_AGAIN',
+  'ENETUNREACH',
+  'EHOSTUNREACH',
+  'CERT_HAS_EXPIRED',
+  'DEPTH_ZERO_SELF_SIGNED_CERT',
+  'SELF_SIGNED_CERT_IN_CHAIN',
+  'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
+  'ERR_TLS_CERT_ALTNAME_INVALID',
+])
+
+// 4xx answers to a create that do not prove NCM stored nothing (a proxy timeout, a conflict).
+const CREATE_MAYBE_STORED = new Set([408, 409, 425])
+
+// A token is sent in a header, so only visible ASCII can go; anything else is refused, never sent.
+const TOKEN_SHAPE = /^[\x21-\x7e]{8,200}$/
 
 type Reply =
   | { kind: 'response'; status: number; body: unknown; isJson: boolean }
   | { kind: 'timeout' }
   | { kind: 'not_sent' }
   | { kind: 'lost' }
+  | { kind: 'not_configured' }
+  | { kind: 'bad_credentials' }
 
 function error(
   code: CourierErrorCode,
@@ -95,15 +123,19 @@ function text(value: unknown): string | null {
 /*
  * NCM has four error shapes (`detail`, `Error`, `message`, and `success:
  * false` with `message`). Only the field-error shape (`{"Error": {...}}`)
- * says something we keep: the names of the fields, at most ten, each a
- * plain identifier. The messages are dropped, because a courier message
- * may repeat a phone number or address (docs/04a §9.13).
+ * says something we keep: which create fields it names, from the fixed
+ * list above. Any other key becomes `other`, and the messages are dropped,
+ * because a courier message or key may repeat a phone number or address
+ * (docs/04a §9.13).
  */
 export function ncmErrorFields(body: unknown): string[] {
   if (!isRecord(body) || !isRecord(body.Error)) return []
-  return Object.keys(body.Error)
-    .filter((field) => /^[A-Za-z0-9_]{1,40}$/.test(field))
-    .slice(0, 10)
+  const fields: string[] = []
+  for (const key of Object.keys(body.Error)) {
+    const field = CREATE_FIELDS.has(key) ? key : 'other'
+    if (!fields.includes(field)) fields.push(field)
+  }
+  return fields.slice(0, 10)
 }
 
 function failure(reply: Reply): CourierError {
@@ -114,14 +146,18 @@ function failure(reply: Reply): CourierError {
       return error('connection_failed', null, [], true)
     case 'lost':
       return error('courier_error', null, [], false)
+    case 'not_configured':
+      return error('not_configured', null, [], false)
+    case 'bad_credentials':
+      return error('auth_failed', null, [], false)
     case 'response': {
-      const fields = reply.isJson ? ncmErrorFields(reply.body) : []
       if (reply.status === 401 || reply.status === 403) {
         return error('auth_failed', reply.status, [], false)
       }
       if (reply.status === 404) return error('not_found', reply.status, [], false)
       if (reply.status === 429) return error('rate_limited', reply.status, [], true)
       if (reply.status >= 400 && reply.status < 500) {
+        const fields = reply.isJson ? ncmErrorFields(reply.body) : []
         return error('invalid_request', reply.status, fields, false)
       }
       if (reply.status >= 200 && reply.status < 300) {
@@ -144,43 +180,40 @@ function parseMoney(value: unknown): number | null {
   return raw === null ? null : parseRupeesToMinor(raw)
 }
 
+// A label or event from NCM, within the inbox's limit; anything longer is not trusted.
+function boundedLabel(value: unknown): string | null {
+  const raw = text(value)
+  if (raw === null) return null
+  const trimmed = raw.trim()
+  return trimmed !== '' && trimmed.length <= RAW_LIMIT ? trimmed : null
+}
+
 // NCM order IDs are integers; anything else cannot be one of ours.
 function ncmOrderId(externalShipmentId: string): number | null {
   return /^[1-9]\d{0,14}$/.test(externalShipmentId) ? Number(externalShipmentId) : null
 }
 
-/*
- * NCM's documented callback events (webhook document v1.1). A callback's
- * event goes into its inbox key only when it is one of these, else as
- * `unknown`, so varied bodies cannot add rows (docs/04a §9.14).
- */
-export const NCM_CALLBACK_EVENTS = [
-  'pickup_completed',
-  'dropoff_collected',
-  'order_dispatched',
-  'order_arrived',
-  'sent_for_delivery',
-  'delivery_completed',
-  'order_marked_rtv',
-  'send_to_vendor',
-  'rtv_delivery',
-  'refund_initiated',
-] as const
-
-export function ncmCallbackKeyEvent(event: string): string {
-  return (NCM_CALLBACK_EVENTS as readonly string[]).includes(event) ? event : 'unknown'
+function checkedBaseUrl(value: string | null): string | null {
+  if (value === null) return null
+  const url = new URL(value)
+  if (url.protocol !== 'https:') throw new Error('NCM base URLs must use https')
+  return url.origin
 }
 
 export class NcmCourierProvider implements CourierProvider {
   readonly code = 'ncm'
   readonly capabilities = NCM_CAPABILITIES
 
-  readonly #baseUrls: NcmOptions['baseUrls']
+  readonly #baseUrls: Record<LogisticsEnvironment, string | null>
   readonly #timeoutMs: number
   readonly #fetch: typeof globalThis.fetch
 
   constructor(options: NcmOptions) {
-    this.#baseUrls = options.baseUrls
+    // A wrong host is a configuration error: fail at start-up, not on a booking.
+    this.#baseUrls = {
+      sandbox: checkedBaseUrl(options.baseUrls.sandbox),
+      production: checkedBaseUrl(options.baseUrls.production),
+    }
     this.#timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
     this.#fetch = options.fetch ?? globalThis.fetch
   }
@@ -189,24 +222,32 @@ export class NcmCourierProvider implements CourierProvider {
     account: CourierAccount,
     method: 'GET' | 'POST',
     path: string,
-    options: { body?: unknown; authenticated?: boolean } = {}
-  ): Promise<Reply | { kind: 'not_configured' }> {
+    body?: unknown
+  ): Promise<Reply> {
     const base = this.#baseUrls[account.environment]
     if (!base) return { kind: 'not_configured' }
 
-    const headers: Record<string, string> = { Accept: 'application/json' }
-    if (options.authenticated !== false) {
-      const { token } = await account.credentials()
-      headers.Authorization = `Token ${token}`
+    let token: string
+    try {
+      const credentials = await account.credentials()
+      token = credentials.token
+    } catch {
+      return { kind: 'bad_credentials' }
     }
-    if (options.body !== undefined) headers['Content-Type'] = 'application/json'
+    if (typeof token !== 'string' || !TOKEN_SHAPE.test(token)) return { kind: 'bad_credentials' }
+
+    const headers: Record<string, string> = {
+      Accept: 'application/json',
+      Authorization: `Token ${token}`,
+    }
+    if (body !== undefined) headers['Content-Type'] = 'application/json'
 
     let response: Response
     try {
       response = await this.#fetch(new URL(path, base), {
         method,
         headers,
-        body: options.body === undefined ? undefined : JSON.stringify(options.body),
+        body: body === undefined ? undefined : JSON.stringify(body),
         signal: AbortSignal.timeout(this.#timeoutMs),
         redirect: 'error',
       })
@@ -235,12 +276,9 @@ export class NcmCourierProvider implements CourierProvider {
     method: 'GET' | 'POST',
     path: string,
     parse: (body: unknown) => T | null,
-    options: { body?: unknown; authenticated?: boolean } = {}
+    body?: unknown
   ): Promise<CourierResult<T>> {
-    const reply = await this.#call(account, method, path, options)
-    if (reply.kind === 'not_configured') {
-      return { ok: false, error: error('not_configured', null, [], false) }
-    }
+    const reply = await this.#call(account, method, path, body)
     if (reply.kind === 'response' && reply.status >= 200 && reply.status < 300 && reply.isJson) {
       const value = parse(reply.body)
       return value === null
@@ -258,39 +296,52 @@ export class NcmCourierProvider implements CourierProvider {
     account: CourierAccount,
     request: CourierBookingRequest
   ): Promise<CourierBookingOutcome> {
-    if (request.originBranchName === null || request.destinationBranchName === null) {
+    const missing = [
+      ...(request.originBranchName === null ? ['fbranch'] : []),
+      ...(request.destinationBranchName === null ? ['branch'] : []),
+    ]
+    if (missing.length > 0) {
       // NCM books between branches (`branches`); the action checks this before claiming.
+      return { outcome: 'refused', error: error('invalid_branch', null, missing, false) }
+    }
+    if (!Number.isSafeInteger(request.codAmountMinor) || request.codAmountMinor < 0) {
       return {
         outcome: 'refused',
-        error: error('invalid_branch', null, ['fbranch', 'branch'], false),
+        error: error('invalid_cod_amount', null, ['cod_charge'], false),
       }
     }
+
     const body: Record<string, string> = {
       name: request.recipient.name,
       phone: request.recipient.phone,
       phone2: request.recipient.secondaryPhone ?? '',
       cod_charge: minorToRupeesFixed(request.codAmountMinor),
       address: request.recipient.address,
-      fbranch: request.originBranchName,
-      branch: request.destinationBranchName,
+      fbranch: request.originBranchName ?? '',
+      branch: request.destinationBranchName ?? '',
       vref_id: request.merchantReference,
       delivery_type: request.serviceCode,
     }
     if (request.packageDescription) body.package = request.packageDescription
     if (request.instructions) body.instruction = request.instructions
-    if (request.weightGrams !== null) body.weight = weightKg(request.weightGrams)
+    const weight = request.weightGrams === null ? null : weightKg(request.weightGrams)
+    if (weight !== null) body.weight = weight
 
-    const reply = await this.#call(account, 'POST', '/api/v1/order/create', { body })
-    if (reply.kind === 'not_configured') {
-      return { outcome: 'refused', error: error('not_configured', null, [], false) }
+    const reply = await this.#call(account, 'POST', '/api/v1/order/create', body)
+    switch (reply.kind) {
+      case 'not_configured':
+      case 'bad_credentials':
+      case 'not_sent':
+        // Nothing reached NCM.
+        return { outcome: 'refused', error: failure(reply) }
+      case 'timeout':
+      case 'lost':
+        // The request may have reached NCM and created the parcel.
+        return { outcome: 'unknown', error: failure(reply) }
+      case 'response':
+        break
     }
-    if (reply.kind !== 'response') {
-      const failed = failure(reply)
-      // A timeout or a lost connection may have created the parcel.
-      return failed.retryable
-        ? { outcome: 'refused', error: failed }
-        : { outcome: 'unknown', error: failed }
-    }
+
     if (reply.status >= 200 && reply.status < 300) {
       const id = reply.isJson && isRecord(reply.body) ? text(reply.body.orderid) : null
       return id !== null && ncmOrderId(id) !== null
@@ -300,13 +351,15 @@ export class NcmCourierProvider implements CourierProvider {
     }
     if (reply.status === 400 && reply.isJson) {
       const fields = ncmErrorFields(reply.body)
-      const code = fields.map((field) => FIELD_ERRORS[field]).find(Boolean) ?? 'invalid_request'
+      const code =
+        fields.map((field) => CREATE_FIELDS.get(field)).find((found) => found !== undefined) ??
+        'invalid_request'
       return { outcome: 'refused', error: error(code, 400, fields, false) }
     }
-    if (reply.status >= 400 && reply.status < 500) {
+    if (reply.status >= 400 && reply.status < 500 && !CREATE_MAYBE_STORED.has(reply.status)) {
       return { outcome: 'refused', error: failure(reply) }
     }
-    // 5xx: NCM may have stored the order before failing.
+    // 5xx, 3xx, 408, 409, 425: NCM may have stored the order before failing.
     return { outcome: 'unknown', error: failure(reply) }
   }
 
@@ -320,42 +373,47 @@ export class NcmCourierProvider implements CourierProvider {
         externalShipmentId,
         codAmountMinor: parseMoney(body.cod_charge),
         deliveryChargeMinor: parseMoney(body.delivery_charge),
-        lastStatus: text(body.last_delivery_status),
-        paymentStatus: text(body.payment_status),
+        lastStatus: boundedLabel(body.last_delivery_status),
+        paymentStatus: boundedLabel(body.payment_status),
         returnedToVendor: typeof body.vendor_return === 'boolean' ? body.vendor_return : null,
       }
     })
   }
 
-  // `GET /api/v1/order/status?id=`: oldest first, sorted by time rather than trusting NCM's order.
+  /*
+   * `GET /api/v1/order/status?id=`, oldest first. The history is replayed
+   * in this order (docs/05 §6.3), so it fails closed: a row for another
+   * parcel, without a label, or without a readable time makes the whole
+   * answer `unexpected_response`. NCM sends newest first and its times
+   * carry microseconds that `Date` drops, so the rows are reversed before a
+   * stable sort, which keeps same-millisecond readings in NCM's order.
+   */
   getStatusHistory(account: CourierAccount, externalShipmentId: string) {
     const id = ncmOrderId(externalShipmentId)
     if (id === null) return Promise.resolve(notFound<CourierStatusReading[]>())
     return this.#read(account, 'GET', `/api/v1/order/status?id=${id}`, (body) => {
       if (!Array.isArray(body)) return null
       const readings: CourierStatusReading[] = []
-      for (const row of body) {
-        const status = isRecord(row) ? text(row.status) : null
-        if (!isRecord(row) || status === null || status === '') return null
-        readings.push({
-          externalShipmentId,
-          rawEvent: null,
-          rawStatus: status,
-          occurredAt: parseTime(row.added_time),
-        })
+      for (const row of [...body].reverse()) {
+        if (!isRecord(row) || text(row.orderid) !== externalShipmentId) return null
+        const status = boundedLabel(row.status)
+        const occurredAt = parseTime(row.added_time)
+        if (status === null || occurredAt === null) return null
+        readings.push({ externalShipmentId, rawEvent: null, rawStatus: status, occurredAt })
       }
-      return readings.sort(
-        (a, b) => (a.occurredAt?.getTime() ?? 0) - (b.occurredAt?.getTime() ?? 0)
-      )
+      return readings.sort((a, b) => a.occurredAt!.getTime() - b.occurredAt!.getTime())
     })
   }
 
   // `POST /api/v1/orders/statuses`: keys come back as strings; `errors` are unanswered.
   async getStatuses(account: CourierAccount, externalShipmentIds: string[]) {
-    const ids = externalShipmentIds.map(ncmOrderId)
-    const invalid = externalShipmentIds.filter((_, index) => ids[index] === null)
-    const valid = ids.filter((id): id is number => id !== null)
+    const unique = [...new Set(externalShipmentIds)]
+    const invalid = unique.filter((id) => ncmOrderId(id) === null)
+    const valid = unique.filter((id) => ncmOrderId(id) !== null)
     if (valid.length === 0) {
+      if (this.#baseUrls[account.environment] === null) {
+        return { ok: false, error: failure({ kind: 'not_configured' }) } as const
+      }
       const value: CourierBulkStatuses = { statuses: new Map(), unanswered: invalid }
       return { ok: true, value } as CourierResult<CourierBulkStatuses>
     }
@@ -366,15 +424,14 @@ export class NcmCourierProvider implements CourierProvider {
       (body) => {
         if (!isRecord(body) || !isRecord(body.result)) return null
         const statuses = new Map<string, string>()
-        for (const [id, status] of Object.entries(body.result)) {
-          const label = text(status)
-          if (label !== null && label !== '') statuses.set(id, label)
+        for (const id of valid) {
+          const label = Object.hasOwn(body.result, id) ? boundedLabel(body.result[id]) : null
+          if (label !== null) statuses.set(id, label)
         }
-        const unanswered = [...invalid]
-        for (const id of valid.map(String)) if (!statuses.has(id)) unanswered.push(id)
+        const unanswered = [...invalid, ...valid.filter((id) => !statuses.has(id))]
         return { statuses, unanswered }
       },
-      { body: { orders: valid } }
+      { orders: valid.map(Number) }
     )
   }
 
@@ -394,10 +451,10 @@ export class NcmCourierProvider implements CourierProvider {
       const branches: CourierBranch[] = []
       for (const row of rows) {
         if (!isRecord(row)) continue
-        const name = text(row.name) ?? text(row.branch_name)
-        if (name === null || name.trim() === '') continue
+        const name = boundedLabel(row.name) ?? boundedLabel(row.branch_name)
+        if (name === null) continue
         branches.push({
-          name: name.trim(),
+          name,
           externalBranchId: text(row.pk) ?? text(row.id),
           code: text(row.code),
           courierDistrict: text(row.district),
@@ -413,7 +470,7 @@ export class NcmCourierProvider implements CourierProvider {
   listAssignedBranches(account: CourierAccount) {
     return this.#read(account, 'GET', '/api/v2/vendor/assigned-branches', (body) => {
       if (!Array.isArray(body)) return null
-      const names = body.map(text)
+      const names = body.map(boundedLabel)
       return names.every((name): name is string => name !== null) ? names : null
     })
   }
@@ -422,7 +479,9 @@ export class NcmCourierProvider implements CourierProvider {
    * A callback body (webhook document v1.1). NCM does not sign callbacks,
    * so nothing here is trusted: a callback only triggers a read of the
    * parcel's history (docs/05 §6.3). Comments and test events are not
-   * stored; the payload keeps only the event, the label and the time.
+   * stored; the payload keeps only the event, the label and the time. An ID
+   * that is not an NCM order ID is skipped, so one bad entry does not drop
+   * the trigger for the others (NCM never resends).
    */
   parseCallback(rawBody: string): CourierCallback {
     let body: unknown
@@ -434,8 +493,8 @@ export class NcmCourierProvider implements CourierProvider {
     if (!isRecord(body)) return { kind: 'invalid' }
     if (body.test === true) return { kind: 'test' }
 
-    const event = text(body.event)
-    if (event === null || event === '') return { kind: 'invalid' }
+    const event = boundedLabel(body.event)
+    if (event === null) return { kind: 'invalid' }
     if (event === 'comment_added') return { kind: 'ignored', reason: 'comment' }
 
     const ids: string[] = []
@@ -443,16 +502,15 @@ export class NcmCourierProvider implements CourierProvider {
       const list = Array.isArray(candidate) ? candidate : candidate === undefined ? [] : [candidate]
       for (const value of list) {
         const id = text(value)
-        if (id === null || ncmOrderId(id) === null) return { kind: 'invalid' }
-        if (!ids.includes(id)) ids.push(id)
+        if (id !== null && ncmOrderId(id) !== null && !ids.includes(id)) ids.push(id)
       }
     }
     if (ids.length === 0) return { kind: 'invalid' }
 
-    const status = text(body.status) ?? ''
+    const status = boundedLabel(body.status)
     const timestamp = text(body.timestamp)
-    const payload: Record<string, string> = { event: event.slice(0, 256) }
-    if (status !== '') payload.status = status.slice(0, 256)
+    const payload: Record<string, string> = { event }
+    if (status !== null) payload.status = status
     if (timestamp !== null) payload.timestamp = timestamp.slice(0, 256)
 
     return {
@@ -460,7 +518,7 @@ export class NcmCourierProvider implements CourierProvider {
       events: ids.map((externalShipmentId) => ({
         externalShipmentId,
         rawEvent: event,
-        rawStatus: status === '' ? event : status,
+        rawStatus: status ?? event,
         occurredAt: parseTime(timestamp),
         payload,
       })),
@@ -468,13 +526,35 @@ export class NcmCourierProvider implements CourierProvider {
   }
 }
 
+/*
+ * NCM's documented callback events (webhook document v1.1). A callback's
+ * event goes into its inbox key only when it is one of these, else as
+ * `unknown`, so varied bodies cannot add rows (docs/04a §9.14).
+ */
+export const NCM_CALLBACK_EVENTS = [
+  'pickup_completed',
+  'dropoff_collected',
+  'order_dispatched',
+  'order_arrived',
+  'sent_for_delivery',
+  'delivery_completed',
+  'order_marked_rtv',
+  'send_to_vendor',
+  'rtv_delivery',
+  'refund_initiated',
+] as const
+
+export function ncmCallbackKeyEvent(event: string): string {
+  return (NCM_CALLBACK_EVENTS as readonly string[]).includes(event) ? event : 'unknown'
+}
+
 function notFound<T>(): CourierResult<T> {
   return { ok: false, error: error('not_found', null, [], false) }
 }
 
-// NCM takes kilograms as a string (default 1); grams keep the request exact.
-function weightKg(grams: number) {
-  if (!Number.isSafeInteger(grams) || grams <= 0) return '1'
+// NCM takes kilograms as a string and defaults to 1 kg; grams keep the request exact.
+function weightKg(grams: number): string | null {
+  if (!Number.isSafeInteger(grams) || grams <= 0) return null
   const kg = Math.floor(grams / 1000)
   const rest = grams % 1000
   return rest === 0 ? String(kg) : `${kg}.${String(rest).padStart(3, '0').replace(/0+$/, '')}`

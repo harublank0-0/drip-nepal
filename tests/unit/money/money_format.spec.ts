@@ -1,5 +1,10 @@
 import { test } from '@japa/runner'
-import { formatNPR, minorToRupeesText, parseRupeesToMinor } from '#shared/format/money'
+import {
+  formatNPR,
+  minorToRupeesFixed,
+  minorToRupeesText,
+  parseRupeesToMinor,
+} from '#shared/format/money'
 
 /*
  * Money is whole paisa (docs/04 §18.1). T-UI-020 for the formatter
@@ -96,5 +101,24 @@ test.group('T-ARCH-013 rupees typed by people and reported by eSewa', () => {
     }
     // An exponent form fails the pattern: an amount that differs (needs_review).
     assert.isNull(parseRupeesToMinor(String(1e21)))
+  })
+})
+
+test.group('minorToRupeesFixed provider format', () => {
+  test('{minor} paisa is sent as {rupees}')
+    .with([
+      { minor: 150000, rupees: '1500.00' },
+      { minor: 129950, rupees: '1299.50' },
+      { minor: 5, rupees: '0.05' },
+      { minor: 0, rupees: '0.00' },
+      { minor: -5, rupees: '-0.05' },
+      { minor: 9007199254740991, rupees: '90071992547409.91' },
+    ])
+    .run(({ assert }, row) => {
+      assert.equal(minorToRupeesFixed(row.minor), row.rupees)
+    })
+
+  test('an amount that is not whole paisa is refused', ({ assert }) => {
+    assert.throws(() => minorToRupeesFixed(1.5), RangeError)
   })
 })
