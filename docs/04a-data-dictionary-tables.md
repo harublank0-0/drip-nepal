@@ -1798,12 +1798,12 @@ The courier event inbox of [05 §6.3](05-order-payment-and-inventory-lifecycles.
 | `error`                | text        | yes  | —           | At most 2,000 characters, redacted                                                                                                                                                                                     |
 | `request_id`           | text        | yes  | —           |                                                                                                                                                                                                                        |
 
-**Callback authentication.** The callback URL of an account is `/api/v1/webhooks/couriers/{provider code}/{account id}?token=<secret>`, with the secret `HMAC-SHA256(courier callback key, account id)` in base64url: the courier documents no signature, so a secret in the URL is what NCM's webhook document offers (VX-16). The receiver compares it in constant time before storing anything, accepts the previous key's secret during a key rotation, caps the body at 64 KiB and keeps the query string out of access logs ([07 TM-32](07-security-threat-model-and-permissions.md#tm-32-courier-credential-theft-and-booking-misuse)). No column holds the secret: it is derived from the key ring.
+**Callback authentication.** The callback URL of an account is `/api/v1/webhooks/couriers/{provider code}/{account id}?token=<secret>`, with the secret `HMAC-SHA256(courier callback key, account id)` in base64url, where the courier callback key is a server secret of its own, `COURIER_CALLBACK_KEYS` (proposed; a versioned key ring like `DATA_ENCRYPTION_KEYS`, added to 09 §6.1 and 11 with the M6 code): the courier documents no signature, so a secret in the URL is what NCM's webhook document offers (VX-16). The receiver compares it in constant time before storing anything, accepts the previous key's secret during a key rotation, caps the body at 64 KiB and keeps the query string out of access logs ([07 TM-32](07-security-threat-model-and-permissions.md#tm-32-courier-credential-theft-and-booking-misuse)). No column holds the secret: it is derived from the key ring. So one leaked URL is revoked only by rotating the key for every account; a per-account secret version would need a column on §9.9, left for M6 if the courier's onboarding shows it is needed. The limiter row of 06 §9.1 and these controls in 07 TM-32 come with the M6 operations, in the next pull request.
 
-**Event keys.** Every key is at most 200 characters, so that `shipment_events.provider_event_key` (§11.6) can hold it with a step suffix.
+**Event keys.** Every key is at most 197 characters, so that `shipment_events.provider_event_key` (§11.6, at most 200) can hold it with a step suffix `#1` or `#2`.
 
 - **Callback from a courier that does not sign:** stored only when its parcel ID matches a shipment of the account the URL names. The key is `callback:<external id>:<event>`, where `<event>` is one of the courier's documented events or `unknown`, never the body, so varying the body adds at most one row per documented event plus `unknown` for each parcel. A callback that matches no shipment, a test event and a comment are not stored; the first leaves a `logistics.callback_rejected` log line.
-- **Callback from a courier that signs:** `signed:<courier event ID>:<external id>`, once the signature verifies, so each parcel of a bulk event has its own row.
+- **Callback from a courier that signs:** `signed:<hex SHA-256 of the courier event ID>:<external id>`, once the signature verifies, so each parcel of a bulk event has its own row.
 - **Poll:** `poll:<external id>:<hex SHA-256 of the normalised label>`; the poll gives no time, so the same label polled again is the same row.
 - **History reading:** `history:<external id>:<hex SHA-256 of the normalised label and occurred_at>`.
 
@@ -1829,7 +1829,7 @@ CONSTRAINT courier_events_hold_reason_check CHECK (hold_reason IS NULL
   OR hold_reason IN ('not_allowed', 'terminal_shop_order', 'cod_collected', 'unmapped_status')),
 CONSTRAINT courier_events_mapped_status_check CHECK (mapped_status IS NULL OR mapped_status IN ('booked',
   'shipped', 'out_for_delivery', 'delivered', 'delivery_failed', 'returning', 'cancelled')),
-CONSTRAINT courier_events_key_check CHECK (char_length(event_key) BETWEEN 8 AND 200),
+CONSTRAINT courier_events_key_check CHECK (char_length(event_key) BETWEEN 8 AND 197),
 CONSTRAINT courier_events_external_id_check CHECK (char_length(external_shipment_id) BETWEEN 1 AND 100),
 CONSTRAINT courier_events_raw_check CHECK (char_length(raw_status) BETWEEN 1 AND 100
   AND (raw_event IS NULL OR char_length(raw_event) BETWEEN 1 AND 100)),
@@ -1849,7 +1849,9 @@ The receiver inserts with `ON CONFLICT (logistics_account_id, event_key) DO NOTH
 | `courier_events_held_idx`     | `(received_at) WHERE processing_status = 'held'`                 | The admin queue of held courier readings            |
 | `courier_events_shipment_idx` | `(shipment_id, received_at) WHERE shipment_id IS NOT NULL`       | The courier history of a shipment on the admin page |
 
-## **Lifecycle and retention.** `payload` and the identifying columns never change; only the processing columns do. Staff close a `held` row as `applied` or `ignored` once they have acted on it through the shipment operations of [05 §6.3](05-order-payment-and-inventory-lifecycles.md#63-shipment-fulfillment) (`adminResolveCourierEvent`, proposed, with an `audit_logs` row); `hold_reason` stays as the record of why. A matched row is retained as its shipment (§11.5); a row that matches no shipment is deleted after one year [Assumption] ([04 §19.3](04-domain-model-and-data-dictionary.md#193-retention-schedule)). It holds no personal data, so nothing is redacted at the end.
+**Lifecycle and retention.** `payload` and the identifying columns never change; only the processing columns do. Trigger keys dedupe for good, so a repeated callback starts no new history read; the tracking poll (`orders.poll_courier_statuses`) and a manual refresh by staff re-send `orders.process_courier_event` for a parcel still moving. Staff close a `held` row as `applied` or `ignored` once they have acted on it through the shipment operations of [05 §6.3](05-order-payment-and-inventory-lifecycles.md#63-shipment-fulfillment) (`adminResolveCourierEvent`, proposed, with an `audit_logs` row); `hold_reason` stays as the record of why, and closing it re-sends `orders.process_courier_event`, so a replay that stopped on it continues. A matched row is retained as its shipment (§11.5); a row that matches no shipment is deleted after one year [Assumption A-56] ([04 §19.3](04-domain-model-and-data-dictionary.md#193-retention-schedule)). It holds no personal data, so nothing is redacted at the end.
+
+---
 
 ## 10. Cart
 
@@ -2541,7 +2543,7 @@ CREATE UNIQUE INDEX shipment_events_provider_event_key ON shipment_events (shipm
 
 A tracking correction ([05 §6.3](05-order-payment-and-inventory-lifecycles.md#63-shipment-fulfillment), `shipped → shipped`, manual path only) is recorded as `event = 'shipped'`, `status = 'shipped'` with the note "tracking corrected"; `shipment_events_status_check` accepts it without a separate event value. `in_transit` records a courier update that does not change the shipment status.
 
-`shipment_events_provider_event_key` stores each courier update once per shipment (INV-32): the adapter inserts with `ON CONFLICT DO NOTHING`, so a repeated callback or poll result changes nothing (AC-FR-FUL-004-3). An update that the state machine does not allow, or one for a `cancelled` shipment, is not written here: it stays in the courier event inbox that 04a specifies before the M6 code ([ADR-0019](adr/0019-courier-integration-in-r1.md) decision 6) and raises an admin alert ([05 §6.3](05-order-payment-and-inventory-lifecycles.md#63-shipment-fulfillment)). T-FUL-105 (proposed).
+`shipment_events_provider_event_key` stores each courier update once per shipment (INV-32): the job that applies a courier reading inserts with `ON CONFLICT DO NOTHING`, so a repeated reading changes nothing (AC-FR-FUL-004-3). A reading that the state machine does not allow, or one for a `cancelled` shipment, is not written here: it stays `held` in the courier event inbox (§9.14) and raises an admin alert ([05 §6.3](05-order-payment-and-inventory-lifecycles.md#63-shipment-fulfillment)). T-FUL-105 (proposed).
 
 **Indexes.** `shipment_events_shipment_idx (shipment_id, occurred_at, id)` serves the tracking timeline, in the order things happened even when a courier update arrives late. `shipment_events_provider_event_key` serves the duplicate check above. If OD-18 adopts the repeat-refuser COD rule (`cod_max_refusals`, §15.1), `shipment_events_refused_idx (created_at) WHERE reason_code = 'refused'` is added with it to count a customer's refusals in the window. It is not created before that decision.
 
