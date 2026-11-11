@@ -31,7 +31,7 @@ Nothing in this file has been checked against the live or demo API yet. On 2026-
 | Conduct | "Avoid duplication of order creation from both bulk file upload and api system." "No Spamming or running scripts to overload the server." [doc] |
 | Versioning | Paths mix `/api/v1/` and `/api/v2/` [doc]. No deprecation policy is documented [unknown]. |
 | Pagination | Documented for the staff list (`page_size` default 20) and the customer list (`page_size` default 25, maximum 100), both as `count`, `next`, `previous`, `results` [doc]. |
-| Sandbox | The documents are written against the demo host. NCM gave the product owner a demo-portal login and a demo token on 2026-11-11 [reported]; whether every vendor gets one is [unknown]. Whether the demo shares data or tokens with production: [unknown]. |
+| Sandbox | The documents are written against the demo host. The product owner has a demo-portal login and a demo token from NCM [reported]; whether every vendor gets one is [unknown]. Whether the demo shares data or tokens with production: [unknown]. |
 
 ## Errors
 
@@ -53,7 +53,7 @@ Nothing in this file has been checked against the live or demo API yet. On 2026-
 | Rating, no `phone` | `400 {"detail": "phone parameter is required"}` |
 | Rating, a phone NCM doesn't know | `404 {"detail": "No customer found with this phone number"}` |
 
-Every row is [doc] except the `Invalid token.` row, which was seen, not documented.
+Every row is [doc] except the `Invalid token.` row, which was seen, not documented, and the clause marked [inferred] in the label row.
 
 Error bodies use four shapes: `detail`, `Error` (an object keyed by field), `message`, and `success: false` with `message`. Parse all four. The response to a rate limit (for example 429) is [unknown]. Expect HTML error pages from proxies as well, and never show a raw body to an end user.
 

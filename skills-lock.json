@@ -5,7 +5,7 @@
       "source": "harublank0-0/drip-nepal",
       "sourceType": "github",
       "skillPath": ".agents/skills/ncm-integration/SKILL.md",
-      "computedHash": "94b2b4b554e535378b535ab2a3dce0e23262cfb01141e6a1f3080047ca1d7fa4"
+      "computedHash": "402e7d00075f514e49c59cf5cb80839b137cea06d698eeff50f1da927cedbde8"
     },
     "shadcn": {
       "source": "shadcn/ui",

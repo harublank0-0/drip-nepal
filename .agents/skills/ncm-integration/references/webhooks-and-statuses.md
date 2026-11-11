@@ -143,7 +143,9 @@ are included.
 store and compare instants.
 
 The portal's Test button and `POST /api/v2/vendor/webhook/test` send the same
-test event, shown under [the webhook contract](#the-webhook-contract-doc). Note
+shape of test event [inferred]; v2 shows it under
+[the webhook contract](#the-webhook-contract-doc) and calls its sample "similar
+to" what NCM sends. Note
 its different shape and its `+05:45` offset.
 
 [recommended] Authenticate it like any other event, record it in the inbox as a
