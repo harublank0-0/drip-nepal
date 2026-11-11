@@ -66,6 +66,7 @@ router
     })
     router.post('echo', ({ request }) => request.body())
     router.post('protected', () => 'ok').use(middleware.auth())
+    router.get('signed-in', () => 'ok').use(middleware.auth())
   })
   .prefix('/api/v1/__test__')
 
@@ -86,6 +87,7 @@ router
     router.get('needs-login', () => {
       throw new DomainError('UNAUTHENTICATED')
     })
+    router.get('signed-in-page/:token', () => 'ok').use(middleware.auth())
     router.get('page-validation', async ({ request }) => {
       await vine
         .compile(vine.object({ page: vine.number().min(1) }))
@@ -391,6 +393,31 @@ test.group('Pages answer from the problem, never from error.status', () => {
       location.searchParams.get('return_to'),
       '/__test__/needs-login?token=abc123&page=2'
     )
+  })
+
+  test('the auth middleware: a page redirects with return_to and stores nothing', async ({
+    assert,
+  }) => {
+    const response = await fetch(`${baseUrl()}/__test__/signed-in-page/secret-token-9?x=1`, {
+      redirect: 'manual',
+    })
+    assert.equal(response.status, 302)
+    const location = new URL(response.headers.get('location')!, baseUrl())
+    assert.equal(location.pathname, '/login')
+    assert.equal(
+      location.searchParams.get('return_to'),
+      '/__test__/signed-in-page/secret-token-9?x=1'
+    )
+    // No intended URL in the session (docs/07 §3.2): the token never reaches sessions.data.
+    const rows = await db.from('sessions').whereRaw('data::text LIKE ?', ['%secret-token-9%'])
+    assert.lengthOf(rows, 0)
+  })
+
+  test('the auth middleware: an API route answers 401 UNAUTHENTICATED', async ({ assert }) => {
+    const response = await fetch(`${baseUrl()}/api/v1/__test__/signed-in`)
+    assert.equal(response.status, 401)
+    const problem = await problemOf(response)
+    assert.equal(problem.code, 'UNAUTHENTICATED')
   })
 
   test('a validation error on a page URL asked for JSON is problem+json without meta', async ({
