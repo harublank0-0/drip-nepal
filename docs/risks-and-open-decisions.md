@@ -246,7 +246,7 @@ Evidence: The product owner asked on 2026-11-11 to "work on what we can and fini
           adapter follows NCM's API document v2 as the ncm-integration skill records it; none of
           its facts is verified (VX-16).
 ADR: ADR-0019 (decision 6 stays Proposed until VX-16 closes).
-Docs updated: 12 (§5.6, note 26), 09 (§1 tree, note 87), 04 (§18.1, note 22), 10 (§3.1, §6, note 42),
+Docs updated: 12 (§5.6, note 26), 09 (§1 tree, note 87), 04 (§18.1, note 22), 10 (§3.1, §6, note 43),
               03 (§11.1, note 21)  |  Status: Decided
 ```
 
