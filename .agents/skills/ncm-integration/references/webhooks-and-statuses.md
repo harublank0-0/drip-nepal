@@ -20,8 +20,10 @@ The API doc v2 offers the same through the API:
   It answers `201` the first time and `200` after that, both with
   `{"success": true, "message": …}`. An empty string removes the stored URL. A
   URL that doesn't start with `http://` or `https://` gets `400` with
-  `success: false`. The doc calls it the "order status webhook"; whether it also
-  sets the portal's "Order Comment Webhook URL" is [unknown].
+  `success: false`. The doc says the endpoint manages "webhook URLs used by NCM
+  to push order status and comment events", but its only parameter is the
+  "Order status webhook URL"; whether it also sets the portal's "Order Comment
+  Webhook URL" is [unknown].
 - **Test** `POST /api/v2/vendor/webhook/test` with `{"webhook_url"}` makes NCM
   post a sample event to that URL:
 
@@ -30,8 +32,9 @@ The API doc v2 offers the same through the API:
   ```
 
   It always answers `200`. `{"success": true, "status_code": 200, "response": "OK"}`
-  means your server answered (a 4xx or 5xx from your server also comes back as
-  `success: true`, with that code in `status_code`). `{"success": false, "error": …}`
+  means your server answered. The doc's example of an HTTP error from your server
+  (a 400) also comes back as `success: true`, with that code in `status_code`
+  and the response `headers`; that a 5xx does the same is [inferred]. `{"success": false, "error": …}`
   means a timeout after 10 seconds or a connection error.
 
   The test event matches none of the real events below: its `event` is
@@ -139,11 +142,9 @@ are included.
 `added_time` uses a `+05:45` offset [doc]. Always parse to an instant, and
 store and compare instants.
 
-Test button payload (note the different shape, and its `+05:45` offset):
-
-```json
-{"event": "order.status.changed", "order_id": "TEST-123456", "status": "In Transit", "timestamp": "2026-01-02T15:30:00.000000+05:45", "test": true}
-```
+The portal's Test button and `POST /api/v2/vendor/webhook/test` send the same
+test event, shown under [the webhook contract](#the-webhook-contract-doc). Note
+its different shape and its `+05:45` offset.
 
 [recommended] Authenticate it like any other event, record it in the inbox as a
 test, answer 2xx, and write nothing to orders.

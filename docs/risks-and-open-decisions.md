@@ -263,7 +263,7 @@ Edited 2026-11-11: the skill is no longer unchanged. At the product owner's requ
         data, and a new decision D12 on that rating. Its NOTICE.md lists the changes. The facts are
         still unverified: the demo token NCM issued answered "Invalid token." on 2026-11-11, so VX-16,
         VX-17 and VX-18 stay open, and the documents still win. skills-lock.json's computedHash is
-        recomputed with the algorithm above. Note 30.
+        recomputed with the algorithm above. Docs updated: 09 (§1.5, note 86), note 30.
 ```
 
 ```text

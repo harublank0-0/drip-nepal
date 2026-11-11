@@ -31,11 +31,11 @@ Nothing in this file has been checked against the live or demo API yet. On 2026-
 | Conduct | "Avoid duplication of order creation from both bulk file upload and api system." "No Spamming or running scripts to overload the server." [doc] |
 | Versioning | Paths mix `/api/v1/` and `/api/v2/` [doc]. No deprecation policy is documented [unknown]. |
 | Pagination | Documented for the staff list (`page_size` default 20) and the customer list (`page_size` default 25, maximum 100), both as `count`, `next`, `previous`, `results` [doc]. |
-| Sandbox | The documents are written against the demo host. NCM hands each integrating vendor a demo-portal login and a demo token. Whether the demo shares data or tokens with production: [unknown]. |
+| Sandbox | The documents are written against the demo host. NCM gave the product owner a demo-portal login and a demo token on 2026-11-11 [reported]; whether every vendor gets one is [unknown]. Whether the demo shares data or tokens with production: [unknown]. |
 
 ## Errors
 
-| Situation | Response [doc] |
+| Situation | Response |
 |---|---|
 | GET without a token | `401 {"detail": "Authentication credentials were not provided."}` |
 | A token NCM doesn't know | `401 {"detail": "Invalid token."}`. Not in the documents; seen on the demo host on 2026-11-11, on every endpoint tried, the branch list included. |
@@ -47,11 +47,13 @@ Nothing in this file has been checked against the live or demo API yet. On 2026-
 | Return, missing id | `400 {"message": "Order ID is required"}` |
 | Return, unknown order | `404 {"message": "Order not found"}` |
 | Webhook URL not `http://` or `https://` | `400 {"success": false, "message": "Please enter a valid URL for Order Status Webhook (must start with http:// or https://)"}` |
-| Label, unknown order or another vendor's | `404 {"detail": "Order not found"}` |
+| Label, unknown order | `404 {"detail": "Order not found"}`. Only the account's own orders are accessible; that another vendor's order gets this same 404 is [inferred] from the batch, which says so |
 | Label batch, empty or missing `ids` | `400 {"detail": "\"ids\" must be a non-empty array"}` |
 | Customer detail, unknown customer | `404 {"detail": "Customer not found"}` or `404 {"detail": "Not found"}` |
 | Rating, no `phone` | `400 {"detail": "phone parameter is required"}` |
 | Rating, a phone NCM doesn't know | `404 {"detail": "No customer found with this phone number"}` |
+
+Every row is [doc] except the `Invalid token.` row, which was seen, not documented.
 
 Error bodies use four shapes: `detail`, `Error` (an object keyed by field), `message`, and `success: false` with `message`. Parse all four. The response to a rate limit (for example 429) is [unknown]. Expect HTML error pages from proxies as well, and never show a raw body to an end user.
 
@@ -61,7 +63,7 @@ Every endpoint takes `Authorization: Token <api-token>` unless the row says othe
 
 | # | Purpose | Method and path | Request | Success response [doc] |
 |---|---|---|---|---|
-| 1 | Branch list with details (phone, covered areas, district, region) | `GET /api/v2/branches` | none | Shape **not documented**, in v2 too [unknown]. The doc shows no auth header for this one; one integration sends none and gets branches [observed]. With a token NCM rejects, it answers 401 like every other endpoint (demo, 2026-11-11). Branch **ids**, which the redirect endpoint needs, are documented nowhere else; that integration reads a `pk` field here [observed]. Branch **codes** (such as `TINK1`) appear in label data (#25) [doc]. Test with a demo token. |
+| 1 | Branch list with details (phone, covered areas, district, region) | `GET /api/v2/branches` | none | Shape **not documented**, in v2 too [unknown]. The doc shows no auth header for this one; one integration sends none and gets branches [observed]. With a token NCM rejects, it answered 401 like every other endpoint tried (demo, 2026-11-11). Branch **ids**, which the redirect endpoint needs, are documented nowhere else; that integration reads a `pk` field here [observed]. Branch **codes** (such as `TINK1`) appear in label data (#25) [doc]. Test with a demo token. |
 | 2 | Delivery charge between branches | `GET /api/v1/shipping-rate?creation=<from>&destination=<to>&type=<type>` | query `creation` (pickup branch), `destination` (destination branch), `type` (below). The doc's example uses branch **names** in capitals (`creation=TINKUNE&destination=POKHARA`) [doc]; whether ids or codes are accepted is [unknown]. | Shape **not documented** [unknown] |
 | 3 | One order's detail | `GET /api/v1/order?id=<ncm-order-id>` | query `id` | `{"orderid", "cod_charge", "delivery_charge", "last_delivery_status", "payment_status"}` |
 | 4 | One order's comments, newest first | `GET /api/v1/order/comment?id=<ncm-order-id>` | query `id` | array of `{"orderid", "comments", "addedBy", "added_time"}` |
@@ -83,7 +85,7 @@ Every endpoint takes `Authorization: Token <api-token>` unless the row says othe
 | 20 | One ticket's detail | `GET /api/v1/tickets/<ticket_id>/detail` | ticket id in the path | `200 {"success": true, "ticket": {…}}`; see [Tickets](#tickets) |
 | 21 | Reply to a ticket | `POST /api/v1/vendor/tickets/<ticket_id>/response` | `{"message"}` | `201 {"success": true, "ticket_id", "response": {"id", "message", "added_on", "vendor_display": true, "added_by": {"id", "name"}}}`. Reopens a closed ticket |
 | 22 | Customers linked to the account | `GET /api/v2/vendor/customers?page=&page_size=&name=&phone=` | all optional; `page_size` default 25, maximum 100; `name` contains, `phone` starts with | `{"count", "next", "previous", "results": [{"id", "name", "phone", "address"}]}`. See [Customers and ratings](#customers-and-ratings) |
-| 23 | One customer and their orders with this account | `GET /api/v2/vendor/customers/<customer_id>/detail` | customer id in the path | `{"id", "name", "phone", "email", "orders": [{"orderid", "created_date", "cod_charge", "delivery_charge", "last_delivery_status"}]}` |
+| 23 | One customer and their order history | `GET /api/v2/vendor/customers/<customer_id>/detail` | customer id in the path | `{"id", "name", "phone", "email", "orders": [{"orderid", "created_date", "cod_charge", "delivery_charge", "last_delivery_status"}]}` |
 | 24 | A phone number's delivery record across all of NCM | `GET /api/v2/vendor/ratings?phone=<phone>` | query `phone`, required | `{"phone", "total_orders", "total_delivered", "total_returned"}`. See [Customers and ratings](#customers-and-ratings) |
 | 25 | Label data for one order | `GET /api/v2/vendor/order/label/<order_id>` | order id in the path | see [Labels](#labels) |
 | 26 | Label data for many orders | `POST /api/v2/vendor/order/label/` (trailing slash as documented) | `{"ids": [<int>, ...]}`, non-empty; "recommended ≤ 100" | `200 {"labels": [...], "not_found": [<id>, ...]}` |
@@ -207,7 +209,7 @@ Failure: `400 {"Error": {"phone": "Invalid Phone Number", "branch": "Invalid Bra
   - [observed] One integration found most of its long-stuck parcels listed here, while control parcels on the same token answered normally.
   - [reported] Ids created under another account's token went unanswered in one production check, so group ids by the token that created them.
 - Maximum batch size: [unknown]. One integration uses 100.
-- Whether a bulk call counts as one read or one per id against the 5,000 daily reads: [unknown].
+- Whether a bulk call counts as one read or one per id against the 20,000 daily order views: [unknown].
 
 ### Comments
 
@@ -261,8 +263,8 @@ have stored the comment. Before posting again, read the thread
   }
   ```
 
-  - `message` comes back with `<br>` where the vendor wrote line breaks, and NCM may append text (the doc's example adds "Actual Pickup count : 52"). Render it as text, never as HTML.
-  - What `status: false` means (open, or not resolved) is [unknown]. `closed_on` and `closed_by` are null on an open ticket [doc], so read those to learn that NCM closed one.
+  - In the doc's example, `message` comes back with `<br>` between the parts of the vendor's message and with text NCM appended ("Actual Pickup count : 52"). That NCM always does this is [inferred]. Render it as text, never as HTML.
+  - What `status: false` means (open, or not resolved) is [unknown]. In the doc's one example, `closed_on` and `closed_by` are null; that they stay null until NCM closes the ticket, and so tell you it closed, is [inferred].
   - `responses` is a top-level field beside `ticket`, not inside it [doc].
 - **Reply** `POST /api/v1/vendor/tickets/<ticket_id>/response` with `{"message"}` [doc]. It stores the reply with `vendor_display: true`, **reopens the ticket if it was closed**, and answers `201` with the stored reply. A length limit is [unknown]. Like a comment, a reply isn't idempotent: after a timeout, read the detail before posting again.
 
@@ -325,8 +327,8 @@ needs for one of the account's own orders [doc]:
 NCM keeps its own customer records. Three endpoints read them [doc]:
 
 - **List** `GET /api/v2/vendor/customers`: customers the account created or delivered at least one order to, filterable by `name` (contains) and `phone` (starts with).
-- **Detail** `GET /api/v2/vendor/customers/<customer_id>/detail`: name, phone, email and the customer's orders **with this account**, each with its `cod_charge`, `delivery_charge` and `last_delivery_status` (one example reads `"Sent to Vendor"`).
-- **Rating** `GET /api/v2/vendor/ratings?phone=<phone>`: "delivery performance stats for a customer by phone number — total orders placed, successful deliveries, and returns **across the entire NCM system**" [doc], for example `{"phone": "98XXXXXXXX", "total_orders": 18, "total_delivered": 15, "total_returned": 3}`. A phone NCM doesn't know answers `404`.
+- **Detail** `GET /api/v2/vendor/customers/<customer_id>/detail`: "full profile and complete order history for a specific customer of your vendor account" [doc]: name, phone, email and orders, each with its `cod_charge`, `delivery_charge` and `last_delivery_status` (one example reads `"Sent to Vendor"`). Whether the history holds only this account's orders or the customer's orders with every vendor is [unknown]; until NCM answers, treat it like the rating below.
+- **Rating** `GET /api/v2/vendor/ratings?phone=<phone>`: "delivery performance stats for a customer by phone number — total orders placed, successful deliveries, and returns across the entire NCM system" [doc], for example `{"phone": "98XXXXXXXX", "total_orders": 18, "total_delivered": 15, "total_returned": 3}`. A phone NCM doesn't know answers `404`.
 
 The rating is personal data about a customer's dealings with **other** vendors.
 Sending a customer's phone to NCM to look it up, and acting on the answer (to
@@ -367,6 +369,6 @@ The same integration retries an order-detail read when the error text matches "e
 17. Where branch ids come from, since the branch list's shape is undocumented and the redirect's `destination` needs one; and whether create and the rate endpoint accept the branch `code` that label data shows.
 18. Whether `Delivery Attempted`, `Out for Delivery` and `Dispatched to <BRANCH>` are real status strings, and what `returned_to_warehouse` means.
 19. Whether posting a comment is idempotent in any way, since no comment id is returned.
-20. Whether NCM's terms let a vendor use the rating endpoint to screen customers, and what NCM tells the customer about it.
+20. Whether NCM's terms let a vendor use the rating endpoint to screen customers, and what NCM tells the customer about it. Whether customer detail's order history covers only this account's orders.
 21. Whether the old ticket path `/api/v2/vendor/ticket/create` still works, and whether a `Pickup` ticket's `branch` match ignores case.
 22. What a ticket's `status` field means, and where `handling` (label data) is set, since create takes no such field.
