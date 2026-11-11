@@ -235,6 +235,24 @@ OD-28 to OD-54 register the owner decisions that the three deep audits left open
 Newest first. The entry format is in §1.5. A ruling that is not an OD but changes an owning document or an ADR is logged in the same format, headed "Not an OD".
 
 ```text
+Not an OD — Decided 2026-11-11 by product owner: specify M6's courier work and build the NCM adapter now
+Ruling: While NCM's demo token does not work, the courier work that does not depend on it is done
+        before M1 to M5: the M6 courier tables and rules (#178), the M6 courier operations, and the
+        CourierProvider port with the Nepal Can Move adapter (app/modules/logistics/providers/),
+        tested on synthetic responses. The adapter is not wired to any job, route or page; M6 still
+        builds the migration, jobs, operations and pages, and checks the adapter against NCM's
+        sandbox. This departs from AGENTS.md's "build only what the current milestone schedules" for
+        this adapter alone.
+Evidence: The product owner asked on 2026-11-11 to "work on what we can and finish integration"
+          while the NCM key is missing, chose "specs, then adapter" over specs only or finishing M0
+          first, and asked for the pull requests to be reviewed and merged without them. The
+          adapter follows NCM's API document v2 as the ncm-integration skill records it; none of
+          its facts is verified (VX-16).
+ADR: ADR-0019 (decision 6 stays Proposed until VX-16 closes).
+Docs updated: 12 (§5.6, note 26), 09 (§1 tree, note 87), 04 (§18.1, note 22)  |  Status: Decided
+```
+
+```text
 Not an OD — Decided 2026-11-09 by product owner: commit the reviewed ncm-integration skill
 Ruling: The ncm-integration skill that commit bd23da5 added to main under .claude/skills/ is tracked as
         a third-party skill, unchanged: it moves to .agents/skills/ncm-integration/ with a
@@ -860,3 +878,4 @@ This matrix is authoritative for decision gates. [12 §3](12-roadmap-and-backlog
 28. **The `ncm-integration` skill (2026-11-09).** §2.3 logs the product owner's decision to track the skill that commit `bd23da5` added to `main`, after the licence check and read-through that [AGENTS.md](../AGENTS.md) requires. It changes no OD, VX or risk: the skill's NCM API facts are unverified, so VX-16, VX-17 and VX-18 stay open and R-33 is unchanged.
 29. **Preparing the E4 merge (2026-11-09).** §2.3 adds dated notes to the 2026-11-07 integration-branch entry (both of its conditions hold) and the 2026-11-04 entry (the merge removes the v1 store from `main`), and note 24 follows. Nothing here says the merge into `main` has happened. Outside this register the same change updates DEPLOY.md, README.md, `database/README.md`, the `dripnepal-run` and `dripnepal-testing` skills, 10 (§3.1, §5, notes 29, 31, 33, 40) and 12 (§4.1, note 24).
 30. **The `ncm-integration` skill follows NCM's API doc v2 (2026-11-11).** §2.3 adds a dated note to the 2026-11-09 skill entry. It changes no OD, VX or risk: the v2 document answers some VX-16 questions on paper, but nothing is verified against NCM's API, and the production host, cancellation and webhook authentication are still missing from it. Recording the v2 facts in VX-16's evidence, and any new question for NCM, is left to the pull request that verifies them on the demo host.
+31. **The courier adapter ahead of M6 (2026-11-11).** §2.3 logs the product owner's decision to specify M6's courier work and build the NCM adapter now. It changes no OD, VX or risk: VX-16, VX-17 and VX-18 stay open, R-33's trigger is unchanged, and ADR-0019 decision 6 stays Proposed.
