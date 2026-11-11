@@ -45,6 +45,17 @@ export function minorToRupeesText(minor: number) {
   return `${negative ? '-' : ''}${rupees}${fraction}`
 }
 
+/*
+ * Paisa as rupees with exactly two decimals, for a provider that takes
+ * rupee strings: 150000 -> "1500.00", 129950 -> "1299.50", 5 -> "0.05"
+ * (docs/04 §18.1 "Provider formats", docs/05 §6.3 for Nepal Can Move).
+ * Integer division and padStart only; never a float.
+ */
+export function minorToRupeesFixed(minor: number) {
+  const { negative, rupees, paisa } = splitPaisa(minor)
+  return `${negative ? '-' : ''}${rupees}.${String(paisa).padStart(2, '0')}`
+}
+
 const RUPEES_TYPED = /^(\d{1,9})(?:\.(\d{1,2}))?$/
 
 /*
