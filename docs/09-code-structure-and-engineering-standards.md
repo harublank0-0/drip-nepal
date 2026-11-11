@@ -85,7 +85,7 @@ drip-nepal/
 │   ├── transformers/<module>/*_transformer.ts
 │   └── validators/<module>/<operation>.ts · validators/support/strict.ts
 ├── architecture/{model-ownership.json, model_rules.cjs}   # table → module map and rule generator for T-ARCH-001
-├── commands/{platform_create_admin.ts, inventory_correct.ts, audit_record_disclosure.ts, jobs_work.ts, jobs_redrive.ts, data_reencrypt.ts}
+├── commands/{platform_create_admin.ts, inventory_correct.ts, audit_record_disclosure.ts, jobs_install.ts, jobs_work.ts, jobs_redrive.ts, data_reencrypt.ts}
 ├── config/*.ts                              # + limiter, drive, mail, jobs when those packages land
 ├── database/
 │   ├── migrations/                          # the 14-file baseline of 04 §20.2.2, then forward-only
@@ -258,8 +258,8 @@ Controllers, commands and `start/jobs.ts` sit outside the chain: a controller ma
 4. **Events after commit** are pg-boss jobs sent in the same transaction ([ADR-0010](adr/0010-postgres-jobs-pg-boss-transactional-send.md), [03 §10.1](03-system-architecture.md#101-transactional-send-the-job-table-is-the-outbox)). A module sends to another module's queue **by name**, without importing it. Payload types stay type-safe through declaration merging, so `platform` never imports a higher module:
 
 ```ts
-// app/modules/platform/jobs.ts — design sketch. The pg-boss adapter call is pseudocode
-// Edited 2026-11-11: the real file follows this sketch; the spike T-ARCH-004 confirmed the call.
+// app/modules/platform/jobs.ts — as built 2026-11-11 (T-ARCH-004), shortened; the file also holds
+// createJobBoss, setJobBoss (the process's instance) and the schema step's helpers.
 import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
 
 export interface JobPayloads {} // augmented by each module's events.ts
@@ -2343,7 +2343,7 @@ The ADR line is the checkbox [ADR-0001](adr/0001-record-architecture-decisions.m
 
 This section follows one operation through every layer, so that a new endpoint can be built by copying its shape. The operation is `createProduct` (R1·M3, ⚷ with 24-hour key retention). Its contract is [06 §13.5](06-api-design.md#135-seller), [06 §14.2](06-api-design.md#142-vendor-product-creation-createproduct-then-replaceproductvariants) and `openapi.yaml` (`CreateProductRequest`, `SellerProductResponse`). The tables are [04a §7.6](04a-data-dictionary-tables.md#76-products), [§7.7](04a-data-dictionary-tables.md#77-product_attribute_values), [§7.9](04a-data-dictionary-tables.md#79-product_variants), [§8.1](04a-data-dictionary-tables.md#81-inventory_items) and [§15.3](04a-data-dictionary-tables.md#153-audit_logs).
 
-Labels on code follow the rule of this document. A **design sketch** uses only APIs verified for the installed versions, and each block cites what it relies on. **Pseudocode** marks code that depends on a package that is not installed (`pg-boss`, `@japa/api-client`, `@adonisjs/limiter`) or on a runtime shape confirmed only in M0.
+Labels on code follow the rule of this document. A **design sketch** uses only APIs verified for the installed versions, and each block cites what it relies on. **Pseudocode** marks code that depends on a package that is not installed (`@japa/api-client`, `@adonisjs/limiter`; `pg-boss` is installed since 2026-11-11) or on a runtime shape confirmed only in M0.
 
 ### 12.1 The path of one request
 
@@ -2372,7 +2372,7 @@ sequenceDiagram
 | 4   | Policy       | none for this operation                                                                                        | §12.6                                                   |
 | 5   | Controller   | `app/controllers/api/v1/seller/catalog/products_controller.ts`, `app/controllers/support/idempotency_scope.ts` | design sketch (§12.7)                                   |
 | 6   | Idempotency  | `app/modules/platform/idempotency.ts` (`idempotentTx`, `withIdempotency`)                                      | design sketch; `rawQuery` result shape pseudocode       |
-| 7   | Entry action | `app/modules/inventory/actions/create_product.ts`                                                              | design sketch; `sendJob` pseudocode (§12.8)             |
+| 7   | Entry action | `app/modules/inventory/actions/create_product.ts`                                                              | design sketch; `sendJob` as built (§2.3)                |
 | 8   | Step actions | `app/modules/catalog/actions/insert_product_draft.ts`, `app/modules/inventory/actions/open_inventory_items.ts` | design sketch (§12.8)                                   |
 | 9   | Transformer  | `app/transformers/catalog/product_seller_transformer.ts`, `app/modules/catalog/domain/submit_readiness.ts`     | design sketch (§12.9)                                   |
 | 10  | Tests        | `tests/functional/catalog/create_product.spec.ts`                                                              | pseudocode until `@japa/api-client` is added (§12.10)   |
@@ -2745,7 +2745,7 @@ Two additions to the 06 §7.9 sketch of `withIdempotency`: the key `INSERT` is w
 
 ```ts
 // app/modules/inventory/actions/create_product.ts — design sketch; hosting rule in §12.2 item 2.
-// sendJob exists since the pg-boss spike T-ARCH-004 (2026-11-11); its first argument is the pg-boss instance.
+// sendJob exists since the pg-boss spike T-ARCH-004 (2026-11-11).
 import { idempotentTx, type IdempotencyScope, type Presented } from '#modules/platform/idempotency'
 import { sendJob } from '#modules/platform/jobs'
 import { recordAudit } from '#modules/audit/actions/record_audit'
@@ -2783,7 +2783,7 @@ export default class CreateProduct {
           after: { status: 'draft', title: draft.product.title, category_id: draft.category.id },
         },
       })
-      // pseudocode: boss.send(..., { db: fromKnex(trx.knexClient) }) inside sendJob (§2.3).
+      // sendJob sends with { db: fromKnex(trx.knexClient) } (§2.3).
       // No singletonKey: a keyed send would wait on another transaction's job (05 §4.4, 03 §9)
       await sendJob(trx, 'catalog.refresh_listing', {
         product_id: draft.product.id,
@@ -3686,4 +3686,4 @@ These names close the items that [08](08-ui-ux-and-design-system.md) handed to t
 85. **The `ncm-integration` skill (2026-11-09).** The §1.5 `.agents/**` row records the product owner's decision of 2026-11-09 ([risks §2.3](risks-and-open-decisions.md#23-decision-log)). Commit `bd23da5` on `main` had added the skill as a real directory under `.claude/skills/`; it now lives in `.agents/skills/ncm-integration/` with a `.claude/skills/` symlink, is excepted from the `.agents/skills/*` rule of `.gitignore` and ignored by Prettier like the other vendored skills, and is listed in `skills-lock.json` and [AGENTS.md](../AGENTS.md). Its `NOTICE.md` says that its API facts are not verified (VX-16, [ADR-0019](adr/0019-courier-integration-in-r1.md) decision 6 stays Proposed) and that 04a, 05 and the ADRs win where it disagrees.
 86. **The `ncm-integration` skill follows NCM's API doc v2 (2026-11-11).** The §1.5 `.agents/**` row gets a dated sentence: the skill is no longer unchanged. Its local changes are listed in its `NOTICE.md` and logged in [risks §2.3](risks-and-open-decisions.md#23-decision-log) (risks note 30); `skills-lock.json` carries its recomputed hash. The `.prettierignore` comment now says the vendored skills keep their authors' formatting, since one of them is edited locally.
 87. **The courier adapter (2026-11-11).** The §1 tree shows `app/modules/logistics/providers/`: the `CourierProvider` port (`courier_provider.ts`), the Nepal Can Move adapter (`ncm.ts`) and its label mapping (`ncm_mapping.ts`), built ahead of M6 at the product owner's request ([risks §2.3](risks-and-open-decisions.md#23-decision-log)). Only `ncm.ts` calls NCM, with `fetch`, which §11.2 allows inside `providers/` folders. Nothing wires it yet: the M6 jobs in `orders` call it through the `logistics` public surface.
-88. **The pg-boss spike (2026-11-11).** §2.3's job sketch is now `app/modules/platform/jobs.ts`: `sendJob(boss, trx, queue, data, opts)` sends through `fromKnex(trx.knexClient)`, `createJobBoss` starts runtime instances with migration off, and `commands/jobs_install.ts` is the schema step. `sendJob` takes the pg-boss instance as its first argument; the service provider that holds the app's instances comes with the first job (`jobs_provider.ts`, §1 tree).
+88. **The pg-boss spike (2026-11-11).** §2.3's job sketch is now `app/modules/platform/jobs.ts`: `sendJob(trx, queue, data, opts)` keeps the sketch's signature and sends through `fromKnex(trx.knexClient)` on the process's instance, which `setJobBoss` sets (the service provider that starts it comes with the first job, `jobs_provider.ts` in the §1 tree). `createJobBoss` starts runtime instances with `migrate`, `createSchema`, `persistQueueStats` and `reindex` off, and pools of 4 (worker) and 1 (web) from 03 §3.4; `JobDatabase` passes Lucid's TLS options. `commands/jobs_install.ts` is the schema step, added to the §1 tree. §1.2's pseudocode list no longer names `pg-boss`.

@@ -73,6 +73,7 @@ node ace generate:key --show   # paste the key after APP_KEY= in .env
 
 docker compose up -d     # PostgreSQL 18 with the three database roles, Redis and Mailpit (the app uses only PostgreSQL)
 node ace migration:run --no-schema-generate   # the 14 baseline files; leaves the generated database/schema.ts alone
+node ace jobs:install    # the pg-boss schema and its grants (docs/11 §6.1)
 node ace db:seed         # reference data only: no demo shops, products, orders or logins yet (OD-59)
 pnpm dev                 # http://localhost:3333/design-system and /health/live
 ```

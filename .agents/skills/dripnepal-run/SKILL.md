@@ -41,6 +41,7 @@ To keep a second checkout's data apart, give one command or server another datab
 
 ```bash
 node ace migration:run --no-schema-generate
+node ace jobs:install
 node ace db:seed
 ```
 
