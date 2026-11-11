@@ -604,6 +604,9 @@ ADR: ADR-0010 decision 1 and ADR-0011 decision 2 (dated notes, 2026-10-01).
 Docs updated: 03 §3.4, §5.4 and §10.1, 04a §15.5, 07 §4.10, 09 §2.3, §6.1, §8.8 and §9.3, 10 §3.2, 11 §6.1,
               ADR-0010, ADR-0011 (2026-10-01)  |  Status: Decided; Resolved when the M0 release step and the
               pg-boss start follow it
+Edited 2026-11-11: T-ARCH-004 confirmed both. The runtime instances start with migrate, createSchema,
+        persistQueueStats and reindex off; the step is node ace jobs:install, which installs or upgrades the
+        schema, waits for the upgrade's out-of-transaction commands, then grants (ADR-0010). Note 32.
 ```
 
 ```text
@@ -877,3 +880,4 @@ This matrix is authoritative for decision gates. [12 §3](12-roadmap-and-backlog
 29. **Preparing the E4 merge (2026-11-09).** §2.3 adds dated notes to the 2026-11-07 integration-branch entry (both of its conditions hold) and the 2026-11-04 entry (the merge removes the v1 store from `main`), and note 24 follows. Nothing here says the merge into `main` has happened. Outside this register the same change updates DEPLOY.md, README.md, `database/README.md`, the `dripnepal-run` and `dripnepal-testing` skills, 10 (§3.1, §5, notes 29, 31, 33, 40) and 12 (§4.1, note 24).
 30. **The `ncm-integration` skill follows NCM's API doc v2 (2026-11-11).** §2.3 adds a dated note to the 2026-11-09 skill entry. It changes no OD, VX or risk: the v2 document answers some VX-16 questions on paper, but nothing is verified against NCM's API, and the production host, cancellation and webhook authentication are still missing from it. Recording the v2 facts in VX-16's evidence, and any new question for NCM, is left to the pull request that verifies them on the demo host.
 31. **The courier adapter ahead of M6 (2026-11-11).** §2.3 logs the product owner's decision to specify M6's courier work and build the NCM adapter now. It changes no OD, VX or risk: VX-16, VX-17 and VX-18 stay open, R-33's trigger is unchanged, and ADR-0019 decision 6 stays Proposed.
+32. **The pg-boss spike (2026-11-11).** §2.3 adds a dated note to the 2026-10-01 entry on the `pgboss` schema: `T-ARCH-004` confirmed the runtime options and the schema step, `node ace jobs:install`. It changes no OD, VX or risk.

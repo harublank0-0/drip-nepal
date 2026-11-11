@@ -64,13 +64,13 @@ Short, plain sentences. Put identifiers in backticks (Prettier can turn an unquo
 
 ## Commands
 
-| Command                                                           | Use                                                           |
-| ----------------------------------------------------------------- | ------------------------------------------------------------- |
-| `pnpm install`                                                    | Install dependencies (pnpm 11 is enforced)                    |
-| `docker compose up -d`                                            | Local PostgreSQL 18 (and Mailpit)                             |
-| `node ace migration:run --no-schema-generate`, `node ace db:seed` | Database schema and seed data                                 |
-| `pnpm dev`                                                        | Development server with hot reload on `http://localhost:3333` |
-| `pnpm test`                                                       | Japa test suites                                              |
-| `pnpm lint`, `pnpm typecheck`, `pnpm format`                      | ESLint, TypeScript for server and `inertia/`, Prettier        |
+| Command                                                                                    | Use                                                           |
+| ------------------------------------------------------------------------------------------ | ------------------------------------------------------------- |
+| `pnpm install`                                                                             | Install dependencies (pnpm 11 is enforced)                    |
+| `docker compose up -d`                                                                     | Local PostgreSQL 18 (and Mailpit)                             |
+| `node ace migration:run --no-schema-generate`, `node ace jobs:install`, `node ace db:seed` | Database schema, the pg-boss schema, and seed data            |
+| `pnpm dev`                                                                                 | Development server with hot reload on `http://localhost:3333` |
+| `pnpm test`                                                                                | Japa test suites                                              |
+| `pnpm lint`, `pnpm typecheck`, `pnpm format`                                               | ESLint, TypeScript for server and `inertia/`, Prettier        |
 
 The target local setup, including the pg-boss schema step and the `jobs:work` worker, is [docs/11 §4.4](docs/11-deployment-and-operations.md#44-local-setup-in-five-commands); M0 brings the repository to it.

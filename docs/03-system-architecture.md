@@ -1038,7 +1038,7 @@ The dual-write problem is real: an order commit followed by a separate "enqueue 
 Because pg-boss stores jobs in PostgreSQL, a job can be inserted **in the same transaction** as the state change. pg-boss's `send` accepts a `db` option with a built-in Knex adapter, and its documentation states: "If the transaction rolls back, so does the job" [Verified-doc <https://github.com/timgit/pg-boss/blob/master/docs/api/adapters.md>]. Lucid's transaction client exposes the underlying Knex transaction as `knexClient: Knex.Transaction` [Verified-doc, `@adonisjs/lucid` 22.4.2 `build/src/types/database.d.ts` line 220, <https://registry.npmjs.org/@adonisjs/lucid/-/lucid-22.4.2.tgz>].
 
 ```ts
-// design sketch — adapter import path and option names are confirmed by the M0 spike
+// design sketch; the import path and options were confirmed by the M0 spike T-ARCH-004 on 2026-11-11 (app/modules/platform/jobs.ts)
 export async function sendJob<Q extends QueueName>(
   trx: TransactionClientContract,
   queue: Q,
@@ -1049,7 +1049,7 @@ export async function sendJob<Q extends QueueName>(
 }
 ```
 
-**M0 spike (T-ARCH-004, proposed)** must prove, against PostgreSQL 18.4:
+**M0 spike (T-ARCH-004)** must prove, against PostgreSQL 18.4 (done 2026-11-11, [ADR-0010](adr/0010-postgres-jobs-pg-boss-transactional-send.md) dated note; it stays as a regression test in the concurrency suite):
 
 1. a job sent inside a Lucid transaction that rolls back is never visible to workers;
 2. after commit the job is fetched and completed normally;
@@ -1491,3 +1491,4 @@ ADR files live in [docs/adr](adr/README.md). Status is the "Decision status" fie
 19. **Courier integration (2026-11-05).** OD-56 moves courier booking and tracking with Nepal Can Move into R1 ([risks §2.3](risks-and-open-decisions.md#23-decision-log), [ADR-0019](adr/0019-courier-integration-in-r1.md)). Applied here: driver D5, the section 2 context diagram, its note and the Couriers row, the `logistics` and `orders` rows of §4.4 (four logistics tables and `shipment_items`), the `CourierProvider` row of §11.1 and the ADR-0019 row of §14. Still open: a `CourierProvider` design sketch beside §11.2, the courier status mapping beside §11.3, and the M6 jobs in section 9 (`orders.book_courier_shipment`, `orders.cancel_courier_booking` and `logistics.verify_account`, proposed in [05 §6.3](05-order-payment-and-inventory-lifecycles.md#63-shipment-fulfillment) and [04a §9.9](04a-data-dictionary-tables.md#99-logistics_accounts), and the courier status sweep), all written when VX-16 is answered.
 20. **M6 courier tables (2026-11-11).** The §4.4 `logistics` row owns the three M6 tables of 04a §9.12 to §9.14: courier branches, booking calls and the courier event inbox. Of the jobs that write them, `logistics.sync_branches` and `logistics.verify_account` run in `logistics`. The jobs that change shipments run in `orders`, because they apply shipment transitions (stock, ledger) and `logistics` may not import `orders` (09 §2.2): `orders.book_courier_shipment`, `orders.cancel_courier_booking`, `orders.find_courier_booking`, `orders.process_courier_event`, `orders.poll_courier_statuses` and the sweepers of stale booking claims and lost courier events. They call the adapter through the `logistics` public surface. All stay proposed and join §9's job list with the M6 operations.
 21. **The courier adapter (2026-11-11).** The §11.1 `CourierProvider` row says the NCM adapter exists, unwired, built ahead of M6 at the product owner's request (risks §2.3). It departs from §11.1 and §11.4 in three ways, recorded here for M6: it takes no `CallContext` (request ID, abort signal) yet; it sets the 10 s total timeout but not the 3 s connect timeout, which needs an undici dispatcher; and its port has no cancel or lookup by reference, because NCM offers neither (05 §6.3).
+22. **The pg-boss spike (2026-11-11).** §10.1's six points pass with pg-boss 12.38.0, recorded in ADR-0010: `app/modules/platform/jobs.ts` (`sendJob`, `createJobBoss`) and `node ace jobs:install`. `T-ARCH-004` is no longer proposed.

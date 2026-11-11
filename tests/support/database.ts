@@ -1,5 +1,7 @@
 import { readdir } from 'node:fs/promises'
 import app from '@adonisjs/core/services/app'
+import db from '@adonisjs/lucid/services/db'
+import { JOB_SCHEMA } from '#modules/platform/jobs'
 
 async function runAce(command: string, args: string[]) {
   const ace = await app.container.make('ace')
@@ -65,10 +67,12 @@ export function prepareTestDatabase() {
       '--compact-output',
       '--no-schema-generate',
     ])
-    // TODO(T-ARCH-004): the pg-boss schema step and the idempotent `pgboss`
-    // grants to dripnepal_app, as the migrator, go here, before the reference
-    // seeders (docs/10 §3.2, docs/09 §6.1 "Test roles"). Their command is fixed
-    // by the M0 spike T-ARCH-004, which is not done yet.
+    // db:wipe drops only `public`, so the pg-boss schema is dropped too and
+    // every run starts from a fresh install with no jobs left from an earlier
+    // run. Then the schema step and its grants, as the migrator, in the order
+    // of the release step (docs/10 §3.2, docs/11 §6.1; T-ARCH-004).
+    await db.connection(MIGRATOR_CONNECTION).rawQuery(`DROP SCHEMA IF EXISTS ${JOB_SCHEMA} CASCADE`)
+    await runAce('jobs:install', [`--connection=${MIGRATOR_CONNECTION}`])
     await runReferenceSeeders()
   })()
   return prepared

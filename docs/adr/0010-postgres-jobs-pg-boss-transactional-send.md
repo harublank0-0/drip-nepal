@@ -7,6 +7,9 @@ Reviewed: 2026-09-25 · consistency review 2026-09-30 to 2026-10-04
 ## Status
 
 - **Decision status:** Accepted. Handing a Lucid transaction to pg-boss is to be confirmed by the M0 spike T-ARCH-004 (proposed). If the spike fails, the defined outbox fallback applies without changing this decision.
+
+  Edited 2026-11-11: the spike passed with pg-boss 12.38.0, in CI on `postgres:18.4` (`tests/concurrency/platform/pgboss.spec.ts`). `sendJob` passes `fromKnex(trx.knexClient)` as pg-boss's `db` option, so the job is written by the Lucid transaction itself (its `xmin` is that transaction's), takes no second Lucid connection, and vanishes with a rollback or a rolled-back savepoint; a commit makes it fetchable. `node ace jobs:install` installs or upgrades the schema as the migrator, waits for the upgrade's out-of-transaction index builds, and grants it. Runtime instances start with `migrate`, `createSchema`, `persistQueueStats` and `reindex` off and work without DDL, the worker's supervise pass included. The stately and standard queue policies behave as 03 §9 and 11 §8.5 assume. The outbox fallback is not needed.
+
 - **Date:** 2026-09-25
 - **Deciders:** lead developer
 - **Supersedes / superseded by:** — / —
