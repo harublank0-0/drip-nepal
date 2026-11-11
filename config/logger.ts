@@ -2,6 +2,7 @@ import env from '#start/env'
 import app from '@adonisjs/core/services/app'
 import { defineConfig, syncDestination, targets } from '@adonisjs/core/logger'
 import { REDACT_CENSOR, REDACT_PATHS } from '#config/log_redaction'
+import { runtime } from '#config/runtime'
 
 const loggerConfig = defineConfig({
   /**
@@ -32,9 +33,17 @@ const loggerConfig = defineConfig({
       redact: { paths: REDACT_PATHS, censor: REDACT_CENSOR },
 
       /**
-       * Use sync destination in non-production for immediate flush.
+       * Every line names its process (`web` for the server, `console` for
+       * the worker and `node ace`) and release, replacing pino's `hostname`,
+       * which the log shipper adds (docs/09 §7.1).
        */
-      destination: !app.inProduction ? await syncDestination() : undefined,
+      base: { pid: process.pid, process: app.getEnvironment(), release: runtime.release },
+
+      /**
+       * A synchronous pretty stream on a developer machine only; test,
+       * staging and production write raw JSON lines to stdout (docs/09 §7.1).
+       */
+      destination: app.inDev ? await syncDestination() : undefined,
 
       /**
        * Configure where logs are written.

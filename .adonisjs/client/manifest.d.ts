@@ -5,10 +5,12 @@
 
 /// <reference path="../../adonisrc.ts" />
 /// <reference path="../../config/auth.ts" />
+/// <reference path="../../config/crypto.ts" />
 /// <reference path="../../config/drive.ts" />
 /// <reference path="../../config/hash.ts" />
 /// <reference path="../../config/limiter.ts" />
 /// <reference path="../../config/log_redaction.ts" />
 /// <reference path="../../config/logger.ts" />
 /// <reference path="../../config/mail.ts" />
+/// <reference path="../../config/runtime.ts" />
 /// <reference path="../../config/storefront.ts" />

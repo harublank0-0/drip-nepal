@@ -6,7 +6,11 @@
 # See DEPLOY.md.
 services:
   app:
-    build: .
+    build:
+      context: .
+      # The commit being deployed; staging and production refuse to boot without it.
+      args:
+        APP_RELEASE: ${APP_RELEASE:?set APP_RELEASE to the commit being deployed}
     restart: unless-stopped
     env_file: .env.production
     environment:

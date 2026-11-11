@@ -70,6 +70,7 @@ pnpm install
 
 cp .env.example .env     # the database settings already match docker-compose.yml
 node ace generate:key --show   # paste the key after APP_KEY= in .env
+# An older .env lacks newer variables: boot lists every missing one; copy them from .env.example.
 
 docker compose up -d     # PostgreSQL 18 with the three database roles, Redis and Mailpit (the app uses only PostgreSQL)
 node ace migration:run --no-schema-generate   # the 14 baseline files; leaves the generated database/schema.ts alone

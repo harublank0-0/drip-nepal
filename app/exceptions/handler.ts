@@ -2,7 +2,8 @@ import app from '@adonisjs/core/services/app'
 import { type HttpContext, ExceptionHandler } from '@adonisjs/core/http'
 import type { HttpError, StatusPageRange, StatusPageRenderer } from '@adonisjs/core/types/http'
 import { databaseError, toProblem, type Problem } from '#exceptions/to_problem'
-import { reportToTracker, scrubbedDatabaseError } from '#exceptions/tracker'
+import { reportToTracker, scrubbedDatabaseError, userReference } from '#exceptions/tracker'
+import { hmacKeys } from '#config/crypto'
 
 /*
  * The exception handler (docs/09 §5.4, ADR-0018). `toProblem()` is the one
@@ -56,7 +57,9 @@ function renderPage(
 ) {
   const inertia = (ctx as Partial<HttpContext>).inertia
   if (inertia) return render(inertia)
-  // The status page's error is the handler's shim: the problem's title and status.
+  // The status page's error is the handler's shim (renderErrorAsHTML): the problem's title
+  // and status. Status pages run only without debug (`renderStatusPages = !app.inDev`), and
+  // without debug every HTML error goes through the shim, so no raw message reaches here.
   return `<p>${escapeHtml(error.message)}</p>`
 }
 
@@ -206,7 +209,10 @@ export default class HttpExceptionHandler extends ExceptionHandler {
       status: problem.status,
       route: ctx.route?.pattern ?? null,
       route_name: ctx.route?.name ?? null,
-      user_ref: null,
+      user_ref: userReference(
+        (ctx as Partial<HttpContext>).auth?.user?.id,
+        hmacKeys.telemetry?.release()
+      ),
     })
     if (tracked.outcome === 'failed') {
       ctx.logger.warn({ problem_code: problem.code, cause: tracked.cause }, 'tracker.failed')

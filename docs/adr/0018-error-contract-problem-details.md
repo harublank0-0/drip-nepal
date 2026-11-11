@@ -17,6 +17,8 @@ Reviewed: 2026-09-25 · consistency review 2026-09-30 to 2026-10-04
 
 Edited 2026-09-30 (consistency review): decisions 1 and 2 follow [06 §5](../06-api-design.md#5-error-contract) and [07 §3.3](../07-security-threat-model-and-permissions.md#33-the-per-request-account-check-and-the-suspension-decision): `errors[]` also carries the per-line reasons of five non-validation codes, `IDEMPOTENCY_KEY_REQUIRED` is 400, `SERVICE_BUSY` is proposed for both catalog-read causes of [06 §5.2](../06-api-design.md#52-codes), and the CSRF mapping is decided; the contract is otherwise unchanged.
 
+Edited 2026-11-11 (E5 built, [09 note 89](../09-code-structure-and-engineering-standards.md#consistency-notes-for-editor)): decision 5's "full error" excludes what can quote submitted personal data. The logger redacts a PostgreSQL error's `detail` ([09 §7.2](../09-code-structure-and-engineering-standards.md#72-redaction-paths)). A data exception (SQLSTATE class 22), whose server message quotes the submitted value, is logged and sent to the tracker reduced to its SQLSTATE, table, column, routine, placeholder SQL and call frames ([09 §5.4](../09-code-structure-and-engineering-standards.md#54-the-exception-handler)). A 503 `PROVIDER_UNAVAILABLE` is logged at `warn` and not sent to the tracker (09 §5.6). The contract is otherwise unchanged.
+
 ## Context
 
 **Repository today** [Verified-repo; [research: repository-audit](../research/repository-audit.md)]:

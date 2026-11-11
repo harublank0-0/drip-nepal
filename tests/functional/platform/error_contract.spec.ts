@@ -9,6 +9,10 @@ import env from '#start/env'
 import { middleware } from '#start/kernel'
 import { DomainError } from '#exceptions/domain_error'
 import { ProviderUnavailableError } from '#exceptions/provider_errors'
+import { hmacKeys } from '#config/crypto'
+import { ipHash, keyedHash } from '#modules/platform/crypto/keyed_hash'
+import pg from 'pg'
+import { parseInt8 } from '#start/database_types'
 
 /*
  * The error contract and request IDs over HTTP (docs/06 §5, §11; docs/09
@@ -465,6 +469,44 @@ test.group('Database errors are logged without the values they quote', () => {
       sql: 'SELECT $1::uuid',
     })
     assert.notInclude(JSON.stringify(errorLine!.fields), 'ram@example.com')
+  })
+
+  test('the access line carries the keyed IP hash, never the IP', async ({ assert }) => {
+    const lines = await captureLogs(async () => {
+      await fetch(`${baseUrl()}/api/v1/nothing-here`).then((response) => response.text())
+    })
+    const accessLine = lines.find((line) => line.message === 'http.request')
+    assert.match(String(accessLine?.fields.ip_hash), /^[0-9a-f]{64}$/)
+    // The test client connects over loopback, IPv4 or IPv6 depending on the host.
+    const loopback = ['127.0.0.1', '::1', '::ffff:127.0.0.1']
+    const expected = loopback.map((ip) => keyedHash(hmacKeys.auditIp.release(), ip).toString('hex'))
+    assert.include(expected, String(accessLine?.fields.ip_hash))
+    for (const ip of loopback) assert.notInclude(JSON.stringify(accessLine?.fields), `"${ip}"`)
+  })
+
+  test('readiness answers 200 when the database answers and int8 is a number', async ({
+    assert,
+  }) => {
+    const response = await fetch(`${baseUrl()}/health/ready`)
+    assert.equal(response.status, 200)
+    assert.deepEqual(await response.json(), { status: 'ok' })
+  })
+
+  test('readiness answers 503 when int8 arrives as a string', async ({ assert }) => {
+    // As if start/database_types.ts were not preloaded: node-postgres's default.
+    pg.types.setTypeParser(20, (text: string) => text)
+    try {
+      const response = await fetch(`${baseUrl()}/health/ready`)
+      assert.equal(response.status, 503)
+    } finally {
+      pg.types.setTypeParser(20, parseInt8)
+    }
+  })
+
+  test('an IPv4 address mapped into IPv6 hashes as plain IPv4', ({ assert }) => {
+    const key = Buffer.alloc(32, 3)
+    assert.deepEqual(ipHash(key, '::ffff:203.0.113.7'), ipHash(key, '203.0.113.7'))
+    assert.notDeepEqual(ipHash(key, '::1'), ipHash(key, '203.0.113.7'))
   })
 
   test('health probes write no access line', async ({ assert }) => {

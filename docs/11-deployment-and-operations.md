@@ -2367,3 +2367,24 @@ Notes 1–13 cover §1–§2; notes 14–31 cover §3–§5; notes 32–55 cover
 108. **Final review (consistency review, 2026-09-30).** Applied here: §8.3 step 4 and §10.4 step 4 never redrive `dlq.refunds.execute` by batch. `jobs:redrive` handles that queue job by job: it redrives a job only when the job carries no `attempts` value (sent by `approveRefund` or by a system approval) and its refund is still `approved`, and discards every job that carries `attempts` (sent by `retryRefund`). The §8.2 row says why: both kinds of job land in the same dead-letter queue. §10.4 step 1 names that job as the one that does not rerun after `expireInSeconds`. §4.4 runs the pg-boss schema step between `migration:run` and `db:seed`, because pg-boss starts with its migration disabled and the dev seeders send jobs (tech lead decision 2026-10-01); 04 §20.2.3 step 6 follows. Note 83 is done for 08.
 109. **Roles in the test database (2026-11-09).** §2.3 and §4.3 now say where the test database's roles come from, as [10 §3.2](10-testing-and-quality-gates.md#32-the-test-database) requires: the CI job creates `dripnepal_migrator`, `dripnepal_app` and `dripnepal_readonly` (with `pg_read_all_stats`) before the migrations and makes the migrator the owner of `dripnepal_test`, and the development init folder does the same with `00_create_roles.sql` before `01_create_test_database.sql`. `dripnepal_dev` is still the §4.3 target; today's Compose file still creates `dripnepal`, and the rest of the RF-43 list is unchanged. An existing developer volume needs the roles once by hand; the init file's header gives the commands. No meaning changed.
 110. **The pg-boss schema step (2026-11-11).** §4.4 and §5.4 name the step: `node ace jobs:install`, run as the migrator after `migration:run`, which installs or upgrades `pgboss` and re-grants it; §6.1 names the runtime options. Both were confirmed by `T-ARCH-004`.
+111. **The image in M0 (E6, 2026-11-11).** The prototype `Dockerfile` follows §4.2 where it already could:
+
+- the build fails without `build/ssr/ssr.js`;
+- `APP_RELEASE` is a build argument baked into the runtime image (CI passes the commit; `docker-compose.prod.yml` requires it);
+- `.dockerignore` excludes `.env*`, `docs` and `coverage`.
+
+`T-OPS-010` is `scripts/check_image.sh`, run by CI's Docker image job. It checks that the image:
+
+- runs as a non-root user;
+- holds no `.env*` under `/app`;
+- has `/app/ssr/ssr.js`;
+- boots in a staging-shaped environment with throwaway keys, with `/health/live` reporting the release and `/health/ready` answering 503 without a database.
+
+Still to do from §4.2:
+
+- the digest pin of the base image;
+- the `bin/instrument.js` import, which comes with the Sentry adapter;
+- removing the migrate-on-start entrypoint, which goes with the §4.5 Compose files and the release step of §5.4;
+- the image check that serves `/` with server-rendered markup (`T-ARCH-002`), once M1 has a `/` page.
+
+`.env.production.example` lists the new keys and runs the prototype stack as `APP_ENV=staging`: production requires `DB_SSL=true`, and that stack's Postgres container has no TLS. It sets no `APP_RELEASE`, because an empty value in the `env_file` would override the image's. `ARG APP_RELEASE` comes last in the runtime stage, so a new commit rebuilds only that layer; on a pull request CI bakes the branch head's commit, not the merge commit. `scripts/check_image.sh` removes its container on any exit.

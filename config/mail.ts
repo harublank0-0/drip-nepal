@@ -20,7 +20,7 @@ const mailConfig = defineConfig({
       port,
       secure: port === 465,
       auth: username
-        ? { type: 'login', user: username, pass: env.get('SMTP_PASSWORD') ?? '' }
+        ? { type: 'login', user: username, pass: env.get('SMTP_PASSWORD')?.release() ?? '' }
         : undefined,
     }),
   },

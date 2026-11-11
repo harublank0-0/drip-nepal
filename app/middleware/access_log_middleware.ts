@@ -1,5 +1,7 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import type { NextFn } from '@adonisjs/core/types/http'
+import { hmacKeys } from '#config/crypto'
+import { ipHash } from '#modules/platform/crypto/keyed_hash'
 
 /*
  * One `http.request` line per request (docs/09 §7.4 "Access line"), the
@@ -11,8 +13,8 @@ import type { NextFn } from '@adonisjs/core/types/http'
  *
  * The `/health/*` probes of docs/11 §7.1 get no line.
  *
- * `ip_hash` (HMAC with `HMAC_KEY_AUDIT_IP`) joins the line with the key ring
- * of E6 (docs/12 §4.1).
+ * `ip_hash` is the keyed hash of the client IP with `HMAC_KEY_AUDIT_IP`, the
+ * same as `audit_logs.ip_hash`, in hex; never the IP itself.
  */
 
 // Cloudflare's ray ID, logged only when it looks like one (no log injection).
@@ -35,6 +37,7 @@ export default class AccessLogMiddleware {
           route_name: ctx.route?.name ?? null,
           status: ctx.response.getStatus(),
           duration_ms: Number((process.hrtime.bigint() - started) / 1_000_000n),
+          ip_hash: ipHash(hmacKeys.auditIp.release(), ctx.request.ip()).toString('hex'),
           ...(userId ? { user_id: userId } : {}),
           ...(cfRay && CF_RAY.test(cfRay) ? { cf_ray: cfRay } : {}),
         },

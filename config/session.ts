@@ -63,11 +63,7 @@ const sessionConfig = defineConfig({
    * list of available stores and their config.
    */
   stores: {
-    /**
-     * Store session data inside encrypted cookies.
-     */
-    cookie: stores.cookie(),
-
+    // No cookie store: session data never travels to the browser (RF-04).
     /**
      * Store session data inside the configured database.
      */

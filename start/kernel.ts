@@ -26,8 +26,8 @@ server.use([
   // First: sanitizes X-Request-Id before anything logs or echoes it (docs/09 §7.4).
   () => import('#middleware/request_context_middleware'),
   () => import('#middleware/access_log_middleware'),
-  () => import('#middleware/container_bindings_middleware'),
   () => import('#middleware/health_middleware'),
+  () => import('#middleware/container_bindings_middleware'),
   () => import('@adonisjs/static/static_middleware'),
   () => import('@adonisjs/cors/cors_middleware'),
   () => import('@adonisjs/vite/vite_middleware'),
