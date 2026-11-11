@@ -74,10 +74,12 @@ node ace generate:key --show   # paste the key after APP_KEY= in .env
 
 docker compose up -d     # PostgreSQL 18 with the three database roles, Redis and Mailpit (the app uses only PostgreSQL)
 node ace migration:run --no-schema-generate   # the 14 baseline files; leaves the generated database/schema.ts alone
-node ace jobs:install    # the pg-boss schema and its grants (docs/11 §6.1)
+node ace jobs:install    # the pg-boss schema, its queues and its grants (docs/11 §6.1)
 node ace db:seed         # reference data only: no demo shops, products, orders or logins yet (OD-59)
 pnpm dev                 # http://localhost:3333/design-system and /health/live
 ```
+
+No seeder creates a login, in any environment. The first platform admin comes from `node ace platform:create-admin --interactive`, which asks for the e-mail, the name and the password at masked prompts; it has no password flag ([docs/09 §9.1](docs/09-code-structure-and-engineering-standards.md#91-node-ace-platformcreate-admin)). Nothing can sign in until M1 builds the login and TOTP enrolment, and the enrolment e-mail it queues is sent once M1's worker exists. Production and staging follow [docs/11](docs/11-deployment-and-operations.md) instead of this section: the release step runs the migrations, `jobs:install`, the reference seeders and `node ace release:check`.
 
 Every other path answers 404 until M1 to M7 add the pages. The `dripnepal-run` and `dripnepal-testing` skills in `.agents/skills/` have the details, including a setup without Docker.
 
