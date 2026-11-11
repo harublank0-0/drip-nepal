@@ -1,5 +1,6 @@
 import { BaseSeeder } from '@adonisjs/lucid/seeders'
 import app from '@adonisjs/core/services/app'
+import { runtime } from '#config/runtime'
 
 /*
  * The base class of every development seeder in database/seeders/dev/
@@ -8,10 +9,9 @@ import app from '@adonisjs/core/services/app'
  *
  * 1. `static environment`: Lucid marks the seeder `ignored` under
  *    NODE_ENV=production and never calls run().
- * 2. run() refuses when `app.inProduction`. docs/09 §8.8 also refuses
- *    APP_ENV=staging or production; `APP_ENV` is added to start/env.ts by
- *    epic E6 (docs/09 §6.1, docs/12 §4.1), and the check joins this guard
- *    then.
+ * 2. run() refuses when `app.inProduction`, or when `APP_ENV` is `staging`
+ *    or `production` (start/env.ts, docs/09 §6.1), so a staging host whose
+ *    NODE_ENV was mistyped is still refused.
  * 3. run() refuses unless `current_database()` ends in `_dev` or `_test`,
  *    whatever the environment variables say.
  *
@@ -21,11 +21,16 @@ import app from '@adonisjs/core/services/app'
 
 export class RefusedInThisEnvironment extends Error {}
 
-export type DevSeederSituation = { inProduction: boolean; databaseName: string }
+export type DevSeederSituation = { inProduction: boolean; appEnv: string; databaseName: string }
+
+const DEPLOYED = ['staging', 'production']
 
 /** Why a development seeder must not run here (guards 2 and 3), or null. */
 export function devSeederRefusal(situation: DevSeederSituation): string | null {
   if (situation.inProduction) return 'development seeders refuse NODE_ENV=production'
+  if (DEPLOYED.includes(situation.appEnv)) {
+    return `development seeders refuse APP_ENV=${situation.appEnv}`
+  }
   if (!/_(dev|test)$/.test(situation.databaseName)) {
     return `development seeders refuse database ${situation.databaseName}`
   }
@@ -41,6 +46,7 @@ export abstract class DevSeeder extends BaseSeeder {
     const result = await this.client.rawQuery('SELECT current_database() AS name')
     const refusal = devSeederRefusal({
       inProduction: app.inProduction,
+      appEnv: runtime.appEnv,
       databaseName: result.rows[0].name,
     })
     if (refusal) throw new RefusedInThisEnvironment(refusal)

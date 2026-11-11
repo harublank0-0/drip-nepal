@@ -1,5 +1,5 @@
-import { PgBoss, fromKnex } from 'pg-boss'
-import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
+import { PgBoss, fromKnex, type Queue } from 'pg-boss'
+import type { PostgreConfig, TransactionClientContract } from '@adonisjs/lucid/types/database'
 
 /*
  * Jobs run on pg-boss in PostgreSQL (ADR-0010). A job is sent inside the
@@ -37,6 +37,25 @@ export interface JobDatabase {
   database: string
   // The same TLS options as Lucid's connection (docs/11 §1); none in development.
   ssl?: unknown
+}
+
+/*
+ * The pg-boss connection settings of a Lucid connection's configuration, or
+ * null when it does not name a host, user and database (a connection
+ * string or a function). Commands use it to reach pg-boss as the same role
+ * as their Lucid connection.
+ */
+export function jobDatabaseOf(config: PostgreConfig | undefined): JobDatabase | null {
+  const connection = config?.connection
+  if (!connection || typeof connection !== 'object' || !('user' in connection)) return null
+  return {
+    host: String(connection.host),
+    port: Number(connection.port),
+    user: String(connection.user),
+    password: String(connection.password),
+    database: String(connection.database),
+    ssl: 'ssl' in connection ? connection.ssl : undefined,
+  }
 }
 
 // Pool sizes from the connection budget of docs/03 §3.4.
@@ -87,6 +106,48 @@ function jobBoss() {
   return current
 }
 
+export function hasJobBoss() {
+  return current !== null
+}
+
+/*
+ * The queues the application sends to, created or updated by the schema
+ * step (`node ace jobs:install`) as the migrator, so a send never meets a
+ * missing queue and no runtime instance creates one (proposed, docs/09
+ * §2.3). A queue is added here with its first sender. Names and settings
+ * are docs/03 §9's: the defaults [Assumption there], a dead-letter queue
+ * per queue, and on the queues that carry `token_enc` completed jobs
+ * deleted after one day and queued ones after 7 days, the longest token
+ * lifetime (docs/07 §3.8 rule 2). Dead-letter queues have no worker.
+ */
+const QUEUE_DEFAULTS = { retryBackoff: true, retryDelayMax: 3600, expireInSeconds: 120 }
+const TOKEN_RETENTION = { deleteAfterSeconds: 86_400, retentionSeconds: 604_800 }
+
+// Settings `updateQueue` can change too, so a later release can retune a queue; `standard` policy.
+type QueueSettings = Omit<
+  Queue,
+  'name' | 'policy' | 'partition' | 'deadLetter' | 'heartbeatSeconds'
+>
+
+export const JOB_QUEUES: Record<string, QueueSettings> = {
+  'notifications.dispatch': { ...QUEUE_DEFAULTS, ...TOKEN_RETENTION },
+}
+
+export const deadLetterQueue = (queue: string) => `dlq.${queue}`
+
+// Creates each queue of `queues` and its dead-letter queue, or updates its settings.
+export async function ensureQueues(boss: PgBoss, queues = JOB_QUEUES) {
+  for (const [name, options] of Object.entries(queues)) {
+    const dlq = deadLetterQueue(name)
+    const parking = { retentionSeconds: options.retentionSeconds }
+    if (await boss.getQueue(dlq)) await boss.updateQueue(dlq, parking)
+    else await boss.createQueue(dlq, parking)
+    const settings = { ...options, deadLetter: dlq }
+    if (await boss.getQueue(name)) await boss.updateQueue(name, settings)
+    else await boss.createQueue(name, settings)
+  }
+}
+
 /*
  * Installs or upgrades the pg-boss schema as the migrator. An upgrade may
  * queue commands that run outside its transaction (`CREATE INDEX
@@ -94,8 +155,9 @@ function jobBoss() {
  * migration on runs them, so this waits until none is pending, running or
  * failed. pg-boss retries a failed one on its next pass, so a row left
  * failed by an earlier, interrupted run heals here; the step fails only if
- * one is still unfinished at the deadline. The caller then runs the grants
- * of `jobSchemaGrants()` (docs/11 §6.1).
+ * one is still unfinished at the deadline. Then it creates or updates the
+ * queues of `JOB_QUEUES`. The caller then runs the grants of
+ * `jobSchemaGrants()` (docs/11 §6.1).
  */
 export async function installJobSchema(
   migrator: JobDatabase,
@@ -127,6 +189,7 @@ export async function installJobSchema(
       }
       await new Promise((resolve) => setTimeout(resolve, 500))
     }
+    await ensureQueues(boss)
     if (errors.length > 0) throw errors[0]
   } finally {
     await boss.stop({ graceful: true, close: true })

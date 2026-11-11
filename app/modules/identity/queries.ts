@@ -1,3 +1,4 @@
+import db from '@adonisjs/lucid/services/db'
 import { maySignIn } from '#modules/identity/domain/user_status'
 import { ABSOLUTE_SESSION_LIMIT_MS, olderThan } from '#modules/identity/domain/session_limits'
 
@@ -26,4 +27,15 @@ export function accountStanding(
   if (typeof stamp !== 'string' || stamp !== user.securityStamp) return 'signed_out'
   if (olderThan(session.authenticatedAt, ABSOLUTE_SESSION_LIMIT_MS, now)) return 'signed_out'
   return 'valid'
+}
+
+/*
+ * Whether an account holds `email` (already normalised by the account
+ * email rule), for `platform:create-admin`, which asks the operator before
+ * granting a role to an existing account (docs/09 §9.1). A host-side
+ * command, so the answer reveals nothing to a client.
+ */
+export async function accountExistsWithEmail(email: string) {
+  const row = await db.from('users').where('email', email).select('id').first()
+  return row !== null
 }
