@@ -65,10 +65,9 @@ export function prepareTestDatabase() {
       '--compact-output',
       '--no-schema-generate',
     ])
-    // TODO(T-ARCH-004): the pg-boss schema step and the idempotent `pgboss`
-    // grants to dripnepal_app, as the migrator, go here, before the reference
-    // seeders (docs/10 §3.2, docs/09 §6.1 "Test roles"). Their command is fixed
-    // by the M0 spike T-ARCH-004, which is not done yet.
+    // The pg-boss schema step and its grants, as the migrator, in the order of
+    // the release step (docs/10 §3.2, docs/11 §6.1; T-ARCH-004).
+    await runAce('jobs:install', [`--connection=${MIGRATOR_CONNECTION}`])
     await runReferenceSeeders()
   })()
   return prepared
