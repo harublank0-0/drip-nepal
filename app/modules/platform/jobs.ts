@@ -50,6 +50,8 @@ export function jobBossOptions(db: JobDatabase, role: 'worker' | 'web') {
     schema: JOB_SCHEMA,
     migrate: false,
     createSchema: false,
+    // Recorded queue stats create a table partition each day: DDL (docs/07 §4.10).
+    persistQueueStats: false,
     supervise: role === 'worker',
     schedule: role === 'worker',
   }
@@ -80,15 +82,14 @@ export async function installJobSchema(migrator: JobDatabase) {
 
 /*
  * The idempotent grants that follow every install or upgrade, including the
- * reinstall after a restore (docs/07 §4.10, docs/04a §15.5). Sequences are
- * included because pg-boss may use them; functions keep PostgreSQL's
- * default EXECUTE for PUBLIC, which USAGE on the schema makes reachable.
+ * reinstall after a restore (docs/07 §4.10, docs/04a §15.5). pg-boss 12
+ * creates no sequence; its functions keep PostgreSQL's default EXECUTE for
+ * PUBLIC, which USAGE on the schema makes reachable.
  */
 export function jobSchemaGrants(role = JOB_APP_ROLE) {
   return [
     `GRANT USAGE ON SCHEMA ${JOB_SCHEMA} TO ${role}`,
     `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA ${JOB_SCHEMA} TO ${role}`,
-    `GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA ${JOB_SCHEMA} TO ${role}`,
   ]
 }
 

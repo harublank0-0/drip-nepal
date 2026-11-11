@@ -145,6 +145,7 @@ test.group('T-ARCH-004 pg-boss transactional send', (group) => {
       const options = jobBossOptions(appDatabase(), role)
       assert.isFalse(options.migrate)
       assert.isFalse(options.createSchema)
+      assert.isFalse(options.persistQueueStats)
     }
     // The instances above started and created queues, so pg-boss needed none.
     await assert.rejects(

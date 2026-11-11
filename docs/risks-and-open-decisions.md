@@ -600,6 +600,8 @@ Ruling: dripnepal_migrator owns the pgboss schema. pg-boss's own schema install 
 Evidence: 07 §4.10 gives dripnepal_app no DDL, while pg-boss creates and upgrades its schema at start unless told
           not to (11 note 32). The pg-boss 12 option and the schema-step call stay pseudocode until the M0 spike
           T-ARCH-004 (proposed) confirms them (03 §10.1 item 5).
+          Edited 2026-11-11: T-ARCH-004 confirmed them: migrate: false, createSchema: false and
+          persistQueueStats: false on the runtime instances, and the step node ace jobs:install (ADR-0010).
 ADR: ADR-0010 decision 1 and ADR-0011 decision 2 (dated notes, 2026-10-01).
 Docs updated: 03 §3.4, §5.4 and §10.1, 04a §15.5, 07 §4.10, 09 §2.3, §6.1, §8.8 and §9.3, 10 §3.2, 11 §6.1,
               ADR-0010, ADR-0011 (2026-10-01)  |  Status: Decided; Resolved when the M0 release step and the
