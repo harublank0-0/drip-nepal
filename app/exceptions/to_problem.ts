@@ -58,6 +58,9 @@ const CORE_MEMBERS = new Set([
 // for a JSON body that is neither an object nor an array.
 const STRICT_JSON_MESSAGE = 'Invalid JSON, only supports object and array'
 
+// The message `inflation` 2 throws, with status 415 and no code, for an unknown encoding.
+const INFLATION_MESSAGE = 'Unsupported Content-Encoding: '
+
 // Seconds a client waits before retrying (docs/06 §5.2, §5.3).
 const RETRY_AFTER = { lockTimeout: 2, provider: 30 } as const
 
@@ -238,7 +241,10 @@ export function toProblem(
     return build('PAYLOAD_TOO_LARGE', requestId, { detail: 'The request is too large.' })
   }
   // An encoding raw-body does not know, or one `inflation` refuses (415, no code).
-  if (fields.code === 'E_ENCODING_UNSUPPORTED' || fields.status === 415) {
+  if (
+    fields.code === 'E_ENCODING_UNSUPPORTED' ||
+    (fields.status === 415 && error instanceof Error && error.message.startsWith(INFLATION_MESSAGE))
+  ) {
     return validationFailed(requestId, [
       item(null, 'unsupported_media_type', 'The request body encoding is not supported.'),
     ])

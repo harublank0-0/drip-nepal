@@ -50,19 +50,29 @@ function framesOf(stack: string) {
 }
 
 /*
- * A PostgreSQL error, reduced to what carries no submitted value. Knex
- * prefixes the SQL with numbered placeholders ($1), which is kept; the
- * server's own message can quote a value ("invalid input syntax for type
- * uuid: …", SQLSTATE 22P02), so it is replaced by the SQLSTATE, the
- * constraint, the table and column, and the server routine. The handler
- * logs the same reduction (docs/09 §7.3: identifiers, not data).
+ * A PostgreSQL data exception (SQLSTATE class 22), reduced to what carries
+ * no submitted value. Their server messages quote the value ("invalid input
+ * syntax for type uuid: …", 22P02), so the message is dropped and replaced by
+ * the SQLSTATE, the table, column and routine, and the SQL that Knex puts
+ * before it, with numbered placeholders ($1) instead of values. The SQL is
+ * kept only when the message starts with a statement keyword, cut at the
+ * first " - ": SQL comes first and holds no value, so a cut there can only
+ * shorten it, never reach the server's text. Every other class names objects,
+ * not values, and is logged and sent in full, with `detail` redacted
+ * (docs/09 §5.4, §7.2).
  */
+const STATEMENT = /^(select|insert|update|delete|with|merge|copy|call)\b/i
+
 export function scrubbedDatabaseError(error: unknown) {
   const database = databaseError(error)
-  if (!database || !(error instanceof Error)) return null
+  if (!database || !database.sqlstate.startsWith('22') || !(error instanceof Error)) return null
   const fields = error as Error & Record<string, unknown>
   const text = (key: string) => (typeof fields[key] === 'string' ? (fields[key] as string) : null)
-  const separator = error.message.lastIndexOf(' - ')
+  const separator = error.message.indexOf(' - ')
+  const sql =
+    separator !== -1 && STATEMENT.test(error.message)
+      ? error.message.slice(0, separator).slice(0, MAX_MESSAGE)
+      : null
   return {
     type: 'DatabaseError',
     sqlstate: database.sqlstate,
@@ -70,7 +80,7 @@ export function scrubbedDatabaseError(error: unknown) {
     table: text('table'),
     column: text('column'),
     routine: text('routine'),
-    sql: separator === -1 ? null : error.message.slice(0, separator).slice(0, MAX_MESSAGE),
+    sql,
     stack: typeof error.stack === 'string' ? framesOf(error.stack) : null,
   }
 }
@@ -105,6 +115,11 @@ export function trackerEvent(error: unknown, context: TrackerContext): TrackerEv
   }
 }
 
+export type TrackerOutcome =
+  | { outcome: 'sent' | 'skipped' }
+  // The transport's error name and code, never its message or body.
+  | { outcome: 'failed'; cause: { name: string; code: string | null } }
+
 /*
  * Sends one event for a 5xx and nothing for anything else (T-ARCH-026).
  * A failing transport never replaces the error response: the failure is
@@ -113,12 +128,19 @@ export function trackerEvent(error: unknown, context: TrackerContext): TrackerEv
 export async function reportToTracker(
   error: unknown,
   context: TrackerContext
-): Promise<'sent' | 'skipped' | 'failed'> {
-  if (!transport || context.status < 500) return 'skipped'
+): Promise<TrackerOutcome> {
+  if (!transport || context.status < 500) return { outcome: 'skipped' }
   try {
     await transport.capture(trackerEvent(error, context))
-    return 'sent'
-  } catch {
-    return 'failed'
+    return { outcome: 'sent' }
+  } catch (failure) {
+    const code = (failure as { code?: unknown } | null)?.code
+    return {
+      outcome: 'failed',
+      cause: {
+        name: failure instanceof Error ? failure.name : typeof failure,
+        code: typeof code === 'string' ? code : null,
+      },
+    }
   }
 }

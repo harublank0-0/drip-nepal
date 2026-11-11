@@ -85,17 +85,57 @@ test.group('T-ARCH-026 reportToTracker', (group) => {
     assert.notInclude(JSON.stringify(event), 'ram@example.com')
   })
 
+  test('a data exception whose value contains " - " sends {expected}')
+    .with([
+      {
+        name: 'with the Knex prefix',
+        message:
+          'select * from "users" where "id" = $1 limit $2 - invalid input syntax for type uuid: "ram@example.com - x"',
+        expected: 'SQLSTATE 22P02: select * from "users" where "id" = $1 limit $2',
+      },
+      {
+        name: 'without one (a direct pg query)',
+        message: 'invalid input syntax for type uuid: "ram@example.com - x"',
+        expected: 'SQLSTATE 22P02',
+      },
+    ])
+    .run(async ({ assert }, { message, expected }) => {
+      const events = fakeTransport()
+      const error = Object.assign(new Error(message), { code: '22P02', severity: 'ERROR' })
+      await reportToTracker(error, context(500))
+      assert.equal(events[0].error.message, expected)
+      assert.notInclude(JSON.stringify(events[0]), 'ram@example.com')
+    })
+
+  test('another class keeps the server message, which names objects, not values', async ({
+    assert,
+  }) => {
+    const events = fakeTransport()
+    const message = 'delete from "audit_logs" - table audit_logs is append-only'
+    const error = Object.assign(new Error(message), {
+      code: 'P0001',
+      severity: 'ERROR',
+      detail: 'Key (email)=(ram@example.com)',
+    })
+    await reportToTracker(error, context(500))
+    assert.equal(events[0].error.message, message)
+    assert.notInclude(JSON.stringify(events[0]), 'ram@example.com')
+  })
+
   test('a failing transport is reported back, never thrown', async ({ assert }) => {
     setTrackerTransport({
       capture: () => {
         throw new Error('tracker down')
       },
     })
-    assert.equal(await reportToTracker(new Error('x'), context(500)), 'failed')
+    assert.deepEqual(await reportToTracker(new Error('x'), context(500)), {
+      outcome: 'failed',
+      cause: { name: 'Error', code: null },
+    })
   })
 
   test('without a transport nothing is sent and nothing throws', async ({ assert }) => {
     setTrackerTransport(null)
-    assert.equal(await reportToTracker(new Error('x'), context(500)), 'skipped')
+    assert.deepEqual(await reportToTracker(new Error('x'), context(500)), { outcome: 'skipped' })
   })
 })

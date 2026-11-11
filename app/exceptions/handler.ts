@@ -49,10 +49,15 @@ const titlePage = (problem: Problem) => `<p>${escapeHtml(problem.title)}</p>`
  * Inertia middleware (static files, CORS, Vite) has not set up; those get the
  * title alone.
  */
-function renderPage(ctx: HttpContext, render: (inertia: HttpContext['inertia']) => unknown) {
+function renderPage(
+  ctx: HttpContext,
+  error: HttpError,
+  render: (inertia: HttpContext['inertia']) => unknown
+) {
   const inertia = (ctx as Partial<HttpContext>).inertia
   if (inertia) return render(inertia)
-  return titlePage(problemFor(new Error('status page'), ctx))
+  // The status page's error is the handler's shim: the problem's title and status.
+  return `<p>${escapeHtml(error.message)}</p>`
 }
 
 /*
@@ -81,9 +86,10 @@ export default class HttpExceptionHandler extends ExceptionHandler {
 
   // 403 gets `errors/forbidden` with the permission work of M1 (docs/08 §8.3).
   protected statusPages: Record<StatusPageRange, StatusPageRenderer> = {
-    '404': (_, ctx) => renderPage(ctx, (inertia) => inertia.render('errors/not_found', {})),
-    '500..599': (_, ctx) =>
-      renderPage(ctx, (inertia) =>
+    '404': (error, ctx) =>
+      renderPage(ctx, error, (inertia) => inertia.render('errors/not_found', {})),
+    '500..599': (error, ctx) =>
+      renderPage(ctx, error, (inertia) =>
         inertia.render('errors/server_error', { request_id: ctx.request.id() ?? null })
       ),
   }
@@ -168,9 +174,9 @@ export default class HttpExceptionHandler extends ExceptionHandler {
    *   carries the statement, since PostgreSQL names no column) (docs/09 §7.3,
    *   docs/06 §5.3);
    * - other 4xx at `info`.
-   * A database error is logged reduced to its SQLSTATE, constraint, table,
-   * column, routine and placeholder SQL: the server's message can quote a
-   * submitted value (docs/09 §7.3).
+   * A data exception (SQLSTATE class 22) is logged reduced, since its server
+   * message quotes the submitted value; every other error in full, with
+   * `detail` redacted by the logger (docs/09 §5.4, §7.2).
    */
   async report(error: unknown, ctx: HttpContext) {
     const problem = problemFor(error, ctx)
@@ -202,8 +208,8 @@ export default class HttpExceptionHandler extends ExceptionHandler {
       route_name: ctx.route?.name ?? null,
       user_ref: null,
     })
-    if (tracked === 'failed') {
-      ctx.logger.warn({ problem_code: problem.code }, 'tracker.failed')
+    if (tracked.outcome === 'failed') {
+      ctx.logger.warn({ problem_code: problem.code, cause: tracked.cause }, 'tracker.failed')
     }
   }
 }

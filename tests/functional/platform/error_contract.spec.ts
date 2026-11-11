@@ -290,12 +290,14 @@ test.group('T-SEC-027 no SQL or stack in production errors', () => {
       status: 500,
       sqlstate: '23505',
     })
-    const logged = errorLine!.fields.err as { constraint: string; sql: string }
+    // Not a data exception: logged in full. PostgreSQL's message names the
+    // constraint; Knex's SQL has numbered placeholders, not values.
+    const logged = errorLine!.fields.err as Error & { constraint: string }
+    assert.instanceOf(logged, Error)
     assert.equal(logged.constraint, 'platform_settings_pkey')
-    // Knex's pg dialect numbers the bindings ($1, $2) before it prefixes the
-    // SQL to the message, so the logged message holds no bound value.
-    assert.notInclude(logged.sql, 'checkout_enabled')
-    assert.include(logged.sql, '$1')
+    assert.include(logged.message, '$1')
+    assert.include(logged.message, 'platform_settings_pkey')
+    assert.notInclude(logged.message, "'checkout_enabled'")
 
     const accessLine = lines.find((line) => line.message === 'http.request')
     assert.containsSubset(accessLine?.fields, {
