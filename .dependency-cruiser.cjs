@@ -132,7 +132,20 @@ module.exports = {
       comment: 'Node network modules only in providers/ (T-SEC-016, docs/07 TM-13)',
       severity: 'error',
       from: { path: '^(app|start)/', pathNot: '^app/modules/[^/]+/providers/' },
-      to: { dependencyTypes: ['core'], path: '^(node:)?(http|https|http2|net|tls|dgram)$' },
+      to: { dependencyTypes: ['core'], path: '^(node:)?(http|https|http2|tls|dgram)$' },
+    },
+    // `net` as well, except in rate_limits.ts, which imports only the
+    // address parsers isIPv4 and isIPv6 and opens no socket (docs/09 §2.4,
+    // "Outbound HTTP only through adapters").
+    {
+      name: 'core-net-in-adapters-only',
+      comment: 'node:net only in providers/ (T-SEC-016, docs/07 TM-13)',
+      severity: 'error',
+      from: {
+        path: '^(app|start)/',
+        pathNot: ['^app/modules/[^/]+/providers/', '^app/modules/platform/rate_limits\\.ts$'],
+      },
+      to: { dependencyTypes: ['core'], path: '^(node:)?net$' },
     },
     // Unresolvable imports would hide every rule above.
     {
