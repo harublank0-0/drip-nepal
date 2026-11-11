@@ -42,4 +42,11 @@ test.group('T-SEC-101 limiter keys have a fixed length', () => {
     assert.match(key, /^login:acct_ip:[0-9a-f]{64}$/)
     assert.notInclude(key, 'example.com')
   })
+
+  test('parts are hashed unambiguously', ({ assert }) => {
+    assert.notEqual(
+      rateLimitKey('login_acct_ip', 'a|b', 'c'),
+      rateLimitKey('login_acct_ip', 'a', 'b|c')
+    )
+  })
 })
