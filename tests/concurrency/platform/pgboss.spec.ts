@@ -1,11 +1,11 @@
 import { test } from '@japa/runner'
+import app from '@adonisjs/core/services/app'
 import db from '@adonisjs/lucid/services/db'
 import env from '#start/env'
 import { getRollbackPlans, type PgBoss } from 'pg-boss'
 import {
   JOB_SCHEMA,
   createJobBoss,
-  installJobSchema,
   jobBossOptions,
   sendJob,
   setJobBoss,
@@ -57,6 +57,13 @@ async function queuedJobs(queue: string) {
     [queue]
   )
   return result.rows[0].n as number
+}
+
+// Runs `node ace jobs:install` as the migrator, as the release step does.
+async function jobsInstall() {
+  const ace = await app.container.make('ace')
+  const result = await ace.exec('jobs:install', [`--connection=${MIGRATOR_CONNECTION}`])
+  if (result.exitCode) throw result.error ?? new Error('jobs:install failed')
 }
 
 test.group('T-ARCH-004 pg-boss transactional send', (group) => {
@@ -253,14 +260,8 @@ test.group('T-ARCH-004 pg-boss transactional send', (group) => {
     await migrator.rawQuery(getRollbackPlans(JOB_SCHEMA))
     assert.equal(await version(), current - 1)
 
-    const config = db.manager.get(MIGRATOR_CONNECTION)!.config.connection as Record<string, unknown>
-    await installJobSchema({
-      host: String(config.host),
-      port: Number(config.port),
-      user: String(config.user),
-      password: String(config.password),
-      database: String(config.database),
-    })
+    // The real step, through Ace, so its grants are re-run too.
+    await jobsInstall()
 
     assert.equal(await version(), current)
     const open = await migrator.rawQuery(
@@ -270,6 +271,21 @@ test.group('T-ARCH-004 pg-boss transactional send', (group) => {
     // The runtime instance still sends on the upgraded schema.
     assert.isString(await db.transaction((trx) => sendJob(trx, STANDARD, { n: 7, ...envelope })))
     await boss!.deleteQueuedJobs(STANDARD)
+  }).timeout(60_000)
+
+  test('the schema step heals a command an earlier run left failed', async ({ assert }) => {
+    const migrator = db.connection(MIGRATOR_CONNECTION)
+    // An interrupted deploy can leave an index build marked failed; its
+    // command is CREATE INDEX CONCURRENTLY IF NOT EXISTS, so a retry is safe.
+    await migrator.rawQuery(
+      `UPDATE ${JOB_SCHEMA}.bam SET status = 'failed', error = 'interrupted'
+        WHERE id = (SELECT id FROM ${JOB_SCHEMA}.bam ORDER BY created_on DESC LIMIT 1)`
+    )
+    await jobsInstall()
+    const open = await migrator.rawQuery(
+      `SELECT count(*)::int AS n FROM ${JOB_SCHEMA}.bam WHERE status <> 'completed'`
+    )
+    assert.equal(open.rows[0].n, 0)
   }).timeout(60_000)
 
   test('the uuidv7() check of docs/04 §2.1', async ({ assert }) => {

@@ -90,9 +90,12 @@ function jobBoss() {
 /*
  * Installs or upgrades the pg-boss schema as the migrator. An upgrade may
  * queue commands that run outside its transaction (`CREATE INDEX
- * CONCURRENTLY`, pg-boss's "bam" table); only an instance with migration on
- * runs them, so this waits until none is pending and fails on a failed one.
- * The caller then runs the grants of `jobSchemaGrants()` (docs/11 §6.1).
+ * CONCURRENTLY IF NOT EXISTS`, pg-boss's "bam" table); only an instance with
+ * migration on runs them, so this waits until none is pending, running or
+ * failed. pg-boss retries a failed one on its next pass, so a row left
+ * failed by an earlier, interrupted run heals here; the step fails only if
+ * one is still unfinished at the deadline. The caller then runs the grants
+ * of `jobSchemaGrants()` (docs/11 §6.1).
  */
 export async function installJobSchema(
   migrator: JobDatabase,
@@ -116,13 +119,12 @@ export async function installJobSchema(
     const deadline = Date.now() + (options.timeoutMs ?? 10 * 60_000)
     for (;;) {
       const status = await boss.getBamStatus()
-      const failed = status.find((row) => row.status === 'failed' && row.count > 0)
-      if (failed) throw new Error(`pg-boss schema upgrade: ${failed.count} command(s) failed`)
-      const open = status.some(
-        (row) => (row.status === 'pending' || row.status === 'in_progress') && row.count > 0
-      )
-      if (!open) break
-      if (Date.now() > deadline) throw new Error('pg-boss schema upgrade: commands still pending')
+      const open = status.filter((row) => row.status !== 'completed' && row.count > 0)
+      if (open.length === 0) break
+      if (Date.now() > deadline) {
+        const left = open.map((row) => `${row.count} ${row.status}`).join(', ')
+        throw new Error(`pg-boss schema upgrade unfinished: ${left}`)
+      }
       await new Promise((resolve) => setTimeout(resolve, 500))
     }
     if (errors.length > 0) throw errors[0]

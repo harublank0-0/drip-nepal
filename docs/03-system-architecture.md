@@ -1038,7 +1038,7 @@ The dual-write problem is real: an order commit followed by a separate "enqueue 
 Because pg-boss stores jobs in PostgreSQL, a job can be inserted **in the same transaction** as the state change. pg-boss's `send` accepts a `db` option with a built-in Knex adapter, and its documentation states: "If the transaction rolls back, so does the job" [Verified-doc <https://github.com/timgit/pg-boss/blob/master/docs/api/adapters.md>]. Lucid's transaction client exposes the underlying Knex transaction as `knexClient: Knex.Transaction` [Verified-doc, `@adonisjs/lucid` 22.4.2 `build/src/types/database.d.ts` line 220, <https://registry.npmjs.org/@adonisjs/lucid/-/lucid-22.4.2.tgz>].
 
 ```ts
-// design sketch — adapter import path and option names are confirmed by the M0 spike
+// design sketch; the import path and options were confirmed by the M0 spike T-ARCH-004 on 2026-11-11 (app/modules/platform/jobs.ts)
 export async function sendJob<Q extends QueueName>(
   trx: TransactionClientContract,
   queue: Q,
