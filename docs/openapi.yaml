@@ -2341,8 +2341,9 @@ components:
       description: |
         One reason (06 §5.1). `field` is a dotted path (`variants.2.sku`, `lines.0`) or `null`
         for a non-field reason (also the one item of a SQLSTATE 22001, 06 §5.3).
-        `code` is a rule name (`required`, `regex`, `enum`, `unique`, `unknown_field`) or a
-        business reason (`insufficient_stock`, also on the `addCartItem` 409 `OUT_OF_STOCK`;
+        `code` is a rule name in snake case (`required`, `regex`, `enum`, `min_length`, `unique`,
+        `unknown_field`) or a business reason (`insufficient_stock`, also on the `addCartItem`
+        409 `OUT_OF_STOCK`;
         `below_reserved`, `stock_changed`; `payout_stale` on the `approvePayout` 409,
         `shop_frozen` on the `createPayout` and `approvePayout` 409 `CONFLICT` and
         `nothing_to_pay` on the `createPayout` 422, all proposed in 06 §5.2 and §13.6;

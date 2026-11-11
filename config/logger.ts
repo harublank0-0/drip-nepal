@@ -1,6 +1,7 @@
 import env from '#start/env'
 import app from '@adonisjs/core/services/app'
 import { defineConfig, syncDestination, targets } from '@adonisjs/core/logger'
+import { REDACT_CENSOR, REDACT_PATHS } from '#config/log_redaction'
 
 const loggerConfig = defineConfig({
   /**
@@ -24,6 +25,11 @@ const loggerConfig = defineConfig({
        * Minimum level to output (trace, debug, info, warn, error, fatal).
        */
       level: env.get('LOG_LEVEL'),
+
+      /**
+       * Paths whose values never reach a log line (docs/09 §7.2).
+       */
+      redact: { paths: REDACT_PATHS, censor: REDACT_CENSOR },
 
       /**
        * Use sync destination in non-production for immediate flush.
