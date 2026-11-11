@@ -1,3 +1,4 @@
+import db from '@adonisjs/lucid/services/db'
 import { maySignIn } from '#modules/identity/domain/user_status'
 import { ABSOLUTE_SESSION_LIMIT_MS, olderThan } from '#modules/identity/domain/session_limits'
 
@@ -26,4 +27,30 @@ export function accountStanding(
   if (typeof stamp !== 'string' || stamp !== user.securityStamp) return 'signed_out'
   if (olderThan(session.authenticatedAt, ABSOLUTE_SESSION_LIMIT_MS, now)) return 'signed_out'
   return 'valid'
+}
+
+/*
+ * Whether an account holds `email` (already normalised by the account
+ * email rule), for `platform:create-admin`, which asks the operator before
+ * granting a role to an existing account (docs/09 §9.1). A host-side
+ * command, so the answer reveals nothing to a client.
+ */
+export async function accountExistsWithEmail(email: string) {
+  const row = await db.from('users').where('email', email).select('id').first()
+  return row !== null
+}
+
+/*
+ * Whether an unrevoked `platform_admin` row exists, whatever its user's
+ * status: the bootstrap refuses then (docs/09 §9.1). `platform:create-admin`
+ * asks before its prompts; its action checks again under its lock.
+ */
+export async function platformAdminExists() {
+  const row = await db
+    .from('platform_staff')
+    .where('role', 'platform_admin')
+    .whereNull('revoked_at')
+    .select('user_id')
+    .first()
+  return row !== null
 }

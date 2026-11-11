@@ -10,9 +10,9 @@ import { DevSeeder, RefusedInThisEnvironment, devSeederRefusal } from '#database
 
 /*
  * The development-seeder guards of docs/09 §8.8 (RF-05, ADR-0011):
- * T-ARCH-019, development seeders refuse production or a database without
- * `_dev`/`_test`; T-ARCH-020, every development seeder extends `DevSeeder`
- * and keeps its run(). A refusal throws, so Lucid marks the seeder `failed`
+ * T-ARCH-019, development seeders refuse production, `APP_ENV` staging or
+ * production, or a database without `_dev`/`_test`; T-ARCH-020, every
+ * development seeder extends `DevSeeder` and keeps its run(). A refusal throws, so Lucid marks the seeder `failed`
  * and db:seed exits 1.
  */
 
@@ -39,11 +39,25 @@ test.group('T-ARCH-019 development seeders refuse production', () => {
   })
 
   test('T-ARCH-019 run() refuses when the app runs in production', ({ assert }) => {
-    // Guard 2: app.inProduction is fixed for this process, so the rule is
-    // tested on the function run() calls.
-    assert.isString(devSeederRefusal({ inProduction: true, databaseName: 'dripnepal_test' }))
-    assert.isNull(devSeederRefusal({ inProduction: false, databaseName: 'dripnepal_test' }))
+    // Guard 2: app.inProduction and APP_ENV are fixed for this process, so
+    // the rule is tested on the function run() calls.
+    const on = { inProduction: false, appEnv: 'test', databaseName: 'dripnepal_test' }
+    assert.isString(devSeederRefusal({ ...on, inProduction: true }))
+    assert.isNull(devSeederRefusal(on))
+    assert.isNull(devSeederRefusal({ ...on, appEnv: 'development', databaseName: 'dripnepal_dev' }))
   })
+
+  test('T-ARCH-019 run() refuses APP_ENV={appEnv} whatever NODE_ENV says')
+    .with([{ appEnv: 'staging' }, { appEnv: 'production' }])
+    .run(({ assert }, { appEnv }) => {
+      // A deployed host whose NODE_ENV is not production, on a _test database.
+      const refusal = devSeederRefusal({
+        inProduction: false,
+        appEnv,
+        databaseName: 'dripnepal_test',
+      })
+      assert.equal(refusal, `development seeders refuse APP_ENV=${appEnv}`)
+    })
 
   test('T-ARCH-019 run() refuses a database whose name lacks _dev or _test: {name}')
     .with([{ name: 'dripnepal' }, { name: 'dripnepal_staging' }, { name: 'dripnepal_test_old' }])
