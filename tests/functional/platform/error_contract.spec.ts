@@ -29,6 +29,9 @@ import { parseInt8 } from '#start/database_types'
  *   screen, and problem+json for a page URL asked for JSON.
  *
  * The routes below exist only in this test run, under `__test__` paths.
+ * A failing statement runs in a transaction, as an action's does: inside the
+ * test's global transaction it is a savepoint, so the session store can
+ * still write the session afterwards.
  */
 
 router
@@ -36,9 +39,11 @@ router
     router.get('unique-violation', async () => {
       // `platform_settings_pkey` is not on the constraint allowlist.
       const key = 'checkout_enabled'
-      await db.rawQuery(
-        `INSERT INTO platform_settings (key, value) VALUES (?, 'true'::jsonb), (?, 'true'::jsonb)`,
-        [key, key]
+      await db.transaction((trx) =>
+        trx.rawQuery(
+          `INSERT INTO platform_settings (key, value) VALUES (?, 'true'::jsonb), (?, 'true'::jsonb)`,
+          [key, key]
+        )
       )
     })
     router.get('rate-limited', () => {
@@ -57,17 +62,18 @@ router
     })
     router.get('bad-uuid', async () => {
       // SQLSTATE 22P02, whose server message quotes the value.
-      await db.rawQuery('SELECT ?::uuid', ['ram@example.com'])
+      await db.transaction((trx) => trx.rawQuery('SELECT ?::uuid', ['ram@example.com']))
     })
     router.post('echo', ({ request }) => request.body())
     router.post('protected', () => 'ok').use(middleware.auth())
+    router.get('signed-in', () => 'ok').use(middleware.auth())
   })
   .prefix('/api/v1/__test__')
 
 router
   .group(() => {
     router.get('page-boom', async () => {
-      await db.rawQuery('SELECT 1 / 0')
+      await db.transaction((trx) => trx.rawQuery('SELECT 1 / 0'))
     })
     // An error from a library that sets its own `status`, with a message that must not show.
     router.get('foreign-status/:status', ({ params }) => {
@@ -81,6 +87,7 @@ router
     router.get('needs-login', () => {
       throw new DomainError('UNAUTHENTICATED')
     })
+    router.get('signed-in-page/:token', () => 'ok').use(middleware.auth())
     router.get('page-validation', async ({ request }) => {
       await vine
         .compile(vine.object({ page: vine.number().min(1) }))
@@ -386,6 +393,31 @@ test.group('Pages answer from the problem, never from error.status', () => {
       location.searchParams.get('return_to'),
       '/__test__/needs-login?token=abc123&page=2'
     )
+  })
+
+  test('the auth middleware: a page redirects with return_to and stores nothing', async ({
+    assert,
+  }) => {
+    const response = await fetch(`${baseUrl()}/__test__/signed-in-page/secret-token-9?x=1`, {
+      redirect: 'manual',
+    })
+    assert.equal(response.status, 302)
+    const location = new URL(response.headers.get('location')!, baseUrl())
+    assert.equal(location.pathname, '/login')
+    assert.equal(
+      location.searchParams.get('return_to'),
+      '/__test__/signed-in-page/secret-token-9?x=1'
+    )
+    // No intended URL in the session (docs/07 §3.2): the token never reaches sessions.data.
+    const rows = await db.from('sessions').whereRaw('data::text LIKE ?', ['%secret-token-9%'])
+    assert.lengthOf(rows, 0)
+  })
+
+  test('the auth middleware: an API route answers 401 UNAUTHENTICATED', async ({ assert }) => {
+    const response = await fetch(`${baseUrl()}/api/v1/__test__/signed-in`)
+    assert.equal(response.status, 401)
+    const problem = await problemOf(response)
+    assert.equal(problem.code, 'UNAUTHENTICATED')
   })
 
   test('a validation error on a page URL asked for JSON is problem+json without meta', async ({

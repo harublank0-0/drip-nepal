@@ -12,6 +12,9 @@ const bodyParserConfig = defineConfig({
    * content-type parser.
    */
   form: {
+    // The JSON limit: no body larger than the largest operation's is read (docs/06 §9.2).
+    limit: '512kb',
+
     /**
      * Normalize empty string values to null.
      */
@@ -23,10 +26,27 @@ const bodyParserConfig = defineConfig({
     types: ['application/x-www-form-urlencoded'],
   },
 
+  /*
+   * The text parser (`text/*`), with the same limit. The package default
+   * would read 1 MB before request_body_middleware.ts could refuse it.
+   */
+  raw: {
+    limit: '512kb',
+    types: ['text/*'],
+  },
+
   /**
    * Config for the JSON parser.
    */
   json: {
+    /*
+     * The largest JSON body any operation accepts (the catalog writes,
+     * docs/06 §9.2). Most routes allow 256 KB, which
+     * app/middleware/request_body_middleware.ts checks after parsing. The
+     * form and text parsers have the same limit.
+     */
+    limit: '512kb',
+
     /**
      * Normalize empty string values to null.
      */
@@ -43,34 +63,17 @@ const bodyParserConfig = defineConfig({
     ],
   },
 
-  /**
-   * Config for the "multipart/form-data" content-type parser.
-   * File uploads are handled by the multipart parser.
+  /*
+   * Multipart is never parsed (RF-35, ADR-0013): images go straight to
+   * object storage, and no R1 operation accepts file bytes. The parser only
+   * marks the request as multipart; app/middleware/request_body_middleware.ts
+   * then refuses it on every route (docs/06 §9.2, T-MED-002).
    */
   multipart: {
-    /**
-     * Automatically process uploaded files into the system tmp directory.
-     */
     autoProcess: false,
-
-    /**
-     * Normalize empty string values to null.
-     */
     convertEmptyStringsToNull: true,
-
-    /**
-     * Routes where multipart processing is handled manually.
-     */
     processManually: [],
-
-    /**
-     * Maximum accepted payload size for multipart requests.
-     */
-    limit: '45mb',
-
-    /**
-     * Content types handled by the multipart parser.
-     */
+    limit: '1mb',
     types: ['multipart/form-data'],
   },
 })

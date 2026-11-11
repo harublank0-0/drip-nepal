@@ -143,6 +143,8 @@ export default defineConfig({
     init: [
       indexEntities({
         transformers: { enabled: true, withSharedProps: true },
+        // Only controllers: app/controllers/support/ holds the HTTP helpers (docs/09 §3.4).
+        controllers: { glob: ['**/*_controller.ts'] },
       }),
       indexPages({ framework: 'react' }),
       generateRegistry(),

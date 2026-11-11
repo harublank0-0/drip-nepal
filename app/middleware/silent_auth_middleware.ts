@@ -6,7 +6,7 @@ import type { NextFn } from '@adonisjs/core/types/http'
  * if the user is logged-in or not.
  *
  * The request continues as usual, even when the user is not logged-in. The
- * per-request account check (status and `security_stamp`) comes with E7
+ * account-status middleware that follows checks the user it loads
  * (docs/07 §3.3).
  */
 export default class SilentAuthMiddleware {

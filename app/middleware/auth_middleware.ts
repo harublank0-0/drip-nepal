@@ -2,41 +2,18 @@ import type { HttpContext } from '@adonisjs/core/http'
 import type { NextFn } from '@adonisjs/core/types/http'
 import type { Authenticators } from '@adonisjs/auth/types'
 import { errors as authErrors } from '@adonisjs/auth'
-import { safeReturnPath } from '#modules/auth/return_path'
-
-const LOGIN_PROMPT = 'Log in or create an account to continue.'
+import { DomainError } from '#exceptions/domain_error'
 
 /*
- * The page to come back to after logging in: the page itself for a GET,
- * the page the request came from for anything else (adding to the cart
- * from a product page, for example). Only paths on this site are kept.
- */
-function returnPath(ctx: HttpContext): string | null {
-  if (ctx.request.method() === 'GET') {
-    return ctx.request.url(true)
-  }
-
-  const referrer = ctx.request.header('referer')
-  if (!referrer) return null
-  try {
-    const url = new URL(referrer)
-    if (url.host !== ctx.request.host()) return null
-    return url.pathname + url.search
-  } catch {
-    return null
-  }
-}
-
-/**
- * Auth middleware is used authenticate HTTP requests and deny
- * access to unauthenticated users.
+ * Routes that need a signed-in user. A request without one throws
+ * UNAUTHENTICATED: the exception handler answers 401 problem+json under
+ * /api/ and redirects a page visit to /login with the visited URL as the
+ * `return_to` query (docs/09 §5.4). Nothing goes into the session: no
+ * intended URL is ever stored, so a token in a path never reaches
+ * `sessions.data` (docs/07 §3.2, TM-14). `/login` validates `return_to`
+ * with the single helper of docs/07 TM-14 (app/modules/auth/return_path.ts).
  */
 export default class AuthMiddleware {
-  /**
-   * The URL to redirect to, when authentication fails
-   */
-  redirectTo = '/auth/login'
-
   async handle(
     ctx: HttpContext,
     next: NextFn,
@@ -45,16 +22,11 @@ export default class AuthMiddleware {
     } = {}
   ) {
     try {
-      await ctx.auth.authenticateUsing(options.guards, { loginRoute: this.redirectTo })
+      await ctx.auth.authenticateUsing(options.guards)
     } catch (error) {
-      if (!(error instanceof authErrors.E_UNAUTHORIZED_ACCESS)) throw error
-
-      const path = safeReturnPath(returnPath(ctx))
-      if (path) ctx.session.setIntendedUrl(path)
-      throw new authErrors.E_UNAUTHORIZED_ACCESS(LOGIN_PROMPT, {
-        redirectTo: this.redirectTo,
-        guardDriverName: error.guardDriverName,
-      })
+      if (error instanceof authErrors.E_UNAUTHORIZED_ACCESS)
+        throw new DomainError('UNAUTHENTICATED')
+      throw error
     }
     return next()
   }

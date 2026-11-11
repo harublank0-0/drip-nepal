@@ -1,0 +1,29 @@
+import { maySignIn } from '#modules/identity/domain/user_status'
+import { ABSOLUTE_SESSION_LIMIT_MS, olderThan } from '#modules/identity/domain/session_limits'
+
+/*
+ * The identity module's reads for other layers (docs/09 §2.2: a module's
+ * public surface is `actions/`, `queries.ts` and `events.ts`).
+ */
+
+export type AccountStanding = 'valid' | 'suspended' | 'signed_out'
+
+/*
+ * The per-request account check of docs/07 §3.3 over the user `silent_auth`
+ * has already loaded, so it needs no query of its own. In the 07 §3.3 row
+ * order: a user who is not `active` or `pending_verification` is
+ * `suspended` (row 1); a session stamp that is missing, not a string or not
+ * the user's (row 3), or an `authenticated_at` older than 30 days or missing
+ * (row 4), is `signed_out`.
+ */
+export function accountStanding(
+  user: { status: string; securityStamp: string },
+  session: { securityStamp: unknown; authenticatedAt: unknown },
+  now = Date.now()
+): AccountStanding {
+  if (!maySignIn(user.status)) return 'suspended'
+  const stamp = session.securityStamp
+  if (typeof stamp !== 'string' || stamp !== user.securityStamp) return 'signed_out'
+  if (olderThan(session.authenticatedAt, ABSOLUTE_SESSION_LIMIT_MS, now)) return 'signed_out'
+  return 'valid'
+}

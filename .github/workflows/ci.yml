@@ -78,7 +78,7 @@ jobs:
       HOST: localhost
       LOG_LEVEL: warn
       APP_URL: http://localhost:3333
-      SESSION_DRIVER: memory
+      SESSION_DRIVER: database
       DRIVE_DISK: fs
       LIMITER_STORE: database
       DB_HOST: localhost

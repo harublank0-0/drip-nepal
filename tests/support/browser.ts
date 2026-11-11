@@ -16,10 +16,39 @@ export class Browser {
 
   #remember(response: Response) {
     for (const cookie of response.headers.getSetCookie()) {
-      const pair = cookie.slice(0, cookie.indexOf(';'))
+      const end = cookie.indexOf(';')
+      const pair = end === -1 ? cookie : cookie.slice(0, end)
       const at = pair.indexOf('=')
-      this.#cookies.set(pair.slice(0, at), pair.slice(at + 1))
+      const value = pair.slice(at + 1)
+      // A cleared cookie (empty value or Max-Age=0) is dropped, as a browser does.
+      if (value === '' || /;\s*max-age=0(?:;|$)/i.test(cookie))
+        this.#cookies.delete(pair.slice(0, at))
+      else this.#cookies.set(pair.slice(0, at), value)
     }
+  }
+
+  // The cookie a browser would send next, or undefined.
+  cookie(name: string) {
+    return this.#cookies.get(name)
+  }
+
+  // A second browser holding the same cookies, such as a stale tab.
+  clone() {
+    const copy = new Browser(this.base)
+    for (const [name, value] of this.#cookies) copy.#cookies.set(name, value)
+    copy.#inertiaVersion = this.#inertiaVersion
+    return copy
+  }
+
+  // Any request, with the cookies and the XSRF header; redirects are not followed.
+  async request(path: string, init: RequestInit = {}) {
+    const response = await fetch(`${this.base}${path}`, {
+      redirect: 'manual',
+      ...init,
+      headers: { ...this.#headers(), ...(init.headers as Record<string, string>) },
+    })
+    this.#remember(response)
+    return response
   }
 
   // Opens a page as a first visit does, and keeps the page's Inertia version
