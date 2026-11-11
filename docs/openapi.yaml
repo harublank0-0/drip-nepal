@@ -290,9 +290,12 @@ x-pending-operations:
   - adminAllowShopOnLogisticsAccount
   - adminRemoveShopFromLogisticsAccount
   - adminSetShopLogisticsEnabled
+  - adminListLogisticsBranches
   - adminSyncLogisticsBranches
   - adminUpdateLogisticsBranch
+  - adminListCourierBookings
   - adminResolveCourierBooking
+  - adminRefreshCourierStatus
   - adminListCourierEvents
   - adminResolveCourierEvent
   - adminRecordOrderVerification
