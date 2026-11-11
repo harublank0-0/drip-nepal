@@ -1,14 +1,20 @@
 import type { CourierMappedStatus } from '#modules/logistics/domain/courier_mapped_status'
 
 /*
- * Nepal Can Move's events and status labels to normalised shipment
- * statuses: the table "Nepal Can Move mapping" of docs/05 §6.3, from NCM's
- * API document v2 and webhook document v1.1 [Verify-external VX-16]. A pure
- * function (ADR-0019 decision 6), tested by T-FUL-108.
+ * Nepal Can Move's status labels to normalised shipment statuses: the
+ * table "Nepal Can Move mapping" of docs/05 §6.3, from NCM's API document
+ * v2 and webhook document v1.1 [Verify-external VX-16]. A pure function of
+ * (label, the shipment's current status) (ADR-0019 decision 6), tested by
+ * T-FUL-108.
  *
- * It says what the courier reports, not whether the shipment may move: the
- * orders module checks the transition against the machine and holds what
- * it refuses (`courier_events.hold_reason = 'not_allowed'`).
+ * It reads labels only. NCM does not sign callbacks, so a callback's event
+ * is never applied: it triggers a read of the parcel's history, whose
+ * labels are mapped here one by one (05 §6.3 "Replaying a status
+ * history"). It says what the courier reports, not whether the shipment may
+ * move, and it sends nothing: the job that applies the result owns the
+ * transaction, the notices and the alerts, and holds what the machine
+ * refuses (`courier_events.hold_reason = 'not_allowed'`). The return check
+ * before a `delivered` is applied is also the job's.
  */
 
 export type NcmMappingNotice =
@@ -31,26 +37,10 @@ type Stage =
   | 'in_transit'
   | 'out_for_delivery'
   | 'delivered'
-  | 'marked_return'
-  | 'sent_to_vendor'
+  | 'returning'
   | 'back_with_vendor'
   | 'courier_refund'
 
-// NCM tells consumers to decide by `event`, not by the display label (webhook doc v1.1).
-const EVENTS: Record<string, Stage> = {
-  pickup_completed: 'picked_up',
-  dropoff_collected: 'picked_up',
-  order_dispatched: 'in_transit',
-  order_arrived: 'in_transit',
-  sent_for_delivery: 'out_for_delivery',
-  delivery_completed: 'delivered',
-  order_marked_rtv: 'marked_return',
-  send_to_vendor: 'sent_to_vendor',
-  rtv_delivery: 'back_with_vendor',
-  refund_initiated: 'courier_refund',
-}
-
-// Status labels from polls and lookups, compared after `normaliseLabel`.
 const LABELS: Record<string, Stage> = {
   'pickup order created': 'booking_stands',
   'drop off order created': 'booking_stands',
@@ -61,38 +51,37 @@ const LABELS: Record<string, Stage> = {
   'arrived': 'in_transit',
   'sent for delivery': 'out_for_delivery',
   'delivered': 'delivered',
-  'order marked return': 'marked_return',
-  'sent to vendor': 'sent_to_vendor',
-  'send to vendor': 'sent_to_vendor',
+  'order marked return': 'returning',
+  'sent to vendor': 'returning',
+  'send to vendor': 'returning',
   'rtv delivered': 'back_with_vendor',
+  'refund initiated': 'courier_refund',
 }
 
+// `Dispatched to <branch>` and `Arrived at <branch>` match by their prefix (05 §6.3).
+const IN_TRANSIT_PREFIXES = ['dispatched to ', 'arrived at ']
+
 /*
- * NCM's examples write labels in title case. Case and repeated spaces are
- * not treated as meaning anything; any other difference is a new label.
+ * Case and repeated spaces are not treated as meaning anything; any other
+ * difference is a new label.
  */
 export function normaliseLabel(label: string) {
   return label.trim().replace(/\s+/g, ' ').toLowerCase()
 }
 
+function stageOf(label: string): Stage | undefined {
+  const normalised = normaliseLabel(label)
+  if (Object.hasOwn(LABELS, normalised)) return LABELS[normalised]
+  return IN_TRANSIT_PREFIXES.some((prefix) => normalised.startsWith(prefix))
+    ? 'in_transit'
+    : undefined
+}
+
 const IN_TRANSIT: ReadonlySet<string> = new Set(['shipped', 'out_for_delivery'])
 
-/*
- * `currentStatus` is the shipment's `status` (docs/04a §11.5). When NCM
- * sends both an event and a label, the event decides.
- */
-export function mapNcmUpdate(
-  update: { rawEvent: string | null; rawStatus: string | null },
-  currentStatus: string
-): NcmMapping {
-  const stage =
-    update.rawEvent !== null && update.rawEvent !== ''
-      ? EVENTS[update.rawEvent.trim()]
-      : update.rawStatus !== null
-        ? LABELS[normaliseLabel(update.rawStatus)]
-        : undefined
-
-  switch (stage) {
+// `currentStatus` is the shipment's `status` (docs/04a §11.5).
+export function mapNcmLabel(label: string, currentStatus: string): NcmMapping {
+  switch (stageOf(label)) {
     case undefined:
       return { kind: 'unmapped' }
     case 'booking_stands':
@@ -107,16 +96,11 @@ export function mapNcmUpdate(
       return currentStatus === 'returning'
         ? { kind: 'none', notice: 'record_returned_to_origin' }
         : { kind: 'transition', statuses: ['delivered'] }
-    case 'marked_return':
-      // NCM reports no failed attempt, so a return marked in transit is both (05 §6.3).
+    case 'returning':
+      // NCM reports no failed attempt, so a return while in transit is both (05 §6.3).
+      if (currentStatus === 'returning') return { kind: 'none', notice: null }
       return IN_TRANSIT.has(currentStatus)
         ? { kind: 'transition', statuses: ['delivery_failed', 'returning'] }
-        : currentStatus === 'returning'
-          ? { kind: 'none', notice: null }
-          : { kind: 'transition', statuses: ['returning'] }
-    case 'sent_to_vendor':
-      return currentStatus === 'returning'
-        ? { kind: 'none', notice: null }
         : { kind: 'transition', statuses: ['returning'] }
     case 'back_with_vendor':
       return { kind: 'none', notice: 'record_returned_to_origin' }
