@@ -66,8 +66,11 @@ export type CourierErrorCode =
 export interface CourierError {
   code: CourierErrorCode
   httpStatus: number | null
-  // The courier's own wording only, at most 500 characters; never a value DripNepal sent.
-  detail: string | null
+  /*
+   * The request fields a field error named (`shipment_booking_attempts.error_fields`).
+   * Never the courier's message, which may repeat a value DripNepal sent (docs/04a §9.13).
+   */
+  fields: string[]
   // True when the request certainly did not reach the courier, or was refused before any effect.
   retryable: boolean
 }

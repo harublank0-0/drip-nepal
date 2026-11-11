@@ -52,7 +52,6 @@ export interface NcmOptions {
 
 // 3 s connect and 10 s total in docs/03 §11.4; `fetch` takes only the total.
 const DEFAULT_TIMEOUT_MS = 10_000
-const DETAIL_LIMIT = 500
 
 // The create endpoint's field errors (`{"Error": {"<field>": "<message>"}}`) by field.
 const FIELD_ERRORS: Record<string, CourierErrorCode> = {
@@ -77,10 +76,10 @@ type Reply =
 function error(
   code: CourierErrorCode,
   httpStatus: number | null,
-  detail: string | null,
+  fields: string[],
   retryable: boolean
 ): CourierError {
-  return { code, httpStatus, detail, retryable }
+  return { code, httpStatus, fields, retryable }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -93,56 +92,42 @@ function text(value: unknown): string | null {
   return null
 }
 
-function truncate(value: string) {
-  return value.length > DETAIL_LIMIT ? value.slice(0, DETAIL_LIMIT) : value
-}
-
 /*
- * NCM's four error shapes (`detail`, `Error`, `message`, and `success: false`
- * with `message`), reduced to the courier's own wording. An HTML or empty
- * body gives no detail.
+ * NCM has four error shapes (`detail`, `Error`, `message`, and `success:
+ * false` with `message`). Only the field-error shape (`{"Error": {...}}`)
+ * says something we keep: the names of the fields, at most ten, each a
+ * plain identifier. The messages are dropped, because a courier message
+ * may repeat a phone number or address (docs/04a §9.13).
  */
-export function ncmErrorDetail(body: unknown): { detail: string | null; fields: string[] } {
-  if (!isRecord(body)) return { detail: null, fields: [] }
-  if (isRecord(body.Error)) {
-    const fields = Object.keys(body.Error)
-    const parts = fields.map((field) => {
-      const message = text((body.Error as Record<string, unknown>)[field])
-      return message === null ? field : `${field}: ${message}`
-    })
-    return { detail: truncate(parts.join('; ')), fields }
-  }
-  for (const key of ['detail', 'message', 'error']) {
-    const message = text(body[key])
-    if (message !== null) return { detail: truncate(message), fields: [] }
-  }
-  return { detail: null, fields: [] }
+export function ncmErrorFields(body: unknown): string[] {
+  if (!isRecord(body) || !isRecord(body.Error)) return []
+  return Object.keys(body.Error)
+    .filter((field) => /^[A-Za-z0-9_]{1,40}$/.test(field))
+    .slice(0, 10)
 }
 
 function failure(reply: Reply): CourierError {
   switch (reply.kind) {
     case 'timeout':
-      return error('timeout', null, null, false)
+      return error('timeout', null, [], false)
     case 'not_sent':
-      return error('connection_failed', null, null, true)
+      return error('connection_failed', null, [], true)
     case 'lost':
-      return error('courier_error', null, null, false)
+      return error('courier_error', null, [], false)
     case 'response': {
-      const { detail } = reply.isJson
-        ? ncmErrorDetail(reply.body)
-        : { detail: null as string | null }
+      const fields = reply.isJson ? ncmErrorFields(reply.body) : []
       if (reply.status === 401 || reply.status === 403) {
-        return error('auth_failed', reply.status, detail, false)
+        return error('auth_failed', reply.status, [], false)
       }
-      if (reply.status === 404) return error('not_found', reply.status, detail, false)
-      if (reply.status === 429) return error('rate_limited', reply.status, detail, true)
+      if (reply.status === 404) return error('not_found', reply.status, [], false)
+      if (reply.status === 429) return error('rate_limited', reply.status, [], true)
       if (reply.status >= 400 && reply.status < 500) {
-        return error('invalid_request', reply.status, detail, false)
+        return error('invalid_request', reply.status, fields, false)
       }
       if (reply.status >= 200 && reply.status < 300) {
-        return error('unexpected_response', reply.status, null, false)
+        return error('unexpected_response', reply.status, [], false)
       }
-      return error('courier_error', reply.status, detail, false)
+      return error('courier_error', reply.status, [], false)
     }
   }
 }
@@ -162,6 +147,28 @@ function parseMoney(value: unknown): number | null {
 // NCM order IDs are integers; anything else cannot be one of ours.
 function ncmOrderId(externalShipmentId: string): number | null {
   return /^[1-9]\d{0,14}$/.test(externalShipmentId) ? Number(externalShipmentId) : null
+}
+
+/*
+ * NCM's documented callback events (webhook document v1.1). A callback's
+ * event goes into its inbox key only when it is one of these, else as
+ * `unknown`, so varied bodies cannot add rows (docs/04a §9.14).
+ */
+export const NCM_CALLBACK_EVENTS = [
+  'pickup_completed',
+  'dropoff_collected',
+  'order_dispatched',
+  'order_arrived',
+  'sent_for_delivery',
+  'delivery_completed',
+  'order_marked_rtv',
+  'send_to_vendor',
+  'rtv_delivery',
+  'refund_initiated',
+] as const
+
+export function ncmCallbackKeyEvent(event: string): string {
+  return (NCM_CALLBACK_EVENTS as readonly string[]).includes(event) ? event : 'unknown'
 }
 
 export class NcmCourierProvider implements CourierProvider {
@@ -232,12 +239,12 @@ export class NcmCourierProvider implements CourierProvider {
   ): Promise<CourierResult<T>> {
     const reply = await this.#call(account, method, path, options)
     if (reply.kind === 'not_configured') {
-      return { ok: false, error: error('not_configured', null, null, false) }
+      return { ok: false, error: error('not_configured', null, [], false) }
     }
     if (reply.kind === 'response' && reply.status >= 200 && reply.status < 300 && reply.isJson) {
       const value = parse(reply.body)
       return value === null
-        ? { ok: false, error: error('unexpected_response', reply.status, null, false) }
+        ? { ok: false, error: error('unexpected_response', reply.status, [], false) }
         : { ok: true, value }
     }
     return { ok: false, error: failure(reply) }
@@ -255,7 +262,7 @@ export class NcmCourierProvider implements CourierProvider {
       // NCM books between branches (`branches`); the action checks this before claiming.
       return {
         outcome: 'refused',
-        error: error('invalid_branch', null, 'origin and destination branches are required', false),
+        error: error('invalid_branch', null, ['fbranch', 'branch'], false),
       }
     }
     const body: Record<string, string> = {
@@ -275,7 +282,7 @@ export class NcmCourierProvider implements CourierProvider {
 
     const reply = await this.#call(account, 'POST', '/api/v1/order/create', { body })
     if (reply.kind === 'not_configured') {
-      return { outcome: 'refused', error: error('not_configured', null, null, false) }
+      return { outcome: 'refused', error: error('not_configured', null, [], false) }
     }
     if (reply.kind !== 'response') {
       const failed = failure(reply)
@@ -289,12 +296,12 @@ export class NcmCourierProvider implements CourierProvider {
       return id !== null && ncmOrderId(id) !== null
         ? { outcome: 'succeeded', externalShipmentId: id }
         : // A 2xx without an order ID: NCM may still have created it.
-          { outcome: 'unknown', error: error('unexpected_response', reply.status, null, false) }
+          { outcome: 'unknown', error: error('unexpected_response', reply.status, [], false) }
     }
     if (reply.status === 400 && reply.isJson) {
-      const { detail, fields } = ncmErrorDetail(reply.body)
+      const fields = ncmErrorFields(reply.body)
       const code = fields.map((field) => FIELD_ERRORS[field]).find(Boolean) ?? 'invalid_request'
-      return { outcome: 'refused', error: error(code, 400, detail, false) }
+      return { outcome: 'refused', error: error(code, 400, fields, false) }
     }
     if (reply.status >= 400 && reply.status < 500) {
       return { outcome: 'refused', error: failure(reply) }
@@ -413,8 +420,8 @@ export class NcmCourierProvider implements CourierProvider {
 
   /*
    * A callback body (webhook document v1.1). NCM does not sign callbacks,
-   * so nothing here is trusted: the job looks the parcel up before applying
-   * anything (docs/05 §6.3). Comments are not status updates and are not
+   * so nothing here is trusted: a callback only triggers a read of the
+   * parcel's history (docs/05 §6.3). Comments and test events are not
    * stored; the payload keeps only the event, the label and the time.
    */
   parseCallback(rawBody: string): CourierCallback {
@@ -462,7 +469,7 @@ export class NcmCourierProvider implements CourierProvider {
 }
 
 function notFound<T>(): CourierResult<T> {
-  return { ok: false, error: error('not_found', null, null, false) }
+  return { ok: false, error: error('not_found', null, [], false) }
 }
 
 // NCM takes kilograms as a string (default 1); grams keep the request exact.
