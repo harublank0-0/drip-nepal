@@ -69,11 +69,13 @@ export function clientNetwork(ip: string): string {
 }
 
 /*
- * `<prefix>:<hex HMAC-SHA256>` over the parts joined with `|`, the
- * `hmac(a | b)` of 06 §9.1. An IP part must already be a `clientNetwork()`.
+ * `<prefix>:<hex HMAC-SHA256>`, the `hmac(a | b)` of 06 §9.1. The parts are
+ * hashed as a JSON array, so no choice of parts can produce another's
+ * input (`a|b`, `c` and `a`, `b|c` differ). An IP part must already be a
+ * `clientNetwork()`.
  */
 export function rateLimitKey(name: RateLimitName, ...parts: string[]) {
-  const hash = keyedHash(hmacKeys.limiter.release(), parts.join('|')).toString('hex')
+  const hash = keyedHash(hmacKeys.limiter.release(), JSON.stringify(parts)).toString('hex')
   return `${RATE_LIMITS[name].prefix}:${hash}`
 }
 

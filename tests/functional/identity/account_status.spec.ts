@@ -35,6 +35,11 @@ router
       return { session_id: ctx.session.sessionId }
     })
     router.get('flash', ({ session }) => session.flashMessages.all())
+    // Changes the session data, so the response writes the session instead of touching it.
+    router.get('write', ({ session }) => {
+      session.flash('notice', 'saved')
+      return 'written'
+    })
     router.get('account', () => 'account page').use(middleware.auth())
   })
   .prefix('/__test__/session')
@@ -312,6 +317,27 @@ test.group('T-SEC-009 session store and cookie (E7 part)', () => {
     const response = await browser.request('/api/v1/__test__/session/me')
     assert.equal(response.status, 200)
     const untagged = await sessionRow(sessionId)
+    assert.closeTo(new Date(untagged.expires_at).getTime(), Date.now() + 2 * 60 * 60 * 1000, 60_000)
+  })
+
+  test('write extends a tagged row by 7 days and an untagged one by 2 h', async ({ assert }) => {
+    const { browser, sessionId } = await signIn()
+    const soon = new Date(Date.now() + 60_000)
+
+    await db.from('sessions').where('id', sessionId).update({ expires_at: soon })
+    await browser.request('/__test__/session/write')
+    const tagged = await sessionRow(sessionId)
+    assert.closeTo(new Date(tagged.expires_at).getTime(), Date.now() + 7 * DAY_MS, 60_000)
+
+    // Signed in but untagged (07 §3.3): a write does not restore 7 days.
+    await db.from('sessions').where('id', sessionId).update({ expires_at: soon, user_id: null })
+    const response = await browser.request('/__test__/session/write')
+    assert.equal(response.status, 200)
+    const untagged = await sessionRow(sessionId)
+    // It was a write: the data holds the flash message and the signed-in user.
+    const data = sessionData(untagged)!
+    assert.deepEqual(data.__flash__, { notice: 'saved' })
+    assert.isString(data.auth_web)
     assert.closeTo(new Date(untagged.expires_at).getTime(), Date.now() + 2 * 60 * 60 * 1000, 60_000)
   })
 })

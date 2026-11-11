@@ -27,7 +27,10 @@ const FIXTURE = {
   email: 'sita.shrestha@example.com',
   name: 'Sita Shrestha',
   phone: '9841234567',
+  formattedPhone: '+977 981-234 5678',
 }
+
+const REASON = `Owner asked by email ${FIXTURE.email}, phone ${FIXTURE.phone} and ${FIXTURE.formattedPhone}.`
 
 const auditRows = (action: string) => db.from('audit_logs').where('action', action)
 
@@ -58,7 +61,7 @@ test.group('T-SEC-102 no personal value in audit changes or reason', () => {
             before: { status: 'active' },
             after: { status: 'active' },
           },
-          reason: `Owner asked by email ${FIXTURE.email}, phone ${FIXTURE.phone}.`,
+          reason: REASON,
         })
       )
     })
@@ -69,9 +72,14 @@ test.group('T-SEC-102 no personal value in audit changes or reason', () => {
       before: { status: 'active' },
       after: { status: 'active' },
     })
-    assert.equal(row.reason, 'Owner asked by email [email], phone [phone].')
+    assert.equal(row.reason, 'Owner asked by email [email], phone [phone] and [phone].')
+    // The input held every masked value, so this can fail. Names are not
+    // detected in a reason (04a §15.3), so the fixture name is not part of it.
     const stored = JSON.stringify([row.changes, row.reason])
-    for (const value of Object.values(FIXTURE)) assert.notInclude(stored, value)
+    for (const value of [FIXTURE.email, FIXTURE.phone, FIXTURE.formattedPhone]) {
+      assert.include(REASON, value)
+      assert.notInclude(stored, value)
+    }
   })
 
   test('T-SEC-102 {label} in changes is refused and nothing is written')
@@ -79,6 +87,8 @@ test.group('T-SEC-102 no personal value in audit changes or reason', () => {
       { label: 'a name', changes: { after: { full_name: FIXTURE.name } } },
       { label: 'an email', changes: { after: { invitee: FIXTURE.email } } },
       { label: 'a phone number', changes: { before: { contact: `+977${FIXTURE.phone}` } } },
+      { label: 'a camelCase personal column', changes: { after: { fullName: FIXTURE.name } } },
+      { label: 'a numeric phone number', changes: { after: { contact: Number(FIXTURE.phone) } } },
     ])
     .run(async ({ assert }, { changes }) => {
       const staff = await insertUser()
@@ -92,6 +102,30 @@ test.group('T-SEC-102 no personal value in audit changes or reason', () => {
         )
       assert.instanceOf(error, InvariantViolation)
       assert.lengthOf(await auditRows('shop.refused'), 0)
+    })
+
+  test('T-SEC-102 {column} with {label} is refused and nothing is written')
+    .with([
+      { column: 'subjectId', label: 'a raw email', overrides: { subjectId: FIXTURE.email } },
+      { column: 'subjectId', label: 'a phone number', overrides: { subjectId: FIXTURE.phone } },
+      {
+        column: 'actorRole',
+        label: 'an email',
+        overrides: { actorRole: `platform:${FIXTURE.email}` },
+      },
+    ])
+    .run(async ({ assert }, { overrides }) => {
+      const staff = await insertUser()
+      const error = await db
+        .transaction((trx) =>
+          recordAudit(trx, staffEntry(staff, { action: 'shop.refused_id', ...overrides }))
+        )
+        .then(
+          () => null,
+          (e) => e
+        )
+      assert.instanceOf(error, InvariantViolation)
+      assert.lengthOf(await auditRows('shop.refused_id'), 0)
     })
 
   test('the row belongs to the caller transaction [AC-J00-09]', async ({ assert }) => {

@@ -3,7 +3,11 @@ import { hmacKeys } from '#config/crypto'
 import { InvariantViolation } from '#exceptions/programming_errors'
 import { ipHash, keyedHash } from '#modules/platform/crypto/keyed_hash'
 import type { ActorType } from '#modules/audit/domain/actor_type'
-import { maskPersonalText, personalValueIn } from '#modules/audit/domain/personal_values'
+import {
+  isPersonalIdentifier,
+  maskPersonalText,
+  personalValueIn,
+} from '#modules/audit/domain/personal_values'
 
 /*
  * The `audit_logs` writer (docs/04a §15.3, docs/03 §4.4): a step action
@@ -12,9 +16,11 @@ import { maskPersonalText, personalValueIn } from '#modules/audit/domain/persona
  * insert-only for every role (`audit_logs_no_update_delete`).
  *
  * Personal values never reach the row (T-SEC-102): a `changes` member that
- * is a personal column, or a string that holds an email address or a phone
- * number, is a programming error and throws before anything is written;
- * the free-text `reason` is masked instead.
+ * is a personal column (snake_case or camelCase), a string or number in
+ * `changes` that holds an email address or a phone number, and an email or
+ * phone number in `subject_id` or `actor_role` are programming errors and
+ * throw before anything is written. In the free-text `reason`, emails and
+ * mobile numbers are masked; names cannot be detected there.
  */
 
 export type AuditValue =
@@ -60,6 +66,16 @@ export function auditEmailSubject(email: string) {
 }
 
 export async function recordAudit(trx: TransactionClientContract, entry: AuditEntry) {
+  for (const [column, value] of [
+    ['subject_id', entry.subjectId],
+    ['actor_role', entry.actorRole],
+  ] as const) {
+    if (value && isPersonalIdentifier(value)) {
+      throw new InvariantViolation(
+        `audit ${entry.action}: ${column} holds an email address or phone number; use an id or auditEmailSubject()`
+      )
+    }
+  }
   const changes = entry.changes ?? {}
   const personal = personalValueIn(changes)
   if (personal) {

@@ -14,8 +14,8 @@ import { DomainError } from '#exceptions/domain_error'
  *   422 `VALIDATION_FAILED` with the item code `unsupported_media_type`.
  * - A body the parser read (`request.raw()`) may be at most 256 KB, or the
  *   larger limit of its operation below; past it, 413 `PAYLOAD_TOO_LARGE`.
- *   The parser's own `json.limit` (512 KB) stops anything larger before it
- *   is read.
+ *   The JSON, form and text parsers' own limit (512 KB, config/bodyparser.ts)
+ *   refuses anything larger from its Content-Length, before reading it.
  */
 
 const KB = 1024

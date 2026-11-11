@@ -61,6 +61,52 @@ function send(
   })
 }
 
+/*
+ * Declares a body of `length` bytes but sends only `head`, then waits for
+ * the answer. An answer that arrives proves the server refused the body
+ * without reading it: reading would wait for bytes that never come.
+ */
+function answerBeforeBody(
+  method: string,
+  path: string,
+  headers: Record<string, string>,
+  length: number,
+  head: Buffer
+) {
+  return new Promise<Answer>((resolve, reject) => {
+    const req = httpRequest(
+      {
+        host: host(),
+        port: port(),
+        method,
+        path,
+        headers: { ...headers, 'Content-Length': length },
+      },
+      (res) => {
+        const chunks: Buffer[] = []
+        res.on('data', (chunk: Buffer) => chunks.push(chunk))
+        res.on('end', () => {
+          clearTimeout(timer)
+          req.destroy()
+          resolve({
+            status: res.statusCode ?? 0,
+            headers: res.headers,
+            body: Buffer.concat(chunks).toString(),
+          })
+        })
+      }
+    )
+    const timer = setTimeout(() => {
+      req.destroy()
+      reject(new Error(`${method} ${path} waited for the body: it was being read`))
+    }, 3000)
+    req.on('error', (error) => {
+      if (!req.destroyed) reject(error)
+    })
+    req.write(head)
+  })
+}
+
 const BOUNDARY = 'dripnepal-test-boundary'
 const MULTIPART = [
   `--${BOUNDARY}`,
@@ -127,13 +173,14 @@ test.group('T-MED-002 multipart is refused on every route', () => {
     assert.equal(await sessionCount(), before)
   })
 
-  test('T-MED-002 a large upload is refused as multipart, not read', async ({ assert }) => {
-    const big = Buffer.alloc(3 * 1024 * 1024, 'x')
-    const answer = await send(
+  test('T-MED-002 a large upload is answered before its body is sent', async ({ assert }) => {
+    const head = Buffer.from(MULTIPART.slice(0, -`--${BOUNDARY}--\r\n`.length))
+    const answer = await answerBeforeBody(
       'POST',
       '/api/v1/__test__/body-echo',
       { 'Content-Type': `multipart/form-data; boundary=${BOUNDARY}` },
-      Buffer.concat([Buffer.from(MULTIPART.slice(0, -`--${BOUNDARY}--\r\n`.length)), big])
+      3 * 1024 * 1024,
+      head
     )
     assert.equal(answer.status, 422)
     assert.equal(JSON.parse(answer.body).errors[0].code, 'unsupported_media_type')
@@ -183,4 +230,24 @@ test.group('T-API-013 JSON body limits', () => {
     assert.equal(bodyLimitFor('placeOrder'), 256 * 1024)
     assert.equal(bodyLimitFor(undefined), 256 * 1024)
   })
+
+  test('T-API-013 a 900 KB {type} body is refused from its length, before it is read')
+    .with([
+      { type: 'form', contentType: 'application/x-www-form-urlencoded', head: 'text=' },
+      { type: 'text', contentType: 'text/plain', head: 'x' },
+      { type: 'JSON', contentType: 'application/json', head: '{"text":"' },
+    ])
+    .run(async ({ assert }, { contentType, head }) => {
+      const before = await sessionCount()
+      const answer = await answerBeforeBody(
+        'POST',
+        '/api/v1/__test__/body-echo',
+        { 'Content-Type': contentType },
+        900 * 1024,
+        Buffer.from(head)
+      )
+      assert.equal(answer.status, 413)
+      assert.equal(JSON.parse(answer.body).code, 'PAYLOAD_TOO_LARGE')
+      assert.equal(await sessionCount(), before)
+    })
 })

@@ -4,6 +4,8 @@ import { IncomingMessage } from 'node:http'
 import { Socket } from 'node:net'
 import db from '@adonisjs/lucid/services/db'
 import router from '@adonisjs/core/services/router'
+import encryption from '@adonisjs/core/services/encryption'
+import { CookieClient } from '@adonisjs/core/http'
 import { RequestFactory } from '@adonisjs/core/factories/http'
 import { errors as authErrors } from '@adonisjs/auth'
 import { errors as limiterErrors } from '@adonisjs/limiter'
@@ -23,7 +25,8 @@ import {
  * The login limiters of docs/07 §3.6 and docs/06 §9.1 on the database store:
  * - T-SEC-011: the sixth wrong password in a minute for one account and
  *   client network is refused with 429 `RATE_LIMITED` without checking it;
- *   a success clears the key; `login_ip` refuses the 21st attempt from one
+ *   a success clears the key; 20 wrong passwords sent at once reach the
+ *   check at most 5 times; `login_ip` refuses the 21st attempt from one
  *   network before any credential work; one IPv6 /64, and an IPv4 address
  *   mapped into IPv6, share a bucket.
  * - T-SEC-101: a 254-character email from an IPv6 address gives a 64-hex
@@ -31,8 +34,8 @@ import {
  *   `X-Forwarded-For` from outside the trusted proxies is ignored.
  *
  * The limiter store commits on its own connection, so these tests are here,
- * each on a fresh random email and network, and delete their keys (docs/10
- * §3.3). The `logIn` operation itself is M1; the credential check is a stub.
+ * each on a fresh random email and network, and delete their keys and the
+ * session rows their HTTP requests create (docs/10 §3.3). The `logIn` operation itself is M1; the credential check is a stub.
  */
 
 router
@@ -127,15 +130,37 @@ test.group('T-SEC-011 login throttling', () => {
     await forget('login_ip', clientNetwork(attempt.ip))
   })
 
+  test('T-SEC-011 20 wrong passwords at once reach the check at most 5 times', async ({
+    assert,
+  }) => {
+    const attempt = { email: randomEmail(), ip: randomIPv4() }
+    let checks = 0
+    const results = await Promise.allSettled(
+      Array.from({ length: 20 }, () =>
+        throttledLogin(attempt, async () => {
+          checks += 1
+          // Hold the check open, as a password hash does, so the attempts overlap.
+          await new Promise((resolve) => setTimeout(resolve, 50))
+          wrongPassword()
+        })
+      )
+    )
+    assert.equal(checks, 5)
+    const reasons = results.map((result) => (result.status === 'rejected' ? result.reason : null))
+    const wrong = reasons.filter((reason) => reason instanceof authErrors.E_INVALID_CREDENTIALS)
+    const limited = reasons.filter((reason) => reason instanceof limiterErrors.E_TOO_MANY_REQUESTS)
+    assert.lengthOf(wrong, 5)
+    assert.lengthOf(limited, 15)
+    await forget('login_acct_ip', attempt.email, clientNetwork(attempt.ip))
+    await forget('login_ip', clientNetwork(attempt.ip))
+  })
+
   test('T-SEC-011 login_ip refuses the 21st attempt from one network before any check', async ({
     assert,
   }) => {
     const ip = randomIPv4()
-    const emails: string[] = []
     for (let i = 0; i < 20; i++) {
-      const email = randomEmail()
-      emails.push(email)
-      await throttledLogin({ email, ip }, async () => 'signed in')
+      await throttledLogin({ email: randomEmail(), ip }, async () => 'signed in')
     }
     let checked = false
     const error = await refusal(() =>
@@ -205,12 +230,24 @@ test.group('T-SEC-011 login throttling', () => {
     const email = randomEmail()
     const url = `${baseUrl()}/api/v1/__test__/login-throttle?email=${encodeURIComponent(email)}`
     let ip = ''
+    const sessionIds: string[] = []
+    const cookies = new CookieClient(encryption.use())
+    // Each request without a cookie creates a guest session row, which commits here.
+    const remember = (response: Response) => {
+      for (const cookie of response.headers.getSetCookie()) {
+        if (!cookie.startsWith('dripnepal_session=')) continue
+        const value = decodeURIComponent(cookie.slice(cookie.indexOf('=') + 1, cookie.indexOf(';')))
+        sessionIds.push(cookies.unsign('dripnepal_session', value))
+      }
+    }
     for (let i = 0; i < 5; i++) {
       const response = await fetch(url)
+      remember(response)
       assert.equal(response.status, 401)
       await response.text()
     }
     const limited = await fetch(url)
+    remember(limited)
     assert.equal(limited.status, 429)
     const retryAfter = Number(limited.headers.get('retry-after'))
     assert.isAbove(retryAfter, 0)
@@ -227,6 +264,10 @@ test.group('T-SEC-011 login throttling', () => {
     assert.isNotEmpty(ip)
     await forget('login_acct_ip', email, clientNetwork(ip))
     await forget('login_ip', clientNetwork(ip))
+
+    assert.lengthOf(sessionIds, 6)
+    await db.from('sessions').whereIn('id', sessionIds).delete()
+    assert.lengthOf(await db.from('sessions').whereIn('id', sessionIds), 0)
   })
 })
 

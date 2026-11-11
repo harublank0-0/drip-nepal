@@ -12,6 +12,9 @@ const bodyParserConfig = defineConfig({
    * content-type parser.
    */
   form: {
+    // The JSON limit: no body larger than the largest operation's is read (docs/06 §9.2).
+    limit: '512kb',
+
     /**
      * Normalize empty string values to null.
      */
@@ -23,6 +26,15 @@ const bodyParserConfig = defineConfig({
     types: ['application/x-www-form-urlencoded'],
   },
 
+  /*
+   * The text parser (`text/*`), with the same limit. The package default
+   * would read 1 MB before request_body_middleware.ts could refuse it.
+   */
+  raw: {
+    limit: '512kb',
+    types: ['text/*'],
+  },
+
   /**
    * Config for the JSON parser.
    */
@@ -30,7 +42,8 @@ const bodyParserConfig = defineConfig({
     /*
      * The largest JSON body any operation accepts (the catalog writes,
      * docs/06 §9.2). Most routes allow 256 KB, which
-     * app/middleware/request_body_middleware.ts checks after parsing.
+     * app/middleware/request_body_middleware.ts checks after parsing. The
+     * form and text parsers have the same limit.
      */
     limit: '512kb',
 
