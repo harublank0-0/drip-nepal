@@ -2,7 +2,7 @@ import { test } from '@japa/runner'
 import db from '@adonisjs/lucid/services/db'
 import env from '#start/env'
 import type { PgBoss } from 'pg-boss'
-import { JOB_SCHEMA, createJobBoss, sendJob } from '#modules/platform/jobs'
+import { JOB_SCHEMA, createJobBoss, jobBossOptions, sendJob } from '#modules/platform/jobs'
 
 /*
  * T-ARCH-004: the M0 spike of docs/03 §10.1, kept as a regression test
@@ -140,6 +140,12 @@ test.group('T-ARCH-004 pg-boss transactional send', (group) => {
   })
 
   test('5. the runtime role has no DDL on the job schema', async ({ assert }) => {
+    // Neither runtime instance may install or upgrade the schema (docs/07 §4.10).
+    for (const role of ['web', 'worker'] as const) {
+      const options = jobBossOptions(appDatabase(), role)
+      assert.isFalse(options.migrate)
+      assert.isFalse(options.createSchema)
+    }
     // The instances above started and created queues, so pg-boss needed none.
     await assert.rejects(
       () => db.rawQuery(`CREATE TABLE ${JOB_SCHEMA}.t_arch_004_probe (id int)`),

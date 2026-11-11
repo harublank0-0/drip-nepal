@@ -44,15 +44,19 @@ export interface JobDatabase {
  * (`node ace jobs:install`, docs/11 §6.1). The worker's instance supervises
  * and runs schedules; the web process's instance only sends.
  */
-export function createJobBoss(db: JobDatabase, role: 'worker' | 'web') {
-  return new PgBoss({
+export function jobBossOptions(db: JobDatabase, role: 'worker' | 'web') {
+  return {
     ...db,
     schema: JOB_SCHEMA,
     migrate: false,
     createSchema: false,
     supervise: role === 'worker',
     schedule: role === 'worker',
-  })
+  }
+}
+
+export function createJobBoss(db: JobDatabase, role: 'worker' | 'web') {
+  return new PgBoss(jobBossOptions(db, role))
 }
 
 /*
