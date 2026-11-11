@@ -35,22 +35,34 @@ export interface JobDatabase {
   user: string
   password: string
   database: string
+  // The same TLS options as Lucid's connection (docs/11 §1); none in development.
+  ssl?: unknown
 }
 
+// Pool sizes from the connection budget of docs/03 §3.4.
+const POOL_MAX = { worker: 4, web: 1 } as const
+
 /*
- * A pg-boss instance as the runtime role. Its migration is off, so it never
- * creates or alters the schema: the release step does that as the migrator
- * (`node ace jobs:install`, docs/11 §6.1). The worker's instance supervises
- * and runs schedules; the web process's instance only sends.
+ * The options of a pg-boss instance as the runtime role. Nothing here may
+ * make pg-boss run DDL, which `dripnepal_app` cannot do (docs/07 §4.10):
+ * - `migrate` and `createSchema` off: the release step installs and
+ *   upgrades the schema as the migrator (`node ace jobs:install`);
+ * - `persistQueueStats` off (pg-boss's default, kept explicit): recorded
+ *   stats create a table partition each day;
+ * - `reindex` off: pg-boss's automatic rebuild of bloated job indexes runs
+ *   `REINDEX`, so the operator runs it as the migrator instead (docs/11 §6.1).
+ * The worker's instance supervises and runs schedules; the web process's
+ * instance only sends.
  */
 export function jobBossOptions(db: JobDatabase, role: 'worker' | 'web') {
   return {
     ...db,
+    max: POOL_MAX[role],
     schema: JOB_SCHEMA,
     migrate: false,
     createSchema: false,
-    // Recorded queue stats create a table partition each day: DDL (docs/07 §4.10).
     persistQueueStats: false,
+    reindex: false,
     supervise: role === 'worker',
     schedule: role === 'worker',
   }
@@ -61,22 +73,62 @@ export function createJobBoss(db: JobDatabase, role: 'worker' | 'web') {
 }
 
 /*
- * Installs or upgrades the pg-boss schema as the migrator, then stops. The
- * caller runs the grants of `jobSchemaGrants()` afterwards, in the same
- * release step.
+ * The process's instance, set by the service provider that starts it (or by
+ * a test), so actions call `sendJob(trx, …)` without carrying it.
  */
-export async function installJobSchema(migrator: JobDatabase) {
+let current: PgBoss | null = null
+
+export function setJobBoss(boss: PgBoss | null) {
+  current = boss
+}
+
+function jobBoss() {
+  if (!current) throw new Error('No pg-boss instance: the jobs provider has not started')
+  return current
+}
+
+/*
+ * Installs or upgrades the pg-boss schema as the migrator. An upgrade may
+ * queue commands that run outside its transaction (`CREATE INDEX
+ * CONCURRENTLY`, pg-boss's "bam" table); only an instance with migration on
+ * runs them, so this waits until none is pending and fails on a failed one.
+ * The caller then runs the grants of `jobSchemaGrants()` (docs/11 §6.1).
+ */
+export async function installJobSchema(
+  migrator: JobDatabase,
+  options: { timeoutMs?: number } = {}
+) {
   const boss = new PgBoss({
     ...migrator,
+    max: 2,
     schema: JOB_SCHEMA,
     migrate: true,
     createSchema: true,
     supervise: false,
     schedule: false,
+    // pg-boss runs the queued commands on this timer only, not at start; 10 s is its minimum.
+    bamIntervalSeconds: 10,
   })
-  boss.on('error', () => {})
+  const errors: unknown[] = []
+  boss.on('error', (error) => errors.push(error))
   await boss.start()
-  await boss.stop({ graceful: false, close: true })
+  try {
+    const deadline = Date.now() + (options.timeoutMs ?? 10 * 60_000)
+    for (;;) {
+      const status = await boss.getBamStatus()
+      const failed = status.find((row) => row.status === 'failed' && row.count > 0)
+      if (failed) throw new Error(`pg-boss schema upgrade: ${failed.count} command(s) failed`)
+      const open = status.some(
+        (row) => (row.status === 'pending' || row.status === 'in_progress') && row.count > 0
+      )
+      if (!open) break
+      if (Date.now() > deadline) throw new Error('pg-boss schema upgrade: commands still pending')
+      await new Promise((resolve) => setTimeout(resolve, 500))
+    }
+    if (errors.length > 0) throw errors[0]
+  } finally {
+    await boss.stop({ graceful: true, close: true })
+  }
 }
 
 /*
@@ -106,13 +158,14 @@ export interface SendJobOptions {
  * visible to workers only once `trx` commits; a rollback, or the rollback
  * of a savepoint the send ran in, removes it. Returns the job ID, or null
  * when a queue policy refused the job (a stately or singleton duplicate).
+ * pg-boss may read its queue list on its own pool the first time it meets
+ * a queue; the job itself is always written on `trx`.
  */
 export function sendJob<Q extends QueueName>(
-  boss: PgBoss,
   trx: TransactionClientContract,
   queue: Q,
   data: JobPayloads[Q] & JobEnvelope,
   options: SendJobOptions = {}
 ) {
-  return boss.send(queue, data as object, { ...options, db: fromKnex(trx.knexClient) })
+  return jobBoss().send(queue, data as object, { ...options, db: fromKnex(trx.knexClient) })
 }

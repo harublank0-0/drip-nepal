@@ -1,5 +1,6 @@
 import { readdir } from 'node:fs/promises'
 import app from '@adonisjs/core/services/app'
+import db from '@adonisjs/lucid/services/db'
 
 async function runAce(command: string, args: string[]) {
   const ace = await app.container.make('ace')
@@ -65,8 +66,11 @@ export function prepareTestDatabase() {
       '--compact-output',
       '--no-schema-generate',
     ])
-    // The pg-boss schema step and its grants, as the migrator, in the order of
-    // the release step (docs/10 §3.2, docs/11 §6.1; T-ARCH-004).
+    // db:wipe drops only `public`, so the pg-boss schema is dropped too and
+    // every run starts from a fresh install with no jobs left from an earlier
+    // run. Then the schema step and its grants, as the migrator, in the order
+    // of the release step (docs/10 §3.2, docs/11 §6.1; T-ARCH-004).
+    await db.connection(MIGRATOR_CONNECTION).rawQuery('DROP SCHEMA IF EXISTS pgboss CASCADE')
     await runAce('jobs:install', [`--connection=${MIGRATOR_CONNECTION}`])
     await runReferenceSeeders()
   })()
