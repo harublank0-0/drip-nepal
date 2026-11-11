@@ -55,6 +55,7 @@ export type CourierErrorCode =
   | 'invalid_address'
   | 'invalid_request'
   | 'auth_failed'
+  | 'credentials_unavailable'
   | 'not_found'
   | 'rate_limited'
   | 'connection_failed'

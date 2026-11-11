@@ -85,6 +85,7 @@ const NOT_SENT_CAUSES = new Set([
   'SELF_SIGNED_CERT_IN_CHAIN',
   'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
   'ERR_TLS_CERT_ALTNAME_INVALID',
+  'UND_ERR_CONNECT_TIMEOUT',
 ])
 
 // 4xx answers to a create that do not prove NCM stored nothing (a proxy timeout, a conflict).
@@ -149,13 +150,17 @@ function failure(reply: Reply): CourierError {
     case 'not_configured':
       return error('not_configured', null, [], false)
     case 'bad_credentials':
-      return error('auth_failed', null, [], false)
+      // Our side could not produce a usable token. Only NCM's 401 or 403 is
+      // `auth_failed`, which marks the account invalid (docs/04a §9.13).
+      return error('credentials_unavailable', null, [], false)
     case 'response': {
       if (reply.status === 401 || reply.status === 403) {
         return error('auth_failed', reply.status, [], false)
       }
       if (reply.status === 404) return error('not_found', reply.status, [], false)
       if (reply.status === 429) return error('rate_limited', reply.status, [], true)
+      if (CREATE_MAYBE_STORED.has(reply.status))
+        return error('courier_error', reply.status, [], false)
       if (reply.status >= 400 && reply.status < 500) {
         const fields = reply.isJson ? ncmErrorFields(reply.body) : []
         return error('invalid_request', reply.status, fields, false)
@@ -296,11 +301,13 @@ export class NcmCourierProvider implements CourierProvider {
     account: CourierAccount,
     request: CourierBookingRequest
   ): Promise<CourierBookingOutcome> {
-    const missing = [
-      ...(request.originBranchName === null ? ['fbranch'] : []),
-      ...(request.destinationBranchName === null ? ['branch'] : []),
-    ]
-    if (missing.length > 0) {
+    const origin = request.originBranchName
+    const destination = request.destinationBranchName
+    if (origin === null || destination === null) {
+      const missing = [
+        ...(origin === null ? ['fbranch'] : []),
+        ...(destination === null ? ['branch'] : []),
+      ]
       // NCM books between branches (`branches`); the action checks this before claiming.
       return { outcome: 'refused', error: error('invalid_branch', null, missing, false) }
     }
@@ -317,8 +324,8 @@ export class NcmCourierProvider implements CourierProvider {
       phone2: request.recipient.secondaryPhone ?? '',
       cod_charge: minorToRupeesFixed(request.codAmountMinor),
       address: request.recipient.address,
-      fbranch: request.originBranchName ?? '',
-      branch: request.destinationBranchName ?? '',
+      fbranch: origin,
+      branch: destination,
       vref_id: request.merchantReference,
       delivery_type: request.serviceCode,
     }

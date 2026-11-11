@@ -104,7 +104,7 @@ test.group('T-ARCH-013 rupees typed by people and reported by eSewa', () => {
   })
 })
 
-test.group('minorToRupeesFixed provider format', () => {
+test.group('T-FUL-109 minorToRupeesFixed provider format', () => {
   test('{minor} paisa is sent as {rupees}')
     .with([
       { minor: 150000, rupees: '1500.00' },

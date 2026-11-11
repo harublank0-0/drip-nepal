@@ -204,13 +204,13 @@ test.group('T-FUL-109 NCM adapter: booking', () => {
         name: '408 from a proxy is unknown',
         answer: json(408, {}),
         outcome: 'unknown',
-        code: 'invalid_request',
+        code: 'courier_error',
       },
       {
         name: '409 is unknown',
         answer: json(409, {}),
         outcome: 'unknown',
-        code: 'invalid_request',
+        code: 'courier_error',
       },
       {
         name: '500 is unknown: NCM may have stored it',
@@ -322,7 +322,8 @@ test.group('T-FUL-109 NCM adapter: booking', () => {
       const outcome = await ncm.book(which, bookingRequest())
       assert.equal(outcome.outcome, 'refused')
       if (outcome.outcome !== 'refused') return
-      assert.equal(outcome.error.code, 'auth_failed')
+      // A local failure never marks the courier account invalid (04a §9.13).
+      assert.equal(outcome.error.code, 'credentials_unavailable')
     }
     assert.lengthOf(sent, 0)
   })
@@ -342,7 +343,8 @@ test.group('T-FUL-109 NCM adapter: booking', () => {
       () =>
         new NcmCourierProvider({
           baseUrls: { sandbox: 'http://demo.example.test', production: null },
-        })
+        }),
+      /https/
     )
   })
 
@@ -493,6 +495,7 @@ test.group('T-FUL-109 NCM adapter: reads', () => {
       assert.isFalse(result.ok)
       if (result.ok) return
       assert.equal(result.error.code, row.code)
+      assertNoSecrets(assert, result)
     })
 
   test('an ID that is not an NCM order ID is not sent', async ({ assert }) => {
@@ -572,6 +575,14 @@ test.group('T-FUL-109 NCM adapter: callbacks and errors', () => {
     // No label: the event stands in for it (04a §9.14 `raw_status`).
     assert.equal(single.events[0].rawStatus, 'delivery_completed')
     assert.isNull(single.events[0].occurredAt)
+
+    const longLabel = ncm.parseCallback(
+      JSON.stringify({ event: 'sent_for_delivery', order_id: 1001, status: 'x'.repeat(101) })
+    )
+    assert.equal(longLabel.kind, 'events')
+    if (longLabel.kind !== 'events') return
+    // A label over the inbox's 100 characters is dropped; the event stands in.
+    assert.equal(longLabel.events[0].rawStatus, 'sent_for_delivery')
 
     const undocumented = ncm.parseCallback(
       JSON.stringify({ event: 'returned_to_warehouse', order_id: '1001', status: 'x' })
