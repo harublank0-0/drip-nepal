@@ -10,3 +10,11 @@ overrides:
   # fails to boot while commands/ holds a command. Fixed in 14.1.1. Remove
   # once @adonisjs/core requires >=14.1.1.
   '@adonisjs/ace': 14.1.1
+# Advisories `pnpm audit` ignores (docs/09 §10.3). Each has a row with its
+# reason, who accepted it and an expiry date in security/audit-exceptions.md;
+# T-SEC-038 fails when the two lists differ or a date has passed.
+auditConfig:
+  ignoreGhsas:
+    - GHSA-v53p-9fqp-m79j
+    - GHSA-prgh-xp8r-p3m5
+    - GHSA-mrhx-c7xc-m3w5

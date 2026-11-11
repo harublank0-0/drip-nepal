@@ -1,0 +1,20 @@
+# T-ARCH-030 denylist (docs/10 §5.1): one JavaScript regular expression per
+# line, matched against every line of every tracked text file except this
+# one. Blank lines and lines starting with # are ignored. Entries match paths
+# and source names, never ordinary words: the `audit` module and the word
+# "canonical" must pass.
+
+# Absolute home-directory paths: Linux, macOS, Windows, WSL.
+(^|[\s"'`(<\[=])/home/[A-Za-z0-9._-]+/
+(^|[\s"'`(<\[=])/Users/[A-Za-z0-9._-]+/
+(^|[\s"'`(<\[=])/root/
+[A-Za-z]:\\Users\\
+(^|[\s"'`(<\[=])/mnt/[a-z]/Users/
+# Local file URLs.
+file:///?[A-Za-z~]
+# Personal folders addressed from the home directory.
+~/(Desktop|Documents|Downloads|Dropbox|OneDrive|iCloud Drive)/
+
+# Local-only planning sources: the file or folder name of each source that
+# exists only on a planner's machine, one escaped name per line. docs/ never
+# spells these names; this file is the one place that does.
