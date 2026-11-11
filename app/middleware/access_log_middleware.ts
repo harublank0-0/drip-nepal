@@ -9,6 +9,8 @@ import type { NextFn } from '@adonisjs/core/types/http'
  * after `next()` is final even when the route threw: the exception handler
  * has already written the error response by then.
  *
+ * The `/health/*` probes of docs/11 §7.1 get no line.
+ *
  * `ip_hash` (HMAC with `HMAC_KEY_AUDIT_IP`) joins the line with the key ring
  * of E6 (docs/12 §4.1).
  */
@@ -18,6 +20,8 @@ const CF_RAY = /^[A-Za-z0-9-]{1,64}$/
 
 export default class AccessLogMiddleware {
   async handle(ctx: HttpContext, next: NextFn) {
+    // Health probes run every few seconds; their failures log on their own.
+    if (ctx.request.url().startsWith('/health/')) return next()
     const started = process.hrtime.bigint()
     try {
       return await next()

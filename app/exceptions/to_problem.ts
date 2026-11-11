@@ -43,7 +43,16 @@ const MAX_MESSAGE = 500
 const ITEM_CODE = /^[a-z][a-z0-9_]{1,63}$/
 
 // Members the registry owns; a DomainError extension can never replace them.
-const CORE_MEMBERS = new Set(['type', 'title', 'status', 'detail', 'code', 'request_id'])
+const CORE_MEMBERS = new Set([
+  'type',
+  'title',
+  'status',
+  'detail',
+  'code',
+  'request_id',
+  'errors',
+  'retry_after_seconds',
+])
 
 // The message @adonisjs/bodyparser 11.0.4 throws, with status 422 and no code,
 // for a JSON body that is neither an object nor an array.
@@ -134,7 +143,10 @@ export function databaseError(error: unknown) {
 
 function fromDatabase(sqlstate: string, constraint: string | null, requestId: string) {
   if (sqlstate === '23505' || sqlstate === '23514') {
-    const mapping = constraint ? CONSTRAINT_MAP[constraint] : undefined
+    const mapping =
+      constraint && Object.hasOwn(CONSTRAINT_MAP, constraint)
+        ? CONSTRAINT_MAP[constraint]
+        : undefined
     if (!mapping || mapping.sqlstate !== sqlstate) return internal(requestId)
     if ('code' in mapping) return build(mapping.code, requestId)
     return validationFailed(requestId, [item(mapping.field, mapping.item, mapping.message)])
@@ -202,11 +214,14 @@ export function toProblem(
       return build('FORBIDDEN', requestId, {
         detail: 'This page is out of date. Reload the page and try again.',
       })
+    // An unknown route, and Lucid's `findOrFail` on a missing row.
     case 'E_ROUTE_NOT_FOUND':
+    case 'E_ROW_NOT_FOUND':
       return build('NOT_FOUND', requestId, { detail: "We couldn't find that." })
     case 'E_TOO_MANY_REQUESTS': {
       const response = fieldsOf(fields.response)
-      const seconds = typeof response?.availableIn === 'number' ? response.availableIn : 60
+      const available = response?.availableIn
+      const seconds = typeof available === 'number' && Number.isFinite(available) ? available : 60
       return build('RATE_LIMITED', requestId, {
         detail: 'Too many attempts. Try again later.',
         retryAfterSeconds: Math.max(1, seconds),
@@ -214,20 +229,30 @@ export function toProblem(
     }
   }
 
-  // The body parser: the multipart limit (E_REQUEST_ENTITY_TOO_LARGE) and
-  // raw-body's limit (type `entity.too.large`) are both 413.
+  // The body parser (@adonisjs/bodyparser 11.0.4 rewraps raw-body's errors
+  // with these codes). All are the client's doing, so none is a 500.
   if (
-    fields.status === 413 &&
-    (fields.code === 'E_REQUEST_ENTITY_TOO_LARGE' || fields.type === 'entity.too.large')
+    fields.code === 'E_REQUEST_ENTITY_TOO_LARGE' ||
+    (fields.status === 413 && fields.type === 'entity.too.large')
   ) {
     return build('PAYLOAD_TOO_LARGE', requestId, { detail: 'The request is too large.' })
   }
-  if (
-    fields.status === 415 &&
-    (fields.type === 'encoding.unsupported' || fields.type === 'charset.unsupported')
-  ) {
+  // An encoding raw-body does not know, or one `inflation` refuses (415, no code).
+  if (fields.code === 'E_ENCODING_UNSUPPORTED' || fields.status === 415) {
     return validationFailed(requestId, [
       item(null, 'unsupported_media_type', 'The request body encoding is not supported.'),
+    ])
+  }
+  // A body cut off, a broken multipart stream, a wrong length, or a
+  // compressed body that does not decompress (zlib's Z_* codes).
+  if (
+    fields.code === 'E_REQUEST_ABORTED' ||
+    fields.code === 'E_INVALID_MULTIPART_REQUEST' ||
+    fields.type === 'request.size.invalid' ||
+    (typeof fields.code === 'string' && /^Z_[A-Z_]+$/.test(fields.code))
+  ) {
+    return validationFailed(requestId, [
+      item(null, 'malformed_body', 'The request body could not be read.'),
     ])
   }
   if (fields.status === 422 && error instanceof Error && error.message === STRICT_JSON_MESSAGE) {

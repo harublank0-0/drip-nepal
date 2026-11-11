@@ -1,3 +1,5 @@
+import { databaseError } from '#exceptions/to_problem'
+
 /*
  * The error-tracker hook (docs/09 §5.6, NFR-OBS-002). The exception handler
  * calls `reportToTracker` for every failure; only a 5xx is sent. What leaves
@@ -39,34 +41,84 @@ export function setTrackerTransport(next: TrackerTransport | null) {
 
 export type TrackerContext = Omit<TrackerEvent['tags'], 'release' | 'environment'>
 
-/*
- * The SQL text Knex prepends to a database error's message carries no values
- * (they are bound as $1, $2), but a message can still be long; it is cut.
- */
 const MAX_MESSAGE = 2000
+
+// The stack's call frames, without the message lines above them.
+function framesOf(stack: string) {
+  const first = stack.indexOf('\n    at ')
+  return first === -1 ? '' : stack.slice(first + 1)
+}
+
+/*
+ * A PostgreSQL error, reduced to what carries no submitted value. Knex
+ * prefixes the SQL with numbered placeholders ($1), which is kept; the
+ * server's own message can quote a value ("invalid input syntax for type
+ * uuid: …", SQLSTATE 22P02), so it is replaced by the SQLSTATE, the
+ * constraint, the table and column, and the server routine. The handler
+ * logs the same reduction (docs/09 §7.3: identifiers, not data).
+ */
+export function scrubbedDatabaseError(error: unknown) {
+  const database = databaseError(error)
+  if (!database || !(error instanceof Error)) return null
+  const fields = error as Error & Record<string, unknown>
+  const text = (key: string) => (typeof fields[key] === 'string' ? (fields[key] as string) : null)
+  const separator = error.message.lastIndexOf(' - ')
+  return {
+    type: 'DatabaseError',
+    sqlstate: database.sqlstate,
+    constraint: database.constraint,
+    table: text('table'),
+    column: text('column'),
+    routine: text('routine'),
+    sql: separator === -1 ? null : error.message.slice(0, separator).slice(0, MAX_MESSAGE),
+    stack: typeof error.stack === 'string' ? framesOf(error.stack) : null,
+  }
+}
 
 export function trackerEvent(error: unknown, context: TrackerContext): TrackerEvent {
   const fields =
     typeof error === 'object' && error !== null ? (error as Record<string, unknown>) : {}
   const code = fields.code
+  const database = scrubbedDatabaseError(error)
+  const message = database
+    ? `SQLSTATE ${database.sqlstate}${database.constraint ? ` on ${database.constraint}` : ''}${database.sql ? `: ${database.sql}` : ''}`
+    : error instanceof Error
+      ? error.message
+      : 'Non-error value thrown'
   return {
     error: {
       name: error instanceof Error ? error.name : typeof error,
-      message:
-        error instanceof Error ? error.message.slice(0, MAX_MESSAGE) : 'Non-error value thrown',
-      stack: error instanceof Error && typeof error.stack === 'string' ? error.stack : null,
+      message: message.slice(0, MAX_MESSAGE),
+      stack: database
+        ? database.stack
+        : error instanceof Error && typeof error.stack === 'string'
+          ? error.stack
+          : null,
       code: typeof code === 'string' ? code : null,
     },
     tags: {
       ...context,
       release: process.env.APP_RELEASE ?? null,
-      environment: process.env.NODE_ENV ?? null,
+      // APP_ENV tells staging from production; both run NODE_ENV=production (docs/09 §6.1).
+      environment: process.env.APP_ENV ?? process.env.NODE_ENV ?? null,
     },
   }
 }
 
-// Sends one event for a 5xx and nothing for anything else (T-ARCH-026).
-export async function reportToTracker(error: unknown, context: TrackerContext) {
-  if (!transport || context.status < 500) return
-  await transport.capture(trackerEvent(error, context))
+/*
+ * Sends one event for a 5xx and nothing for anything else (T-ARCH-026).
+ * A failing transport never replaces the error response: the failure is
+ * returned for the handler to log, and nothing is thrown.
+ */
+export async function reportToTracker(
+  error: unknown,
+  context: TrackerContext
+): Promise<'sent' | 'skipped' | 'failed'> {
+  if (!transport || context.status < 500) return 'skipped'
+  try {
+    await transport.capture(trackerEvent(error, context))
+    return 'sent'
+  } catch {
+    return 'failed'
+  }
 }

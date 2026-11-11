@@ -76,7 +76,14 @@ test.group('T-API-012 toProblem: domain errors', () => {
 
   test('extensions are added but never replace a core member', ({ assert }) => {
     const error = new DomainError('SHOP_NOT_ACTIVE', {
-      extensions: { shop_status: 'suspended', status: 200, code: 'X', request_id: 'forged' },
+      extensions: {
+        shop_status: 'suspended',
+        status: 200,
+        code: 'X',
+        request_id: 'forged',
+        errors: 'x',
+        retry_after_seconds: 'abc',
+      },
     })
     assert.deepEqual(toProblem(error, ID), {
       ...base('SHOP_NOT_ACTIVE', 403, 'Shop not active', 'Shop not active.'),
@@ -90,6 +97,12 @@ test.group('T-API-012 toProblem: domain errors', () => {
       ...base('IDEMPOTENCY_IN_PROGRESS', 409, 'Request in progress', 'Request in progress.'),
       retry_after_seconds: 2,
     })
+  })
+
+  test('a proposed code cannot be thrown', ({ assert }) => {
+    assert.throws(() => new DomainError('SERVICE_BUSY'), 'SERVICE_BUSY is a proposed problem code')
+    assert.throws(() => new DomainError('CHECKOUT_DISABLED'), /proposed/)
+    assert.throws(() => new DomainError('MALFORMED_REQUEST'), /proposed/)
   })
 
   test('InvalidStateTransition and VersionConflict carry their members', ({ assert }) => {
@@ -214,18 +227,84 @@ test.group('T-API-012 toProblem: framework errors', () => {
     assert.deepEqual(toProblem(strict, ID).errors, [
       { field: null, code: 'malformed_json', message: 'The request body must be a JSON object.' },
     ])
+  })
 
-    const encoding = Object.assign(new Error('unsupported content encoding "br"'), {
-      status: 415,
-      type: 'encoding.unsupported',
-    })
-    assert.deepEqual(toProblem(encoding, ID).errors, [
+  // The errors @adonisjs/bodyparser 11.0.4 and its `inflation` and zlib streams throw.
+  test('the body parser: {name} is 422 {item}')
+    .with([
       {
-        field: null,
-        code: 'unsupported_media_type',
-        message: 'The request body encoding is not supported.',
+        name: 'an encoding raw-body does not know',
+        item: 'unsupported_media_type',
+        error: () =>
+          new Exception('unsupported content encoding "br"', {
+            status: 415,
+            code: 'E_ENCODING_UNSUPPORTED',
+          }),
+      },
+      {
+        name: 'an encoding inflation refuses',
+        item: 'unsupported_media_type',
+        error: () =>
+          Object.assign(new Error('Unsupported Content-Encoding: bogus'), { status: 415 }),
+      },
+      {
+        name: 'an aborted body',
+        item: 'malformed_body',
+        error: () => new Exception('request aborted', { status: 400, code: 'E_REQUEST_ABORTED' }),
+      },
+      {
+        name: 'a broken multipart stream',
+        item: 'malformed_body',
+        error: () =>
+          new Exception('Invalid multipart request', {
+            status: 400,
+            code: 'E_INVALID_MULTIPART_REQUEST',
+          }),
+      },
+      {
+        name: 'a body shorter than its Content-Length',
+        item: 'malformed_body',
+        error: () =>
+          Object.assign(new Error('request size did not match content length'), {
+            status: 400,
+            type: 'request.size.invalid',
+          }),
+      },
+      {
+        name: 'a gzip body that does not decompress',
+        item: 'malformed_body',
+        error: () =>
+          Object.assign(new Error('incorrect header check'), { code: 'Z_DATA_ERROR', errno: -3 }),
       },
     ])
+    .run(({ assert }, { item, error }) => {
+      const problem = toProblem(error(), ID)
+      assert.equal(problem.status, 422)
+      assert.equal(problem.code, 'VALIDATION_FAILED')
+      assert.lengthOf(problem.errors!, 1)
+      assert.equal(problem.errors![0].code, item)
+      assert.isNull(problem.errors![0].field)
+    })
+
+  test("Lucid's findOrFail on a missing row is 404 NOT_FOUND", ({ assert }) => {
+    const error = new Exception('Row not found', { status: 404, code: 'E_ROW_NOT_FOUND' })
+    assert.deepEqual(
+      toProblem(error, ID),
+      base('NOT_FOUND', 404, 'Not found', "We couldn't find that.")
+    )
+  })
+
+  test('a limiter response with no finite wait gives 60 seconds', ({ assert }) => {
+    const response = new LimiterResponse({
+      limit: 5,
+      remaining: 0,
+      consumed: 6,
+      availableIn: Number.NaN,
+    })
+    assert.equal(
+      toProblem(new limiterErrors.E_TOO_MANY_REQUESTS(response), ID).retry_after_seconds,
+      60
+    )
   })
 })
 

@@ -1,4 +1,6 @@
 import { test } from '@japa/runner'
+import { gzipSync } from 'node:zlib'
+import vine from '@vinejs/vine'
 import router from '@adonisjs/core/services/router'
 import db from '@adonisjs/lucid/services/db'
 import { Logger } from '@adonisjs/core/logger'
@@ -49,14 +51,39 @@ router
     router.get('kill-switch', () => {
       throw new DomainError('PROVIDER_UNAVAILABLE', { detail: 'Checkout is paused.' })
     })
+    router.get('bad-uuid', async () => {
+      // SQLSTATE 22P02, whose server message quotes the value.
+      await db.rawQuery('SELECT ?::uuid', ['ram@example.com'])
+    })
     router.post('echo', ({ request }) => request.body())
     router.post('protected', () => 'ok').use(middleware.auth())
   })
   .prefix('/api/v1/__test__')
 
-router.get('/__test__/page-boom', async () => {
-  await db.rawQuery('SELECT 1 / 0')
-})
+router
+  .group(() => {
+    router.get('page-boom', async () => {
+      await db.rawQuery('SELECT 1 / 0')
+    })
+    // An error from a library that sets its own `status`, with a message that must not show.
+    router.get('foreign-status/:status', ({ params }) => {
+      throw Object.assign(new Error('SECRET select * from users'), {
+        status: Number(params.status),
+      })
+    })
+    router.get('missing-row', async () => {
+      await db.from('platform_settings').where('key', 'no_such_key').firstOrFail()
+    })
+    router.get('needs-login', () => {
+      throw new DomainError('UNAUTHENTICATED')
+    })
+    router.get('page-validation', async ({ request }) => {
+      await vine
+        .compile(vine.object({ page: vine.number().min(1) }))
+        .validate(request.qs(), { meta: {} })
+    })
+  })
+  .prefix('/__test__')
 
 const baseUrl = () => `http://${env.get('HOST')}:${env.get('PORT')}`
 
@@ -109,18 +136,20 @@ test.group('T-API-005 request IDs and Retry-After', () => {
       { name: 'too long', id: 'a'.repeat(65) },
     ])
     .run(async ({ assert }, { id }) => {
+      let echoedId: string | null = null
       const lines = await captureLogs(async () => {
         const response = await fetch(`${baseUrl()}/api/v1/nothing-here`, {
           headers: { 'X-Request-Id': id.replace('\n', ' ') },
         })
         const echoed = response.headers.get('x-request-id')
+        echoedId = echoed
         assert.match(echoed ?? '', /^[0-9a-f-]{36}$/)
         const problem = await problemOf(response)
         assert.equal(problem.request_id, echoed)
       })
       // The log lines carry the replacement, never the client's value.
       assert.isNotEmpty(lines)
-      for (const line of lines) assert.notEqual(line.request_id, id.replace('\n', ' '))
+      for (const line of lines) assert.equal(line.request_id, echoedId)
     })
 
   test('without an incoming ID one is generated and echoed', async ({ assert }) => {
@@ -261,11 +290,12 @@ test.group('T-SEC-027 no SQL or stack in production errors', () => {
       status: 500,
       sqlstate: '23505',
     })
-    const logged = errorLine!.fields.err as Error & { constraint?: string }
+    const logged = errorLine!.fields.err as { constraint: string; sql: string }
     assert.equal(logged.constraint, 'platform_settings_pkey')
     // Knex's pg dialect numbers the bindings ($1, $2) before it prefixes the
     // SQL to the message, so the logged message holds no bound value.
-    assert.notInclude(logged.message, "'checkout_enabled'")
+    assert.notInclude(logged.sql, 'checkout_enabled')
+    assert.include(logged.sql, '$1')
 
     const accessLine = lines.find((line) => line.message === 'http.request')
     assert.containsSubset(accessLine?.fields, {
@@ -311,5 +341,136 @@ test.group('Error pages', () => {
     const body = await response.text()
     assert.equal(JSON.parse(body).code, 'INTERNAL')
     assert.notInclude(body, 'division by zero')
+  })
+})
+
+test.group('Pages answer from the problem, never from error.status', () => {
+  test('an error with its own status {status} answers {expected} without its message')
+    .with([
+      { status: 600, expected: 500 },
+      { status: 403, expected: 500 },
+      { status: 302, expected: 500 },
+      { status: 404, expected: 500 },
+    ])
+    .run(async ({ assert }, { status, expected }) => {
+      const response = await fetch(`${baseUrl()}/__test__/foreign-status/${status}`, {
+        redirect: 'manual',
+      })
+      assert.equal(response.status, expected)
+      const html = await response.text()
+      assert.include(html, 'Sorry, something went wrong')
+      assert.notInclude(html, 'SECRET')
+    })
+
+  test("Lucid's firstOrFail on a missing row renders errors/not_found", async ({ assert }) => {
+    const response = await fetch(`${baseUrl()}/__test__/missing-row`)
+    assert.equal(response.status, 404)
+    assert.include(await response.text(), 'find that page')
+  })
+
+  test('a page needing a sign-in redirects with the URL only as return_to', async ({ assert }) => {
+    const response = await fetch(`${baseUrl()}/__test__/needs-login?token=abc123&page=2`, {
+      redirect: 'manual',
+    })
+    assert.equal(response.status, 302)
+    const location = new URL(response.headers.get('location')!, baseUrl())
+    assert.equal(location.pathname, '/login')
+    assert.deepEqual([...location.searchParams.keys()], ['return_to'])
+    assert.equal(
+      location.searchParams.get('return_to'),
+      '/__test__/needs-login?token=abc123&page=2'
+    )
+  })
+
+  test('a validation error on a page URL asked for JSON is problem+json without meta', async ({
+    assert,
+  }) => {
+    const response = await fetch(`${baseUrl()}/__test__/page-validation?page=0`, {
+      headers: { Accept: 'application/json' },
+    })
+    assert.equal(response.status, 422)
+    assert.equal(response.headers.get('content-type'), 'application/problem+json; charset=utf-8')
+    const problem = await problemOf(response)
+    assert.equal(problem.code, 'VALIDATION_FAILED')
+    assert.deepEqual(
+      (problem.errors as { field: string; code: string }[]).map(({ field, code }) => ({
+        field,
+        code,
+      })),
+      [{ field: 'page', code: 'min' }]
+    )
+    assert.notInclude(JSON.stringify(problem), 'meta')
+  })
+})
+
+test.group('Unreadable bodies are 422, not 500', () => {
+  test('{name} is 422 {item} at info')
+    .with([
+      {
+        name: 'an unknown Content-Encoding',
+        item: 'unsupported_media_type',
+        headers: { 'Content-Encoding': 'bogus' },
+        body: () => '{}',
+      },
+      {
+        name: 'a gzip body that does not decompress',
+        item: 'malformed_body',
+        headers: { 'Content-Encoding': 'gzip' },
+        body: () => '{"not": "gzip"}',
+      },
+    ])
+    .run(async ({ assert }, { item, headers, body }) => {
+      let problem: Record<string, unknown> = {}
+      const lines = await captureLogs(async () => {
+        const response = await fetch(`${baseUrl()}/api/v1/__test__/echo`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...headers },
+          body: body(),
+        })
+        assert.equal(response.status, 422)
+        problem = await problemOf(response)
+      })
+      assert.equal((problem.errors as { code: string }[])[0].code, item)
+      const errorLine = lines.find((line) => line.message === 'http.error')
+      assert.equal(errorLine?.level, 'info')
+    })
+
+  test('a valid gzip body is still read', async ({ assert }) => {
+    const response = await fetch(`${baseUrl()}/api/v1/__test__/echo`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Encoding': 'gzip' },
+      body: gzipSync('{"a": 1}'),
+    })
+    // The body parses; the route then fails CSRF, which runs after the body parser.
+    assert.equal(response.status, 403)
+  })
+})
+
+test.group('Database errors are logged without the values they quote', () => {
+  test('a 22P02 logs its SQLSTATE and statement, not the submitted value', async ({ assert }) => {
+    let body = ''
+    const lines = await captureLogs(async () => {
+      const response = await fetch(`${baseUrl()}/api/v1/__test__/bad-uuid`)
+      assert.equal(response.status, 500)
+      body = await response.text()
+    })
+    assert.notInclude(body, 'ram@example.com')
+    const errorLine = lines.find((line) => line.message === 'http.error')
+    assert.equal(errorLine?.level, 'error')
+    assert.containsSubset(errorLine!.fields.err, {
+      type: 'DatabaseError',
+      sqlstate: '22P02',
+      sql: 'SELECT $1::uuid',
+    })
+    assert.notInclude(JSON.stringify(errorLine!.fields), 'ram@example.com')
+  })
+
+  test('health probes write no access line', async ({ assert }) => {
+    const lines = await captureLogs(async () => {
+      const response = await fetch(`${baseUrl()}/health/live`)
+      assert.equal(response.status, 200)
+      await response.text()
+    })
+    assert.isUndefined(lines.find((line) => line.message === 'http.request'))
   })
 })

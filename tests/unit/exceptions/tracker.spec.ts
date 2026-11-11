@@ -65,8 +65,37 @@ test.group('T-ARCH-026 reportToTracker', (group) => {
     }
   })
 
+  test("a PostgreSQL error's own message, which can quote a value, is not sent", async ({
+    assert,
+  }) => {
+    const events = fakeTransport()
+    const message =
+      'select * from "users" where "id" = $1 - invalid input syntax for type uuid: "ram@example.com"'
+    const error = Object.assign(new Error(message), {
+      code: '22P02',
+      severity: 'ERROR',
+      routine: 'string_to_uuid',
+    })
+    error.stack = `error: ${message}\n    at parseErrorMessage (parser.ts:394:9)`
+    await reportToTracker(error, context(500))
+
+    const [event] = events
+    assert.equal(event.error.message, 'SQLSTATE 22P02: select * from "users" where "id" = $1')
+    assert.equal(event.error.stack, '    at parseErrorMessage (parser.ts:394:9)')
+    assert.notInclude(JSON.stringify(event), 'ram@example.com')
+  })
+
+  test('a failing transport is reported back, never thrown', async ({ assert }) => {
+    setTrackerTransport({
+      capture: () => {
+        throw new Error('tracker down')
+      },
+    })
+    assert.equal(await reportToTracker(new Error('x'), context(500)), 'failed')
+  })
+
   test('without a transport nothing is sent and nothing throws', async ({ assert }) => {
     setTrackerTransport(null)
-    await assert.doesNotReject(() => reportToTracker(new Error('x'), context(500)))
+    assert.equal(await reportToTracker(new Error('x'), context(500)), 'skipped')
   })
 })

@@ -1,5 +1,6 @@
 import { Exception } from '@adonisjs/core/exceptions'
-import { PROBLEM_CODES, type ProblemCode } from '#exceptions/problem_codes'
+import { PROBLEM_CODES, isProposed, type ProblemCode } from '#exceptions/problem_codes'
+import { InvariantViolation } from '#exceptions/programming_errors'
 
 /*
  * One reason of a problem's `errors[]` (docs/06 §5.1): `field` is a dotted
@@ -35,6 +36,8 @@ export class DomainError extends Exception {
   readonly options: DomainErrorOptions
 
   constructor(code: ProblemCode, options: DomainErrorOptions = {}) {
+    // A proposed code is not adopted yet, so no code may throw it (docs/09 §5.2).
+    if (isProposed(code)) throw new InvariantViolation(`${code} is a proposed problem code`)
     super(PROBLEM_CODES[code].title, {
       code,
       status: PROBLEM_CODES[code].status,

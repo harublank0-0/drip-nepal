@@ -2,7 +2,7 @@ import app from '@adonisjs/core/services/app'
 import { type HttpContext, ExceptionHandler } from '@adonisjs/core/http'
 import type { HttpError, StatusPageRange, StatusPageRenderer } from '@adonisjs/core/types/http'
 import { databaseError, toProblem, type Problem } from '#exceptions/to_problem'
-import { reportToTracker } from '#exceptions/tracker'
+import { reportToTracker, scrubbedDatabaseError } from '#exceptions/tracker'
 
 /*
  * The exception handler (docs/09 §5.4, ADR-0018). `toProblem()` is the one
@@ -41,6 +41,33 @@ function signedOutOnProtectedRoute(ctx: HttpContext) {
   return false
 }
 
+// A page error's answer when no Inertia page can render it.
+const titlePage = (problem: Problem) => `<p>${escapeHtml(problem.title)}</p>`
+
+/*
+ * Status pages render through Inertia, which an error thrown before the
+ * Inertia middleware (static files, CORS, Vite) has not set up; those get the
+ * title alone.
+ */
+function renderPage(ctx: HttpContext, render: (inertia: HttpContext['inertia']) => unknown) {
+  const inertia = (ctx as Partial<HttpContext>).inertia
+  if (inertia) return render(inertia)
+  return titlePage(problemFor(new Error('status page'), ctx))
+}
+
+/*
+ * The redirect of a page visit that needs a sign-in: the visited URL, query
+ * included, travels only as `return_to`, never forwarded as the target's own
+ * query string (config/app.ts forwards it by default; docs/09 §5.4).
+ */
+function signInRedirect(ctx: HttpContext, path: '/login' | '/mfa') {
+  return ctx.response
+    .redirect()
+    .withQs(false)
+    .withQs({ return_to: ctx.request.url(true) })
+    .toPath(path)
+}
+
 function problemFor(error: unknown, ctx: HttpContext): Problem {
   return toProblem(error, ctx.request.id() ?? 'unavailable', {
     signedOutOnProtectedRoute: signedOutOnProtectedRoute(ctx),
@@ -54,9 +81,11 @@ export default class HttpExceptionHandler extends ExceptionHandler {
 
   // 403 gets `errors/forbidden` with the permission work of M1 (docs/08 §8.3).
   protected statusPages: Record<StatusPageRange, StatusPageRenderer> = {
-    '404': (_, { inertia }) => inertia.render('errors/not_found', {}),
-    '500..599': (_, { inertia, request }) =>
-      inertia.render('errors/server_error', { request_id: request.id() ?? null }),
+    '404': (_, ctx) => renderPage(ctx, (inertia) => inertia.render('errors/not_found', {})),
+    '500..599': (_, ctx) =>
+      renderPage(ctx, (inertia) =>
+        inertia.render('errors/server_error', { request_id: ctx.request.id() ?? null })
+      ),
   }
 
   #sendProblem(problem: Problem, ctx: HttpContext) {
@@ -75,23 +104,25 @@ export default class HttpExceptionHandler extends ExceptionHandler {
     if (isApiRequest(ctx)) return this.#sendProblem(problem, ctx)
     // Pages: the account checks of docs/07 §3.3 throw these on GET visits too.
     if (problem.code === 'UNAUTHENTICATED') {
-      return ctx.response.redirect().withQs({ return_to: ctx.request.url() }).toPath('/login')
+      return signInRedirect(ctx, '/login')
     }
     if (problem.code === 'ACCOUNT_SUSPENDED') {
-      ctx.session.flash('notice', 'account_suspended')
+      ;(ctx as Partial<HttpContext>).session?.flash('notice', 'account_suspended')
       return ctx.response.redirect().withQs(false).toPath('/login')
     }
     if (problem.code === 'MFA_REQUIRED') {
-      return ctx.response.redirect().withQs({ return_to: ctx.request.url() }).toPath('/mfa')
+      return signInRedirect(ctx, '/mfa')
     }
     // Status pages, the Inertia protocol and errors that handle themselves.
     return super.handle(error, ctx)
   }
 
   /*
-   * The base renderers below would send `error.message` when a page URL is
-   * asked for JSON, or for HTML with a status that has no status page. They
-   * answer the problem, or its fixed title, instead (RF-36).
+   * The base renderers below would send `error.message`, or Vine's raw
+   * messages with their `meta`, when a page URL is asked for JSON, and would
+   * trust `error.status` for HTML. They answer from the problem instead: its
+   * status picks the status page, and a status without one shows the title
+   * (RF-36).
    */
   async renderErrorAsJSON(error: HttpError, ctx: HttpContext) {
     if (this.debug) return super.renderErrorAsJSON(error, ctx)
@@ -103,53 +134,76 @@ export default class HttpExceptionHandler extends ExceptionHandler {
     this.#sendProblem(problemFor(error, ctx), ctx)
   }
 
+  async renderValidationErrorAsJSON(error: HttpError, ctx: HttpContext) {
+    if (this.debug) return super.renderValidationErrorAsJSON(error, ctx)
+    this.#sendProblem(problemFor(error, ctx), ctx)
+  }
+
+  async renderValidationErrorAsJSONAPI(error: HttpError, ctx: HttpContext) {
+    if (this.debug) return super.renderValidationErrorAsJSONAPI(error, ctx)
+    this.#sendProblem(problemFor(error, ctx), ctx)
+  }
+
   async renderErrorAsHTML(error: HttpError, ctx: HttpContext) {
-    const hasStatusPage = error.status === 404 || error.status >= 500
-    if (this.debug || (this.renderStatusPages && hasStatusPage)) {
-      return super.renderErrorAsHTML(error, ctx)
+    if (this.debug) return super.renderErrorAsHTML(error, ctx)
+    const problem = problemFor(error, ctx)
+    const hasStatusPage = problem.status === 404 || (problem.status >= 500 && problem.status < 600)
+    if (this.renderStatusPages && hasStatusPage) {
+      // The base renderer picks the page by `status`; it gets the problem's, and only the title.
+      const shim = Object.assign(new Error(problem.title), { status: problem.status })
+      return super.renderErrorAsHTML(shim as HttpError, ctx)
     }
-    const { title } = problemFor(error, ctx)
-    ctx.response.status(error.status).send(`<p>${escapeHtml(title)}</p>`)
+    ctx.response.status(problem.status).send(titlePage(problem))
   }
 
   /*
    * Replaces the base report(), which logs 4xx at `warn`, skips 400, 401 and
    * 422 and decides by `error.status`. One `http.error` line per failure:
-   * - 5xx at `error` with the full error, which only the logs ever see, and
-   *   one tracker event;
+   * - 5xx at `error` with the error, and one tracker event;
    * - 503 `PROVIDER_UNAVAILABLE` (a provider outage or the kill switch) at
    *   `warn` and not tracked: degraded but handled, and an outage would send
    *   one event per checkout (docs/09 §5.1, §5.6);
-   * - 4xx at `info`, except the client-bug codes and a 22001 (value too long,
-   *   a validator no longer mirrors a length CHECK) at `warn` (docs/06 §5.3).
+   * - `warn` for the client-bug codes, a lock timeout (55P03) and a value too
+   *   long (22001: a validator no longer mirrors a length CHECK; the line
+   *   carries the statement, since PostgreSQL names no column) (docs/09 §7.3,
+   *   docs/06 §5.3);
+   * - other 4xx at `info`.
+   * A database error is logged reduced to its SQLSTATE, constraint, table,
+   * column, routine and placeholder SQL: the server's message can quote a
+   * submitted value (docs/09 §7.3).
    */
   async report(error: unknown, ctx: HttpContext) {
     const problem = problemFor(error, ctx)
     const database = databaseError(error)
     const handled = problem.code === 'PROVIDER_UNAVAILABLE'
-    const level =
-      problem.status >= 500 && !handled
-        ? 'error'
-        : handled || CLIENT_BUG_CODES.has(problem.code) || database?.sqlstate === '22001'
-          ? 'warn'
-          : 'info'
+    const warned =
+      handled ||
+      CLIENT_BUG_CODES.has(problem.code) ||
+      database?.sqlstate === '22001' ||
+      database?.sqlstate === '55P03'
+    const level = problem.status >= 500 && !handled ? 'error' : warned ? 'warn' : 'info'
+    const withError = level === 'error' || database?.sqlstate === '22001'
     ctx.logger.log(
       level,
       {
         problem_code: problem.code,
         status: problem.status,
+        route: ctx.route?.pattern ?? null,
         ...(database ? { sqlstate: database.sqlstate } : {}),
-        ...(level === 'error' ? { err: error } : {}),
+        ...(withError ? { err: scrubbedDatabaseError(error) ?? error } : {}),
       },
       'http.error'
     )
     if (handled) return
-    await reportToTracker(error, {
+    const tracked = await reportToTracker(error, {
       request_id: problem.request_id,
       status: problem.status,
       route: ctx.route?.pattern ?? null,
       route_name: ctx.route?.name ?? null,
       user_ref: null,
     })
+    if (tracked === 'failed') {
+      ctx.logger.warn({ problem_code: problem.code }, 'tracker.failed')
+    }
   }
 }
