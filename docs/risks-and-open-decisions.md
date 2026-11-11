@@ -236,20 +236,18 @@ Newest first. The entry format is in §1.5. A ruling that is not an OD but chang
 
 ```text
 Not an OD — Decided 2026-11-11 by product owner: specify M6's courier work and build the NCM adapter now
-Ruling: While NCM's demo token does not work, the courier work that does not depend on it is done
-        before M1 to M5: the M6 courier tables and rules (#178), the M6 courier operations, and the
-        CourierProvider port with the Nepal Can Move adapter (app/modules/logistics/providers/),
-        tested on synthetic responses. The adapter is not wired to any job, route or page; M6 still
-        builds the migration, jobs, operations and pages, and checks the adapter against NCM's
-        sandbox. This departs from AGENTS.md's "build only what the current milestone schedules" for
-        this adapter alone.
+Ruling: While NCM's demo token does not work, the courier work that does not need it is done before
+        M1 to M5: the M6 courier specifications, and the CourierProvider port with an unwired Nepal Can
+        Move adapter tested on synthetic responses; M6 still builds the rest and checks the adapter
+        against NCM's sandbox.
 Evidence: The product owner asked on 2026-11-11 to "work on what we can and finish integration"
           while the NCM key is missing, chose "specs, then adapter" over specs only or finishing M0
           first, and asked for the pull requests to be reviewed and merged without them. The
           adapter follows NCM's API document v2 as the ncm-integration skill records it; none of
           its facts is verified (VX-16).
 ADR: ADR-0019 (decision 6 stays Proposed until VX-16 closes).
-Docs updated: 12 (§5.6, note 26), 09 (§1 tree, note 87), 04 (§18.1, note 22)  |  Status: Decided
+Docs updated: 12 (§5.6, note 26), 09 (§1 tree, note 87), 04 (§18.1, note 22), 10 (§3.1, §6, note 42),
+              03 (§11.1, note 21)  |  Status: Decided
 ```
 
 ```text
