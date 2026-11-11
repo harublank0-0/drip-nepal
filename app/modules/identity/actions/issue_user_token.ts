@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto'
 import encryption from '@adonisjs/core/services/encryption'
 import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
+import { InvariantViolation } from '#exceptions/programming_errors'
 import { sendJob } from '#modules/platform/jobs'
 import {
   USER_TOKEN_LIFETIME_SECONDS,
@@ -50,13 +51,15 @@ export async function issueUserToken(
     expiresIn: `${lifetime}s`,
     purpose: `email_token:${purpose}`,
   })
-  await sendJob(trx, 'notifications.dispatch', {
+  const jobId = await sendJob(trx, 'notifications.dispatch', {
     event: 'user_token.issued',
     user_token_id: row.id,
     token_enc: tokenEnc,
     request_id: null,
     causation_id: null,
   })
+  // A standard queue never refuses a send; a null id would mean the email is lost.
+  if (!jobId) throw new InvariantViolation('notifications.dispatch refused the token email job')
 
   return { id: row.id, purpose, lifetimeSeconds: lifetime }
 }

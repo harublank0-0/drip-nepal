@@ -115,33 +115,49 @@ export function hasJobBoss() {
  * step (`node ace jobs:install`) as the migrator, so a send never meets a
  * missing queue and no runtime instance creates one (proposed, docs/09
  * §2.3). A queue is added here with its first sender. Names and settings
- * are docs/03 §9's: the defaults [Assumption there], a dead-letter queue
- * per queue, and on the queues that carry `token_enc` completed jobs
- * deleted after one day and queued ones after 7 days, the longest token
- * lifetime (docs/07 §3.8 rule 2). Dead-letter queues have no worker.
+ * are docs/03 §9's: the defaults [Assumption there], each row's retry
+ * count, a dead-letter queue per queue, and on the queues that carry
+ * `token_enc` completed jobs deleted after one day and queued ones after 7
+ * days, the longest token lifetime (docs/07 §3.8 rule 2). Dead-letter
+ * queues have no worker. Every setting is one `updateQueue` accepts, so the
+ * next `jobs:install` applies a changed value to an existing queue.
  */
 const QUEUE_DEFAULTS = { retryBackoff: true, retryDelayMax: 3600, expireInSeconds: 120 }
 const TOKEN_RETENTION = { deleteAfterSeconds: 86_400, retentionSeconds: 604_800 }
 
-// Settings `updateQueue` can change too, so a later release can retune a queue; `standard` policy.
-type QueueSettings = Omit<
+// `standard` policy, no partition (docs/09 §2.3: both would need DDL at runtime).
+export type QueueSettings = Omit<
   Queue,
   'name' | 'policy' | 'partition' | 'deadLetter' | 'heartbeatSeconds'
 >
 
-export const JOB_QUEUES: Record<string, QueueSettings> = {
-  'notifications.dispatch': { ...QUEUE_DEFAULTS, ...TOKEN_RETENTION },
-}
+// Queues declared in `JobPayloads`; tests name their own `t_<test id>.*` queues and create them.
+export type ApplicationQueueName = Exclude<QueueName, `t_${string}`>
+
+// `satisfies`: a queue declared in `JobPayloads` but missing here fails `pnpm typecheck`.
+export const JOB_QUEUES = {
+  'notifications.dispatch': { ...QUEUE_DEFAULTS, retryLimit: 5, ...TOKEN_RETENTION },
+} satisfies Record<ApplicationQueueName, QueueSettings>
 
 export const deadLetterQueue = (queue: string) => `dlq.${queue}`
 
-// Creates each queue of `queues` and its dead-letter queue, or updates its settings.
-export async function ensureQueues(boss: PgBoss, queues = JOB_QUEUES) {
+/*
+ * Creates each queue of `queues` and its dead-letter queue, or updates
+ * their settings. pg-boss refuses an option key whose value is undefined
+ * (`retentionSeconds` must then be >= 1), so the dead-letter queue gets
+ * the key only when its queue sets it.
+ */
+export async function ensureQueues(
+  boss: PgBoss,
+  queues: Record<string, QueueSettings> = JOB_QUEUES
+) {
   for (const [name, options] of Object.entries(queues)) {
     const dlq = deadLetterQueue(name)
-    const parking = { retentionSeconds: options.retentionSeconds }
-    if (await boss.getQueue(dlq)) await boss.updateQueue(dlq, parking)
-    else await boss.createQueue(dlq, parking)
+    const parking: QueueSettings = {}
+    if (options.retentionSeconds !== undefined) parking.retentionSeconds = options.retentionSeconds
+    // `updateQueue` refuses an empty update, so a dead-letter queue with defaults is left as it is.
+    if (!(await boss.getQueue(dlq))) await boss.createQueue(dlq, parking)
+    else if (Object.keys(parking).length > 0) await boss.updateQueue(dlq, parking)
     const settings = { ...options, deadLetter: dlq }
     if (await boss.getQueue(name)) await boss.updateQueue(name, settings)
     else await boss.createQueue(name, settings)

@@ -39,3 +39,18 @@ export async function accountExistsWithEmail(email: string) {
   const row = await db.from('users').where('email', email).select('id').first()
   return row !== null
 }
+
+/*
+ * Whether an unrevoked `platform_admin` row exists, whatever its user's
+ * status: the bootstrap refuses then (docs/09 §9.1). `platform:create-admin`
+ * asks before its prompts; its action checks again under its lock.
+ */
+export async function platformAdminExists() {
+  const row = await db
+    .from('platform_staff')
+    .where('role', 'platform_admin')
+    .whereNull('revoked_at')
+    .select('user_id')
+    .first()
+  return row !== null
+}

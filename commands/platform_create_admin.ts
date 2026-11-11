@@ -9,7 +9,7 @@ import BootstrapPlatformAdmin, {
   ExistingAccountNeedsConfirmation,
   type BootstrapInput,
 } from '#modules/identity/actions/bootstrap_platform_admin'
-import { accountExistsWithEmail } from '#modules/identity/queries'
+import { accountExistsWithEmail, platformAdminExists } from '#modules/identity/queries'
 import { createJobBoss, hasJobBoss, jobDatabaseOf, setJobBoss } from '#modules/platform/jobs'
 import {
   createPlatformAdminValidator,
@@ -22,7 +22,9 @@ import {
  *
  * - Default, invitation: `--email` and `--full-name`; the account gets a
  *   password nobody knows and a `password_reset` link by email.
- * - `--interactive`: the password is typed at a masked prompt, twice.
+ * - `--interactive`: asks for the e-mail and name, then the password at a
+ *   masked prompt, twice. Only the password prompts are masked.
+ * - A prompt needs a terminal: without one the command exits 1 at once.
  * - Every mode queues an `mfa_enrollment` link (docs/07 §3.9).
  * - An email that belongs to an existing account is granted the role only
  *   after the operator confirms, and its password is never changed.
@@ -34,6 +36,10 @@ import {
  * Exit 1 when an unrevoked platform_admin exists. Verified by T-OPS-019.
  */
 
+export const EMAIL_PROMPT = 'E-mail'
+export const NAME_PROMPT = 'Full name'
+export const PASSWORD_PROMPT = 'Password (10-128 characters)'
+export const REPEAT_PROMPT = 'Repeat the password'
 export const EXISTING_ACCOUNT_PROMPT =
   'This e-mail belongs to an existing account. Grant it platform_admin? Its password is not changed'
 
@@ -70,8 +76,28 @@ export default class PlatformCreateAdmin extends BaseCommand {
     this.exitCode = 1
   }
 
+  /*
+   * Whether a prompt can be answered: on a terminal, or by a test that
+   * trapped it. Without one (a release container, `ssh host cmd`, a pipe)
+   * the command stops with a clear message instead of hanging or failing
+   * inside the prompt library.
+   */
+  interactiveTerminal = process.stdin.isTTY === true
+
+  #mayAsk(title: string) {
+    if (this.interactiveTerminal || this.prompt.traps.prompts.has(title)) return true
+    this.logger.error(`"${title}" needs an interactive terminal; run the command with a TTY`)
+    this.exitCode = 1
+    return false
+  }
+
+  async #ask(title: string) {
+    return this.#mayAsk(title) ? this.prompt.ask(title) : null
+  }
+
   async #input(): Promise<BootstrapInput | null> {
-    const typed = this.email ?? (this.interactive ? await this.prompt.ask('E-mail') : undefined)
+    const typed = this.email ?? (this.interactive ? await this.#ask(EMAIL_PROMPT) : undefined)
+    if (typed === null) return null
     if (!typed) {
       this.logger.error('--email is required (or use --interactive)')
       this.exitCode = 1
@@ -85,9 +111,15 @@ export default class PlatformCreateAdmin extends BaseCommand {
       return null
     }
 
+    // Refuse before any other prompt; the action checks again under its lock.
+    if (await platformAdminExists()) {
+      this.#adminExists()
+      return null
+    }
+
     if (await accountExistsWithEmail(email)) {
-      const grant = await this.prompt.confirm(EXISTING_ACCOUNT_PROMPT)
-      if (!grant) {
+      if (!this.#mayAsk(EXISTING_ACCOUNT_PROMPT)) return null
+      if (!(await this.prompt.confirm(EXISTING_ACCOUNT_PROMPT))) {
         this.logger.error('Nothing changed')
         this.exitCode = 1
         return null
@@ -95,11 +127,13 @@ export default class PlatformCreateAdmin extends BaseCommand {
       return { email, fullName: null, password: null, grantExistingAccount: true }
     }
 
-    const fullName = this.fullName ?? (await this.prompt.ask('Full name'))
+    const fullName = this.fullName ?? (await this.#ask(NAME_PROMPT))
+    if (fullName === null) return null
     let password: string | undefined
     if (this.interactive) {
-      password = await this.prompt.secure('Password (10-128 characters)')
-      if ((await this.prompt.secure('Repeat the password')) !== password) {
+      if (!this.#mayAsk(PASSWORD_PROMPT) || !this.#mayAsk(REPEAT_PROMPT)) return null
+      password = await this.prompt.secure(PASSWORD_PROMPT)
+      if ((await this.prompt.secure(REPEAT_PROMPT)) !== password) {
         this.logger.error('The passwords do not match')
         this.exitCode = 1
         return null
@@ -121,6 +155,11 @@ export default class PlatformCreateAdmin extends BaseCommand {
       this.#refuse(error)
       return null
     }
+  }
+
+  #adminExists() {
+    this.logger.error('An active platform_admin exists; grant roles in /admin instead')
+    this.exitCode = 1
   }
 
   /*
@@ -171,7 +210,7 @@ export default class PlatformCreateAdmin extends BaseCommand {
       this.#report(await action.execute(input))
     } catch (error) {
       if (error instanceof AdminAlreadyExists) {
-        this.logger.error('An active platform_admin exists; grant roles in /admin instead')
+        this.#adminExists()
       } else if (error instanceof ExistingAccountNeedsConfirmation) {
         this.logger.error(
           'An account with this e-mail was created meanwhile; run the command again'

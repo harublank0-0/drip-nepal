@@ -5,9 +5,16 @@ import encryption from '@adonisjs/core/services/encryption'
 import hash from '@adonisjs/core/services/hash'
 import db from '@adonisjs/lucid/services/db'
 import PlatformCreateAdmin, {
+  EMAIL_PROMPT,
   EXISTING_ACCOUNT_PROMPT,
+  NAME_PROMPT,
+  PASSWORD_PROMPT,
+  REPEAT_PROMPT,
 } from '../../../commands/platform_create_admin.js'
-import { JOB_SCHEMA } from '#modules/platform/jobs'
+import type { PgBoss } from 'pg-boss'
+import { InvariantViolation } from '#exceptions/programming_errors'
+import { issueUserToken } from '#modules/identity/actions/issue_user_token'
+import { JOB_SCHEMA, setJobBoss } from '#modules/platform/jobs'
 import { insertUser } from '#tests/support/schema_rows'
 
 /*
@@ -23,7 +30,7 @@ import { insertUser } from '#tests/support/schema_rows'
  *   tests/concurrency/identity/platform_create_admin.spec.ts; the
  *   `/admin` enrolment gate comes with M1.
  * - T-IAM-112, the `platform:create-admin` part: an `anonymized.invalid`
- *   email is refused.
+ *   email is refused, and so is any address in the reserved `.invalid` TLD.
  *
  * Each test runs in the functional suite's global transaction, so the
  * command's transaction and its job sends are rolled back afterwards. The
@@ -31,8 +38,6 @@ import { insertUser } from '#tests/support/schema_rows'
  */
 
 const PASSWORD = 'correct horse battery staple'
-const PASSWORD_PROMPT = 'Password (10-128 characters)'
-const REPEAT_PROMPT = 'Repeat the password'
 
 type Answers = (command: PlatformCreateAdmin) => void
 
@@ -40,6 +45,8 @@ async function createAdmin(argv: string[], answers?: Answers) {
   const ace = await app.container.make('ace')
   ace.ui.switchMode('raw')
   const command = await ace.create(PlatformCreateAdmin, argv)
+  // As in a release container: only prompts a test answers can be asked.
+  command.interactiveTerminal = false
   answers?.(command)
   await command.exec()
   return command
@@ -57,6 +64,36 @@ async function counts() {
             (SELECT count(*)::int FROM ${JOB_SCHEMA}.job WHERE name = 'notifications.dispatch') AS jobs`
   )
   return result.rows[0] as Record<string, number>
+}
+
+/*
+ * Decrypts as if `offsetMs` had passed: the encrypter compares the
+ * message's expiry with `new Date()`, so only argument-less dates move.
+ */
+function decryptAt(offsetMs: number, value: string, purpose: string) {
+  const RealDate = Date
+  class Later extends RealDate {
+    constructor(...args: ConstructorParameters<typeof Date> | []) {
+      if (args.length === 0) super(RealDate.now() + offsetMs)
+      else super(...(args as ConstructorParameters<typeof Date>))
+    }
+  }
+  globalThis.Date = Later as DateConstructor
+  try {
+    return encryption.decrypt<string>(value, purpose)
+  } finally {
+    globalThis.Date = RealDate
+  }
+}
+
+// An `active`, verified account of the kind an existing customer has.
+async function insertActiveUser() {
+  const userId = await insertUser()
+  await db
+    .from('users')
+    .where('id', userId)
+    .update({ status: 'active', email_verified_at: new Date() })
+  return userId
 }
 
 async function userByEmail(email: string) {
@@ -126,6 +163,11 @@ test.group('T-OPS-019 platform:create-admin', () => {
       assert.isNull(encryption.decrypt(job.token_enc as string, 'email_token:email_verification'))
       assert.deepEqual(createHash('sha256').update(plain!).digest(), token.token_hash)
       raw.push(plain!)
+      // The ciphertext expires with its token (docs/07 §3.8 rule 1).
+      const lifetimeMs = token.expires_at.getTime() - token.created_at.getTime()
+      const purpose = `email_token:${token.purpose}`
+      assert.isString(decryptAt(lifetimeMs - 60_000, job.token_enc as string, purpose))
+      assert.isNull(decryptAt(lifetimeMs + 60_000, job.token_enc as string, purpose))
     }
 
     const audit = await db
@@ -157,8 +199,8 @@ test.group('T-OPS-019 platform:create-admin', () => {
     assert,
   }) => {
     const command = await createAdmin(['--interactive'], (cmd) => {
-      cmd.prompt.trap('E-mail').replyWith('sita.admin@example.com')
-      cmd.prompt.trap('Full name').replyWith('Sita Admin')
+      cmd.prompt.trap(EMAIL_PROMPT).replyWith('sita.admin@example.com')
+      cmd.prompt.trap(NAME_PROMPT).replyWith('Sita Admin')
       cmd.prompt.trap(PASSWORD_PROMPT).replyWith(PASSWORD)
       cmd.prompt.trap(REPEAT_PROMPT).replyWith(PASSWORD)
     })
@@ -198,11 +240,11 @@ test.group('T-OPS-019 platform:create-admin', () => {
     assert.include(logsOf(second).join('\n'), 'An active platform_admin exists')
   })
 
-  test('T-OPS-019 a revoked admin does not block the bootstrap', async () => {
+  test('T-OPS-019 a revoked admin does not block the bootstrap', async ({ assert }) => {
     const revoker = await insertUser()
-    const former = await insertUser()
+    const formerId = await insertUser()
     await db.table('platform_staff').insert({
-      user_id: former,
+      user_id: formerId,
       role: 'platform_admin',
       granted_by: revoker,
       revoked_at: new Date(),
@@ -212,6 +254,31 @@ test.group('T-OPS-019 platform:create-admin', () => {
     const command = await createAdmin(['--email=new.admin@example.com', '--full-name=New Admin'])
 
     command.assertSucceeded()
+    const user = await userByEmail('new.admin@example.com')
+    const admins = await db
+      .from('platform_staff')
+      .where('role', 'platform_admin')
+      .whereNull('revoked_at')
+      .select('user_id', 'granted_by')
+    assert.deepEqual(admins, [{ user_id: user.id, granted_by: null }])
+    const former = await db.from('platform_staff').where('user_id', formerId).firstOrFail()
+    assert.isNotNull(former.revoked_at, 'the revoked row is left as it was')
+    assert.lengthOf(await tokensOf(user.id), 2)
+  })
+
+  test('T-OPS-019 a token whose email job is refused is not issued', async ({ assert }) => {
+    const userId = await insertActiveUser()
+    // A pg-boss instance whose queue policy refuses the send (sendJob returns null).
+    setJobBoss({ send: async () => null } as unknown as PgBoss)
+    try {
+      await assert.rejects(
+        () => db.transaction((trx) => issueUserToken(trx, userId, 'mfa_enrollment')),
+        InvariantViolation
+      )
+    } finally {
+      setJobBoss(null)
+    }
+    assert.isEmpty(await tokensOf(userId))
   })
 
   test('T-OPS-019 the command has no flag or argument that takes a password', ({ assert }) => {
@@ -226,7 +293,7 @@ test.group('T-OPS-019 platform:create-admin', () => {
   test('T-OPS-019 an existing account is granted the role only after confirmation, keeping its password', async ({
     assert,
   }) => {
-    const userId = await insertUser()
+    const userId = await insertActiveUser()
     const before = await db.from('users').where('id', userId).firstOrFail()
 
     const declined = await createAdmin([`--email=${before.email}`], (cmd) => {
@@ -257,18 +324,68 @@ test.group('T-OPS-019 platform:create-admin', () => {
     assert.deepEqual(audit.changes, { role: 'platform_admin', mode: 'existing_account' })
   })
 
-  test('T-OPS-019 a suspended account is not granted the role', async ({ assert }) => {
-    const userId = await insertUser()
-    await db.from('users').where('id', userId).update({ status: 'suspended' })
-    const { email } = await db.from('users').where('id', userId).firstOrFail()
+  test('T-OPS-019 an account that is not active is not granted the role: {status}')
+    .with([
+      { status: 'pending_verification', values: {} },
+      { status: 'suspended', values: {} },
+      { status: 'deactivated', values: { deletion_requested_at: new Date() } },
+    ])
+    .run(async ({ assert }, { status, values }) => {
+      const userId = await insertUser()
+      await db
+        .from('users')
+        .where('id', userId)
+        .update({ status, ...values })
+      const { email } = await db.from('users').where('id', userId).firstOrFail()
 
-    const command = await createAdmin([`--email=${email}`], (cmd) => {
-      cmd.prompt.trap(EXISTING_ACCOUNT_PROMPT).accept()
+      const command = await createAdmin([`--email=${email}`], (cmd) => {
+        cmd.prompt.trap(EXISTING_ACCOUNT_PROMPT).accept()
+      })
+
+      command.assertFailed()
+      assert.include(logsOf(command).join('\n'), `The existing account is ${status}`)
+      assert.isNull(await db.from('platform_staff').where('user_id', userId).first())
     })
 
-    command.assertFailed()
-    assert.isNull(await db.from('platform_staff').where('user_id', userId).first())
+  test('T-OPS-019 an existing admin is refused before the existing-account prompt', async ({
+    assert,
+  }) => {
+    const first = await createAdmin(['--email=first.admin@example.com', '--full-name=First'])
+    first.assertSucceeded()
+    const userId = await insertActiveUser()
+    const { email } = await db.from('users').where('id', userId).firstOrFail()
+
+    // No trap: the prompt must not be reached.
+    const second = await createAdmin([`--email=${email}`])
+
+    second.assertFailed()
+    assert.include(logsOf(second).join('\n'), 'An active platform_admin exists')
   })
+
+  test('T-OPS-019 without a terminal a needed prompt exits 1 at once: {case}')
+    .with([
+      { case: 'existing account', argv: 'existing' },
+      {
+        case: 'password',
+        argv: ['--interactive', '--email=tty.admin@example.com', '--full-name=T'],
+      },
+      { case: 'full name', argv: ['--email=tty.admin@example.com'] },
+    ])
+    .run(async ({ assert }, row) => {
+      let argv = row.argv as string[]
+      if (row.argv === 'existing') {
+        const userId = await insertActiveUser()
+        const { email } = await db.from('users').where('id', userId).firstOrFail()
+        argv = [`--email=${email}`]
+      }
+      const before = await counts()
+
+      const command = await createAdmin(argv)
+
+      command.assertFailed()
+      assert.match(logsOf(command).join('\n'), /needs an interactive terminal/)
+      assert.deepEqual(await counts(), before)
+    })
 
   test('T-OPS-019 refused input changes nothing: {case}')
     .with([
@@ -324,4 +441,16 @@ test.group('T-IAM-112 anonymized.invalid refused by platform:create-admin', () =
     assert.deepEqual(await counts(), before)
     assert.match(logsOf(command).join('\n'), /email: .*reserved domain/)
   })
+
+  test('T-IAM-112 any address in the reserved .invalid TLD is refused: {email}')
+    .with([{ email: 'a@b.invalid' }, { email: 'Vendor-1@Dev.DripNepal.INVALID' }])
+    .run(async ({ assert }, { email }) => {
+      const before = await counts()
+
+      const command = await createAdmin([`--email=${email}`, '--full-name=Stranger'])
+
+      command.assertFailed()
+      assert.deepEqual(await counts(), before)
+      assert.match(logsOf(command).join('\n'), /email: .*reserved domain/)
+    })
 })

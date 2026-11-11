@@ -6,7 +6,6 @@ import { InvariantViolation } from '#exceptions/programming_errors'
 import { recordAudit } from '#modules/audit/actions/record_audit'
 import { issueUserToken } from '#modules/identity/actions/issue_user_token'
 import { maskEmail } from '#modules/identity/domain/mask_email'
-import { SIGNED_IN_STATUSES } from '#modules/identity/domain/user_status'
 
 /*
  * `BootstrapPlatformAdmin`, the identity entry action behind
@@ -22,9 +21,11 @@ import { SIGNED_IN_STATUSES } from '#modules/identity/domain/user_status'
  * 3. the account: a new one, `pending_verification` with the hash of 32
  *    random bytes nobody sees (invitation) or `active` and verified with
  *    the password typed at the masked prompt (`--interactive`); or, only
- *    when the operator confirmed it, an existing `active` or
- *    `pending_verification` account, whose password is never changed and
- *    whose `security_stamp` rotates (docs/07 §3.3);
+ *    when the operator confirmed it, an existing `active` account, whose
+ *    password is never changed and whose `security_stamp` rotates (docs/07
+ *    §3.3). A `pending_verification` account is refused: its address is
+ *    not proven, so someone could have registered the operator's address
+ *    first;
  * 4. the `platform_staff` row with `granted_by` null;
  * 5. a `password_reset` token for an invited new account, and an
  *    `mfa_enrollment` token in every mode (docs/07 §3.9), each with its
@@ -33,7 +34,8 @@ import { SIGNED_IN_STATUSES } from '#modules/identity/domain/user_status'
  *    and the mode, never the email or a token.
  *
  * Verified by T-OPS-019. The `--recover` reset of 11 §14.6 comes with the
- * MFA enrolment path in M1.
+ * MFA enrolment path in M1. The transaction is a plain `db.transaction`,
+ * because the `withTx` helper of docs/09 §3.8 does not exist yet.
  */
 
 export const BOOTSTRAP_LOCK = 'platform:create-admin'
@@ -101,7 +103,7 @@ async function createAccount(
 }
 
 async function grantExisting(trx: TransactionClientContract, user: ExistingUser) {
-  if (!(SIGNED_IN_STATUSES as readonly string[]).includes(user.status)) {
+  if (user.status !== 'active') {
     throw new AccountNotEligible(user.status)
   }
   // A staff role grant rotates the stamp, so other sessions sign in again (docs/07 §3.3).
@@ -110,9 +112,9 @@ async function grantExisting(trx: TransactionClientContract, user: ExistingUser)
 
 export default class BootstrapPlatformAdmin {
   async execute(input: BootstrapInput) {
-    // Hashing is slow, so it runs before any lock is taken.
-    const secret = input.password ?? randomBytes(32).toString('base64url')
-    const passwordHash = await hash.make(secret)
+    // Hashing is slow, so it runs before any lock is taken, and only for a new account.
+    const newPasswordHash = () => hash.make(input.password ?? randomBytes(32).toString('base64url'))
+    const passwordHash = input.grantExistingAccount ? null : await newPasswordHash()
 
     return db.transaction(async (trx) => {
       await lockAdmins(trx)
@@ -130,7 +132,8 @@ export default class BootstrapPlatformAdmin {
         userId = existing.id
         mode = 'existing_account'
       } else {
-        userId = await createAccount(trx, input, passwordHash)
+        // Users are never deleted, so a confirmed existing account cannot vanish; hash anyway if it did.
+        userId = await createAccount(trx, input, passwordHash ?? (await newPasswordHash()))
         mode = input.password === null ? 'invitation' : 'interactive'
       }
 

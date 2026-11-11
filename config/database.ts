@@ -44,6 +44,16 @@ const debug = env.get('DB_DEBUG') ?? false
  * carry the request limits themselves (docs/09 §6.3, docs/03 §3.4).
  * `node ace` commands and the worker are `console` and are not cut off.
  */
+/*
+ * The pool limits for `DB_POOL_MAX` (docs/09 §6.3). Tarn's minimum is 2 by
+ * default and it refuses a maximum below the minimum, so a one-off
+ * container run with `DB_POOL_MAX=1` (docs/11 §10.1, §14.6) would not
+ * start. The minimum is therefore never above the maximum.
+ */
+export function poolLimits(max: number) {
+  return { min: Math.min(2, max), max }
+}
+
 const requestTimeouts =
   app.getEnvironment() === 'web' ? { statement_timeout: 10_000, lock_timeout: 5_000 } : {}
 
@@ -100,7 +110,7 @@ const dbConfig = defineConfig({
         ssl,
         ...requestTimeouts,
       },
-      pool: { max: env.get('DB_POOL_MAX') },
+      pool: poolLimits(env.get('DB_POOL_MAX')),
       migrations,
       seeders,
       schemaGeneration,

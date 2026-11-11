@@ -35,7 +35,8 @@ export const RELEASE_CHECKS: Check[] = [
     name: 'no pending migration',
     count: async ({ app, connection }) => {
       const db = await app.container.make('lucid.db')
-      // Read only: getList() compares the files with `adonis_schema` and runs nothing.
+      // getList() runs no migration: it compares the files with `adonis_schema`, which it creates
+      // when missing (only on a database never migrated, where every file is then pending).
       const runner = new MigrationRunner(db, app, { direction: 'up', connectionName: connection })
       const list = await runner.getList()
       return list.filter((node) => node.status === 'pending' || node.status === 'corrupt').length

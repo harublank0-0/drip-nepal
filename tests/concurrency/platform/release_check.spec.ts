@@ -7,8 +7,8 @@ import ReleaseCheck from '../../../commands/release_check.js'
 /*
  * `node ace release:check` as the release step runs it, on the migrator's
  * connection (docs/11 §6.1):
- * - T-OPS-013: a migration file with no `adonis_schema` row is pending and
- *   fails the release;
+ * - T-OPS-013: a migration file with no `adonis_schema` row is pending, and
+ *   a row whose file is gone is corrupt; either fails the release;
  * - T-OPS-014: an index left invalid by a failed `CREATE INDEX
  *   CONCURRENTLY` fails the release.
  * Both conditions need committed changes (an index build that runs outside
@@ -50,6 +50,23 @@ test.group('T-OPS-013 T-OPS-014 release checks on the migrator connection', (gro
     }
     const restored = await releaseCheck()
     restored.assertSucceeded()
+  })
+
+  test('T-OPS-013 an applied migration whose file is gone fails the release', async ({
+    assert,
+  }) => {
+    const migrator = db.connection(MIGRATOR_CONNECTION)
+    const [row] = await migrator
+      .table('adonis_schema')
+      .insert({ name: 'database/migrations/1700000000000_t_ops_013_missing', batch: 1 })
+      .returning('id')
+    try {
+      const command = await releaseCheck()
+      command.assertFailed()
+      assert.include(output(command), 'T-OPS-013 no pending migration: 1 failing')
+    } finally {
+      await migrator.from('adonis_schema').where('id', row.id).delete()
+    }
   })
 
   test('T-OPS-014 an index left invalid by a failed concurrent build fails the release', async ({
