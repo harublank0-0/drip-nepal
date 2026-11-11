@@ -1,7 +1,7 @@
 # NCM webhooks, statuses and status processing
 
 Labels:
-- **[doc]** NCM's documents (webhook doc v1.1, Sept 2026, "Beta"; API doc PDF dated `251222`). Example values are adapted, with ids and dates changed.
+- **[doc]** NCM's documents (webhook doc v1.1, Sept 2026, "Beta"; API doc v2, which replaced the PDF dated `251222`; see [api-contract.md](api-contract.md)). Example values are adapted, with ids and dates changed.
 - **[inferred]** follows from the documents without being stated in them.
 - **[observed]** seen in one production integration's code, not in NCM's documents. Code shows what the integration *handles*, not what NCM *sends*; confirm with NCM.
 - **[reported]** that integration's team reports it from production checks; it is not visible in its code.
@@ -12,8 +12,35 @@ Labels:
 
 **Setup.** In the NCM vendor portal: API section (`/accounts/vendor/api`) →
 "Webhook/API Callback URLs" → put your URL in **"Order Delivery Webhook URL"**
-→ "Test Webhook" → "Add/Update". NCM also mentions setting or removing the URL
-with `POST /api/v2/vendor/webhook`, whose parameters are [unknown].
+→ "Test Webhook" → "Add/Update".
+
+The API doc v2 offers the same through the API:
+
+- **Register** `POST /api/v2/vendor/webhook` with `{"webhook_url": "https://…"}`.
+  It answers `201` the first time and `200` after that, both with
+  `{"success": true, "message": …}`. An empty string removes the stored URL. A
+  URL that doesn't start with `http://` or `https://` gets `400` with
+  `success: false`. The doc calls it the "order status webhook"; whether it also
+  sets the portal's "Order Comment Webhook URL" is [unknown].
+- **Test** `POST /api/v2/vendor/webhook/test` with `{"webhook_url"}` makes NCM
+  post a sample event to that URL:
+
+  ```json
+  {"event": "order.status.changed", "order_id": "TEST-123456", "status": "In Transit", "timestamp": "2024-01-01T12:00:00+05:45", "test": true}
+  ```
+
+  It always answers `200`. `{"success": true, "status_code": 200, "response": "OK"}`
+  means your server answered (a 4xx or 5xx from your server also comes back as
+  `success: true`, with that code in `status_code`). `{"success": false, "error": …}`
+  means a timeout after 10 seconds or a connection error.
+
+  The test event matches none of the real events below: its `event` is
+  `order.status.changed`, its `order_id` is not a number, and it carries
+  `test: true`. Answer it with a 2xx and change nothing [recommended]. Don't
+  take its shape as the shape of real events.
+
+The registered URL is where the secret goes (below), so register it from
+configuration, and never log the full URL.
 
 **URL.** Valid HTTP or HTTPS; HTTPS recommended; may include query parameters.
 NCM's own example is `https://your-domain.com/api/ncm-webhook?token=your-secret`.
@@ -293,7 +320,7 @@ the parcel exists:
 - **Post-delivery return check.** A return can show only as `vendor_return`
   flipping after `Delivered` [observed]. Re-check recent deliveries' order detail
   for a while, and apply a hit as the mapping's "return after delivered" row.
-- **Budget the calls.** The status APIs count against 5,000 reads a day [doc].
+- **Budget the calls.** The status APIs count against 20,000 reads a day (5,000 in the `251222` PDF) [doc].
   Whether a bulk call costs one read or one per id is [unknown]; assume per id
   until NCM says otherwise. Size the sweep (batch size, staleness window,
   look-back days) so it fits with room for manual refreshes.

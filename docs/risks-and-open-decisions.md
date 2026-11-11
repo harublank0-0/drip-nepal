@@ -256,6 +256,14 @@ Evidence: Licence: MIT (its LICENSE, copyright 2026 harublank0-0). Read-through 
           which may not be the algorithm of the two older entries (never checked, 2026-11-04 entry).
 ADR: none.
 Docs updated: 09 (§1.5, note 85), 12 (E12, note 24), AGENTS.md, note 28  |  Status: Decided
+Edited 2026-11-11: the skill is no longer unchanged. At the product owner's request its NCM API facts
+        follow NCM's API Documentation v2 (a 32-page PDF NCM sent to the product owner, kept out of the
+        repository), which replaces the PDF dated 251222: new limits, webhook registration and test,
+        assigned branches, ticket detail and reply, customers, the cross-NCM customer rating, label
+        data, and a new decision D12 on that rating. Its NOTICE.md lists the changes. The facts are
+        still unverified: the demo token NCM issued answered "Invalid token." on 2026-11-11, so VX-16,
+        VX-17 and VX-18 stay open, and the documents still win. skills-lock.json's computedHash is
+        recomputed with the algorithm above. Note 30.
 ```
 
 ```text
@@ -851,3 +859,4 @@ This matrix is authoritative for decision gates. [12 §3](12-roadmap-and-backlog
 27. **Reference seeders without the locations dataset (2026-11-09).** §2.3 logs the product owner's split of the E4 and E8 seeders. VX-10 stays open and still blocks the M1 and M2 exits as §5 says; the locations seeder it feeds is now a separate pull request, and the M0 exit waits for it and `T-SHOP-108` through [12 §4.3](12-roadmap-and-backlog.md#43-exit-criteria) item 6. §2.2 opens OD-59 for the demo seeder that 09 §9.4 schedules in M0 but that calls M1 to M6 actions, and §5 lists it under the M0 exit with its safe default.
 28. **The `ncm-integration` skill (2026-11-09).** §2.3 logs the product owner's decision to track the skill that commit `bd23da5` added to `main`, after the licence check and read-through that [AGENTS.md](../AGENTS.md) requires. It changes no OD, VX or risk: the skill's NCM API facts are unverified, so VX-16, VX-17 and VX-18 stay open and R-33 is unchanged.
 29. **Preparing the E4 merge (2026-11-09).** §2.3 adds dated notes to the 2026-11-07 integration-branch entry (both of its conditions hold) and the 2026-11-04 entry (the merge removes the v1 store from `main`), and note 24 follows. Nothing here says the merge into `main` has happened. Outside this register the same change updates DEPLOY.md, README.md, `database/README.md`, the `dripnepal-run` and `dripnepal-testing` skills, 10 (§3.1, §5, notes 29, 31, 33, 40) and 12 (§4.1, note 24).
+30. **The `ncm-integration` skill follows NCM's API doc v2 (2026-11-11).** §2.3 adds a dated note to the 2026-11-09 skill entry. It changes no OD, VX or risk: the v2 document answers some VX-16 questions on paper, but nothing is verified against NCM's API, and the production host, cancellation and webhook authentication are still missing from it. Recording the v2 facts in VX-16's evidence, and any new question for NCM, is left to the pull request that verifies them on the demo host.

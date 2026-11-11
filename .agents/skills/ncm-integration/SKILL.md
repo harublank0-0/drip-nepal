@@ -1,6 +1,6 @@
 ---
 name: ncm-integration
-description: Use when adding, extending or debugging a Nepal Can Move (NCM, nepalcanmove.com) courier integration in an e-commerce or order-management project - creating parcels, delivery rates, branches, COD, NCM webhooks, delivery status sync, returns, redirects, tickets or comments.
+description: Use when adding, extending or debugging a Nepal Can Move (NCM, nepalcanmove.com) courier integration in an e-commerce or order-management project - creating parcels, delivery rates, branches, COD, NCM webhooks, delivery status sync, returns, redirects, tickets, comments, labels or customer ratings.
 ---
 
 # NCM courier integration
@@ -9,7 +9,8 @@ description: Use when adding, extending or debugging a Nepal Can Move (NCM, nepa
 
 NCM's API is small and loosely specified: token auth, string money, no
 idempotency, no cancel endpoint, and webhooks that are **never retried** and
-carry **no signature**. A correct integration is mostly about what you build
+carry **no signature**. The contract here follows NCM's API doc v2 and its
+webhook doc v1.1. A correct integration is mostly about what you build
 around it: a claim before creating a parcel, per-account matching, idempotent
 and ordered status processing, polling reconciliation, and explicit business
 decisions about returns, COD and stock.
@@ -52,7 +53,7 @@ Don't assume a particular framework, ORM, queue or cloud provider. Use what the 
 
 ## Workflow
 
-1. **Settle decisions D1–D11** in [checklists.md](references/checklists.md#decisions-to-settle-with-the-user-first) with the user. Never decide cancellation, returns, COD settlement or stock effects alone.
+1. **Settle decisions D1–D12** in [checklists.md](references/checklists.md#decisions-to-settle-with-the-user-first) with the user. Never decide cancellation, returns, COD settlement or stock effects alone.
 2. **Agree the status mapping.** Fill in the template in [webhooks-and-statuses.md](references/webhooks-and-statuses.md#mapping-template-recommended) row by row, for the project's real states. Every NCM event and status gets an explicit outcome, including "no order change".
 3. **Implement in the order** in [checklists.md](references/checklists.md#implementation-order). Each step has a verification checkpoint; don't skip ahead.
 4. **Write the tests** in the [testing checklist](references/checklists.md#testing-checklist), with synthetic data only.
@@ -67,14 +68,17 @@ Don't assume a particular framework, ORM, queue or cloud provider. Use what the 
 | A parcel's status history | `GET /api/v1/order/status?id=` (newest first) |
 | Many parcels' current status | `POST /api/v1/orders/statuses` `{"orders": [...]}` → `result` and `errors` |
 | Delivery charge | `GET /api/v1/shipping-rate?creation=&destination=&type=` |
-| Branches | `GET /api/v2/branches` |
+| Branches | `GET /api/v2/branches`; the account's pickup branches: `GET /api/v2/vendor/assigned-branches` |
 | Comments | `GET /api/v1/order/comment?id=`, `GET /api/v1/order/getbulkcomments`, `POST /api/v1/comment` |
 | Return, exchange, redirect | `POST /api/v2/vendor/order/return`, `…/exchange-create`, `…/redirect` |
-| Tickets | `POST /api/v2/vendor/ticket/create`, `…/ticket/cod/create`, `…/ticket/close/<id>` |
+| Tickets | `POST /api/v2/vendor/ticket/create/new`, `…/ticket/cod/create`, `…/ticket/close/<id>`; `GET /api/v1/tickets/<id>/detail`; `POST /api/v1/vendor/tickets/<id>/response` |
+| Label data | `GET /api/v2/vendor/order/label/<id>`, `POST /api/v2/vendor/order/label/` `{"ids": [...]}` |
+| Customers, rating | `GET /api/v2/vendor/customers`, `…/customers/<id>/detail`; `GET /api/v2/vendor/ratings?phone=` (decision D12 first) |
+| Webhook setup | `POST /api/v2/vendor/webhook` `{"webhook_url"}`; `POST /api/v2/vendor/webhook/test` |
 | Webhooks in | `POST` to your URL; 2xx within 10 s; one shot, no retry |
 
-Auth on every call: `Authorization: Token <token>`. Limits: 200 creates and
-5,000 reads a day. Full contract: [api-contract.md](references/api-contract.md).
+Auth on every call: `Authorization: Token <token>`. Limits: 1,000 creates and
+20,000 order reads a day. Full contract: [api-contract.md](references/api-contract.md).
 Events, payloads and statuses: [webhooks-and-statuses.md](references/webhooks-and-statuses.md).
 
 ## Common mistakes
@@ -93,6 +97,8 @@ Events, payloads and statuses: [webhooks-and-statuses.md](references/webhooks-an
 | Calling NCM before claiming the local record (create, redirect, comment) | Claim first, call, then record. NCM has no idempotency keys. |
 | Sending the rate `type` (`D2B`) to create | Create takes `Door2Branch`; map between them. |
 | Trusting the URL token in the receiver without checking it | Verify it in constant time before storing anything. |
+| Treating the webhook test event as a real one | `order.status.changed` with `test: true` matches no real event; answer 2xx and change nothing. |
+| Calling the rating endpoint because it exists | It shares a customer's record with other vendors; settle D12 first. |
 | Returning NCM's raw error text to users, or logging full payloads | Map to safe messages; log ids and outcomes, not names, phones or addresses. |
 
 ## What production showed
