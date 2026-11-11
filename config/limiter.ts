@@ -1,21 +1,22 @@
 import env from '#start/env'
 import { defineConfig, stores } from '@adonisjs/limiter'
 
+/*
+ * Rate limits (docs/06 §9.1; OD-10 resolved). The database store keeps its
+ * windows in `rate_limits` (docs/04a §15.4), because PostgreSQL is the only
+ * stateful service in R1. Keys are built and HMAC-hashed by
+ * app/modules/platform/rate_limits.ts, never by callers.
+ */
 const limiterConfig = defineConfig({
   default: env.get('LIMITER_STORE'),
   stores: {
-    /**
-     * Database store to save rate limiting data inside a
-     * MYSQL or PostgreSQL database.
-     */
     database: stores.database({
       tableName: 'rate_limits',
+      // Deletes expired windows every 5 minutes, so the table holds live ones only.
+      clearExpiredByTimeout: true,
     }),
 
-    /**
-     * Memory store could be used during
-     * testing
-     */
+    // For local experiments; staging, production and the tests use `database`.
     memory: stores.memory({}),
   },
 })

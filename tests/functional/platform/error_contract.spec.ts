@@ -29,6 +29,9 @@ import { parseInt8 } from '#start/database_types'
  *   screen, and problem+json for a page URL asked for JSON.
  *
  * The routes below exist only in this test run, under `__test__` paths.
+ * A failing statement runs in a transaction, as an action's does: inside the
+ * test's global transaction it is a savepoint, so the session store can
+ * still write the session afterwards.
  */
 
 router
@@ -36,9 +39,11 @@ router
     router.get('unique-violation', async () => {
       // `platform_settings_pkey` is not on the constraint allowlist.
       const key = 'checkout_enabled'
-      await db.rawQuery(
-        `INSERT INTO platform_settings (key, value) VALUES (?, 'true'::jsonb), (?, 'true'::jsonb)`,
-        [key, key]
+      await db.transaction((trx) =>
+        trx.rawQuery(
+          `INSERT INTO platform_settings (key, value) VALUES (?, 'true'::jsonb), (?, 'true'::jsonb)`,
+          [key, key]
+        )
       )
     })
     router.get('rate-limited', () => {
@@ -57,7 +62,7 @@ router
     })
     router.get('bad-uuid', async () => {
       // SQLSTATE 22P02, whose server message quotes the value.
-      await db.rawQuery('SELECT ?::uuid', ['ram@example.com'])
+      await db.transaction((trx) => trx.rawQuery('SELECT ?::uuid', ['ram@example.com']))
     })
     router.post('echo', ({ request }) => request.body())
     router.post('protected', () => 'ok').use(middleware.auth())
@@ -67,7 +72,7 @@ router
 router
   .group(() => {
     router.get('page-boom', async () => {
-      await db.rawQuery('SELECT 1 / 0')
+      await db.transaction((trx) => trx.rawQuery('SELECT 1 / 0'))
     })
     // An error from a library that sets its own `status`, with a message that must not show.
     router.get('foreign-status/:status', ({ params }) => {

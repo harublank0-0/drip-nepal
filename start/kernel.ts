@@ -40,10 +40,14 @@ server.use([
  */
 router.use([
   () => import('@adonisjs/core/bodyparser_middleware'),
+  // Before the session: a refused body creates no session row (docs/06 §9.2).
+  () => import('#middleware/request_body_middleware'),
   () => import('@adonisjs/session/session_middleware'),
   () => import('@adonisjs/shield/shield_middleware'),
   () => import('@adonisjs/auth/initialize_auth_middleware'),
   () => import('#middleware/silent_auth_middleware'),
+  // Status, stamp and the absolute limit of the signed-in user (docs/07 §3.3).
+  () => import('#middleware/account_status_middleware'),
 ])
 
 /**

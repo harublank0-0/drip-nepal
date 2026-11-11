@@ -13,8 +13,11 @@ const authConfig = defineConfig({
      * Session-based guard for browser authentication.
      */
     web: sessionGuard({
-      /**
-       * Enable persistent login using remember-me tokens.
+      /*
+       * Remember-me is off in R1 (ADR-0005 decision 6, docs/07 §3.5): a
+       * remember-me token would be a second long-lived credential that a
+       * suspension or a password change must also revoke. The 7-day session
+       * covers the convenience.
        */
       useRememberMeTokens: false,
 

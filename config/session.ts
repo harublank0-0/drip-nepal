@@ -1,73 +1,45 @@
 import env from '#start/env'
-import app from '@adonisjs/core/services/app'
-import { defineConfig, stores } from '@adonisjs/session'
+import { defineConfig } from '@adonisjs/session'
+import { runtime } from '#config/runtime'
+import { taggedExpiryStore } from '#modules/platform/session_store'
 
+/*
+ * Sessions (ADR-0005, docs/07 §3.1). The database store keeps every session
+ * server-side, so a suspension, a password change or "log out everywhere"
+ * can end it (RF-04); there is no cookie store. `memory` remains for local
+ * experiments only: staging and production require `database`
+ * (start/env_policy.ts), and the tests use `database` too.
+ */
 const sessionConfig = defineConfig({
-  /**
-   * Enable or disable session support globally.
-   */
   enabled: true,
 
-  /**
-   * Cookie name storing the session identifier.
-   */
   cookieName: 'dripnepal_session',
 
-  /**
-   * When set to true, the session id cookie will be deleted
-   * once the user closes the browser.
-   */
+  // The cookie outlives a browser restart; the server-side expiry ends the session.
   clearWithBrowser: false,
 
-  /**
-   * Define how long to keep the session data alive without
-   * any activity.
+  /*
+   * The idle expiry of a signed-in session: 7 days, the longest idle period
+   * any user may have [Assumption A-23]. The cookie's Max-Age is the same.
+   * A session without a signed-in user expires after 2 h (the store below);
+   * the seller, admin and absolute limits are checked by middleware
+   * (docs/07 §3.4).
    */
   age: '7d',
 
-  /**
-   * Configuration for session cookie and the
-   * cookie store.
-   */
   cookie: {
-    /**
-     * Restrict the cookie to a URL path. '/' means all routes.
-     */
     path: '/',
-
-    /**
-     * Prevent JavaScript access to the cookie in the browser.
-     */
     httpOnly: true,
-
-    /**
-     * Send cookies only over HTTPS in production.
-     */
-    secure: app.inProduction,
-
-    /**
-     * Cross-site policy for cookie sending.
-     */
+    // Staging and production are served over HTTPS (docs/07 §3.1). No
+    // `domain`: the cookie is host-only.
+    secure: runtime.appEnv === 'staging' || runtime.appEnv === 'production',
     sameSite: 'lax',
   },
 
-  /**
-   * The store to use. Make sure to validate the environment
-   * variable in order to infer the store name without any
-   * errors.
-   */
   store: env.get('SESSION_DRIVER'),
 
-  /**
-   * List of configured stores. Refer documentation to see
-   * list of available stores and their config.
-   */
   stores: {
-    // No cookie store: session data never travels to the browser (RF-04).
-    /**
-     * Store session data inside the configured database.
-     */
-    database: stores.database(),
+    database: taggedExpiryStore({ anonymousAge: '2h' }),
   },
 })
 
