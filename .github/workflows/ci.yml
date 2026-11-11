@@ -151,4 +151,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Build the production image (not pushed)
-        run: docker build --tag dripnepal:ci .
+        run: docker build --build-arg APP_RELEASE=${{ github.sha }} --tag dripnepal:ci .
+      # T-OPS-010 (docs/11 §4.2): non-root, no .env*, SSR bundle present, and
+      # the image boots in a staging-shaped environment.
+      - name: T-OPS-010 image checks
+        run: scripts/check_image.sh dripnepal:ci

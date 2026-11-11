@@ -5,6 +5,25 @@ import { react } from '@adonisjs/eslint-config/react'
 // only by shared/format/money.ts. T-ARCH-014 lints fixtures against these.
 const MONEY_CODE = ['app/modules/**', 'shared/format/**', 'inertia/**']
 const MONEY_GLOBALS = [{ name: 'parseFloat', message: 'Money is integer paisa (ADR-0007)' }]
+// Configuration (docs/09 §6.3): only start/env*.ts and bin/* read the
+// environment; everything else imports typed config.
+const PROCESS_ENV = [
+  {
+    object: 'process',
+    property: 'env',
+    message: 'Read configuration from config/*.ts, not process.env (docs/09 §6.3)',
+  },
+]
+const SERVER_AND_UI = [
+  'app/**',
+  'start/**',
+  'config/**',
+  'providers/**',
+  'commands/**',
+  'database/**',
+  'shared/**',
+  'inertia/**',
+]
 const MONEY_PROPERTIES = [
   { object: 'Number', property: 'parseFloat', message: 'Money is integer paisa (ADR-0007)' },
   { property: 'toFixed', message: 'Format money only with formatNPR (shared/format/money.ts)' },
@@ -21,13 +40,37 @@ export default configApp(
     },
   },
   {
+    // No console output: server code logs through pino, the browser logs no
+    // data at all (docs/09 §7.5, RF-26). process.env stays in start/env*.ts.
+    files: SERVER_AND_UI,
+    ignores: ['start/env.ts', 'start/env_schema.ts'],
+    rules: {
+      'no-console': 'error',
+      'no-restricted-properties': ['error', ...PROCESS_ENV],
+    },
+  },
+  {
+    // The environment is read through config/*.ts only (docs/09 §6.3).
+    files: ['app/**', 'inertia/**', 'shared/**'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            { name: '#start/env', message: 'Import typed config from #config/* (docs/09 §6.3)' },
+          ],
+        },
+      ],
+    },
+  },
+  {
     // A later block that sets one of these rules for the same files replaces
-    // this list (docs/09 §11.2, notes), so such a block adds these arrays.
+    // this list (docs/09 §11.2, notes), so this block repeats PROCESS_ENV.
     files: MONEY_CODE,
     ignores: ['shared/format/money.ts'],
     rules: {
       'no-restricted-globals': ['error', ...MONEY_GLOBALS],
-      'no-restricted-properties': ['error', ...MONEY_PROPERTIES],
+      'no-restricted-properties': ['error', ...MONEY_PROPERTIES, ...PROCESS_ENV],
     },
   },
   {

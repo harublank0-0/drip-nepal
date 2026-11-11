@@ -28,6 +28,26 @@ const schemaGeneration = {
 }
 
 /*
+ * TLS to PostgreSQL (docs/09 §6.3, docs/07 §5.5): the server certificate is
+ * verified, against DB_SSL_CA when the provider gives one. Production
+ * refuses DB_SSL=false (start/env_policy.ts).
+ */
+const ssl = env.get('DB_SSL')
+  ? { rejectUnauthorized: true, ...(env.get('DB_SSL_CA') ? { ca: env.get('DB_SSL_CA') } : {}) }
+  : false
+
+// Query logging, without bindings, only when a developer asks for it (docs/09 §7.6).
+const debug = env.get('DB_DEBUG') ?? false
+
+/*
+ * The web process's page reads run outside transactions, so its connections
+ * carry the request limits themselves (docs/09 §6.3, docs/03 §3.4).
+ * `node ace` commands and the worker are `console` and are not cut off.
+ */
+const requestTimeouts =
+  app.getEnvironment() === 'web' ? { statement_timeout: 10_000, lock_timeout: 5_000 } : {}
+
+/*
  * Test roles (docs/09 §6.1, docs/10 §3.2): under NODE_ENV=test the app runs
  * as `dripnepal_app` on `pg`, and migrations run as `dripnepal_migrator` on
  * `pg_migrator`, same host and database, so the grants of docs/07 §4.10 are
@@ -47,11 +67,12 @@ const migratorConnection = (): Record<string, PostgreConfig> => {
         user,
         password: password.release(),
         database: env.get('DB_DATABASE'),
+        ssl,
       },
       migrations,
       seeders,
       schemaGeneration,
-      debug: app.inDev,
+      debug,
     },
   }
 }
@@ -61,7 +82,8 @@ const dbConfig = defineConfig({
    * Default connection used for all queries.
    */
   connection: 'pg',
-  prettyPrintDebugQueries: true,
+  // Bindings are never printed: start/events.ts logs the SQL alone (docs/09 §7.6).
+  prettyPrintDebugQueries: false,
   connections: {
     /**
      * PostgreSQL connection.
@@ -73,74 +95,19 @@ const dbConfig = defineConfig({
         host: env.get('DB_HOST'),
         port: env.get('DB_PORT'),
         user: env.get('DB_USER'),
-        password: env.get('DB_PASSWORD'),
+        password: env.get('DB_PASSWORD').release(),
         database: env.get('DB_DATABASE'),
+        ssl,
+        ...requestTimeouts,
       },
+      pool: { max: env.get('DB_POOL_MAX') },
       migrations,
       seeders,
       schemaGeneration,
-      debug: app.inDev,
+      debug,
     },
 
     ...migratorConnection(),
-
-    /**
-     * MySQL / MariaDB connection.
-     * Install package to switch: npm install mysql2
-     */
-    // mysql: {
-    //   client: 'mysql2',
-    //   connection: {
-    //     host: env.get('DB_HOST'),
-    //     port: env.get('DB_PORT'),
-    //     user: env.get('DB_USER'),
-    //     password: env.get('DB_PASSWORD'),
-    //     database: env.get('DB_DATABASE'),
-    //   },
-    //   migrations: {
-    //     naturalSort: true,
-    //     paths: ['database/migrations'],
-    //   },
-    //   debug: app.inDev,
-    // },
-
-    /**
-     * Microsoft SQL Server connection.
-     * Install package to switch: npm install tedious
-     */
-    // mssql: {
-    //   client: 'mssql',
-    //   connection: {
-    //     server: env.get('DB_HOST'),
-    //     port: env.get('DB_PORT'),
-    //     user: env.get('DB_USER'),
-    //     password: env.get('DB_PASSWORD'),
-    //     database: env.get('DB_DATABASE'),
-    //   },
-    //   migrations: {
-    //     naturalSort: true,
-    //     paths: ['database/migrations'],
-    //   },
-    //   debug: app.inDev,
-    // },
-
-    /**
-     * libSQL (Turso) connection.
-     * Install package to switch: npm install @libsql/client
-     */
-    // libsql: {
-    //   client: 'libsql',
-    //   connection: {
-    //     url: env.get('LIBSQL_URL'),
-    //     authToken: env.get('LIBSQL_AUTH_TOKEN'),
-    //   },
-    //   useNullAsDefault: true,
-    //   migrations: {
-    //     naturalSort: true,
-    //     paths: ['database/migrations'],
-    //   },
-    //   debug: app.inDev,
-    // },
   },
 })
 

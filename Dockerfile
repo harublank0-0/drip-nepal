@@ -22,14 +22,21 @@ RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
 FROM deps AS build
 COPY . .
 RUN node ace build
+# RF-08 guard: every page would answer 500 without the SSR bundle (docs/11 §4.2).
+RUN test -f build/ssr/ssr.js
 
 # Runtime: the compiled app and production dependencies only.
 FROM base AS production
+# The commit the image was built from; staging and production refuse to boot
+# without it (start/env_policy.ts, docs/09 §6.1).
+ARG APP_RELEASE
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
-    PORT=3333
+    PORT=3333 \
+    APP_RELEASE=${APP_RELEASE}
 COPY --from=build /app/build ./
 COPY --from=build /app/pnpm-workspace.yaml ./
+# Production dependencies only; --ignore-scripts skips husky's prepare (docs/11 §4.2).
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --prod --frozen-lockfile --ignore-scripts
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh

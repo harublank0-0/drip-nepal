@@ -5,6 +5,7 @@ import {
   type TrackerContext,
   type TrackerEvent,
 } from '#exceptions/tracker'
+import { runtime } from '#config/runtime'
 
 /*
  * T-ARCH-026: `reportToTracker` with a fake transport (docs/09 §5.6). A 422
@@ -54,7 +55,7 @@ test.group('T-ARCH-026 reportToTracker', (group) => {
       route: '/api/v1/shops/:id',
       route_name: 'getShop',
       user_ref: null,
-      release: process.env.APP_RELEASE ?? null,
+      release: runtime.release,
       environment: 'test',
     })
     assert.deepEqual(Object.keys(event.error).sort(), ['code', 'message', 'name', 'stack'])

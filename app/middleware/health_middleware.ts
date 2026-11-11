@@ -1,7 +1,7 @@
 import app from '@adonisjs/core/services/app'
 import logger from '@adonisjs/core/services/logger'
 import db from '@adonisjs/lucid/services/db'
-import env from '#start/env'
+import { runtime } from '#config/runtime'
 import type { HttpContext } from '@adonisjs/core/http'
 import type { NextFn } from '@adonisjs/core/types/http'
 
@@ -12,7 +12,8 @@ import type { NextFn } from '@adonisjs/core/types/http'
  * readiness answer into a 500 page instead of a 503.
  *
  * /health/live:  the process serves HTTP, and which release it runs.
- * /health/ready: the database answers and the app is not shutting down.
+ * /health/ready: the database answers, int8 arrives as a number, and the
+ *                app is not shutting down.
  *                Used by Compose; Caddy hides it from the internet.
  * Neither answer is cached.
  */
@@ -23,7 +24,7 @@ export default class HealthMiddleware {
 
     switch (request.url()) {
       case '/health/live':
-        return response.ok({ status: 'ok', release: env.get('APP_RELEASE') ?? 'unknown' })
+        return response.ok({ status: 'ok', release: runtime.release ?? 'unknown' })
       case '/health/ready': {
         const ready = await this.#isReady()
         return response.status(ready ? 200 : 503).json({ status: ready ? 'ok' : 'error' })
@@ -36,7 +37,13 @@ export default class HealthMiddleware {
   async #isReady() {
     if (app.isTerminating) return false
     try {
-      await db.rawQuery('SELECT 1')
+      // The int8 parser of start/database_types.ts must be registered, or
+      // money would arrive as strings (docs/09 §6.5 item 3, docs/04 §18.4).
+      const result = await db.rawQuery('SELECT 9007199254740991::int8 AS max_safe')
+      if (typeof result.rows[0]?.max_safe !== 'number') {
+        logger.error('readiness check failed: the int8 parser is not registered')
+        return false
+      }
       return true
     } catch (error) {
       logger.error({ err: error }, 'readiness check failed: database')

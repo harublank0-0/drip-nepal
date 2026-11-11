@@ -3,6 +3,8 @@ import { type HttpContext, ExceptionHandler } from '@adonisjs/core/http'
 import type { HttpError, StatusPageRange, StatusPageRenderer } from '@adonisjs/core/types/http'
 import { databaseError, toProblem, type Problem } from '#exceptions/to_problem'
 import { reportToTracker, scrubbedDatabaseError } from '#exceptions/tracker'
+import { hmacKeys } from '#config/crypto'
+import { keyedHash } from '#modules/platform/crypto/keyed_hash'
 
 /*
  * The exception handler (docs/09 §5.4, ADR-0018). `toProblem()` is the one
@@ -56,7 +58,9 @@ function renderPage(
 ) {
   const inertia = (ctx as Partial<HttpContext>).inertia
   if (inertia) return render(inertia)
-  // The status page's error is the handler's shim: the problem's title and status.
+  // The status page's error is the handler's shim (renderErrorAsHTML): the problem's title
+  // and status. Status pages run only without debug (`renderStatusPages = !app.inDev`), and
+  // without debug every HTML error goes through the shim, so no raw message reaches here.
   return `<p>${escapeHtml(error.message)}</p>`
 }
 
@@ -71,6 +75,13 @@ function signInRedirect(ctx: HttpContext, path: '/login' | '/mfa') {
     .withQs(false)
     .withQs({ return_to: ctx.request.url(true) })
     .toPath(path)
+}
+
+// The tracker's user reference: a keyed hash of the user ID, never the ID (docs/09 §5.6).
+function userReference(ctx: HttpContext) {
+  const userId = (ctx as Partial<HttpContext>).auth?.user?.id
+  const key = hmacKeys.telemetry
+  return userId && key ? keyedHash(key.release(), String(userId)).toString('hex') : null
 }
 
 function problemFor(error: unknown, ctx: HttpContext): Problem {
@@ -206,7 +217,7 @@ export default class HttpExceptionHandler extends ExceptionHandler {
       status: problem.status,
       route: ctx.route?.pattern ?? null,
       route_name: ctx.route?.name ?? null,
-      user_ref: null,
+      user_ref: userReference(ctx),
     })
     if (tracked.outcome === 'failed') {
       ctx.logger.warn({ problem_code: problem.code, cause: tracked.cause }, 'tracker.failed')

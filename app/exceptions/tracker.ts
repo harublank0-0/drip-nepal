@@ -1,4 +1,5 @@
 import { databaseError } from '#exceptions/to_problem'
+import { runtime } from '#config/runtime'
 
 /*
  * The error-tracker hook (docs/09 §5.6, NFR-OBS-002). The exception handler
@@ -24,7 +25,7 @@ export type TrackerEvent = {
     route_name: string | null
     release: string | null
     environment: string | null
-    // HMAC-SHA256(HMAC_KEY_TELEMETRY, user_id), never the ID itself; null until the key ring (E6).
+    // HMAC-SHA256(HMAC_KEY_TELEMETRY, user_id) in hex, never the ID itself; null without the key.
     user_ref: string | null
   }
 }
@@ -108,9 +109,9 @@ export function trackerEvent(error: unknown, context: TrackerContext): TrackerEv
     },
     tags: {
       ...context,
-      release: process.env.APP_RELEASE ?? null,
+      release: runtime.release,
       // APP_ENV tells staging from production; both run NODE_ENV=production (docs/09 §6.1).
-      environment: process.env.APP_ENV ?? process.env.NODE_ENV ?? null,
+      environment: runtime.appEnv,
     },
   }
 }

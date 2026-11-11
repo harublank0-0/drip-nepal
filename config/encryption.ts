@@ -10,10 +10,11 @@ const encryptionConfig = defineConfig({
   list: {
     gcm: drivers.aes256gcm({
       /**
-       * Keys used for encryption/decryption.
-       * First key encrypts, all keys are tried for decryption.
+       * The first key encrypts and every key decrypts. APP_KEY_PREVIOUS is set
+       * only for the 7 days of a yearly rotation; after an exposure the list
+       * holds the new key alone (docs/09 §6.3, docs/07 §5.5).
        */
-      keys: [env.get('APP_KEY')],
+      keys: [env.get('APP_KEY'), env.get('APP_KEY_PREVIOUS')].filter((key) => key !== undefined),
 
       /**
        * Stable identifier for this driver.

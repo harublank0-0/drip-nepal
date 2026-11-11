@@ -3,88 +3,52 @@
 | Environment variables service
 |--------------------------------------------------------------------------
 |
-| The `Env.create` method creates an instance of the Env service. The
-| service validates the environment variables and also cast values
-| to JavaScript data types.
+| Validates the variables of start/env_schema.ts, then the cross-field
+| policy of start/env_policy.ts (docs/09 §6.2). Boot stops with every
+| broken rule listed, so the web process, the worker, the test runner and
+| every `node ace` command refuse a bad set before anything connects.
+| Only config/*.ts and start/*.ts read it (docs/09 §6.3).
 |
 */
 
 import { Env, errors } from '@adonisjs/core/env'
+import { envSchema } from '#start/env_schema'
 import { environmentPolicyViolations } from '#start/env_policy'
 
-const env = await Env.create(new URL('../', import.meta.url), {
-  // Node
-  NODE_ENV: Env.schema.enum(['development', 'production', 'test'] as const),
-  PORT: Env.schema.number(),
-  HOST: Env.schema.string({ format: 'host' }),
-  LOG_LEVEL: Env.schema.string(),
+const env = await Env.create(new URL('../', import.meta.url), envSchema)
 
-  // App
-  APP_KEY: Env.schema.secret(),
-  APP_URL: Env.schema.string({ format: 'url', tld: false }),
+const base64 = (secret: { release(): Buffer } | undefined) => secret?.release().toString('base64')
 
-  // How customers reach the store, shared with every page (config/storefront.ts).
-  // Each is optional; unset ones are hidden.
-  SUPPORT_PHONE: Env.schema.string.optional(),
-  SUPPORT_EMAIL: Env.schema.string.optional({ format: 'email' }),
-  INSTAGRAM_URL: Env.schema.string.optional({ format: 'url' }),
-  FACEBOOK_URL: Env.schema.string.optional({ format: 'url' }),
-  TIKTOK_URL: Env.schema.string.optional({ format: 'url' }),
-
-  // The running release, shown by /health/live (for example the git commit)
-  APP_RELEASE: Env.schema.string.optional(),
-
-  // Proxies allowed to set X-Forwarded-For: comma-separated CIDRs (docs/11 §3.4)
-  TRUSTED_PROXY_CIDRS: Env.schema.string.optional(),
-
-  // Session
-  SESSION_DRIVER: Env.schema.enum(['cookie', 'memory', 'database'] as const),
-
-  // DB
-  DB_HOST: Env.schema.string({ format: 'host' }),
-  DB_PORT: Env.schema.number(),
-  DB_USER: Env.schema.string(),
-  DB_PASSWORD: Env.schema.string(),
-  DB_DATABASE: Env.schema.string(),
-  // The migrator role for the `pg_migrator` connection: tests only (docs/09 §6.1 "Test roles")
-  DB_MIGRATOR_USER: Env.schema.string.optionalWhen(() => process.env.NODE_ENV !== 'test'),
-  DB_MIGRATOR_PASSWORD: Env.schema.secret.optionalWhen(() => process.env.NODE_ENV !== 'test'),
-
-  /*
-  |----------------------------------------------------------
-  | Variables for configuring the drive package
-  |----------------------------------------------------------
-  */
-  DRIVE_DISK: Env.schema.enum(['fs'] as const),
-
-  /*
-  |----------------------------------------------------------
-  | Variables for configuring the mail package (config/mail.ts). All
-  | optional: without SMTP_HOST and MAIL_FROM, order alerts are skipped.
-  |----------------------------------------------------------
-  */
-  SMTP_HOST: Env.schema.string.optional({ format: 'host' }),
-  SMTP_PORT: Env.schema.number.optional(),
-  SMTP_USERNAME: Env.schema.string.optional(),
-  SMTP_PASSWORD: Env.schema.string.optional(),
-  MAIL_FROM: Env.schema.string.optional(),
-
-  /*
-  |----------------------------------------------------------
-  | Variables for configuring the limiter package
-  |----------------------------------------------------------
-  */
-  LIMITER_STORE: Env.schema.enum(['database', 'memory'] as const),
-})
-
-/*
- * Cross-field policy (docs/09 §6.2). Boot stops with every broken rule listed,
- * so the web process, the test runner and every `node ace` command refuse a
- * bad combination before anything connects to the database.
- */
 const violations = environmentPolicyViolations({
   NODE_ENV: env.get('NODE_ENV'),
+  APP_ENV: env.get('APP_ENV'),
+  LOG_LEVEL: env.get('LOG_LEVEL'),
+  APP_URL: env.get('APP_URL'),
+  APP_RELEASE: env.get('APP_RELEASE'),
+  SESSION_DRIVER: env.get('SESSION_DRIVER'),
   DB_DATABASE: env.get('DB_DATABASE'),
+  DB_MIGRATOR_USER: env.get('DB_MIGRATOR_USER'),
+  DB_MIGRATOR_PASSWORD: Boolean(env.get('DB_MIGRATOR_PASSWORD')),
+  DB_SSL: env.get('DB_SSL'),
+  DB_DEBUG: env.get('DB_DEBUG'),
+  DATA_ENCRYPTION_KEY_IDS: [...env.get('DATA_ENCRYPTION_KEYS').release().keys()],
+  DATA_ENCRYPTION_ACTIVE_KEY_ID: env.get('DATA_ENCRYPTION_ACTIVE_KEY_ID'),
+  SENTRY_DSN: env.get('SENTRY_DSN'),
+  KEYS: {
+    // APP_KEY as written: a key's base64 text reused as APP_KEY is caught too.
+    APP_KEY: env.get('APP_KEY').release(),
+    ...Object.fromEntries(
+      [...env.get('DATA_ENCRYPTION_KEYS').release()].map(([id, key]) => [
+        `DATA_ENCRYPTION_KEYS[${id}]`,
+        key.toString('base64'),
+      ])
+    ),
+    BLIND_INDEX_KEY: base64(env.get('BLIND_INDEX_KEY')),
+    HMAC_KEY_LIMITER: base64(env.get('HMAC_KEY_LIMITER')),
+    HMAC_KEY_AUDIT_IP: base64(env.get('HMAC_KEY_AUDIT_IP')),
+    HMAC_KEY_NOTIFY_ADDRESS: base64(env.get('HMAC_KEY_NOTIFY_ADDRESS')),
+    HMAC_KEY_TELEMETRY: base64(env.get('HMAC_KEY_TELEMETRY')),
+  },
 })
 
 if (violations.length > 0) {

@@ -3,9 +3,9 @@ build
 tmp
 storage
 .git
-.env
-.env.*
-!.env.example
+.env*
+coverage
+docs
 *.tsbuildinfo
 screenshots
 .agents

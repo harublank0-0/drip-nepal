@@ -69,7 +69,9 @@ node ace generate:key --show
 
 Paste the printed key after `APP_KEY=` in `.env`. Plain `node ace generate:key` would write it for you, but it also rewrites `.env.example`, which you'd then have to restore.
 
-`.env.test` (committed) switches to `NODE_ENV=test`, `SESSION_DRIVER=memory` and `DB_DATABASE=dripnepal_test`, connects as `DB_USER=dripnepal_app`, and sets `DB_MIGRATOR_USER` and `DB_MIGRATOR_PASSWORD` for the `pg_migrator` connection, which exists only under `NODE_ENV=test`. `DB_PASSWORD` comes from `.env`; all three roles use the docker-compose password. CI has no `.env`: the "Tests" job in `.github/workflows/ci.yml` creates the roles in a step and sets the same variables in its `env:` block.
+An `.env` copied before 2026-11-11 lacks the variables E6 added (`APP_ENV`, `APP_NAME`, `DB_SSL`, `DB_POOL_MAX` and the keys); boot fails with a list of them, and `.env.example` has a development value for each.
+
+`.env.test` (committed) switches to `NODE_ENV=test` and `APP_ENV=test`, `SESSION_DRIVER=memory` and `DB_DATABASE=dripnepal_test`, sets `LOG_LEVEL=warn`, a fixed `APP_KEY` and placeholder keys, connects as `DB_USER=dripnepal_app`, and sets `DB_MIGRATOR_USER` and `DB_MIGRATOR_PASSWORD` for the `pg_migrator` connection, which exists only under `NODE_ENV=test`. `DB_PASSWORD` comes from `.env`; all three roles use the docker-compose password. CI has no `.env`: the "Tests" job in `.github/workflows/ci.yml` creates the roles in a step and sets the same variables in its `env:` block.
 
 To regenerate `database/schema.ts` after a migration change, migrate as the migrator: `NODE_ENV=test node ace migration:fresh --connection=pg_migrator`, then `pnpm exec prettier --write database/schema.ts` (this is the `T-ARCH-010` CI step).
 
