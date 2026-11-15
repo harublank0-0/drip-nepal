@@ -21,7 +21,10 @@ import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { parseArgs } from 'node:util'
 
+// Positional arguments are ignored: lint-staged appends the staged file names
+// (package.json `lint-staged`), and the script always checks the whole folder.
 const { values: args } = parseArgs({
+  allowPositionals: true,
   options: {
     write: { type: 'boolean', default: false },
     dir: { type: 'string', default: 'database/migrations' },

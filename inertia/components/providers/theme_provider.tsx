@@ -37,6 +37,7 @@ export function ThemeProvider({
   // uses getServerSnapshot while hydrating).
   const savedTheme = useSyncExternalStore(
     subscribeToStorage,
+    // eslint-disable-next-line no-restricted-globals -- the theme moves to a cookie in E10 (docs/12 §4.1, 08 §1.2)
     () => localStorage.getItem(storageKey) as Theme | null,
     () => null
   )
@@ -65,6 +66,7 @@ export function ThemeProvider({
   const value = {
     theme,
     setTheme: (themeValue: Theme) => {
+      // eslint-disable-next-line no-restricted-globals -- the theme moves to a cookie in E10 (docs/12 §4.1, 08 §1.2)
       localStorage.setItem(storageKey, themeValue)
       setTheme(themeValue)
     },

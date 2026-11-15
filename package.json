@@ -14,8 +14,11 @@
     "build": "node ace build",
     "dev": "node ace serve --hmr",
     "test": "node ace test",
-    "lint": "eslint .",
+    "lint": "eslint . --max-warnings 0",
+    "lint:arch": "depcruise app start database --config .dependency-cruiser.cjs && node scripts/check_owner_writes.mjs",
+    "lint:openapi": "redocly lint docs/openapi.yaml",
     "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit && tsc --noEmit --project inertia/tsconfig.json",
     "prepare": "husky"
   },
@@ -134,8 +137,18 @@
   },
   "prettier": "@adonisjs/prettier-config",
   "lint-staged": {
-    "*.{js,jsx,ts,tsx,json,md,yml,yaml}": [
+    "*.{ts,tsx,js,mjs,cjs}": [
+      "eslint --max-warnings 0 --no-warn-ignored --fix",
       "prettier --write"
+    ],
+    "*.{json,md,yml,yaml,css}": [
+      "prettier --write"
+    ],
+    "database/migrations/*.ts": [
+      "node scripts/check_migrations_lock.mjs"
+    ],
+    "*": [
+      "secretlint --maskSecrets"
     ]
   }
 }

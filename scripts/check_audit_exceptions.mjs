@@ -35,7 +35,12 @@ function ignoredGhsas(yaml) {
     if (/^\S/.test(line)) break // the next top-level key
     const flow = /^\s+ignoreGhsas:\s*\[(.*)\]/.exec(line)
     if (flow) {
-      ids.push(...flow[1].split(',').map((id) => id.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean))
+      ids.push(
+        ...flow[1]
+          .split(',')
+          .map((id) => id.trim().replace(/^['"]|['"]$/g, ''))
+          .filter(Boolean)
+      )
       continue
     }
     if (!/^\s+ignoreGhsas:\s*(#.*)?$/.test(line)) continue

@@ -62,7 +62,9 @@ if (existsSync(componentsFile)) {
       continue
     }
     if (!SHADCNUIKIT_ALLOWED) {
-      problems.push('components.json: the @shadcnuikit registry is allowed only once VX-13 clears (ADR-0015)')
+      problems.push(
+        'components.json: the @shadcnuikit registry is allowed only once VX-13 clears (ADR-0015)'
+      )
     }
     for (const [header, headerValue] of Object.entries(headers)) {
       if (!String(headerValue).includes('${SHADCNUIKIT_API_KEY}')) {

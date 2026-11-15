@@ -137,7 +137,11 @@ for (const file of markdownFiles()) {
       if (fragment === undefined || fragment === '') continue
       if (statSync(resolved).isDirectory() || !resolved.endsWith('.md')) continue
       if (!anchorsOf(resolved).has(decodeURIComponent(fragment))) {
-        report(file, index + 1, `link "${target}": no heading #${fragment} in ${relative(root, resolved)}`)
+        report(
+          file,
+          index + 1,
+          `link "${target}": no heading #${fragment} in ${relative(root, resolved)}`
+        )
       }
     }
   })

@@ -158,15 +158,13 @@ module.exports = {
   ],
   options: {
     doNotFollow: { path: 'node_modules' },
-    includeOnly: { path: '^(app|start|database|shared|config|node_modules)/|^(node:)?[a-z]' },
     tsPreCompilationDeps: true,
     tsConfig: { fileName: 'tsconfig.json' },
     combinedDependencies: false,
-    enhancedResolveOptions: {
-      exportsFields: ['exports'],
-      conditionNames: ['import', 'require', 'node', 'default', 'types'],
-      extensions: ['.ts', '.tsx', '.js', '.mjs', '.cjs', '.d.ts'],
-      mainFields: ['module', 'main', 'types', 'typings'],
+    // extensionAlias and the package.json `imports` field (#models/* and the
+    // like) live there, because enhancedResolveOptions cannot hold them.
+    webpackConfig: {
+      fileName: require('node:path').join(__dirname, 'architecture', 'depcruise_resolve.cjs'),
     },
     skipAnalysisNotInRules: true,
   },

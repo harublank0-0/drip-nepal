@@ -1,0 +1,74 @@
+# release.yml up to the image push (docs/11 §5.1, §5.2; docs/12 §4.1 E2).
+# After ci.yml succeeds on a push to main, the `build` job builds the image
+# once, runs the T-OPS-010 image checks on it and, only when the repository
+# variable IMAGE_PUSH_ENABLED is "true", pushes it to the GitHub Container
+# Registry by digest. That variable is unset until the registry is
+# provisioned (VX-15, docs/11 §5.2 "Registry"), so today nothing is pushed.
+# The staging and production jobs, and the workflow_dispatch rollback by
+# digest (docs/11 §5.8), come when staging exists (docs/11 §2.4). Nothing
+# here deploys. Actions are pinned by commit SHA; the release tag is in the
+# comment. The only credential is the run's own GITHUB_TOKEN.
+name: release
+
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-build
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build image
+    # Only a green ci run for a push to main in this repository: `branches`
+    # matches the head branch name, which a fork's pull request can also
+    # call main.
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write # used only by the gated push step
+    env:
+      COMMIT: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      # Build once (docs/11 §5.2): this is the image staging and production
+      # will deploy by digest. APP_RELEASE is the commit SHA (docs/11 §5.3).
+      - name: Build the production image
+        run: docker build --build-arg APP_RELEASE="$COMMIT" --tag "dripnepal:sha-$COMMIT" .
+      # T-OPS-010 (docs/11 §4.2) on the image that would be pushed.
+      - name: T-OPS-010 image checks
+        run: scripts/check_image.sh "dripnepal:sha-$COMMIT"
+      # Gated: runs only once the registry is provisioned and the tech lead
+      # sets the repository variable IMAGE_PUSH_ENABLED to "true" (Settings,
+      # Secrets and variables, Actions, Variables). The tag is
+      # sha-<40-char commit SHA>, never re-pushed; deploys use the digest
+      # printed here (docs/11 §5.3).
+      - name: Push to ghcr.io by digest
+        if: vars.IMAGE_PUSH_ENABLED == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/dripnepal"
+          echo "$GH_TOKEN" | docker login ghcr.io --username "$ACTOR" --password-stdin
+          docker tag "dripnepal:sha-$COMMIT" "$image:sha-$COMMIT"
+          docker push "$image:sha-$COMMIT"
+          digest=$(docker inspect --format '{{index .RepoDigests 0}}' "$image:sha-$COMMIT")
+          echo "Pushed $digest" | tee -a "$GITHUB_STEP_SUMMARY"
+          docker logout ghcr.io
+      - name: Push skipped
+        if: vars.IMAGE_PUSH_ENABLED != 'true'
+        run: echo "IMAGE_PUSH_ENABLED is not \"true\", so the image was built and checked but not pushed (docs/11 §5.2)." | tee -a "$GITHUB_STEP_SUMMARY"

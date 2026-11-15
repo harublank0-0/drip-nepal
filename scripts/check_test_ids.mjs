@@ -17,8 +17,27 @@ const { values: args } = parseArgs({ options: { root: { type: 'string', default:
 const root = resolve(args.root)
 
 const AREAS = [
-  'ARCH', 'API', 'SEC', 'IAM', 'SHOP', 'CAT', 'MED', 'INV', 'CART', 'CHK', 'ORD',
-  'FUL', 'PAY', 'RET', 'LED', 'NOT', 'ADM', 'OPS', 'UI', 'A11Y', 'PERF',
+  'ARCH',
+  'API',
+  'SEC',
+  'IAM',
+  'SHOP',
+  'CAT',
+  'MED',
+  'INV',
+  'CART',
+  'CHK',
+  'ORD',
+  'FUL',
+  'PAY',
+  'RET',
+  'LED',
+  'NOT',
+  'ADM',
+  'OPS',
+  'UI',
+  'A11Y',
+  'PERF',
 ]
 const ID = new RegExp(`\\bT-(?:${AREAS.join('|')})-\\d{3}\\b`, 'g')
 

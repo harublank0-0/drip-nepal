@@ -1,11 +1,14 @@
-# CI for the repository (docs/10 §5). Runs on pushes to main and on pull
-# requests into it. Nothing is deployed yet; docs/11 §5 is the release path.
+# CI for the repository: the stages of docs/10 §5.1 that exist in M0, each a
+# job whose name is the required status check on `main` (docs/10 §5.4,
+# docs/11 §5.2). Runs on pushes to main and on pull requests into it.
+# Nothing is deployed; release.yml builds the image after a green run on main.
 # It also runs on pull requests into feat/e4-schema-baseline, the E4
 # integration branch (docs/12 §4.1, docs/09 §8.1), and on demand
 # (workflow_dispatch): retargeting a stacked pull request onto that branch
 # starts no run, so a run can be started by hand for the branch.
 # Actions are pinned by commit SHA; the release tag is in the comment. No
-# secrets are used.
+# secrets are used: the Supply chain job reads the pull request's labels with
+# the run's own token.
 name: ci
 
 on:
@@ -22,9 +25,32 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# What booting the application needs in CI. NODE_ENV=test adds .env.test,
+# which holds the fixed test keys; the database values match the Tests job's
+# service container. Jobs that boot the app also get a throwaway APP_KEY.
+env:
+  TZ: UTC
+  PORT: 3333
+  HOST: localhost
+  LOG_LEVEL: warn
+  APP_URL: http://localhost:3333
+  SESSION_DRIVER: database
+  DRIVE_DISK: fs
+  LIMITER_STORE: database
+  DB_HOST: localhost
+  DB_PORT: 5432
+  DB_USER: dripnepal_app
+  DB_PASSWORD: secret
+  DB_DATABASE: dripnepal_test
+  DB_MIGRATOR_USER: dripnepal_migrator
+  DB_MIGRATOR_PASSWORD: secret
+
 jobs:
-  checks:
-    name: Format, lint, typecheck, build
+  # docs/10 §5.1 Static: frozen install, Prettier, ESLint with zero warnings
+  # (its fixtures are T-ARCH-021 and T-UI-029, in the unit suite), both
+  # typechecks, the unit suite, and the production build.
+  static:
+    name: Static
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -37,11 +63,18 @@ jobs:
       - name: Install (frozen lockfile)
         run: pnpm install --frozen-lockfile
       - name: Prettier
-        run: pnpm exec prettier --check .
+        run: pnpm format:check
       - name: ESLint, zero warnings
-        run: pnpm lint --max-warnings 0
+        run: pnpm lint
       - name: Typecheck (server and inertia)
         run: pnpm typecheck
+      # The unit suite needs no database. It holds the lint fixtures
+      # (T-ARCH-014, T-ARCH-021, T-SEC-016, T-UI-029) and the tests of every
+      # check script below, so a check that stops failing fails here.
+      - name: App key for the unit suite
+        run: echo "APP_KEY=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+      - name: Unit suite
+        run: node ace test unit
       # Compiles the server and builds the client and SSR bundles, so a
       # missing SSR bundle (every page would answer 500) fails here.
       - name: Production build
@@ -49,11 +82,109 @@ jobs:
           node ace build
           test -f build/ssr/ssr.js
 
-  # The unit, functional and concurrency suites against PostgreSQL 18.4, the
-  # production version (docs/10 §3.2). The test runner rebuilds the
-  # dripnepal_test database at the start of every run, as dripnepal_migrator,
-  # and the suites run as dripnepal_app (docs/07 §4.10). The image's
-  # superuser, postgres, only creates those roles.
+  # docs/10 §5.1 Repository. T-ARCH-016 runs in the Tests job, after the
+  # suites have regenerated .adonisjs/.
+  repository:
+    name: Repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+      # docs/09 §2.4: dependency-cruiser over app/, start/ and database/
+      # (T-SEC-016 is its rule 8), then the raw-SQL owner-writes scan.
+      - name: T-ARCH-001 module rules
+        run: pnpm lint:arch
+      - name: T-ARCH-029 docs links, ADR sections and index
+        run: node scripts/check_docs.mjs
+      - name: T-ARCH-030 portability (every tracked file)
+        run: node scripts/check_portability.mjs
+      - name: T-ARCH-033 test IDs are registered
+        run: node scripts/check_test_ids.mjs
+
+  # docs/10 §5.1 Supply chain (docs/07 §7.1, §7.2).
+  supply-chain:
+    name: Supply chain
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: read # the labels, for the lockfile rule of T-SEC-026
+    steps:
+      # The whole history: the secret scan reads every blob, and the
+      # lockfile rule diffs against the merge base.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+      - name: T-SEC-025 secret scan over the full history
+        run: node scripts/scan_secrets.mjs
+      # No --ignore-registry-errors: a registry outage shows as a failure
+      # (docs/09 §10.3). Ignored advisories are listed in pnpm-workspace.yaml.
+      - name: T-SEC-026 advisories in production dependencies
+        run: pnpm audit --prod --audit-level high
+      - name: T-SEC-038 advisory exceptions agree and are current
+        run: node scripts/check_audit_exceptions.mjs
+      # The labels are read when the job runs, so a maintainer who adds
+      # `dependencies` can re-run this job instead of pushing again.
+      - name: T-SEC-026 lockfile sources, registries and lockfile-only changes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            labels=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json labels --jq '[.labels[].name] | join(",")')
+            node scripts/check_dependency_policy.mjs --base "origin/$BASE_REF" --labels "$labels"
+          else
+            node scripts/check_dependency_policy.mjs
+          fi
+
+  # docs/10 §5.1 Contract (docs/09 §4.5).
+  contract:
+    name: Contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+      - name: App key for the run
+        run: echo "APP_KEY=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+      - name: T-API-009 OpenAPI lint
+        run: pnpm lint:openapi
+      # Reads `node ace list:routes --json`, which boots the app without a
+      # database connection.
+      - name: T-API-010 route parity
+        run: node scripts/check_api_contract.mjs
+      - name: T-API-011 problem-code registry
+        run: node ace test unit --files tests/unit/exceptions/problem_codes.spec.ts
+
+  # docs/10 §5.1 Database, Functional and Concurrency: the suites against
+  # PostgreSQL 18.4, the production version (docs/10 §3.2). The test runner
+  # rebuilds the dripnepal_test database at the start of every run, as
+  # dripnepal_migrator, and the suites run as dripnepal_app (docs/07
+  # §4.10). The image's superuser, postgres, only creates those roles.
   tests:
     name: Tests
     runs-on: ubuntu-24.04
@@ -72,22 +203,6 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 12
-    env:
-      TZ: UTC
-      PORT: 3333
-      HOST: localhost
-      LOG_LEVEL: warn
-      APP_URL: http://localhost:3333
-      SESSION_DRIVER: database
-      DRIVE_DISK: fs
-      LIMITER_STORE: database
-      DB_HOST: localhost
-      DB_PORT: 5432
-      DB_USER: dripnepal_app
-      DB_PASSWORD: secret
-      DB_DATABASE: dripnepal_test
-      DB_MIGRATOR_USER: dripnepal_migrator
-      DB_MIGRATOR_PASSWORD: secret
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
@@ -141,9 +256,18 @@ jobs:
           pnpm exec prettier --write database/schema.ts
           git diff --exit-code database/schema.ts
           if grep -nE '\bany\b' database/schema.ts; then exit 1; fi
-      - name: Unit, functional and concurrency suites
-        run: pnpm test
+      # The unit suite runs in the Static job.
+      - name: Functional and concurrency suites
+        run: node ace test functional concurrency
+      # T-ARCH-016 (docs/09 §1.4): the test run regenerated .adonisjs/ through
+      # the assembler hooks; the committed files must equal what it wrote.
+      - name: T-ARCH-016 generated files are fresh
+        run: |
+          git diff --exit-code -- .adonisjs
+          untracked=$(git status --porcelain --untracked-files=all -- .adonisjs)
+          if [ -n "$untracked" ]; then echo "$untracked"; exit 1; fi
 
+  # docs/10 §5.1 Image.
   image:
     name: Docker image
     runs-on: ubuntu-24.04

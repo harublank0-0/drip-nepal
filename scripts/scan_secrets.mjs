@@ -89,9 +89,15 @@ for await (const { sha, type, content } of readBlobs([...blobs.keys()])) {
   if (ignored.some((pattern) => pattern.test(path))) continue
   if (content.subarray(0, 8000).includes(0)) continue // binary
   scanned++
-  const result = await engine.executeOnContent({ content: content.toString('utf8'), filePath: path })
+  const result = await engine.executeOnContent({
+    content: content.toString('utf8'),
+    filePath: path,
+  })
   if (!result.ok) {
-    const commit = git('log', '--all', '--format=%h', `--find-object=${sha}`).trim().split('\n').pop()
+    const commit = git('log', '--all', '--format=%h', `--find-object=${sha}`)
+      .trim()
+      .split('\n')
+      .pop()
     findings.push(`${path} (blob ${sha.slice(0, 10)}, first in commit ${commit})\n${result.output}`)
   }
 }
