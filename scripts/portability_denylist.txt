@@ -15,6 +15,8 @@ file:///?[A-Za-z~]
 # Personal folders addressed from the home directory.
 ~/(Desktop|Documents|Downloads|Dropbox|OneDrive|iCloud Drive)/
 
-# Local-only planning sources: the file or folder name of each source that
-# exists only on a planner's machine, one escaped name per line. docs/ never
-# spells these names; this file is the one place that does.
+# Local-only planning sources. The product owner, who knows them, adds the
+# file or folder name of each source that exists only on a planner's
+# machine, one escaped name per line, below this comment. docs/ and the
+# rest of the repository never spell these names; this file is the one place
+# that does (docs/10 §5.1).

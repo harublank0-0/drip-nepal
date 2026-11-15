@@ -390,7 +390,7 @@ Host rules (the from-scratch rebuild in §1.9 follows them): Ubuntu LTS image [A
 
 Requests pass through two proxies before `web`: Cloudflare, then Caddy. `request.ip()` must return the browser's address, because the login limiter, `audit_logs.ip_hash` and abuse rules key on it ([03 §12.2](03-system-architecture.md#122-authentication-and-sessions-adr-0005), [07 TB-3](07-security-threat-model-and-permissions.md#13-trust-boundaries)). Today `config/app.ts` sets no `trustProxy`, so the default trusts only loopback and every request would appear to come from Caddy's container address (RF-31, audit A5-12).
 
-What the installed code does [Verified-repo `@adonisjs/http-server` 9.1.0 `build/define_config-Cuq6_o-f.js:5559-5568`, `build/src/define_config.d.ts`; `proxy-addr` 2.0.7 `index.js:84-120`]:
+What the installed code does [Verified-repo `@adonisjs/http-server` 9.1.0 `build/define_config-Cuq6_o-f.js:5559-5568`, `build/src/define_config.d.ts`; `proxy-addr` 2.0.7 `index.js:84-120`, unchanged in 2.0.8]:
 
 - `trustProxy` accepts a boolean, a string, or a function `(address: string, distance: number) => boolean`. A string is passed to `proxyaddr.compile()` as a **single** entry: a comma-separated list is not split, so `'10.0.0.0/8, 173.245.48.0/20'` does not work. Several ranges need the function form, which `proxyaddr.compile([...])` returns.
 - `proxy-addr` walks the address chain from the socket address leftwards through `X-Forwarded-For` and returns the first address that is not trusted. Entries a client forges at the left end of the header are never reached, because the real client address that Cloudflare appends sits to their right.
@@ -400,7 +400,7 @@ Decision:
 
 1. Caddy and the app share a Compose network with a fixed subnet, `172.30.0.0/24` (§4.5). The trusted set is that subnet plus Cloudflare's published ranges.
 2. The ranges come from a new variable `TRUSTED_PROXY_CIDRS` (proposed; comma-separated CIDRs, required in staging and production, validated as CIDRs by `start/env.ts`; 09 §6.1 left "trusted-proxy ranges" to this document). Updating the list is a config change and a restart, not a code change.
-3. `proxy-addr` becomes a direct dependency at the version `@adonisjs/http-server` already resolves (2.0.7), so the app compiles exactly what the framework evaluates.
+3. `proxy-addr` becomes a direct dependency at the version `@adonisjs/http-server` already resolves (2.0.7), so the app compiles exactly what the framework evaluates. Edited 2026-11-15 (note 113): both are 2.0.8, which fixes GHSA-jqcg-44mw-7w3h (critical: an IPv4-mapped IPv6 address could match a trusted IPv4 subnet, or the reverse). The fix changes only the trust matching, not `compile()`.
 
 ```ts
 // config/app.ts — design sketch; trustProxy function form verified against http-server 9.1.0 types,
@@ -738,7 +738,7 @@ The env files are the "host secret store" of [03 §12.6](03-system-architecture.
 
 ## 5. CI/CD and release promotion
 
-[10](10-testing-and-quality-gates.md) owns which checks run and their IDs; this section owns the pipeline shape, the promotion rules, configuration per environment and rollback. Today `ci.yml` runs only the v1 checks that 10 §5 lists; the full pipeline is built in M0 up to the image push, and the deploy jobs are added when staging exists (§2.4).
+[10](10-testing-and-quality-gates.md) owns which checks run and their IDs; this section owns the pipeline shape, the promotion rules, configuration per environment and rollback. Today `ci.yml` runs only the v1 checks that 10 §5 lists; the full pipeline is built in M0 up to the image push, and the deploy jobs are added when staging exists (§2.4). Built in M0 (E2, 2026-11-15, note 113): `ci.yml` runs the M0 stages of [10 §5.1](10-testing-and-quality-gates.md#51-every-pull-request-ciyml), and `release.yml` builds the image up to a push that is switched off (§5.2).
 
 ### 5.1 Pipeline
 
@@ -773,6 +773,11 @@ Rules for the workflows:
 - **Actions pinned by commit SHA**, updated by the dependency bot. Tradeoff: more update PRs, in exchange for a tag change upstream never running unreviewed code with deploy credentials.
 - **Registry**: GitHub Container Registry, public package `ghcr.io/<owner>/dripnepal` [Assumption: no charge for public packages; confirm under VX-15]. The repository is public (Q7) and the image holds no secrets (§4.2), so hosts pull without a credential. A private package would need a read-only pull token per host.
 - **Pushing** uses the workflow's short-lived `GITHUB_TOKEN`, so no long-lived registry credential exists. This refines §2.3, which counted a stored registry push credential.
+
+Built in M0 (E2, 2026-11-15, note 113):
+
+- **`ci.yml`** has six jobs, one per M0 stage of 10 §5.1: `Static`, `Repository`, `Supply chain`, `Contract`, `Tests` and `Docker image`. MinIO, `caddy validate`, the browser suite and the `T-ARCH-002` smoke are not in it yet: they come with E3, E10 and the Caddy configuration. Only the Supply chain job has a permission beyond `contents: read`: `pull-requests: read`, to read the labels of the `T-SEC-026` lockfile rule with the run's own token.
+- **`release.yml`** runs on `workflow_run` when `ci` completes on `main`, only for a successful run of a `push` event in this repository (a fork's pull request can also name its branch `main`). Its one job, `Build image`, checks out that commit, builds the image once with `APP_RELEASE` set to the commit SHA, runs the `T-OPS-010` image checks, and pushes to `ghcr.io/<owner>/dripnepal` with the tag `sha-<commit>`, printing the digest, only when the repository variable `IMAGE_PUSH_ENABLED` is `true`. The variable is unset until the registry is provisioned (VX-15), so today the image is built and checked but pushed nowhere. The deploy jobs and the `workflow_dispatch` rollback by digest (§5.8) come with staging (§2.4); nothing deploys.
 
 ### 5.3 Versioning
 
@@ -2390,3 +2395,4 @@ Still to do from §4.2:
 `.env.production.example` lists the new keys and runs the prototype stack as `APP_ENV=staging`: production requires `DB_SSL=true`, and that stack's Postgres container has no TLS. It sets no `APP_RELEASE`, because an empty value in the `env_file` would override the image's. `ARG APP_RELEASE` comes last in the runtime stage, so a new commit rebuilds only that layer; on a pull request CI bakes the branch head's commit, not the merge commit. `scripts/check_image.sh` removes its container on any exit.
 
 112. **Release checks and the queue step (E8, 2026-11-11).** §5.4's placeholder `<release checks>` is now `node ace release:check` (proposed name), and §6.1 says what it runs: the seed-user query of [09 §9.2](09-code-structure-and-engineering-standards.md#92-no-default-credentials-anywhere) (`T-OPS-023`, new in 10), `T-OPS-013` and `T-OPS-014`. 09 §9.2's rule now excepts anonymisation placeholders, which are `.invalid` addresses by design. `node ace jobs:install` also creates or updates the application's pg-boss queues as the migrator ([09 §2.3](09-code-structure-and-engineering-standards.md#23-how-modules-cooperate), proposed), so the release step's order is unchanged. `platform:create-admin` is built (09 §9.1) without `--recover`, which §14.6 runs and which comes with M1's MFA enrolment path. After the review (2026-11-11): `config/database.ts` sets the pool minimum to `min(2, DB_POOL_MAX)`, so the `DB_POOL_MAX=1` one-off containers of §10.1 and §14.6 start (Tarn refused a maximum below its default minimum of 2; `T-ARCH-035`). `node ace jobs:install` also applies the 03 §9 retry count to existing queues. A `platform:create-admin` run that needs a prompt now exits 1 without a terminal, so §14.6's `docker compose run` keeps its TTY.
+113. **CI and the release build (E2, 2026-11-15).** §5.2 records the built workflows. `ci.yml` has one job per M0 stage of [10 §5.1](10-testing-and-quality-gates.md#51-every-pull-request-ciyml); MinIO, `caddy validate` and the SSR smoke are not in it yet. `release.yml` stops at the image push, which is switched off by the unset repository variable `IMAGE_PUSH_ENABLED` until the registry is provisioned (VX-15); it has no deploy job and no rollback input yet. §3.4: `proxy-addr` is 2.0.8, found by the new audit gate ([09 §10.3](09-code-structure-and-engineering-standards.md#103-update-cadence-and-advisories)).
