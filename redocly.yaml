@@ -1,7 +1,7 @@
 # T-API-009: the OpenAPI 3.1 lint of docs/openapi.yaml (docs/09 §4.5), run
 # by `pnpm lint:openapi` in CI's Contract stage. Errors fail: an invalid
 # schema, a broken $ref, a duplicate operationId and the rest of the
-# recommended set. Three recommended rules are off because the contract
+# recommended set. Four recommended rules are off because the contract
 # breaks them on purpose (docs/09 §4.5, note on the spec lint).
 extends:
   - recommended
@@ -13,5 +13,8 @@ rules:
   no-server-example.com: off
   # GET /payments/{provider}/return is an Inertia page (x-page-route), with no operationId.
   operation-operationId: off
+  # Cursor, Limit and CursorMeta are the shared list contract of 06 §3.4,
+  # specified now for the list operations still in x-pending-operations.
+  no-unused-components: off
 # No usage data leaves the machine or the CI runner.
 telemetry: off

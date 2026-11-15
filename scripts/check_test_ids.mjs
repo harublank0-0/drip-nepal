@@ -39,7 +39,9 @@ const AREAS = [
   'A11Y',
   'PERF',
 ]
-const ID = new RegExp(`\\bT-(?:${AREAS.join('|')})-\\d{3}\\b`, 'g')
+// Any digit count is read, so a malformed ID (four digits) fails instead of
+// passing unseen; docs/10 §6.1 numbers are three digits.
+const ID = new RegExp(`\\bT-(?:${AREAS.join('|')})-\\d+\\b`, 'g')
 
 const docs = readFileSync(join(root, 'docs', '10-testing-and-quality-gates.md'), 'utf8')
 const start = docs.indexOf('\n## 6. Test ID registry')
@@ -75,11 +77,16 @@ for (const folder of ['tests', 'scripts', join('.github', 'workflows')]) {
   }
 }
 
-const unregistered = [...cited].filter(([id]) => !registered.has(id))
-if (unregistered.length > 0) {
+const malformed = [...cited].filter(([id]) => !/-\d{3}$/.test(id))
+const unregistered = [...cited].filter(([id]) => /-\d{3}$/.test(id) && !registered.has(id))
+if (malformed.length > 0 || unregistered.length > 0) {
   process.stderr.write(
-    `${unregistered.map(([id, where]) => `${where}: ${id} is not registered in docs/10 §6`).join('\n')}\n` +
-      'Register a new ID in docs/10 §6 first (docs/10 §6.1).\n'
+    [
+      ...malformed.map(
+        ([id, where]) => `${where}: ${id} is not T-<AREA>-<three digits> (docs/10 §6.1)`
+      ),
+      ...unregistered.map(([id, where]) => `${where}: ${id} is not registered in docs/10 §6`),
+    ].join('\n') + '\nRegister a new ID in docs/10 §6 first (docs/10 §6.1).\n'
   )
   process.exit(1)
 }

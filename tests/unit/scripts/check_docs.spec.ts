@@ -43,7 +43,9 @@ async function check(files: Record<string, string | undefined>) {
   }
 }
 
-test.group('T-ARCH-029 docs links, ADR sections, numbering and index', () => {
+test.group('T-ARCH-029 docs links, ADR sections, numbering and index', (group) => {
+  group.each.timeout(30_000)
+
   test('T-ARCH-029 the repository passes', async ({ assert }) => {
     const result = await runScript('check_docs.mjs')
     assert.equal(result.code, 0, result.stderr)

@@ -9,6 +9,7 @@ import { lintMessages } from '#tests/support/lint'
  */
 
 const SYNTAX = ['no-restricted-syntax']
+const OUTBOUND = ['no-restricted-globals', 'no-restricted-properties']
 
 test.group('T-ARCH-021 server lint rules', (group) => {
   group.each.timeout(30_000)
@@ -26,9 +27,6 @@ test.group('T-ARCH-021 server lint rules', (group) => {
       },
       { rule: 'concatenated SQL', code: "query.whereRaw('name = ' + name)" },
       { rule: 'db.transaction', code: 'db.transaction(async (trx) => trx)' },
-      { rule: 'fetch (T-SEC-016)', code: "fetch('https://example.com')" },
-      { rule: 'globalThis.fetch (T-SEC-016)', code: "globalThis.fetch('https://example.com')" },
-      { rule: 'WebSocket (T-SEC-016)', code: "new WebSocket('wss://example.com')" },
     ])
     .run(async ({ assert }, { code }) => {
       const messages = await lintMessages(
@@ -59,9 +57,50 @@ test.group('T-ARCH-021 server lint rules', (group) => {
       assert.deepEqual(messages, [])
     })
 
+  test('T-SEC-016 {case} fails in {filePath}')
+    .with(
+      [
+        { case: 'a fetch call', code: "fetch('https://x.test')" },
+        { case: 'a reference to fetch', code: 'const send = fetch' },
+        { case: 'globalThis.fetch', code: "globalThis.fetch('https://x.test')" },
+        { case: 'global.fetch', code: "global.fetch('https://x.test')" },
+        { case: 'new WebSocket', code: "new WebSocket('wss://x.test')" },
+        { case: 'globalThis.WebSocket', code: 'const Socket = globalThis.WebSocket' },
+      ].flatMap((entry) =>
+        [
+          'app/modules/catalog/actions/thing.ts',
+          'app/controllers/seller/products_controller.ts',
+          'start/routes.ts',
+          'start/env.ts',
+          'config/mail.ts',
+          'commands/thing.ts',
+          'providers/api_provider.ts',
+          'database/seeders/dev/thing.ts',
+        ].map((filePath) => ({ ...entry, filePath }))
+      )
+    )
+    .run(async ({ assert }, { code, filePath }) => {
+      const messages = await lintMessages(
+        `export function f() {\n  ${code}\n}\n`,
+        filePath,
+        OUTBOUND
+      )
+      assert.lengthOf(messages, 1)
+      assert.match(messages[0], /^2:no-restricted-(globals|properties)$/)
+    })
+
   test('T-SEC-016 fetch and WebSocket pass inside a providers/ adapter', async ({ assert }) => {
-    const code = "export const f = () => [fetch('https://x.test'), new WebSocket('wss://x.test')]\n"
-    assert.deepEqual(await lintMessages(code, 'app/modules/logistics/providers/ncm.ts', SYNTAX), [])
+    const code =
+      "export const f = () => [fetch('https://x.test'), globalThis.fetch, new WebSocket('wss://x.test')]\n"
+    assert.deepEqual(
+      await lintMessages(code, 'app/modules/logistics/providers/ncm.ts', OUTBOUND),
+      []
+    )
+  })
+
+  test('T-SEC-016 a local function named fetch is not the global', async ({ assert }) => {
+    const code = 'const fetch = (id: string) => id\nexport const f = () => fetch("a")\n'
+    assert.deepEqual(await lintMessages(code, 'app/modules/catalog/queries.ts', OUTBOUND), [])
   })
 
   test('T-ARCH-021 db.transaction passes in app/modules/platform/tx.ts only', async ({
@@ -75,7 +114,7 @@ test.group('T-ARCH-021 server lint rules', (group) => {
     assert,
   }) => {
     const code =
-      'export const show = (user: any) => [user.serialize(), user.toJSON(), fetch("/x")]\n'
+      'export const show = (user: any) => [user.serialize(), user.toJSON(), db.transaction(() => 1)]\n'
     const messages = await lintMessages(
       code,
       'app/controllers/seller/products_controller.ts',
@@ -90,11 +129,15 @@ test.group('T-ARCH-021 server lint rules', (group) => {
 
   test('T-ARCH-021 app/ may not import factories or #start/env', async ({ assert }) => {
     const code =
-      "import { UserFactory } from '#database/factories/user_factory'\nimport env from '#start/env'\nexport const x = [UserFactory, env]\n"
+      "import { UserFactory } from '#database/factories/user_factory'\nimport env from '#start/env'\nimport { ShopFactory } from '../../../../database/factories/shop_factory.js'\nexport const x = [UserFactory, env, ShopFactory]\n"
     const messages = await lintMessages(code, 'app/modules/identity/actions/thing.ts', [
       'no-restricted-imports',
     ])
-    assert.deepEqual(messages, ['1:no-restricted-imports', '2:no-restricted-imports'])
+    assert.deepEqual(messages, [
+      '1:no-restricted-imports',
+      '2:no-restricted-imports',
+      '3:no-restricted-imports',
+    ])
   })
 
   test('T-ARCH-021 @ts-ignore and any fail in {filePath}; @ts-expect-error with a reason passes')

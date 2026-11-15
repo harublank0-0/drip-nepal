@@ -53,6 +53,7 @@
     "@poppinss/ts-exec": "^1.4.4",
     "@redocly/cli": "2.77.0",
     "@secretlint/node": "13.1.0",
+    "@secretlint/secretlint-rule-pattern": "13.1.0",
     "@secretlint/secretlint-rule-preset-recommend": "13.1.0",
     "@tanstack/react-devtools": "^0.10.8",
     "@tanstack/react-form-devtools": "^0.2.29",
@@ -75,6 +76,7 @@
     "secretlint": "13.1.0",
     "typescript": "~6.0.3",
     "vite": "^7.3.3",
+    "yaml": "2.9.1",
     "youch": "^4.1.1"
   },
   "dependencies": {
@@ -148,7 +150,7 @@
       "node scripts/check_migrations_lock.mjs"
     ],
     "*": [
-      "secretlint --maskSecrets"
+      "node scripts/scan_secrets.mjs"
     ]
   }
 }

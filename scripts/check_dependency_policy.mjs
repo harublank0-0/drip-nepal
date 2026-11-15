@@ -5,7 +5,9 @@
 //   node scripts/check_dependency_policy.mjs [--root <dir>] [--base <git ref>] [--labels <a,b>]
 //
 // Fails:
-// 1. on a `tarball:` resolution in pnpm-lock.yaml outside https://registry.npmjs.org/;
+// 1. on a `tarball:` resolution in pnpm-lock.yaml outside https://registry.npmjs.org/,
+//    and on any git (`type: git`, `repo:`, `commit:`) or local folder
+//    (`type: directory`, `directory:`) resolution;
 // 2. on a components.json registry other than `@shadcnuikit` at
 //    https://shadcnuikit.com/r/{name}.json, which is allowed only once VX-13
 //    clears (SHADCNUIKIT_ALLOWED below), and whose headers, if any, hold
@@ -45,6 +47,15 @@ lockfile.split('\n').forEach((line, index) => {
     if (!match[1].startsWith(REGISTRY)) {
       problems.push(`pnpm-lock.yaml:${index + 1}: tarball ${match[1]} is not on ${REGISTRY}`)
     }
+  }
+  // A git or local-folder resolution bypasses the registry and its integrity hash.
+  if (
+    /^\s*resolution:/.test(line) &&
+    /\b(type:\s*['"]?(git|directory)\b|repo:|directory:|commit:)/.test(line)
+  ) {
+    problems.push(
+      `pnpm-lock.yaml:${index + 1}: a git or directory resolution is not allowed (${line.trim()})`
+    )
   }
 })
 

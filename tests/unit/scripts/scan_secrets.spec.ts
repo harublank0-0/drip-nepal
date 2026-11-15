@@ -5,8 +5,9 @@ import { fixtureTree, git, runScript } from '#tests/support/scripts'
 
 /*
  * T-SEC-025, the secret-scan half (docs/07 TM-25, §7.2): secretlint's
- * recommended rules over every blob of the history, so a secret committed
- * and deleted later still fails. The token below is assembled at run time
+ * recommended rules and the pattern for the secret variables of docs/09
+ * §6.1, over every blob of HEAD's history, so a secret committed and
+ * deleted later still fails, and over given files (the pre-commit mode). The token below is assembled at run time
  * and is not a real token; the pre-commit scan never sees it spelled.
  */
 
@@ -15,6 +16,7 @@ const TOKEN = ['gh', 'p_', 'A1b2C3d4E5f6G7h8I9j0', 'K1l2M3n4O5p6Q7r8'].join('')
 async function repository(history: (root: string) => Promise<void>) {
   const tree = await fixtureTree({ 'README.md': '# Fixture\n' })
   await copyFile(join(process.cwd(), '.secretlintrc.json'), join(tree.root, '.secretlintrc.json'))
+  await copyFile(join(process.cwd(), '.secretlintignore'), join(tree.root, '.secretlintignore'))
   await git(tree.root, 'init', '-q', '-b', 'main')
   await git(tree.root, 'add', '.')
   await git(tree.root, 'commit', '-qm', 'base')
@@ -69,6 +71,72 @@ test.group('T-SEC-025 secret scan over the history', (group) => {
     try {
       const result = await runScript('scan_secrets.mjs', ['--root', tree.root])
       assert.equal(result.code, 0, result.stderr)
+    } finally {
+      await tree.cleanup()
+    }
+  })
+
+  test('T-SEC-025 a secret variable with a value fails: {line}')
+    .with([
+      { line: 'APP_KEY=x8Kq2mN5pR7tV9wY1zB3cD6fG8hJ0kL4' },
+      { line: 'export DB_PASSWORD="s3cr3t-db-pass"' },
+      { line: 'HMAC_KEY_TELEMETRY=ZHJpcG5lcGFsIHByb2QgdGVsZW1ldHJ5' },
+      { line: 'SENTRY_DSN=https://abc123@o1.ingest.sentry.io/42' },
+    ])
+    .run(async ({ assert }, { line }) => {
+      const tree = await repository(async (root) => {
+        await writeFile(join(root, 'notes.md'), `Set this:\n\n${line}\n`)
+        await git(root, 'add', '.')
+        await git(root, 'commit', '-qm', 'notes')
+      })
+      try {
+        const result = await runScript('scan_secrets.mjs', ['--root', tree.root])
+        assert.equal(result.code, 1)
+        assert.include(result.stderr, '[PATTERN]')
+      } finally {
+        await tree.cleanup()
+      }
+    })
+
+  test('T-SEC-025 placeholders, empty values and .env.test pass', async ({ assert }) => {
+    const tree = await repository(async (root) => {
+      await writeFile(
+        join(root, 'DEPLOY.md'),
+        'SMTP_PASSWORD=the-app-password\nDB_PASSWORD=change-me-to-a-long-random-password\nAPP_KEY=\nAPP_KEY=<generate one>\n# APP_KEY=commented\n'
+      )
+      await writeFile(join(root, '.env.test'), 'APP_KEY=dripnepal-test-only-app-key-not-a-secret\n')
+      await git(root, 'add', '.')
+      await git(root, 'commit', '-qm', 'templates')
+    })
+    try {
+      const result = await runScript('scan_secrets.mjs', ['--root', tree.root])
+      assert.equal(result.code, 0, result.stderr)
+    } finally {
+      await tree.cleanup()
+    }
+  })
+
+  test('T-SEC-025 file mode (pre-commit) fails on a staged secret and passes a clean file', async ({
+    assert,
+  }) => {
+    const tree = await repository(async (root) => {
+      await writeFile(join(root, 'leak.env'), 'APP_KEY=x8Kq2mN5pR7tV9wY1zB3cD6fG8hJ0kL4\n')
+      await writeFile(join(root, 'clean.md'), '# Nothing here\n')
+    })
+    try {
+      const leak = await runScript('scan_secrets.mjs', [
+        '--root',
+        tree.root,
+        join(tree.root, 'leak.env'),
+      ])
+      assert.equal(leak.code, 1)
+      assert.include(leak.stderr, 'leak.env')
+      const clean = await runScript('scan_secrets.mjs', [
+        '--root',
+        tree.root,
+        join(tree.root, 'clean.md'),
+      ])
+      assert.equal(clean.code, 0, clean.stderr)
     } finally {
       await tree.cleanup()
     }

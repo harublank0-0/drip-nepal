@@ -50,6 +50,20 @@ test.group('T-SEC-026 lockfile sources and components.json registries', () => {
         expected: 'tarball https://evil.example/evil-1.0.0.tgz is not on',
       },
       {
+        case: 'a git resolution',
+        files: {
+          'pnpm-lock.yaml': `${LOCK}  forked@1.0.0:\n    resolution: {commit: 0123abcd, repo: https://github.com/someone/forked.git, type: git}\n`,
+        },
+        expected: 'a git or directory resolution is not allowed',
+      },
+      {
+        case: 'a local folder resolution',
+        files: {
+          'pnpm-lock.yaml': `${LOCK}  local@1.0.0:\n    resolution: {directory: ../local, type: directory}\n`,
+        },
+        expected: 'a git or directory resolution is not allowed',
+      },
+      {
         case: 'the @commercn registry',
         files: {
           'components.json': JSON.stringify({

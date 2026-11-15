@@ -1,24 +1,31 @@
 // T-SEC-025, the secret-scan half (docs/07 TM-25 and §7.2): no secret in the
 // repository's history. The scanner is secretlint with its recommended
-// preset (.secretlintrc.json); the pre-commit hook runs the same rules on
-// the staged files through lint-staged.
+// preset and a pattern for the secret variables of docs/09 §6.1
+// (.secretlintrc.json).
 //
-//   node scripts/scan_secrets.mjs [--root <dir>]
+//   node scripts/scan_secrets.mjs [--root <dir>]     the history of HEAD
+//   node scripts/scan_secrets.mjs <file>...          these files (pre-commit)
 //
-// Every blob reachable from any ref (`git rev-list --objects --all`) is
-// scanned once, with the path it first had, so a secret that was committed
-// and later deleted still fails. CI checks the repository out with its full
-// history (fetch-depth 0); a shallow clone scans only what it has. Binary
-// blobs and files listed in .secretlintignore are skipped. Findings are
-// printed masked. `--root` points it at a fixture repository
-// (tests/unit/scripts/scan_secrets.spec.ts).
+// History mode scans every blob reachable from the checked-out commit
+// (`git rev-list --objects HEAD`) once, with the path it first had, so a
+// secret that was committed and later deleted still fails. Only HEAD's
+// history is read, not every ref, so a stale remote branch cannot fail
+// every pull request. CI checks the repository out with its full history
+// (fetch-depth 0); a shallow clone scans only what it has. File mode is
+// what lint-staged runs on the staged files. Both skip binary content and
+// the paths of .secretlintignore, which the secretlint CLI does not apply to
+// paths it is given. Findings are printed masked. `--root` points it at a
+// fixture repository (tests/unit/scripts/scan_secrets.spec.ts).
 import { execFileSync, spawn } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { join, relative, resolve, sep } from 'node:path'
 import { parseArgs } from 'node:util'
 import { createEngine } from '@secretlint/node'
 
-const { values: args } = parseArgs({ options: { root: { type: 'string', default: '.' } } })
+const { values: args, positionals: files } = parseArgs({
+  allowPositionals: true,
+  options: { root: { type: 'string', default: '.' } },
+})
 const root = resolve(args.root)
 const git = (...gitArgs) =>
   execFileSync('git', gitArgs, { cwd: root, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 })
@@ -40,14 +47,8 @@ const ignored = (existsSync(ignoreFile) ? readFileSync(ignoreFile, 'utf8') : '')
       )
   )
 
-const blobs = new Map()
-for (const line of git('rev-list', '--objects', '--all').split('\n')) {
-  const space = line.indexOf(' ')
-  if (space === -1) continue
-  const sha = line.slice(0, space)
-  const path = line.slice(space + 1)
-  if (!blobs.has(sha)) blobs.set(sha, path)
-}
+const isIgnored = (path) => ignored.some((pattern) => pattern.test(path))
+const isBinary = (content) => content.subarray(0, 8000).includes(0)
 
 // Object types and contents through one `git cat-file --batch` process.
 async function* readBlobs(shas) {
@@ -83,22 +84,52 @@ const engine = await createEngine({
 
 let scanned = 0
 const findings = []
-for await (const { sha, type, content } of readBlobs([...blobs.keys()])) {
-  if (type !== 'blob') continue
-  const path = blobs.get(sha)
-  if (ignored.some((pattern) => pattern.test(path))) continue
-  if (content.subarray(0, 8000).includes(0)) continue // binary
+
+async function scan(content, path) {
+  if (isIgnored(path) || isBinary(content)) return null
   scanned++
   const result = await engine.executeOnContent({
     content: content.toString('utf8'),
     filePath: path,
   })
-  if (!result.ok) {
-    const commit = git('log', '--all', '--format=%h', `--find-object=${sha}`)
+  return result.ok ? null : result.output
+}
+
+if (files.length > 0) {
+  for (const file of files) {
+    const path = relative(root, resolve(file)).split(sep).join('/')
+    const output = await scan(readFileSync(resolve(file)), path)
+    if (output) findings.push(`${path}\n${output}`)
+  }
+  if (findings.length > 0) {
+    process.stderr.write(
+      `${findings.join('\n')}\n${findings.length} file(s) hold a secret; remove it before committing.\n`
+    )
+    process.exit(1)
+  }
+  process.stdout.write(`${scanned} file(s) hold no secret\n`)
+  process.exit(0)
+}
+
+const blobs = new Map()
+for (const line of git('rev-list', '--objects', 'HEAD').split('\n')) {
+  const space = line.indexOf(' ')
+  if (space === -1) continue
+  const sha = line.slice(0, space)
+  const path = line.slice(space + 1)
+  if (!blobs.has(sha)) blobs.set(sha, path)
+}
+
+for await (const { sha, type, content } of readBlobs([...blobs.keys()])) {
+  if (type !== 'blob') continue
+  const path = blobs.get(sha)
+  const output = await scan(content, path)
+  if (output) {
+    const commit = git('log', '--format=%h', `--find-object=${sha}`, 'HEAD')
       .trim()
       .split('\n')
       .pop()
-    findings.push(`${path} (blob ${sha.slice(0, 10)}, first in commit ${commit})\n${result.output}`)
+    findings.push(`${path} (blob ${sha.slice(0, 10)}, first in commit ${commit})\n${output}`)
   }
 }
 

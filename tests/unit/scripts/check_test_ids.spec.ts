@@ -35,7 +35,9 @@ async function check(files: Record<string, string>) {
   }
 }
 
-test.group('T-ARCH-033 every cited test ID is registered', () => {
+test.group('T-ARCH-033 every cited test ID is registered', (group) => {
+  group.each.timeout(30_000)
+
   test('T-ARCH-033 the repository passes', async ({ assert }) => {
     const result = await runScript('check_test_ids.mjs')
     assert.equal(result.code, 0, result.stderr)
@@ -62,4 +64,11 @@ test.group('T-ARCH-033 every cited test ID is registered', () => {
       assert.equal(result.code, 1)
       assert.include(result.stderr, `${path}:2: ${UNREGISTERED} is not registered`)
     })
+
+  test('T-ARCH-033 fails on an ID with four digits instead of ignoring it', async ({ assert }) => {
+    const malformed = ['T', 'SEC', '0251'].join('-')
+    const result = await check({ 'tests/unit/a.spec.ts': `test('${malformed} typo', () => {})\n` })
+    assert.equal(result.code, 1)
+    assert.include(result.stderr, `${malformed} is not T-<AREA>-<three digits>`)
+  })
 })

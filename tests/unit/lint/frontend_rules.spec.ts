@@ -66,12 +66,12 @@ test.group('T-ARCH-021 frontend lint rules', (group) => {
     .with([{ folder: 'ui' }, { folder: 'kit' }])
     .run(async ({ assert }, { folder }) => {
       const code =
-        "import { Button } from '~/components/ui/button'\nimport { cn } from '~/lib/utils'\nimport { Price } from '~/components/catalog/price'\nexport const used = [Button, cn, Price]\n"
+        "import { Button } from '~/components/ui/button'\nimport { cn } from '~/lib/utils'\nimport { Price } from '~/components/catalog/price'\nimport { Badge } from './badge'\nimport { utils } from '../../lib/utils'\nimport { Card } from '../catalog/card'\nexport const used = [Button, cn, Price, Badge, utils, Card]\n"
       assert.deepEqual(
         await lintMessages(code, `inertia/components/${folder}/card.tsx`, [
           'no-restricted-imports',
         ]),
-        ['3:no-restricted-imports']
+        ['3:no-restricted-imports', '6:no-restricted-imports']
       )
     })
 })

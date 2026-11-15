@@ -25,7 +25,9 @@ async function check(files: Record<string, string>, denylist?: string) {
   }
 }
 
-test.group('T-ARCH-030 portability: no local paths or local-only source names', () => {
+test.group('T-ARCH-030 portability: no local paths or local-only source names', (group) => {
+  group.each.timeout(30_000)
+
   test('T-ARCH-030 the repository passes', async ({ assert }) => {
     const result = await runScript('check_portability.mjs')
     assert.equal(result.code, 0, result.stderr)

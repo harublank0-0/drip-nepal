@@ -87,14 +87,14 @@ const TRANSACTIONS = [
     message: 'Open transactions only through withTx/jobTx (09 §3.8)',
   },
 ]
-// T-SEC-016: the globals no import rule can see (docs/09 §2.4 rule 8).
-const OUTBOUND = [
-  {
-    selector:
-      ":matches(CallExpression[callee.name='fetch'], NewExpression[callee.name='WebSocket'], MemberExpression[object.name='globalThis'][property.name=/^(fetch|WebSocket)$/])",
-    message: 'Outbound HTTP only inside providers/ adapters (09 §2.4 rule 8, 07 TM-13)',
-  },
-]
+// T-SEC-016: the globals no import rule can see (docs/09 §2.4 rule 8). A
+// global ban catches every reference (`const f = fetch` included), and the
+// property ban catches `global.fetch` and `globalThis.fetch`.
+const OUTBOUND_MESSAGE = 'Outbound HTTP only inside providers/ adapters (09 §2.4 rule 8, 07 TM-13)'
+const OUTBOUND_GLOBALS = ['fetch', 'WebSocket'].map((name) => ({ name, message: OUTBOUND_MESSAGE }))
+const OUTBOUND_PROPERTIES = ['global', 'globalThis'].flatMap((object) =>
+  ['fetch', 'WebSocket'].map((property) => ({ object, property, message: OUTBOUND_MESSAGE }))
+)
 const NO_MODEL_RESPONSES = [
   {
     selector: 'CallExpression[callee.property.name=/^(serialize|toJSON)$/]',
@@ -106,7 +106,7 @@ const APP_IMPORTS = {
   patterns: [
     ...START_ENV_PATTERNS,
     {
-      regex: '^#database/factories/',
+      regex: '(^#database/factories/|(^|/)database/factories/)',
       message: 'Factories are for tests and dev seeders (09 §8.8)',
     },
   ],
@@ -179,7 +179,8 @@ const INERTIA_IMPORTS = {
 }
 const STORAGE_GLOBALS = ['localStorage', 'sessionStorage'].map((name) => ({
   name,
-  message: 'Use inertia/lib/storage.ts, which is safe during SSR (09 §13.8 rule 1)',
+  message:
+    'Browser storage only through an SSR-safe helper (09 §13.8 rule 1; inertia/lib/storage.ts, not written yet)',
 }))
 // ui/ and kit/ import only ui/ and ~/lib/utils (08 §12.1).
 const COPIED_IMPORTS = (folder) => ({
@@ -193,9 +194,18 @@ const COPIED_IMPORTS = (folder) => ({
       regex: '^~/components/(?!ui/)',
       message: `${folder}/ imports only ui/ and ~/lib/utils (08 §12.1)`,
     },
+    {
+      // The same boundary for relative paths: ../ leaves the folder.
+      regex: '^\\.\\./(?!ui/|\\.\\./lib/utils$)',
+      message: `${folder}/ imports only ui/ and ~/lib/utils (08 §12.1)`,
+    },
   ],
 })
 
+// The server folders, where outbound HTTP is banned outside adapters.
+const SERVER = ['app/**', 'start/**', 'config/**', 'commands/**', 'providers/**', 'database/**']
+const ADAPTERS = ['app/modules/*/providers/**']
+const START_ENV_FILES = ['start/env.ts', 'start/env_schema.ts']
 const SERVER_AND_UI = [
   'app/**',
   'start/**',
@@ -231,10 +241,27 @@ export default configApp(
     // process.env stays in start/env*.ts (docs/09 §6.3), including
     // `import { env } from 'node:process'`.
     files: SERVER_AND_UI,
-    ignores: ['start/env.ts', 'start/env_schema.ts'],
+    ignores: START_ENV_FILES,
     rules: {
       'no-restricted-properties': ['error', ...PROCESS_ENV],
       'no-restricted-imports': ['error', { paths: PROCESS_ENV_IMPORTS }],
+    },
+  },
+  {
+    // T-SEC-016: no fetch or WebSocket in server code outside providers/
+    // adapters (docs/09 §2.4 rule 8). Repeats the process.env ban.
+    files: SERVER,
+    ignores: [...ADAPTERS, ...START_ENV_FILES],
+    rules: {
+      'no-restricted-globals': ['error', ...OUTBOUND_GLOBALS],
+      'no-restricted-properties': ['error', ...PROCESS_ENV, ...OUTBOUND_PROPERTIES],
+    },
+  },
+  {
+    files: START_ENV_FILES,
+    rules: {
+      'no-restricted-globals': ['error', ...OUTBOUND_GLOBALS],
+      'no-restricted-properties': ['error', ...OUTBOUND_PROPERTIES],
     },
   },
 
@@ -243,28 +270,15 @@ export default configApp(
     files: ['app/**/*.ts'],
     rules: {
       'no-restricted-imports': ['error', APP_IMPORTS],
-      'no-restricted-syntax': [
-        'error',
-        ...MASS_ASSIGNMENT,
-        ...SQL_BINDINGS,
-        ...TRANSACTIONS,
-        ...OUTBOUND,
-      ],
-      ...TS_STRICTNESS,
-    },
-  },
-  {
-    // Adapters are the one place outbound HTTP may happen (T-SEC-016).
-    files: ['app/modules/*/providers/**/*.ts'],
-    rules: {
       'no-restricted-syntax': ['error', ...MASS_ASSIGNMENT, ...SQL_BINDINGS, ...TRANSACTIONS],
+      ...TS_STRICTNESS,
     },
   },
   {
     // withTx and jobTx (docs/09 §3.8) are the one db.transaction caller.
     files: ['app/modules/platform/tx.ts'],
     rules: {
-      'no-restricted-syntax': ['error', ...MASS_ASSIGNMENT, ...SQL_BINDINGS, ...OUTBOUND],
+      'no-restricted-syntax': ['error', ...MASS_ASSIGNMENT, ...SQL_BINDINGS],
     },
   },
   {
@@ -275,15 +289,30 @@ export default configApp(
         ...MASS_ASSIGNMENT,
         ...SQL_BINDINGS,
         ...TRANSACTIONS,
-        ...OUTBOUND,
         ...NO_MODEL_RESPONSES,
       ],
     },
   },
 
   // ---- money (ADR-0007, 08 §12.3); T-ARCH-014 ------------------------------
+  // These blocks replace the outbound lists above for app/modules/**, so
+  // they repeat them; adapters keep the money bans only.
   {
-    files: ['app/modules/**', 'shared/format/**'],
+    files: ['app/modules/**'],
+    ignores: ADAPTERS,
+    rules: {
+      'no-restricted-globals': ['error', ...MONEY_GLOBALS, ...OUTBOUND_GLOBALS],
+      'no-restricted-properties': [
+        'error',
+        ...MONEY_PROPERTIES,
+        ...PROCESS_ENV,
+        ...OUTBOUND_PROPERTIES,
+      ],
+    },
+  },
+  {
+    // Adapters are the one place outbound HTTP may happen (T-SEC-016).
+    files: [...ADAPTERS, 'shared/format/**'],
     ignores: ['shared/format/money.ts'],
     rules: {
       'no-restricted-globals': ['error', ...MONEY_GLOBALS],
