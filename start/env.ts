@@ -34,8 +34,6 @@ const violations = environmentPolicyViolations({
   DATA_ENCRYPTION_KEY_IDS: [...env.get('DATA_ENCRYPTION_KEYS').release().keys()],
   DATA_ENCRYPTION_ACTIVE_KEY_ID: env.get('DATA_ENCRYPTION_ACTIVE_KEY_ID'),
   SENTRY_DSN: env.get('SENTRY_DSN'),
-  SMTP_USERNAME: env.get('SMTP_USERNAME'),
-  SMTP_PASSWORD: Boolean(env.get('SMTP_PASSWORD')),
   KEYS: {
     // APP_KEY as written: a key's base64 text reused as APP_KEY is caught too.
     APP_KEY: env.get('APP_KEY').release(),

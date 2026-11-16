@@ -29,8 +29,6 @@ export type EnvPolicyValues = {
   DATA_ENCRYPTION_KEY_IDS: string[]
   DATA_ENCRYPTION_ACTIVE_KEY_ID: string
   SENTRY_DSN?: string
-  SMTP_USERNAME?: string
-  SMTP_PASSWORD?: boolean
   // Base64 of every key that must differ from the others in staging and prod.
   KEYS: Record<string, string | undefined>
 }
@@ -94,9 +92,6 @@ export function environmentPolicyViolations(values: EnvPolicyValues): string[] {
     }
     if (values.LOG_LEVEL === 'trace' || values.LOG_LEVEL === 'debug') {
       violations.push('LOG_LEVEL must not be trace or debug in staging and production')
-    }
-    if (values.SMTP_USERNAME && !values.SMTP_PASSWORD) {
-      violations.push('SMTP_PASSWORD is required with SMTP_USERNAME in staging and production')
     }
     if (values.DB_DEBUG) {
       violations.push('DB_DEBUG must be off in staging and production (RF-26)')

@@ -131,13 +131,6 @@ export const envSchema = {
   // Uploaded files ("fs" = ./storage on local disk)
   DRIVE_DISK: Env.schema.enum(['fs'] as const),
 
-  // Outgoing email (config/mail.ts). Without SMTP_HOST and MAIL_FROM, email is skipped.
-  SMTP_HOST: Env.schema.string.optional({ format: 'host' }),
-  SMTP_PORT: Env.schema.number.optional(),
-  SMTP_USERNAME: Env.schema.string.optional(),
-  SMTP_PASSWORD: Env.schema.secret.optional(),
-  MAIL_FROM: Env.schema.string.optional(),
-
   // Rate limiter store
   LIMITER_STORE: Env.schema.enum(['database', 'memory'] as const),
 

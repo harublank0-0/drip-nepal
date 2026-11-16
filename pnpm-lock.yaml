@@ -31,9 +31,6 @@ importers:
       '@adonisjs/lucid':
         specifier: ^22.4.2
         version: 22.4.2(@adonisjs/assembler@8.4.0(typescript@6.0.3))(@adonisjs/core@7.3.4(@adonisjs/assembler@8.4.0(typescript@6.0.3))(@vinejs/vine@4.4.0)(edge.js@6.5.1)(pino-pretty@13.1.3)(youch@4.1.1))(@vinejs/vine@4.4.0)(luxon@3.7.2)(pg@8.22.0)
-      '@adonisjs/mail':
-        specifier: ^10.4.0
-        version: 10.4.0(@adonisjs/assembler@8.4.0(typescript@6.0.3))(@adonisjs/core@7.3.4(@adonisjs/assembler@8.4.0(typescript@6.0.3))(@vinejs/vine@4.4.0)(edge.js@6.5.1)(pino-pretty@13.1.3)(youch@4.1.1))(@types/luxon@3.7.2)(@types/node@25.9.4)(dayjs@1.11.21)(edge.js@6.5.1)(luxon@3.7.2)
       '@adonisjs/session':
         specifier: ^8.1.0
         version: 8.1.0(@adonisjs/assembler@8.4.0(typescript@6.0.3))(@adonisjs/core@7.3.4(@adonisjs/assembler@8.4.0(typescript@6.0.3))(@vinejs/vine@4.4.0)(edge.js@6.5.1)(pino-pretty@13.1.3)(youch@4.1.1))(@adonisjs/lucid@22.4.2(@adonisjs/assembler@8.4.0(typescript@6.0.3))(@adonisjs/core@7.3.4(@adonisjs/assembler@8.4.0(typescript@6.0.3))(@vinejs/vine@4.4.0)(edge.js@6.5.1)(pino-pretty@13.1.3)(youch@4.1.1))(@vinejs/vine@4.4.0)(luxon@3.7.2)(pg@8.22.0))(@japa/browser-client@2.3.0(@japa/assert@4.2.0(@japa/runner@5.3.0))(@japa/runner@5.3.0)(playwright@1.61.1))(@japa/plugin-adonisjs@5.2.0(@adonisjs/core@7.3.4(@adonisjs/assembler@8.4.0(typescript@6.0.3))(@vinejs/vine@4.4.0)(edge.js@6.5.1)(pino-pretty@13.1.3)(youch@4.1.1))(@japa/browser-client@2.3.0(@japa/assert@4.2.0(@japa/runner@5.3.0))(@japa/runner@5.3.0)(playwright@1.61.1))(@japa/runner@5.3.0)(playwright@1.61.1))(edge.js@6.5.1)
@@ -591,28 +588,6 @@ packages:
       '@vinejs/vine':
         optional: true
       luxon:
-        optional: true
-
-  '@adonisjs/mail@10.4.0':
-    resolution:
-      {
-        integrity: sha512-+o5qYB26gJgOGQysR/1KVEziM+MhSX9uP5ZBZjQuPC2xPTfvL5k10jHFQe5fZimhRHnETtNhoi4h3KIlen4KmQ==,
-      }
-    engines: { node: '>=24.0.0' }
-    peerDependencies:
-      '@adonisjs/assembler': ^8.0.0-next.14 || ^8.0.0
-      '@adonisjs/core': ^7.0.0-next.8 || ^7.0.0
-      '@aws-sdk/client-sesv2': ^3.997.0
-      edge.js: ^6.0.1
-      mjml: ^4.18.0 || ^5.0.0
-    peerDependenciesMeta:
-      '@adonisjs/assembler':
-        optional: true
-      '@aws-sdk/client-sesv2':
-        optional: true
-      edge.js:
-        optional: true
-      mjml:
         optional: true
 
   '@adonisjs/presets@3.0.0':
@@ -3754,12 +3729,6 @@ packages:
         integrity: sha512-dszCsrKb5U7ZsVZBWiHFklTloVl0mSEnWH/iZXfZUlI4rzCUnsvGmgqfuVRHL54ugE7/wRuxEIXRa2iMZ+BG6g==,
       }
 
-  '@types/nodemailer@8.0.2':
-    resolution:
-      {
-        integrity: sha512-c7M5ox8p0nEOfbJ2E9Qcmt8/QCu/VzsiAhzBiZbvky2PhKZDHpKB3sQHBM5MEZNkCfBOaS6S9//AGPRTNB7IaA==,
-      }
-
   '@types/normalize-package-data@2.4.4':
     resolution:
       {
@@ -6038,42 +6007,6 @@ packages:
     engines: { node: '>=18' }
     hasBin: true
 
-  ical-generator@11.1.3:
-    resolution:
-      {
-        integrity: sha512-Wim2JmodqbNtyXXKU8X8+2RFnm0NPfm/Ww6zXaTuOEa2Ui0ZlNzVrKGr8+1pfrW2ik66dfbqu6p9nRF1B9pA2g==,
-      }
-    engines: { node: 22 || >=24.0.0 }
-    peerDependencies:
-      '@touch4it/ical-timezones': '>=1.6.0'
-      '@types/luxon': '>= 1.26.0'
-      '@types/mocha': '>= 8.2.1'
-      '@types/node': '*'
-      dayjs: '>= 1.10.0'
-      luxon: '>= 1.26.0'
-      moment: '>= 2.29.0'
-      moment-timezone: '>= 0.5.33'
-      rrule: '>= 2.6.8'
-    peerDependenciesMeta:
-      '@touch4it/ical-timezones':
-        optional: true
-      '@types/luxon':
-        optional: true
-      '@types/mocha':
-        optional: true
-      '@types/node':
-        optional: true
-      dayjs:
-        optional: true
-      luxon:
-        optional: true
-      moment:
-        optional: true
-      moment-timezone:
-        optional: true
-      rrule:
-        optional: true
-
   iconv-lite@0.7.2:
     resolution:
       {
@@ -6813,13 +6746,6 @@ packages:
       }
     engines: { node: '>=18' }
 
-  ky@2.2.0:
-    resolution:
-      {
-        integrity: sha512-4+B63kyZt+Y8snQiUGydK1vgY9xYQJZEh9K/nIAIEts+gYJzy1EiAw3BbK8xpWRuWUpN70SNCMjqRGTm75xxIA==,
-      }
-    engines: { node: '>=22' }
-
   language-subtag-registry@0.3.23:
     resolution:
       {
@@ -7247,13 +7173,6 @@ packages:
         integrity: sha512-6li2QanLsAXpIH2R6j77MzRyvOyrvdTqlKtO4CgBdHGNvN99ZZfyxszHc5o5+IZBWD5u6Hzwg83JoGXmqZNG9Q==,
       }
     engines: { node: '>=18' }
-
-  nodemailer@9.1.1:
-    resolution:
-      {
-        integrity: sha512-izw9mVKFix6YSnC9eLgV6g1opl9DUlRio9ZNcq+Wu9Ujn2UwF+8Nl0B8nz22kEC+CTZCvinkxwJ0DeFbb6NwcQ==,
-      }
-    engines: { node: '>=6.0.0' }
 
   non-error@0.1.0:
     resolution:
@@ -9794,30 +9713,6 @@ snapshots:
       - supports-color
       - tedious
 
-  '@adonisjs/mail@10.4.0(@adonisjs/assembler@8.4.0(typescript@6.0.3))(@adonisjs/core@7.3.4(@adonisjs/assembler@8.4.0(typescript@6.0.3))(@vinejs/vine@4.4.0)(edge.js@6.5.1)(pino-pretty@13.1.3)(youch@4.1.1))(@types/luxon@3.7.2)(@types/node@25.9.4)(dayjs@1.11.21)(edge.js@6.5.1)(luxon@3.7.2)':
-    dependencies:
-      '@adonisjs/core': 7.3.4(@adonisjs/assembler@8.4.0(typescript@6.0.3))(@vinejs/vine@4.4.0)(edge.js@6.5.1)(pino-pretty@13.1.3)(youch@4.1.1)
-      '@poppinss/macroable': 1.1.2
-      '@poppinss/object-builder': 1.1.0
-      '@types/nodemailer': 8.0.2
-      fastq: 1.20.1
-      ical-generator: 11.1.3(@types/luxon@3.7.2)(@types/node@25.9.4)(dayjs@1.11.21)(luxon@3.7.2)
-      ky: 2.2.0
-      nodemailer: 9.1.1
-    optionalDependencies:
-      '@adonisjs/assembler': 8.4.0(typescript@6.0.3)
-      edge.js: 6.5.1
-    transitivePeerDependencies:
-      - '@touch4it/ical-timezones'
-      - '@types/luxon'
-      - '@types/mocha'
-      - '@types/node'
-      - dayjs
-      - luxon
-      - moment
-      - moment-timezone
-      - rrule
-
   '@adonisjs/presets@3.0.0(@adonisjs/assembler@8.4.0(typescript@6.0.3))(@adonisjs/core@7.3.4(@adonisjs/assembler@8.4.0(typescript@6.0.3))(@vinejs/vine@4.4.0)(edge.js@6.5.1)(pino-pretty@13.1.3)(youch@4.1.1))':
     dependencies:
       '@adonisjs/core': 7.3.4(@adonisjs/assembler@8.4.0(typescript@6.0.3))(@vinejs/vine@4.4.0)(edge.js@6.5.1)(pino-pretty@13.1.3)(youch@4.1.1)
@@ -11916,10 +11811,6 @@ snapshots:
     dependencies:
       undici-types: 7.24.6
 
-  '@types/nodemailer@8.0.2':
-    dependencies:
-      '@types/node': 25.9.4
-
   '@types/normalize-package-data@2.4.4': {}
 
   '@types/pluralize@0.0.33': {}
@@ -13410,13 +13301,6 @@ snapshots:
 
   husky@9.1.7: {}
 
-  ical-generator@11.1.3(@types/luxon@3.7.2)(@types/node@25.9.4)(dayjs@1.11.21)(luxon@3.7.2):
-    optionalDependencies:
-      '@types/luxon': 3.7.2
-      '@types/node': 25.9.4
-      dayjs: 1.11.21
-      luxon: 3.7.2
-
   iconv-lite@0.7.2:
     dependencies:
       safer-buffer: 2.1.2
@@ -13781,8 +13665,6 @@ snapshots:
 
   ky@1.14.3: {}
 
-  ky@2.2.0: {}
-
   language-subtag-registry@0.3.23: {}
 
   language-tags@1.0.9:
@@ -13999,8 +13881,6 @@ snapshots:
       formdata-polyfill: 4.0.10
 
   node-releases@2.0.63: {}
-
-  nodemailer@9.1.1: {}
 
   non-error@0.1.0: {}
 

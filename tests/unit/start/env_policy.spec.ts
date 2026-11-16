@@ -155,12 +155,6 @@ const brokenRules: Case[] = [
     violation: 'APP_KEY is a committed placeholder key, never for staging or production',
   },
   {
-    rule: 'staging with an SMTP user and no password',
-    base: validStaging,
-    values: { SMTP_USERNAME: 'mailer' },
-    violation: 'SMTP_PASSWORD is required with SMTP_USERNAME in staging and production',
-  },
-  {
     rule: 'production without TLS to the database',
     base: validProduction,
     values: { DB_SSL: false },

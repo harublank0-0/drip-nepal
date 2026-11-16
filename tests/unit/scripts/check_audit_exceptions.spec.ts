@@ -56,14 +56,17 @@ async function check(workspace: string, rows: string[]) {
 test.group('T-SEC-038 advisory exceptions agree, are accepted and are current', (group) => {
   group.each.timeout(30_000)
 
-  test("T-SEC-038 the repository's lists agree; its only findings are acceptances still pending", async ({
+  test('T-SEC-038 the repository has no exceptions, and that passes', async ({ assert }) => {
+    const result = await runScript('check_audit_exceptions.mjs', ['--today', TODAY])
+    assert.equal(result.code, 0, result.stderr)
+    assert.include(result.stdout, '0 advisory exception(s)')
+  })
+
+  test('T-SEC-038 a workspace without auditConfig and a table without rows pass', async ({
     assert,
   }) => {
-    const result = await runScript('check_audit_exceptions.mjs', ['--today', TODAY])
-    const findings = result.stderr.split('\n').filter(Boolean)
-    for (const finding of findings)
-      assert.match(finding, /^GHSA-[\w-]+: no one has accepted this exception yet/)
-    assert.equal(result.code, findings.length > 0 ? 1 : 0)
+    const result = await check('allowBuilds:\n  esbuild: true\n', [])
+    assert.equal(result.code, 0, result.stderr)
   })
 
   test('T-SEC-038 matching, accepted, current rows pass, the expiry day included', async ({

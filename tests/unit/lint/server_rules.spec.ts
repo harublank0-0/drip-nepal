@@ -72,7 +72,7 @@ test.group('T-ARCH-021 server lint rules', (group) => {
           'app/controllers/seller/products_controller.ts',
           'start/routes.ts',
           'start/env.ts',
-          'config/mail.ts',
+          'config/database.ts',
           'commands/thing.ts',
           'providers/api_provider.ts',
           'database/seeders/dev/thing.ts',
