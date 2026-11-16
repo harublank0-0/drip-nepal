@@ -124,9 +124,6 @@ importers:
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
-      shadcn:
-        specifier: ^4.8.3
-        version: 4.11.0(typescript@6.0.3)
       slugify:
         specifier: ^1.6.9
         version: 1.6.9
@@ -242,6 +239,9 @@ importers:
       secretlint:
         specifier: 13.1.0
         version: 13.1.0
+      shadcn:
+        specifier: ^4.8.3
+        version: 4.11.0(typescript@6.0.3)
       typescript:
         specifier: ~6.0.3
         version: 6.0.3

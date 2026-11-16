@@ -17,7 +17,7 @@
 // paths it is given. Findings are printed masked. `--root` points it at a
 // fixture repository (tests/unit/scripts/scan_secrets.spec.ts).
 import { execFileSync, spawn } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, lstatSync, readFileSync } from 'node:fs'
 import { join, relative, resolve, sep } from 'node:path'
 import { parseArgs } from 'node:util'
 import { createEngine } from '@secretlint/node'
@@ -97,6 +97,8 @@ async function scan(content, path) {
 
 if (files.length > 0) {
   for (const file of files) {
+    // A symbolic link (such as a .claude/skills/ entry) or a folder holds no content to scan.
+    if (!lstatSync(resolve(file)).isFile()) continue
     const path = relative(root, resolve(file)).split(sep).join('/')
     const output = await scan(readFileSync(resolve(file)), path)
     if (output) findings.push(`${path}\n${output}`)

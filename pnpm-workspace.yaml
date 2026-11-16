@@ -17,4 +17,3 @@ auditConfig:
   ignoreGhsas:
     - GHSA-v53p-9fqp-m79j
     - GHSA-prgh-xp8r-p3m5
-    - GHSA-mrhx-c7xc-m3w5

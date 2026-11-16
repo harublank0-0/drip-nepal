@@ -82,6 +82,10 @@ test.group('T-SEC-025 secret scan over the history', (group) => {
       { line: 'export DB_PASSWORD="s3cr3t-db-pass"' },
       { line: 'HMAC_KEY_TELEMETRY=ZHJpcG5lcGFsIHByb2QgdGVsZW1ldHJ5' },
       { line: 'SENTRY_DSN=https://abc123@o1.ingest.sentry.io/42' },
+      { line: 'S3_SECRET_ACCESS_KEY=AbCdEf0123456789xyzAbCdEf0123456789xyz' },
+      { line: 'KHALTI_SECRET_KEY=live_secret_key_0123456789abcdef' },
+      { line: 'ESEWA_SECRET_KEY=8gBm/:&EnhH.1/q' },
+      { line: 'SHADCNUIKIT_API_KEY=sk_0123456789abcdef' },
     ])
     .run(async ({ assert }, { line }) => {
       const tree = await repository(async (root) => {
@@ -102,9 +106,12 @@ test.group('T-SEC-025 secret scan over the history', (group) => {
     const tree = await repository(async (root) => {
       await writeFile(
         join(root, 'DEPLOY.md'),
-        'SMTP_PASSWORD=the-app-password\nDB_PASSWORD=change-me-to-a-long-random-password\nAPP_KEY=\nAPP_KEY=<generate one>\n# APP_KEY=commented\n'
+        'SMTP_PASSWORD=the-app-password\nDB_PASSWORD=change-me-to-a-long-random-password\nAPP_KEY=\nAPP_KEY=<generate one>\n# APP_KEY=commented\nS3_SECRET_ACCESS_KEY=change-me\nDATA_ENCRYPTION_ACTIVE_KEY_ID=k2\nS3_ACCESS_KEY_ID=dev-access-key-id\nPUBLIC_KEY_SHA256=3b4c0f\n'
       )
-      await writeFile(join(root, '.env.test'), 'APP_KEY=dripnepal-test-only-app-key-not-a-secret\n')
+      await writeFile(
+        join(root, '.env.test'),
+        'APP_KEY=dripnepal-test-only-app-key-not-a-secret\nS3_SECRET_ACCESS_KEY=minio-test-secret\n'
+      )
       await git(root, 'add', '.')
       await git(root, 'commit', '-qm', 'templates')
     })

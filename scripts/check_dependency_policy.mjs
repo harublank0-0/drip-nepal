@@ -1,6 +1,6 @@
 // T-SEC-026, the repository half of the dependency gates (docs/07 TM-26,
 // docs/09 §10.2). `pnpm audit --prod --audit-level high` is the advisory
-// half; CI runs both. Node built-ins only.
+// half; CI runs both. Node built-ins and the `yaml` parser.
 //
 //   node scripts/check_dependency_policy.mjs [--root <dir>] [--base <git ref>] [--labels <a,b>]
 //
@@ -21,6 +21,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
+import { parse } from 'yaml'
 
 const { values: args } = parseArgs({
   options: {
@@ -40,24 +41,22 @@ const EXEMPTION_LABEL = 'dependencies'
 
 const problems = []
 
-// 1. Tarball resolutions.
-const lockfile = readFileSync(join(root, 'pnpm-lock.yaml'), 'utf8')
-lockfile.split('\n').forEach((line, index) => {
-  for (const match of line.matchAll(/tarball:\s*['"]?([^'",}\s]+)/g)) {
-    if (!match[1].startsWith(REGISTRY)) {
-      problems.push(`pnpm-lock.yaml:${index + 1}: tarball ${match[1]} is not on ${REGISTRY}`)
-    }
+// 1. Package resolutions, read with a YAML parser so a resolution that
+// Prettier wraps over several lines is read like a one-line one.
+const lockfile = parse(readFileSync(join(root, 'pnpm-lock.yaml'), 'utf8')) ?? {}
+for (const [name, entry] of Object.entries(lockfile.packages ?? {})) {
+  const resolution = entry?.resolution ?? {}
+  if (resolution.tarball !== undefined && !String(resolution.tarball).startsWith(REGISTRY)) {
+    problems.push(`pnpm-lock.yaml: ${name}: tarball ${resolution.tarball} is not on ${REGISTRY}`)
   }
   // A git or local-folder resolution bypasses the registry and its integrity hash.
-  if (
-    /^\s*resolution:/.test(line) &&
-    /\b(type:\s*['"]?(git|directory)\b|repo:|directory:|commit:)/.test(line)
-  ) {
+  const keys = ['repo', 'commit', 'directory'].filter((key) => resolution[key] !== undefined)
+  if (['git', 'directory'].includes(resolution.type) || keys.length > 0) {
     problems.push(
-      `pnpm-lock.yaml:${index + 1}: a git or directory resolution is not allowed (${line.trim()})`
+      `pnpm-lock.yaml: ${name}: a git or directory resolution is not allowed (${JSON.stringify(resolution)})`
     )
   }
-})
+}
 
 // 2. components.json registries.
 const componentsFile = join(root, 'components.json')

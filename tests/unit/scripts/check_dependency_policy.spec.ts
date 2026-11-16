@@ -57,6 +57,30 @@ test.group('T-SEC-026 lockfile sources and components.json registries', () => {
         expected: 'a git or directory resolution is not allowed',
       },
       {
+        case: 'a git resolution that Prettier wrapped over several lines',
+        files: {
+          'pnpm-lock.yaml': [
+            LOCK.trimEnd(),
+            '  forked@1.0.0:',
+            '    resolution:',
+            '      {',
+            '        commit: 0123456789abcdef0123456789abcdef01234567,',
+            '        repo: https://github.com/someone/forked.git,',
+            '        type: git,',
+            '      }',
+            '',
+          ].join('\n'),
+        },
+        expected: 'forked@1.0.0: a git or directory resolution is not allowed',
+      },
+      {
+        case: 'a wrapped tarball from another host',
+        files: {
+          'pnpm-lock.yaml': `${LOCK}  evil@2.0.0:\n    resolution:\n      {\n        integrity: sha512-abc,\n        tarball: https://evil.example/evil-2.0.0.tgz,\n      }\n`,
+        },
+        expected: 'evil@2.0.0: tarball https://evil.example/evil-2.0.0.tgz is not on',
+      },
+      {
         case: 'a local folder resolution',
         files: {
           'pnpm-lock.yaml': `${LOCK}  local@1.0.0:\n    resolution: {directory: ../local, type: directory}\n`,
