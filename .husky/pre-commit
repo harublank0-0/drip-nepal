@@ -1,1 +1,5 @@
+# Staged files only (docs/09 §11.4): ESLint and Prettier, the secretlint scan
+# (T-SEC-025, docs/07 §7.2) and the migration-lock check (T-ARCH-017), as
+# configured under `lint-staged` in package.json. Convenience, not a
+# control: CI runs the same checks on the whole tree.
 pnpm exec lint-staged

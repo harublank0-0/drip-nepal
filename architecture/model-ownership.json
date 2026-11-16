@@ -1,0 +1,285 @@
+{
+  "$comment": "Table -> owning module (docs/03 §4.4, docs/04a **Module** lines) and its Lucid model, if any. Read by architecture/model_rules.cjs and scripts/check_owner_writes.mjs (T-ARCH-001, docs/09 §2.1). A table joins this map in the pull request that creates it.",
+  "tables": {
+    "attribute_values": {
+      "module": "catalog",
+      "model": "app/models/attribute_value.ts"
+    },
+    "attributes": {
+      "module": "catalog",
+      "model": "app/models/attribute.ts"
+    },
+    "audit_logs": {
+      "module": "audit",
+      "model": "app/models/audit_log.ts"
+    },
+    "brands": {
+      "module": "catalog",
+      "model": "app/models/brand.ts"
+    },
+    "cart_items": {
+      "module": "cart",
+      "model": "app/models/cart_item.ts"
+    },
+    "carts": {
+      "module": "cart",
+      "model": "app/models/cart.ts"
+    },
+    "categories": {
+      "module": "catalog",
+      "model": "app/models/category.ts"
+    },
+    "category_attributes": {
+      "module": "catalog",
+      "model": null
+    },
+    "delivery_zone_districts": {
+      "module": "logistics",
+      "model": null
+    },
+    "delivery_zones": {
+      "module": "logistics",
+      "model": "app/models/delivery_zone.ts"
+    },
+    "districts": {
+      "module": "logistics",
+      "model": "app/models/district.ts"
+    },
+    "idempotency_keys": {
+      "module": "platform",
+      "model": "app/models/idempotency_key.ts"
+    },
+    "inventory_items": {
+      "module": "inventory",
+      "model": "app/models/inventory_item.ts"
+    },
+    "inventory_movements": {
+      "module": "inventory",
+      "model": "app/models/inventory_movement.ts"
+    },
+    "inventory_reservations": {
+      "module": "inventory",
+      "model": "app/models/inventory_reservation.ts"
+    },
+    "ledger_entries": {
+      "module": "ledger",
+      "model": "app/models/ledger_entry.ts"
+    },
+    "local_levels": {
+      "module": "logistics",
+      "model": "app/models/local_level.ts"
+    },
+    "logistics_account_shops": {
+      "module": "logistics",
+      "model": null
+    },
+    "logistics_accounts": {
+      "module": "logistics",
+      "model": "app/models/logistics_account.ts"
+    },
+    "logistics_providers": {
+      "module": "logistics",
+      "model": "app/models/logistics_provider.ts"
+    },
+    "media_assets": {
+      "module": "media",
+      "model": "app/models/media_asset.ts"
+    },
+    "notification_deliveries": {
+      "module": "notifications",
+      "model": "app/models/notification_delivery.ts"
+    },
+    "order_events": {
+      "module": "orders",
+      "model": "app/models/order_event.ts"
+    },
+    "order_items": {
+      "module": "orders",
+      "model": "app/models/order_item.ts"
+    },
+    "orders": {
+      "module": "orders",
+      "model": "app/models/order.ts"
+    },
+    "payment_allocations": {
+      "module": "payments",
+      "model": null
+    },
+    "payments": {
+      "module": "payments",
+      "model": "app/models/payment.ts"
+    },
+    "payout_entries": {
+      "module": "ledger",
+      "model": null
+    },
+    "payouts": {
+      "module": "ledger",
+      "model": "app/models/payout.ts"
+    },
+    "platform_settings": {
+      "module": "platform",
+      "model": "app/models/platform_setting.ts"
+    },
+    "platform_staff": {
+      "module": "identity",
+      "model": "app/models/platform_staff.ts"
+    },
+    "product_attribute_values": {
+      "module": "catalog",
+      "model": null
+    },
+    "product_listings": {
+      "module": "catalog",
+      "model": "app/models/product_listing.ts"
+    },
+    "product_media": {
+      "module": "media",
+      "model": null
+    },
+    "product_option_axes": {
+      "module": "catalog",
+      "model": null
+    },
+    "product_review_decisions": {
+      "module": "catalog",
+      "model": "app/models/product_review_decision.ts"
+    },
+    "product_variants": {
+      "module": "catalog",
+      "model": "app/models/product_variant.ts"
+    },
+    "products": {
+      "module": "catalog",
+      "model": "app/models/product.ts"
+    },
+    "provider_events": {
+      "module": "payments",
+      "model": "app/models/provider_event.ts"
+    },
+    "provinces": {
+      "module": "logistics",
+      "model": "app/models/province.ts"
+    },
+    "rate_limits": {
+      "module": "platform",
+      "model": null
+    },
+    "refund_items": {
+      "module": "payments",
+      "model": null
+    },
+    "refunds": {
+      "module": "payments",
+      "model": "app/models/refund.ts"
+    },
+    "return_items": {
+      "module": "orders",
+      "model": null
+    },
+    "return_requests": {
+      "module": "orders",
+      "model": "app/models/return_request.ts"
+    },
+    "sessions": {
+      "module": "identity",
+      "model": null
+    },
+    "shipment_events": {
+      "module": "orders",
+      "model": "app/models/shipment_event.ts"
+    },
+    "shipment_items": {
+      "module": "orders",
+      "model": null
+    },
+    "shipments": {
+      "module": "orders",
+      "model": "app/models/shipment.ts"
+    },
+    "shop_addresses": {
+      "module": "shops",
+      "model": "app/models/shop_address.ts"
+    },
+    "shop_agreements": {
+      "module": "shops",
+      "model": "app/models/shop_agreement.ts"
+    },
+    "shop_categories": {
+      "module": "shops",
+      "model": "app/models/shop_category.ts"
+    },
+    "shop_category_assignments": {
+      "module": "shops",
+      "model": null
+    },
+    "shop_delivery_coverage": {
+      "module": "logistics",
+      "model": null
+    },
+    "shop_invitations": {
+      "module": "shops",
+      "model": "app/models/shop_invitation.ts"
+    },
+    "shop_logistics_settings": {
+      "module": "logistics",
+      "model": "app/models/shop_logistics_setting.ts"
+    },
+    "shop_memberships": {
+      "module": "shops",
+      "model": "app/models/shop_membership.ts"
+    },
+    "shop_orders": {
+      "module": "orders",
+      "model": "app/models/shop_order.ts"
+    },
+    "shop_payout_accounts": {
+      "module": "shops",
+      "model": "app/models/shop_payout_account.ts"
+    },
+    "shop_review_decisions": {
+      "module": "shops",
+      "model": "app/models/shop_review_decision.ts"
+    },
+    "shop_shipping_rates": {
+      "module": "logistics",
+      "model": null
+    },
+    "shops": {
+      "module": "shops",
+      "model": "app/models/shop.ts"
+    },
+    "slug_redirects": {
+      "module": "shops",
+      "model": null
+    },
+    "support_case_messages": {
+      "module": "platform",
+      "model": "app/models/support_case_message.ts"
+    },
+    "support_cases": {
+      "module": "platform",
+      "model": "app/models/support_case.ts"
+    },
+    "user_addresses": {
+      "module": "identity",
+      "model": "app/models/user_address.ts"
+    },
+    "user_tokens": {
+      "module": "identity",
+      "model": "app/models/user_token.ts"
+    },
+    "users": {
+      "module": "identity",
+      "model": "app/models/user.ts"
+    },
+    "variant_option_values": {
+      "module": "catalog",
+      "model": null
+    },
+    "vendor_remittances": {
+      "module": "ledger",
+      "model": "app/models/vendor_remittance.ts"
+    }
+  }
+}

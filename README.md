@@ -72,7 +72,7 @@ cp .env.example .env     # the database settings already match docker-compose.ym
 node ace generate:key --show   # paste the key after APP_KEY= in .env
 # An older .env lacks newer variables: boot lists every missing one; copy them from .env.example.
 
-docker compose up -d     # PostgreSQL 18 with the three database roles, Redis and Mailpit (the app uses only PostgreSQL)
+docker compose up -d     # PostgreSQL 18 with the three database roles, Redis and Mailpit (the app uses only PostgreSQL; nothing sends email until M1)
 node ace migration:run --no-schema-generate   # the 14 baseline files; leaves the generated database/schema.ts alone
 node ace jobs:install    # the pg-boss schema, its queues and its grants (docs/11 §6.1)
 node ace db:seed         # reference data only: no demo shops, products, orders or logins yet (OD-59)

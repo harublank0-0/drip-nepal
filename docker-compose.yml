@@ -20,6 +20,8 @@ services:
     ports:
       - '6379:6379'
 
+  # Mail capture for development. Nothing sends email yet: @adonisjs/mail
+  # returns with M1's notifications work (docs/12 §5.1), which uses it.
   mailpit:
     image: docker.io/axllent/mailpit:latest
     container_name: dripnepal-mailpit

@@ -95,9 +95,15 @@ async function createAccount(
   const interactive = input.password !== null
   const inserted = await trx.rawQuery(
     `INSERT INTO users (email, full_name, password_hash, status, email_verified_at)
-     VALUES (?, ?, ?, ?, ${interactive ? 'now()' : 'NULL'})
+     VALUES (?, ?, ?, ?, CASE WHEN ?::boolean THEN now() END)
      RETURNING id`,
-    [input.email, input.fullName, passwordHash, interactive ? 'active' : 'pending_verification']
+    [
+      input.email,
+      input.fullName,
+      passwordHash,
+      interactive ? 'active' : 'pending_verification',
+      interactive,
+    ]
   )
   return inserted.rows[0].id as string
 }
@@ -116,6 +122,7 @@ export default class BootstrapPlatformAdmin {
     const newPasswordHash = () => hash.make(input.password ?? randomBytes(32).toString('base64url'))
     const passwordHash = input.grantExistingAccount ? null : await newPasswordHash()
 
+    // eslint-disable-next-line no-restricted-syntax -- withTx (docs/09 §3.8) does not exist yet; see the header
     return db.transaction(async (trx) => {
       await lockAdmins(trx)
 

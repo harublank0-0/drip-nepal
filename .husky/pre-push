@@ -1,1 +1,5 @@
-pnpm lint
+# Both typechecks and the unit suite, which needs no database (docs/09 §11.4).
+# The whole-tree lint, the functional and concurrency suites and the other
+# gates run in CI (docs/10 §5.1).
+pnpm typecheck
+node ace test unit

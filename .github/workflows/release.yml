@@ -1,0 +1,112 @@
+# release.yml up to the image push (docs/11 §5.1, §5.2; docs/12 §4.1 E2).
+# After ci.yml succeeds on a push to main, `build` builds the image once and
+# runs the T-OPS-010 image checks on it. Only when the repository variable
+# IMAGE_PUSH_ENABLED is "true" does it hand that same image, saved as a
+# workflow artifact, to `push`, which pushes it to the GitHub Container
+# Registry and prints its digest. The variable is unset until the registry is
+# provisioned (VX-15, docs/11 §5.2 "Registry"), so today nothing is pushed
+# and `push` does not run. `packages: write` is granted to `push` alone.
+# The staging and production jobs, and the workflow_dispatch rollback by
+# digest (docs/11 §5.8), come when staging exists (docs/11 §2.4). Nothing
+# here deploys. Actions are pinned by commit SHA; the release tag is in the
+# comment. The only credential is the run's own GITHUB_TOKEN.
+name: release
+
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+# One release build at a time. With cancel-in-progress false, a run that
+# arrives while one is running waits; a later one replaces the waiting run,
+# so the newest green commit is built (docs/11 §5.2).
+concurrency:
+  group: release-build
+  cancel-in-progress: false
+
+env:
+  COMMIT: ${{ github.event.workflow_run.head_sha }}
+
+jobs:
+  build:
+    name: Build image
+    # Only a green ci run for a push to main in this repository: `branches`
+    # matches the head branch name, which a fork's pull request can also
+    # call main.
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+      # Build once (docs/11 §5.2): this is the image staging and production
+      # will deploy by digest. APP_RELEASE is the commit SHA (docs/11 §5.3).
+      - name: Build the production image
+        run: docker build --build-arg APP_RELEASE="$COMMIT" --tag "dripnepal:sha-$COMMIT" .
+      # T-OPS-010 (docs/11 §4.2) on the image that would be pushed.
+      - name: T-OPS-010 image checks
+        run: scripts/check_image.sh "dripnepal:sha-$COMMIT"
+      - name: Save the checked image for the push job
+        if: vars.IMAGE_PUSH_ENABLED == 'true'
+        run: docker save "dripnepal:sha-$COMMIT" | gzip > "$RUNNER_TEMP/image.tar.gz"
+      - name: Upload the checked image
+        if: vars.IMAGE_PUSH_ENABLED == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: image
+          path: ${{ runner.temp }}/image.tar.gz
+          retention-days: 1
+          if-no-files-found: error
+      - name: Push switched off
+        if: vars.IMAGE_PUSH_ENABLED != 'true'
+        run: echo "IMAGE_PUSH_ENABLED is not \"true\", so the image was built and checked but not pushed (docs/11 §5.2)." | tee -a "$GITHUB_STEP_SUMMARY"
+
+  # Gated: runs only once the registry is provisioned and the tech lead sets
+  # the repository variable IMAGE_PUSH_ENABLED to "true" (Settings, Secrets
+  # and variables, Actions, Variables). It pushes the image `build` checked,
+  # loaded from the artifact, never a rebuild.
+  push:
+    name: Push image
+    needs: build
+    if: vars.IMAGE_PUSH_ENABLED == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      packages: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: image
+          path: ${{ runner.temp }}
+      - name: Load the checked image
+        run: gunzip -c "$RUNNER_TEMP/image.tar.gz" | docker load
+      # The tag is sha-<40-char commit SHA> and is never re-pushed (docs/11
+      # §5.3): a re-run finds it and prints the digest already there.
+      # Deploys use the digest, never the tag.
+      - name: Push to ghcr.io by digest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/dripnepal"
+          ref="$image:sha-$COMMIT"
+          echo "$GH_TOKEN" | docker login ghcr.io --username "$ACTOR" --password-stdin
+          if docker manifest inspect "$ref" > /dev/null 2>&1; then
+            digest=$(docker buildx imagetools inspect "$ref" | awk '/^Digest:/ { print $2; exit }')
+            echo "$ref already exists ($image@$digest); not pushed again (docs/11 §5.3)." | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            docker tag "dripnepal:sha-$COMMIT" "$ref"
+            docker push "$ref"
+            digest=$(docker inspect --format '{{index .RepoDigests 0}}' "$ref")
+            echo "Pushed $digest" | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+          docker logout ghcr.io

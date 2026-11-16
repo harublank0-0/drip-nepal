@@ -323,7 +323,7 @@ Upward calls are forbidden even inside a transaction. When one transaction must 
 
 ### 4.3 Enforcement (T-ARCH-001)
 
-The rules run in CI with dependency-cruiser [Assumption: chosen over an ESLint `no-restricted-imports` fallback, as in [09 §2.4](09-code-structure-and-engineering-standards.md#24-enforcement-t-arch-001); confirmed in M0]:
+The rules run in CI with dependency-cruiser [Assumption: chosen over an ESLint `no-restricted-imports` fallback, as in [09 §2.4](09-code-structure-and-engineering-standards.md#24-enforcement-t-arch-001); confirmed in M0]. Built in M0 (E2, 2026-11-15, note 24): dependency-cruiser 18.7.2 runs the rules in CI's Repository job; 09 §2.4 records where the built config differs from this sketch:
 
 ```js
 // .dependency-cruiser.cjs — design sketch
@@ -1493,3 +1493,4 @@ ADR files live in [docs/adr](adr/README.md). Status is the "Decision status" fie
 21. **The courier adapter (2026-11-11).** The §11.1 `CourierProvider` row says the NCM adapter exists, unwired, built ahead of M6 at the product owner's request (risks §2.3). It departs from §11.1 and §11.4 in three ways, recorded here for M6: it takes no `CallContext` (request ID, abort signal) yet; it sets the 10 s total timeout but not the 3 s connect timeout, which needs an undici dispatcher; and its port has no cancel or lookup by reference, because NCM offers neither (05 §6.3).
 22. **The pg-boss spike (2026-11-11).** §10.1's six points pass with pg-boss 12.38.0, recorded in ADR-0010: `app/modules/platform/jobs.ts` (`sendJob`, `createJobBoss`) and `node ace jobs:install`. `T-ARCH-004` is no longer proposed.
 23. **E7 (2026-11-11).** §3.3 item 2 records the built account-status middleware and the request body check that now follows the body parser in the router stack ([09 note 91](09-code-structure-and-engineering-standards.md#consistency-notes-for-editor)). The pipeline order of [06 §2.4](06-api-design.md#24-request-pipeline-per-surface) already showed it. After the Fable review, §12.2's limiter sentence no longer names `penalize()` (06 note 45).
+24. **Module rules built (E2, 2026-11-15).** §4.3's dependency-cruiser choice is confirmed: `.dependency-cruiser.cjs` runs in CI ([09 note 93](09-code-structure-and-engineering-standards.md#consistency-notes-for-editor)). Two findings for §4.4, which owns the module list: `app/modules/auth/` holds the return-path helper of 07 TM-14 but is not a module of the §4.4 table, so no rank rule covers it (M1, which builds `logIn`, decides whether it moves into `identity`); and `app/modules/platform/rate_limits.ts` is exempt from the `node:net` part of the outbound rule, because it imports only the address parsers.
