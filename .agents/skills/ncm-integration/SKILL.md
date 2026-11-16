@@ -1,6 +1,6 @@
 ---
 name: ncm-integration
-description: Use when adding, extending or debugging a Nepal Can Move (NCM, nepalcanmove.com) courier integration in an e-commerce or order-management project - creating parcels, delivery rates, branches, COD, NCM webhooks, delivery status sync, returns, redirects, tickets, comments, labels or customer ratings.
+description: Use when adding, extending or debugging a Nepal Can Move (NCM, nepalcanmove.com) courier integration in an e-commerce or order-management project - creating parcels, delivery rates, branches, COD, NCM webhooks and webhook registration, delivery status sync, returns, redirects, pickup tickets, labels or comments - or when moving NCM code to the v2 API documentation.
 ---
 
 # NCM courier integration
@@ -9,24 +9,29 @@ description: Use when adding, extending or debugging a Nepal Can Move (NCM, nepa
 
 NCM's API is small and loosely specified: token auth, string money, no
 idempotency, no cancel endpoint, and webhooks that are **never retried** and
-carry **no signature**. The contract here follows NCM's API doc v2 and its
-webhook doc v1.1. A correct integration is mostly about what you build
+carry **no signature**. A correct integration is mostly about what you build
 around it: a claim before creating a parcel, per-account matching, idempotent
 and ordered status processing, polling reconciliation, and explicit business
 decisions about returns, COD and stock.
 
+This skill follows NCM's **API documentation v2** and webhook documentation
+v1.1. "v2" is the document's version, not a URL prefix: create, detail, status,
+comments and rates still live under `/api/v1/`. What changed from the previous
+document is in [api-contract.md](references/api-contract.md#changes-from-the-v1-doc).
+
 **Core rule:** keep NCM's documented contract exactly. Nothing in this package
 was checked against the live API, so anything marked [observed], [reported],
 [inferred] or [unknown] must be confirmed with NCM or a demo token before you
-depend on it. Adapt
-everything else (states, stock, money, jobs) to the destination project, with
-the user deciding the business rules.
+depend on it. Anything marked [v1 doc] is superseded: use it to recognise old
+code, never build on it. Adapt everything else (states, stock, money, jobs) to
+the destination project, with the user deciding the business rules.
 
 ## When to use
 
 - Building NCM parcel creation, rate quotes or a branch picker.
-- Receiving NCM webhooks, or syncing delivery status by polling.
-- Handling NCM returns (RTV), refunds, exchanges, redirects, tickets or comments.
+- Receiving NCM webhooks, registering the webhook URL, or syncing delivery status by polling.
+- Handling NCM returns (RTV), refunds, exchanges, redirects, pickup tickets, labels or comments.
+- Updating NCM code written against the older API document (file dated `251222`).
 - Debugging orders stuck on an NCM status, duplicate parcels, missing webhooks or
   wrong COD figures.
 
@@ -47,17 +52,18 @@ Before proposing anything, find and write down:
 | **Stock** rules: when an order takes and returns stock | Courier events must not silently break them |
 | Notifications and SMS, and how they avoid duplicates | Courier events trigger customer messages |
 | An existing courier abstraction, if any | Fit into it rather than adding a parallel one |
+| Existing NCM calls, if any | Check them against the [changes from the v1 doc](references/api-contract.md#changes-from-the-v1-doc) |
 | The test setup | Every rule below needs a test |
 
 Don't assume a particular framework, ORM, queue or cloud provider. Use what the project has.
 
 ## Workflow
 
-1. **Settle decisions D1–D12** in [checklists.md](references/checklists.md#decisions-to-settle-with-the-user-first) with the user. Never decide cancellation, returns, COD settlement or stock effects alone.
+1. **Settle decisions D1–D11** in [checklists.md](references/checklists.md#decisions-to-settle-with-the-user-first) with the user. Never decide cancellation, returns, COD settlement or stock effects alone.
 2. **Agree the status mapping.** Fill in the template in [webhooks-and-statuses.md](references/webhooks-and-statuses.md#mapping-template-recommended) row by row, for the project's real states. Every NCM event and status gets an explicit outcome, including "no order change".
 3. **Implement in the order** in [checklists.md](references/checklists.md#implementation-order). Each step has a verification checkpoint; don't skip ahead.
 4. **Write the tests** in the [testing checklist](references/checklists.md#testing-checklist), with synthetic data only.
-5. **Hand over the open questions** for NCM from [api-contract.md](references/api-contract.md#what-to-ask-ncm-before-go-live).
+5. **Hand over the open questions** for NCM from [open-questions.md](references/open-questions.md). If one is already answered there, use the answer; if the project depends on one still open, say so.
 
 ## Quick reference
 
@@ -68,24 +74,28 @@ Don't assume a particular framework, ORM, queue or cloud provider. Use what the 
 | A parcel's status history | `GET /api/v1/order/status?id=` (newest first) |
 | Many parcels' current status | `POST /api/v1/orders/statuses` `{"orders": [...]}` → `result` and `errors` |
 | Delivery charge | `GET /api/v1/shipping-rate?creation=&destination=&type=` |
-| Branches | `GET /api/v2/branches`; the account's pickup branches: `GET /api/v2/vendor/assigned-branches` |
+| Branches; the account's pickup branches | `GET /api/v2/branches`; `GET /api/v2/vendor/assigned-branches` (names) |
 | Comments | `GET /api/v1/order/comment?id=`, `GET /api/v1/order/getbulkcomments`, `POST /api/v1/comment` |
 | Return, exchange, redirect | `POST /api/v2/vendor/order/return`, `…/exchange-create`, `…/redirect` |
-| Tickets | `POST /api/v2/vendor/ticket/create/new`, `…/ticket/cod/create`, `…/ticket/close/<id>`; `GET /api/v1/tickets/<id>/detail`; `POST /api/v1/vendor/tickets/<id>/response` |
-| Label data | `GET /api/v2/vendor/order/label/<id>`, `POST /api/v2/vendor/order/label/` `{"ids": [...]}` |
-| Customers, rating | `GET /api/v2/vendor/customers`, `…/customers/<id>/detail`; `GET /api/v2/vendor/ratings?phone=` (decision D12 first) |
-| Webhook setup | `POST /api/v2/vendor/webhook` `{"webhook_url"}`; `POST /api/v2/vendor/webhook/test` |
+| Tickets, including pickup requests | `POST /api/v2/vendor/ticket/create/new` (`branch` required for `Pickup`), `…/ticket/cod/create`, `…/ticket/close/<id>` |
+| Ticket detail; reply | `GET /api/v1/tickets/<id>/detail`; `POST /api/v1/vendor/tickets/<id>/response` (reopens a closed ticket) |
+| Label data | `GET /api/v2/vendor/order/label/<id>`; `POST /api/v2/vendor/order/label/` `{"ids": [...]}` |
+| Customers; a phone's record across NCM | `GET /api/v2/vendor/customers`, `…/customers/<id>/detail`; `GET /api/v2/vendor/ratings?phone=` |
+| Register; test the webhook URL | `POST /api/v2/vendor/webhook` `{"webhook_url"}`; `POST /api/v2/vendor/webhook/test` |
 | Webhooks in | `POST` to your URL; 2xx within 10 s; one shot, no retry |
 
 Auth on every call: `Authorization: Token <token>`. Limits: 1,000 creates and
-20,000 order reads a day. Full contract: [api-contract.md](references/api-contract.md).
-Events, payloads and statuses: [webhooks-and-statuses.md](references/webhooks-and-statuses.md).
+20,000 reads (detail, comments, status) a day. Full contract:
+[api-contract.md](references/api-contract.md). Events, payloads and statuses:
+[webhooks-and-statuses.md](references/webhooks-and-statuses.md).
 
 ## Common mistakes
 
 | Mistake | Instead |
 |---|---|
-| Retrying a timed-out create | Mark it unknown and have a person check NCM's portal. The API has **no lookup by `vref_id`**; every documented read takes NCM's own id. A retry can make a second parcel. |
+| Rewriting `/api/v1/` paths to `/api/v2/` because the docs are "v2" | Use each path exactly as the catalog lists it. Only the generic ticket path changed. |
+| Filing tickets at `/api/v2/vendor/ticket/create`, or a `Pickup` ticket without `branch` | `/api/v2/vendor/ticket/create/new`, with `branch` set to a name from `assigned-branches`. |
+| Retrying a timed-out create | Mark it unknown and have a person check. The API has **no lookup by `vref_id`**; the customer and label endpoints can help a person search, but a retry can make a second parcel. |
 | Matching a webhook by NCM order id alone | Match by (account, id). One integration's code treats NCM ids as per-account sequences, so one id may exist under two accounts [observed]. |
 | Restocking or refunding on an unsigned webhook alone | The only webhook auth is a URL secret. Confirm return, refund and other money or stock events with an API read first. |
 | Treating `Delivered` as delivered to the customer | Check for a return first: RTV events or `vendor_return`. |
@@ -94,15 +104,16 @@ Events, payloads and statuses: [webhooks-and-statuses.md](references/webhooks-an
 | Comparing raw status strings in the sweep | Compare normalised stages; `Delivered` on a returning parcel means returned. |
 | One transaction for a 100-id bulk event | One transaction per parcel. |
 | Relying on webhooks alone | Poll and reconcile; NCM never retries. |
-| Calling NCM before claiming the local record (create, redirect, comment) | Claim first, call, then record. NCM has no idempotency keys. |
-| Sending the rate `type` (`D2B`) to create | Create takes `Door2Branch`; map between them. |
+| Calling NCM before claiming the local record (create, redirect, comment, ticket) | Claim first, call, then record. NCM has no idempotency keys. |
+| Sending the rate `type` (`D2B`) or the label's `Office`/`Home` to create | Create takes `Door2Branch` and its three siblings; map between the vocabularies. |
+| Reading the webhook test's `success: true` as a pass | It answers 200 with `success: true` even when your server returned 400. Check `status_code`. |
+| Assuming bulk labels come back in request order | Match on `orderid`; ids that aren't yours land in `not_found`. |
 | Trusting the URL token in the receiver without checking it | Verify it in constant time before storing anything. |
-| Treating the webhook test event as a real one | `order.status.changed` with `test: true` matches no real event; answer 2xx and change nothing. |
-| Calling the rating endpoint because it exists | It shares a customer's record with other vendors; settle D12 first. |
 | Returning NCM's raw error text to users, or logging full payloads | Map to safe messages; log ids and outcomes, not names, phones or addresses. |
 
 ## What production showed
 
 [production-lessons.md](references/production-lessons.md) records how one live
 integration was built, what failed, and which of its behaviours **not** to copy.
-Read it before designing the status pipeline.
+It was built against the older API document; its "Out of date since API doc v2"
+section lists what moved. Read it before designing the status pipeline.

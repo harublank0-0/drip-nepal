@@ -21,9 +21,8 @@ Ask these before writing code. Each changes the data model or money.
 | D7 | **Inventory.** Which courier states, if any, move stock; does a courier status ever override a staff decision? | Stock bugs are expensive and silent. |
 | D8 | **Customer messages.** Which courier events text or email the customer, and never twice. | Duplicate and out-of-order webhooks happen. |
 | D9 | **Status mapping.** Fill in the template in webhooks-and-statuses.md for the project's real order states. | The project's states are its own. |
-| D10 | **Branches and rates.** Live NCM calls, a cached copy, or a stored table; refresh schedule; how the destination branch is chosen (from the address, a map pin, or staff); the shop's pickup branch, from the account's assigned pickup branches. | Response shapes for the branch list and the rate are undocumented; rates are quoted by branch name; branch ids (needed to redirect) come only from the undocumented branch list; branch codes appear only in label data. |
-| D11 | **Pickup requests.** How NCM is asked to collect: a `Pickup` ticket by hand or on a schedule, or arranged outside the system; how you avoid filing two while one is open. | NCM has no pickup endpoint. A `Pickup` ticket needs one of the account's assigned pickup branches, and NCM tells you it closed a ticket only through the ticket-detail read. |
-| D12 | **Customer rating.** Whether to look up a customer's delivery record across NCM (`/api/v2/vendor/ratings`) before confirming an order, and what a poor record does: nothing, a flag for staff, or a hold. | It sends a customer's phone to NCM and returns personal data about their dealings with other vendors; privacy rules and NCM's terms decide, not the integration. |
+| D10 | **Branches and rates.** Live NCM calls, a cached copy, or a stored table; refresh schedule; how the destination branch is chosen (from the address, a map pin, or staff); the shop's pickup branch, from the account's assigned branches (whether create's `fbranch` must be one of them is [unknown]). | Response shapes for the branch list and rates are undocumented; rates are quoted by branch name; no documented response carries the branch ids a redirect needs (one integration reads them from the branch list [observed]). Assigned pickup branches are documented, as names only. |
+| D11 | **Pickup requests.** How NCM is asked to collect: a `Pickup` ticket by hand or on a schedule, or arranged outside the system; which assigned branch each ticket names; how you avoid filing two while one is open. | NCM has no pickup endpoint. A `Pickup` ticket must name one of the account's assigned pickup branches. You learn a ticket closed only by polling its detail, and replying to a closed ticket reopens it. |
 
 ## Implementation order
 
@@ -31,13 +30,13 @@ Each step ends with a checkpoint. Don't start the next step until it passes.
 
 1. **Configuration and secrets**
    - Base URL and token per account from configuration or encrypted storage; demo and production kept apart, and the app refuses to start a production environment on the demo host.
-   - A webhook URL per account: a non-secret account id in the path and a secret in the query. Prefer `HMAC(server_key, account_id)` as the secret, so intake can verify it without a database.
-   - Secret rotation that accepts the old and the new secret for a window. The query string kept out of access logs.
+   - A webhook URL per account: a non-secret account id in the path and a secret in the query, in one of the two designs in [processing rule 1](webhooks-and-statuses.md#processing-rules-recommended). Prefer the derived secret, `HMAC(server_key, "<account-id>:<version>")` with the version in the path, so intake can verify it without a database and each account can rotate on its own. Register it in NCM's portal or with `POST /api/v2/vendor/webhook`, using that account's token.
+   - Per-account rotation that accepts the old and the new secret for a window, then drops the old; revoking a leaked URL skips the window. The query string kept out of access logs.
    - A refusal at startup if the encryption key is missing, rather than a fallback key.
    - *Checkpoint:* a unit test proves the right token is chosen for each account, and that no token appears in logs or API responses.
 2. **One NCM HTTP client**
    - Sets the auth header and per-call timeouts.
-   - Parses all four error shapes (`detail`, `Error`, `message`, and `success: false` with `message`) and HTML bodies.
+   - Parses all four error shapes (`detail`, `Error`, `message`, and `success: false` with `message` or `error`) and HTML bodies, and treats `success: false` inside a 200 as a failure. For the webhook test, the pass condition is a 2xx `status_code`, not `success: true`.
    - Maps failures to safe messages, and counts calls against the daily limits.
    - *Checkpoint:* contract tests against recorded **synthetic** responses for every endpoint you use, including 400, 401, 404, 500 and a timeout.
 3. **Data model**
@@ -48,6 +47,7 @@ Each step ends with a checkpoint. Don't start the next step until it passes.
    - *Checkpoint:* the migration runs on a copy; the unique keys reject duplicates.
 4. **Branches and rates**
    - Fetch, validate the shape you actually receive, cache with a time to live, and degrade clearly when NCM is down.
+   - Fetch each account's assigned pickup branches (`GET /api/v2/vendor/assigned-branches`); an empty list means pickup tickets can't be filed.
    - Keep the rate `type` ↔ create `delivery_type` mapping in one place.
    - *Checkpoint:* the order form shows a price for each delivery type, or an explicit "unavailable".
 5. **Create the parcel**
@@ -55,7 +55,7 @@ Each step ends with a checkpoint. Don't start the next step until it passes.
    - Call NCM outside the transaction, with `vref_id` set to your order reference.
    - On success, store `orderid` and move to `created`.
    - On a clear 400, store the field errors and release the claim.
-   - On a timeout or 5xx, mark it `unknown` for a person to check in NCM's portal. The API can't look a parcel up by `vref_id`. Never retry automatically: the create may have succeeded.
+   - On a timeout or 5xx, mark it `unknown` for a person to check in NCM's portal. The API can't look a parcel up by `vref_id`; the customer and label endpoints can help that person search ([api-contract.md](api-contract.md#create-an-order)). Never retry automatically: the create may have succeeded.
    - A sweeper turns `submitting` rows older than the create timeout plus a margin (a crashed worker) into `unknown`.
    - Make `vref_id` unique across every vendor on a shared account, for example `<store>-<order>`.
    - Validate what you know: required fields present, phone digits in your country's format, branch names from the cached list, COD as a non-negative decimal string. NCM's own field limits are undocumented, so keep any length limits configurable and confirm them with NCM.
@@ -64,8 +64,7 @@ Each step ends with a checkpoint. Don't start the next step until it passes.
    - Authenticate the URL secret before storing anything.
    - Write the inbox row and answer 2xx within NCM's 10 seconds; hand off to a job.
    - A `test: true` event is authenticated, recorded as a test, and answered 2xx, with no order writes.
-   - Register the URL from configuration with `POST /api/v2/vendor/webhook` (or the portal), never by hand-typing a secret.
-   - *Checkpoint:* `POST /api/v2/vendor/webhook/test`, or the portal's "Test Webhook", reaches you and is recorded as a test.
+   - *Checkpoint:* the NCM portal's "Test Webhook", or `POST /api/v2/vendor/webhook/test`, reaches you and is recorded as a test, and the test endpoint's answer shows a 2xx `status_code` (its `success: true` alone proves nothing).
 7. **Status processing (one function for webhook and poll)**
    - Per parcel, in its own transaction:
      1. insert the event row; a unique-key clash is an exact redelivery: stop;
@@ -82,16 +81,16 @@ Each step ends with a checkpoint. Don't start the next step until it passes.
    - Ids NCM doesn't recognise are flagged, not silently stamped "checked".
    - A manual refresh button.
    - *Checkpoint:* with webhooks switched off, a parcel still reaches its true status within one sweep window.
-9. **Pickup requests, comments, tickets, redirect, return, exchange** (only those the user wants)
-   - Pickup requests per D11. Claim the request locally (unique per account and slot) before filing the ticket, and take `branch` from the assigned pickup branches.
-   - Ticket status through `GET /api/v1/tickets/<id>/detail`, so a ticket NCM closed releases the local guard.
-   - Label data fetched when a label is printed, not stored.
+9. **Pickup requests, comments, tickets, labels, redirect, return, exchange** (only those the user wants)
+   - Pickup requests per D11. Claim the request locally (unique per account and slot) before filing the ticket at `POST /api/v2/vendor/ticket/create/new`, with `branch` set to an assigned branch exactly as NCM returns it.
+   - Ticket status by polling `GET /api/v1/tickets/<id>/detail`, so a ticket NCM closes releases the local guard. Which `ticket.status` value means open is [unknown], so treat a non-null `closed_on` as closed until NCM confirms ([Tickets](api-contract.md#tickets)). Reply only to open tickets unless reopening is intended.
    - Outbound comments through a job serialized **per account**, not globally.
      - Retry automatically only when the request clearly never reached NCM (connection refused, DNS failure).
      - After a timeout or 5xx, read the order's thread and look for the text before posting again: a comment post isn't idempotent.
      - Failures go to the job system's failure store (a dead-letter queue or a failed-jobs table).
    - Inbound comments from `comment_added` [observed], plus a periodic poll. De-duplicate on (account, NCM order id, `comment_id`) when present, else (account, NCM order id, text, author, `added_time`). Match your own echoed comments by text within a few minutes.
    - Redirects and returns: claim locally, call NCM, then record, as for create.
+   - Labels from the label-data endpoints: batches of at most 100, matched to orders by `orderid`, with `not_found` ids flagged.
    - *Checkpoint:* a comment round-trips once, never twice.
 10. **Operations**
     - Dashboards for: webhook outcomes by type, unmatched ids, unknown events and statuses, parcels with no status change for N days, parcels NCM doesn't recognise, cancelled orders NCM still moves, `unknown` creates, the daily API budget, and failed jobs.
@@ -114,7 +113,7 @@ Use synthetic ids, names and phones only.
 - [ ] A worker crashes mid-create → the sweeper turns the stale `submitting` row into `unknown`.
 - [ ] NCM answers 400 with field errors → the user sees a safe, field-level message, never the raw body.
 - [ ] NCM answers 401, 404, 500 or HTML → handled, logged without secrets.
-- [ ] The database is down while a webhook arrives → intake still verifies it (HMAC secret) and queues it, or, if intake needs the database, the reconcile recovers the status later.
+- [ ] The database is down while a webhook arrives → intake still verifies it (derived secret) and queues it, or, if intake needs the database, the reconcile recovers the status later.
 - [ ] A detail read fails while processing `delivery_completed` → no delivered message goes out; the read is retried or the transition is held for a person. For other stages the update applies and the read is retried later. Nothing is half-applied.
 
 **Duplicates and ordering**
@@ -139,12 +138,19 @@ Use synthetic ids, names and phones only.
 - [ ] Two accounts with the same NCM order id → each event updates only its own account's shipment.
 - [ ] An unknown or empty secret → rejected before anything is stored.
 - [ ] A vendor's own-account secret can't update another vendor's or the platform's orders.
+- [ ] Rotating one account's webhook secret → events to the old URL are accepted during the window and rejected after it; events to a revoked URL change no order from the moment it is revoked (with a derived secret, intake can't see the revocation, so the worker drops them); other accounts are unaffected.
 - [ ] Switching a vendor between its own account and the platform account doesn't strand parcels already in transit.
 
 **Partial bulk failures**
 - [ ] A bulk event where one parcel's transaction fails → the others are saved; the failed one is retried alone; no duplicate side effects for the saved ones.
 - [ ] A bulk event with unmatched ids → matched ones are processed; unmatched ones are recorded for an operator.
 - [ ] A bulk status call returns some ids under `errors` → those are flagged, not marked healthy.
+
+**Tickets, labels and webhook setup**
+- [ ] A `Pickup` ticket is sent to `/ticket/create/new` with an assigned `branch`; with no assigned branches, none is filed and staff are told.
+- [ ] A ticket closed on NCM's side (non-null `closed_on`) releases the local pickup guard on the next poll.
+- [ ] The webhook test endpoint answers `success: true` with `status_code: 400` → reported as a failed test.
+- [ ] A bulk label call that returns labels out of order, plus `not_found` ids → each label goes to its own order; the missing ones are flagged.
 
 **Limits**
 - [ ] The reconciliation run stays within its share of 20,000 reads a day for the expected fleet size.

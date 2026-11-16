@@ -9,6 +9,10 @@ The numbers marked *reported* come from that team's own production
 investigation (aggregate counts, late 2026). They weren't independently checked;
 use them to size things, not as facts about NCM.
 
+That integration was built against the v1 API doc (dated `251222`). What the
+API doc v2 changes about it is listed under
+[Out of date since API doc v2](#out-of-date-since-api-doc-v2).
+
 ## Patterns worth copying
 
 | Pattern | What it does |
@@ -73,12 +77,20 @@ Starting points, not NCM's limits [observed].
 | 18 | Left some routes that call NCM with platform credentials unauthenticated | Anyone could create parcels or spend the platform's daily quota. | Every route that calls NCM needs auth and a permission. |
 | 19 | Every vendor's outbound comments serialized in one global line | One failing comment blocked every vendor for up to 15 minutes per retry. | Serialize per account (a per-account lock or queue key), never globally. |
 | 20 | Cancelling sent only the comment "Order cancelled." | Nobody knows whether NCM acts on it; the reconcile then stopped looking at the order. | Agree a cancel procedure with NCM, and keep watching cancelled parcels. |
-| 21 | A ticket closed on NCM's side stayed open locally | It blocked new pickup tickets until someone closed it by hand. | Sync ticket status, or expire the local guard. |
+| 21 | A ticket closed on NCM's side stayed open locally | It blocked new pickup tickets until someone closed it by hand. | Poll `GET /api/v1/tickets/<id>/detail` (documented since API doc v2), or expire the local guard. |
 | 22 | The branch sync only upserted | Branches NCM retired stayed selectable. | Deactivate branches missing from a successful full sync. |
 | 23 | Sent the shop's own order number as `vref_id` | Two shops on the shared platform account can send the same reference. | Make it unique per account. |
 | 24 | Called NCM's redirect **before** the local transaction | A lost race rolled back locally after NCM had already redirected the parcel. | Claim first, for every NCM write. |
 | 25 | Kept failed webhook messages in a dead-letter queue with no ordering guard | Without that guard, replaying them can move orders backwards and text customers again. | Build the ordering and state rules before relying on replay. |
 | 26 | No tests for the webhook, sync or reconcile functions | Every bug above shipped. | Start with the testing checklist. |
+
+## Out of date since API doc v2
+
+Their code follows the v1 doc here; don't copy these parts.
+
+- Pickup tickets go to the v1 doc's `POST /api/v2/vendor/ticket/create`, with the nearest branch written into the message. API doc v2 lists only `POST /api/v2/vendor/ticket/create/new`, and a `Pickup` ticket needs a `branch` field naming one of the account's assigned pickup branches.
+- Anything sized against the v1 doc's daily limits (200 creates, 5,000 reads) can be resized: API doc v2 gives 1,000 and 20,000.
+- They call rating stats and ticket detail as undocumented endpoints. Both are documented now; the rating shape they assumed matches, and ticket detail's status is a boolean at `ticket.status`.
 
 ## Things they learned about NCM
 
@@ -86,7 +98,7 @@ These were learned in production, and NCM's documents don't confirm them.
 Confirm them with NCM.
 
 - `comment_added` webhooks arrive and are handled in code. `returned_to_warehouse` arrives too (*reported*). The webhook doc lists neither.
-- NCM's portal has a separate "Order Comment Webhook URL", per the integration's own notes.
+- NCM's portal has a separate "Order Comment Webhook URL", per the integration's own notes. API doc v2 mentions "comment events" on its webhook endpoint but documents no comment URL parameter.
 - The order detail carries `vendor_return`, `delivered_date`, `active` and a tracking id.
 - Its status map expects branch names embedded in statuses (`Dispatched to <BRANCH>`, `Arrived at <BRANCH>`) and the strings `Delivery Attempted` and `Out for Delivery`. Whether NCM sends them wasn't verified from a captured response.
 - Webhook and API timestamps for the same transition differ; the integration treats rows within 5 minutes of each other as the same transition.

@@ -281,6 +281,16 @@ Edited 2026-11-11: the skill is no longer unchanged. At the product owner's requ
         still unverified: the demo token NCM issued answered "Invalid token." on 2026-11-11, so VX-16,
         VX-17 and VX-18 stay open, and the documents still win. skills-lock.json's computedHash is
         recomputed with the algorithm above. Docs updated: 09 (§1.5, note 86), note 30.
+Edited 2026-11-16: the product owner's repository harublank0-0/ncm-integration-skill is now the
+        skill's upstream. Its skills/ncm-integration/ folder at commit a1d6ba3 is copied verbatim over
+        this copy, which adds references/open-questions.md; the local v2 changes of 2026-11-11 are in
+        the upstream, so none remain. skills-lock.json names the upstream as source and its
+        computedHash is recomputed with the algorithm above (now seven files). Read-through of the
+        new file: no scripts, no allowed-tools, no remote instructions; it mentions the upstream's
+        scripts/build_reference.py, which is not copied. The same day, read-only calls with the
+        product owner's production token answered HTTP 200 on portal.nepalcanmove.com (staff list,
+        branch list); VX-16 stays open until booking and status callbacks are verified, and the
+        documents still win. Docs updated: 09 (§1.5, note 94), note 34.
 ```
 
 ```text
@@ -883,3 +893,4 @@ This matrix is authoritative for decision gates. [12 §3](12-roadmap-and-backlog
 31. **The courier adapter ahead of M6 (2026-11-11).** §2.3 logs the product owner's decision to specify M6's courier work and build the NCM adapter now. It changes no OD, VX or risk: VX-16, VX-17 and VX-18 stay open, R-33's trigger is unchanged, and ADR-0019 decision 6 stays Proposed.
 32. **The pg-boss spike (2026-11-11).** §2.3 adds a dated note to the 2026-10-01 entry on the `pgboss` schema: `T-ARCH-004` confirmed the runtime options and the schema step, `node ace jobs:install`. It changes no OD, VX or risk.
 33. **OD-60 (2026-11-11).** §2.2 adds OD-60, found in the review of epic E8: whether a password reset or change consumes the live `mfa_enrollment` token of an account with no MFA enrolled. The proposed default (a), written as "(proposed)" in 04a §5.2, 07 §3.8 and 09 §9.1, keeps the token. §5 lists it under M1's code blockers. No VX or risk changes.
+34. **The `ncm-integration` skill's upstream (2026-11-16).** §2.3 adds a dated note to the 2026-11-09 skill entry: the product owner's `ncm-integration-skill` repository is the upstream, copied verbatim at commit `a1d6ba3`, with no local changes. The note also records that read-only calls with the production token answered on `portal.nepalcanmove.com`. VX-16 stays open; no OD or risk changes.
