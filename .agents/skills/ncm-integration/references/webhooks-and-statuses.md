@@ -1,49 +1,25 @@
 # NCM webhooks, statuses and status processing
 
 Labels:
-- **[doc]** NCM's documents (webhook doc v1.1, Sept 2026, "Beta"; API doc v2, which replaced the PDF dated `251222`; see [api-contract.md](api-contract.md)). Example values are adapted, with ids and dates changed.
+- **[doc]** NCM's current documents: the webhook doc v1.1 (September 2026, "Beta") and the API doc v2 (see [api-contract.md](api-contract.md) for both). Example values are adapted, with ids and dates changed.
+- **[v1 doc]** only in the superseded API doc dated `251222`.
 - **[inferred]** follows from the documents without being stated in them.
 - **[observed]** seen in one production integration's code, not in NCM's documents. Code shows what the integration *handles*, not what NCM *sends*; confirm with NCM.
 - **[reported]** that integration's team reports it from production checks; it is not visible in its code.
 - **[recommended]** a design rule for your project.
 - **[unknown]** not settled by any source.
+- **[NCM, date]** answered by NCM outside its documents; see [open-questions.md](open-questions.md#answers).
 
 ## The webhook contract [doc]
 
-**Setup.** In the NCM vendor portal: API section (`/accounts/vendor/api`) →
-"Webhook/API Callback URLs" → put your URL in **"Order Delivery Webhook URL"**
-→ "Test Webhook" → "Add/Update".
+**Setup.** Either in the NCM vendor portal: API section (`/accounts/vendor/api`)
+→ "Webhook/API Callback URLs" → put your URL in **"Order Delivery Webhook URL"**
+→ "Test Webhook" → "Add/Update" [doc]. Or through the API [doc]:
+- `POST /api/v2/vendor/webhook` with `{"webhook_url": "<url>"}` sets it (`""` removes it);
+- `POST /api/v2/vendor/webhook/test` with `{"webhook_url": "<url>"}` sends a test event and answers **200 even when the test failed**: the test passed only if `status_code` in the answer is 2xx, whatever `success` says.
 
-The API doc v2 offers the same through the API:
-
-- **Register** `POST /api/v2/vendor/webhook` with `{"webhook_url": "https://…"}`.
-  It answers `201` the first time and `200` after that, both with
-  `{"success": true, "message": …}`. An empty string removes the stored URL. A
-  URL that doesn't start with `http://` or `https://` gets `400` with
-  `success: false`. The doc says the endpoint manages "webhook URLs used by NCM
-  to push order status and comment events", but its only parameter is the
-  "Order status webhook URL"; whether it also sets the portal's "Order Comment
-  Webhook URL" is [unknown].
-- **Test** `POST /api/v2/vendor/webhook/test` with `{"webhook_url"}` makes NCM
-  post a sample event to that URL:
-
-  ```json
-  {"event": "order.status.changed", "order_id": "TEST-123456", "status": "In Transit", "timestamp": "2024-01-01T12:00:00+05:45", "test": true}
-  ```
-
-  It always answers `200`. `{"success": true, "status_code": 200, "response": "OK"}`
-  means your server answered. The doc's example of an HTTP error from your server
-  (a 400) also comes back as `success: true`, with that code in `status_code`
-  and the response `headers`; that a 5xx does the same is [inferred]. `{"success": false, "error": …}`
-  means a timeout after 10 seconds or a connection error.
-
-  The test event matches none of the real events below: its `event` is
-  `order.status.changed`, its `order_id` is not a number, and it carries
-  `test: true`. Answer it with a 2xx and change nothing [recommended]. Don't
-  take its shape as the shape of real events.
-
-The registered URL is where the secret goes (below), so register it from
-configuration, and never log the full URL.
+The webhook doc says the API sets the same URL as the portal field [doc].
+Details and responses: [api-contract.md](api-contract.md#webhook-registration-and-test).
 
 **URL.** Valid HTTP or HTTPS; HTTPS recommended; may include query parameters.
 NCM's own example is `https://your-domain.com/api/ncm-webhook?token=your-secret`.
@@ -56,7 +32,7 @@ query parameters or headers for authentication" [doc], and it documents no way
 to configure a header, so a secret in the URL is what's available [inferred].
 
 **Response.** Answer within **10 seconds** with **any 2xx**. Body content is
-ignored.
+ignored. The test endpoint's timeout message names the same 10 seconds [doc].
 
 **Delivery.** "No retry mechanism is currently implemented: a failed or
 timed-out webhook is not sent again." Failures are handled silently on NCM's
@@ -101,7 +77,7 @@ Two more events arrive although the webhook doc doesn't list them:
   {"event": "comment_added", "order_id": "1001", "comment": "Customer asked for evening delivery", "comment_id": "501", "added_by": "NCM Staff", "timestamp": "2026-01-02T09:12:00.000000+00:00"}
   ```
 
-  Its notes say NCM's portal has a separate **"Order Comment Webhook URL"**, which can point at the same receiver.
+  Its notes say NCM's portal has a separate **"Order Comment Webhook URL"**, which can point at the same receiver. The API doc v2 now says the webhook endpoint manages URLs for "order status and comment events", which supports this, but it documents neither a comment payload nor a parameter for the comment URL [doc]; `webhook_url` is the order status URL.
 - `returned_to_warehouse` [reported]: its meaning and payload are [unknown].
 
 ### Payloads [doc]
@@ -142,11 +118,13 @@ are included.
 `added_time` uses a `+05:45` offset [doc]. Always parse to an instant, and
 store and compare instants.
 
-The portal's Test button and `POST /api/v2/vendor/webhook/test` send the same
-shape of test event [inferred]; v2 shows it under
-[the webhook contract](#the-webhook-contract-doc) and calls its sample "similar
-to" what NCM sends. Note
-its different shape and its `+05:45` offset.
+Test payload, from the portal's "Test Webhook" button or from
+`POST /api/v2/vendor/webhook/test` (note the different shape, and its `+05:45`
+offset; the API doc's copy has no fractional seconds):
+
+```json
+{"event": "order.status.changed", "order_id": "TEST-123456", "status": "In Transit", "timestamp": "2026-01-02T15:30:00.000000+05:45", "test": true}
+```
 
 [recommended] Authenticate it like any other event, record it in the inbox as a
 test, answer 2xx, and write nothing to orders.
@@ -169,10 +147,10 @@ are every string the sources show.
 | `Out for Delivery` | one integration's status map [observed] | that integration's own name for the Sent for Delivery stage; its poll map accepts both; whether NCM sends it is unverified |
 | `Delivered` | everywhere [doc] | **Also the final status of a return to the vendor** [doc]. |
 | `Order Marked Return` | `order_marked_rtv` [doc] | webhook label |
-| `Send to Vendor` / `Sent to Vendor` | webhook label vs the order's NCM status [doc] | two spellings for one stage |
+| `Send to Vendor` / `Sent to Vendor` | webhook label vs the order's NCM status [doc]; `Sent to Vendor` is also a `last_delivery_status` in the API doc's customer-detail example | two spellings for one stage |
 | `RTV Delivered` | `rtv_delivery` [doc] | the order itself then reads `Delivered` |
 | `Refund Initiated` | `refund_initiated` [doc] | |
-| `In Transit` | test webhook only [doc] | |
+| `In Transit` | test webhook payload only (webhook doc and API doc) [doc] | |
 | `Delivery Attempted` | one integration's status map [observed] | not in the documents; whether NCM sends it is unverified |
 | `returned_to_warehouse` (event) | [reported] | not in the documents; meaning [unknown] |
 | `Completed` | `payment_status` in the order detail [doc] | a payment field, not a delivery status |
@@ -220,9 +198,9 @@ explicit decision; "copy NCM's string onto the order" is not one.
 | unknown event | record it | none | alert; answer 2xx |
 
 If your own system calls `POST /api/v2/vendor/order/return`, record that you
-did. The order detail's `vendor_return` then reads `true` [doc, from the
-return endpoint's response], and your post-delivery check must not take it for
-a return NCM started.
+did. That call sets the order's `vendor_return` flag to `true` [doc], which the
+order detail then shows [observed], and your post-delivery check must not take
+it for a return NCM started.
 
 No cancel endpoint is documented [doc]. If an order is cancelled locally after
 the parcel exists:
@@ -236,7 +214,7 @@ the parcel exists:
    URL, with a **non-secret account id in the path** and a secret in the query.
    Two workable designs:
    - **Random secret per account**, stored hashed: `/webhooks/ncm/<account-id>?token=<secret>`. Intake looks the account up by id and compares in constant time. Rotation per account: store the new hash beside the old for a window, then drop the old. Needs the database at intake.
-   - **Derived secret with a version in the path**: `/webhooks/ncm/<account-id>/<version>?token=HMAC(server_key, "<account-id>:<version>")`. Intake verifies with no database, so it keeps receiving while the database is down. The worker rejects a version older than the account's current one. Rotating one vendor's URL, or revoking a leaked one, means bumping its version and updating the URL in NCM's portal; `server_key` never changes for that.
+   - **Derived secret with a version in the path**: `/webhooks/ncm/<account-id>/<version>?token=HMAC(server_key, "<account-id>:<version>")`. Intake verifies with no database, so it keeps receiving while the database is down. The worker rejects a version below the account's minimum accepted version. Rotation per account: register the URL for the next version with NCM (portal or `POST /api/v2/vendor/webhook`), keep accepting the old version for a window, since NCM may already be sending to it, then raise the minimum. To revoke a leaked URL, raise the minimum at once. Intake can't see the minimum without the database, so events to a revoked version are still stored until the worker drops them; give intake a cached copy of each account's minimum, or rate-limit it per account, if a leaked URL filling the inbox matters. `server_key` never changes for either.
    
    Either way, keep the query string out of access logs, and never queue the secret with the event.
 2. **Acknowledge fast and durably.**
@@ -318,14 +296,16 @@ the parcel exists:
   that `Delivered` on a parcel in a return stage means `returned` (rule 6).
 - **Ids under `errors`, or missing from `result`:** don't mark them "checked and
   fine". NCM gave no status for them, for a reason the docs don't explain. Make
-  a per-order status call; if that answers 404 "Not found.", flag the parcel for
-  a person.
+  a per-order status call; if that answers 404 "Not found.", or keeps answering
+  500 (the API doc lists a 500 for a bad id, see
+  [api-contract.md](api-contract.md#errors)), flag the parcel for a person.
 - **Post-delivery return check.** A return can show only as `vendor_return`
   flipping after `Delivered` [observed]. Re-check recent deliveries' order detail
   for a while, and apply a hit as the mapping's "return after delivered" row.
-- **Budget the calls.** The status APIs count against 20,000 reads a day (5,000 in the `251222` PDF) [doc].
-  Whether a bulk call costs one read or one per id is [unknown]; assume per id
-  until NCM says otherwise. Size the sweep (batch size, staleness window,
+- **Budget the calls.** Per-order status reads count against the 20,000 daily
+  "Order View (Detail, Comments, Status)" reads [doc] (5,000 in the v1 doc
+  [v1 doc]). Whether the bulk status call counts at all, and if so once or per
+  id, is [unknown]; assume per id until NCM says otherwise. Size the sweep (batch size, staleness window,
   look-back days) so it fits with room for manual refreshes.
 - **Manual refresh.** One button per order that runs the same per-order sync,
   for support staff.

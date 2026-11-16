@@ -2,10 +2,10 @@
   "version": 1,
   "skills": {
     "ncm-integration": {
-      "source": "harublank0-0/drip-nepal",
+      "source": "harublank0-0/ncm-integration-skill",
       "sourceType": "github",
-      "skillPath": ".agents/skills/ncm-integration/SKILL.md",
-      "computedHash": "402e7d00075f514e49c59cf5cb80839b137cea06d698eeff50f1da927cedbde8"
+      "skillPath": "skills/ncm-integration/SKILL.md",
+      "computedHash": "82a74b0674e967393e1934de8da2a84e4ef72882705c4cef151ca4f1fd9b60b0"
     },
     "shadcn": {
       "source": "shadcn/ui",
