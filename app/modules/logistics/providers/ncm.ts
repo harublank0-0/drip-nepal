@@ -19,10 +19,11 @@ import type {
 /*
  * The Nepal Can Move adapter (ADR-0019 decision 6, Proposed until VX-16).
  * Its contract is NCM's API document v2 as the `ncm-integration` skill
- * records it (.agents/skills/ncm-integration/references/api-contract.md),
- * with the read-only production responses that file labels
- * [observed 2026-11-16]. NCM has confirmed none of it, and nothing here has
- * been run against NCM's API. T-FUL-109 tests it on synthetic responses.
+ * records it (.agents/skills/ncm-integration/references/api-contract.md);
+ * only `vendor_return` follows a production response that file labels
+ * [observed 2026-11-16]. NCM has confirmed none of the observations, and
+ * nothing here has been run against NCM's API. T-FUL-109 tests it on
+ * synthetic responses.
  *
  * Rules it keeps:
  * - Only this file talks to NCM (docs/09 §2, T-SEC-016) and only outside a

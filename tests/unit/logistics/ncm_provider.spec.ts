@@ -389,8 +389,9 @@ test.group('T-FUL-109 NCM adapter: reads', () => {
     assert.equal(sent[0].url, 'https://demo.example.test/api/v1/order?id=1001')
   })
 
-  // NCM's production API sends `vendor_return` as a string ("False"), which a
-  // truthiness test would read as a return (observed 2026-11-16, VX-16).
+  // NCM's production API sent `vendor_return` as a string ("False") in the one
+  // response observed (2026-11-16, VX-16); a truthiness test would read it as
+  // a return.
   test('vendor_return {name}')
     .with([
       { name: '"False" (production) is false', value: 'False', want: false },
