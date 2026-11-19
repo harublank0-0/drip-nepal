@@ -16,12 +16,12 @@ Ask these before writing code. Each changes the data model or money.
 | D2 | **When is the parcel created?** On confirm, on "ready to ship", or by a person clicking. | NCM has no hold and no cancel endpoint; a created parcel may be collected. |
 | D3 | **Cancellation after creation.** How is NCM told (ticket, comment, portal by hand)? What if NCM collects it anyway? | No cancel endpoint is documented. |
 | D4 | **Returns.** Which events move the order; does a return restock automatically or wait for staff; how is a `Delivered` that is really a return handled? | NCM ends a return as `Delivered`. |
-| D5 | **COD amount.** What goes in `cod_charge` for prepaid, partly paid and discounted orders; is the delivery charge added? | NCM defines it as "cod amount including delivery". Whether `"0"` is accepted for a prepaid order is undocumented. |
+| D5 | **COD amount.** What goes in `cod_charge` for prepaid, partly paid and discounted orders; is the delivery charge added? | NCM defines it as "cod amount including delivery". Whether `"0"` is accepted for a prepaid order is undocumented; one platform's COD-0 parcels were created and delivered [reported], but what the rider collects then is [unknown]. |
 | D6 | **COD settlement.** What proves the vendor was paid, who reconciles NCM's remittance, is `Delivered` "collectable" or "paid", and do vendors on their own NCM account settle with NCM directly? | NCM documents a COD-transfer *request* ticket (bank details), but no remittance statement or settlement field. |
 | D7 | **Inventory.** Which courier states, if any, move stock; does a courier status ever override a staff decision? | Stock bugs are expensive and silent. |
 | D8 | **Customer messages.** Which courier events text or email the customer, and never twice. | Duplicate and out-of-order webhooks happen. |
 | D9 | **Status mapping.** Fill in the template in webhooks-and-statuses.md for the project's real order states. | The project's states are its own. |
-| D10 | **Branches and rates.** Live NCM calls, a cached copy, or a stored table; refresh schedule; how the destination branch is chosen (from the address, a map pin, or staff); the shop's pickup branch, from the account's assigned branches (whether create's `fbranch` must be one of them is [unknown]). | Response shapes for the branch list and rates are undocumented; rates are quoted by branch name; no documented response carries the branch ids a redirect needs (one integration reads them from the branch list [observed]). Assigned pickup branches are documented, as names only. |
+| D10 | **Branches and rates.** Live NCM calls, a cached copy, or a stored table; refresh schedule; how the destination branch is chosen (from the address, a map pin, or staff); the shop's pickup branch, from the account's assigned branches (create's `fbranch` needn't be one of them: one platform's creates succeed with other branches [reported], though what NCM uses `fbranch` for is [unknown]). | Response shapes for the branch list and rates are undocumented, but were seen live: an unpaged array of 649 branches with `pk`, `code` and `name`, and `{"charge": "<decimal string>"}` [observed 2026-11-16]. Rates take branch names only. No documented response carries the branch ids a redirect needs; the branch list's `pk` is the likely source [inferred], and one integration reads it [observed]. Assigned pickup branches are documented, as names only. |
 | D11 | **Pickup requests.** How NCM is asked to collect: a `Pickup` ticket by hand or on a schedule, or arranged outside the system; which assigned branch each ticket names; how you avoid filing two while one is open. | NCM has no pickup endpoint. A `Pickup` ticket must name one of the account's assigned pickup branches. You learn a ticket closed only by polling its detail, and replying to a closed ticket reopens it. |
 
 ## Implementation order
@@ -88,7 +88,7 @@ Each step ends with a checkpoint. Don't start the next step until it passes.
      - Retry automatically only when the request clearly never reached NCM (connection refused, DNS failure).
      - After a timeout or 5xx, read the order's thread and look for the text before posting again: a comment post isn't idempotent.
      - Failures go to the job system's failure store (a dead-letter queue or a failed-jobs table).
-   - Inbound comments from `comment_added` [observed], plus a periodic poll. De-duplicate on (account, NCM order id, `comment_id`) when present, else (account, NCM order id, text, author, `added_time`). Match your own echoed comments by text within a few minutes.
+   - Inbound comments from `comment_added` [reported], plus a periodic poll. De-duplicate on (account, NCM order id, comment id): the webhook's `comment_id` and the API row's `pk` are the same id [reported]. Without an id, fall back to text and time **within a tolerance**, since the two channels' times differ by a fraction of a second; webhooks carry no author. Match your own echoed comments by text within a few minutes.
    - Redirects and returns: claim locally, call NCM, then record, as for create.
    - Labels from the label-data endpoints: batches of at most 100, matched to orders by `orderid`, with `not_found` ids flagged.
    - *Checkpoint:* a comment round-trips once, never twice.
@@ -127,8 +127,8 @@ Use synthetic ids, names and phones only.
 
 **State protection**
 - [ ] A cancelled order receives `pickup_completed` → the order stays cancelled; staff are alerted.
-- [ ] A return (`rtv_delivery`, or `vendor_return: true` with `Delivered`) never produces a "delivered" message to the customer, and follows the return decision (D4).
-- [ ] `vendor_return` turns true days after a normal delivery → handled as "return after delivered" (D4).
+- [ ] A return (`rtv_delivery`, or `vendor_return` reading true with `Delivered`) never produces a "delivered" message to the customer, and follows the return decision (D4).
+- [ ] `vendor_return` turns true days after a normal delivery → handled as "return after delivered" (D4). The fixture sends `"False"` as a string, as production does, then the return as `"True"`, `"true"` and a boolean `true` in turn, since the form a returned parcel takes hasn't been seen.
 - [ ] `refund_initiated` → two child shipments; their later events never move the original order.
 - [ ] A forged webhook with a valid-looking body but a wrong secret → rejected; a return or refund event is confirmed with an API read before stock or money moves.
 - [ ] An unknown event and an unknown status → recorded, answered 2xx, order unchanged, alert raised.
@@ -151,6 +151,13 @@ Use synthetic ids, names and phones only.
 - [ ] A ticket closed on NCM's side (non-null `closed_on`) releases the local pickup guard on the next poll.
 - [ ] The webhook test endpoint answers `success: true` with `status_code: 400` → reported as a failed test.
 - [ ] A bulk label call that returns labels out of order, plus `not_found` ids → each label goes to its own order; the missing ones are flagged.
+
+**Parsing live responses** (shapes seen on production [observed 2026-11-16])
+- [ ] `vendor_return: "False"` (a string) reads as false; `"True"` and a boolean `true` read as true; any other value is flagged for a person, not guessed.
+- [ ] A bulk status answer with string keys in `result` and integers in `errors` → every requested id is found in one or the other.
+- [ ] The same NCM comment arrives as a webhook (`comment_id: "501"`, UTC `timestamp`) and from the comment poll (`pk: 501`, `added_time` 0.4 s later, `+05:45`) → stored once.
+- [ ] A rate answer of `200 {"charge": "0"}`, or a `200` HTML page, is a failed quote: never shown as free delivery, never stored as the charge.
+- [ ] Money as a decimal string (order detail) and as a JSON number (label `cod_charge`, for example `1234.10`) parse to the same decimal, with no float on the way.
 
 **Limits**
 - [ ] The reconciliation run stays within its share of 20,000 reads a day for the expected fleet size.

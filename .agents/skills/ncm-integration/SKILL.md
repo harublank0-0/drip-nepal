@@ -19,12 +19,16 @@ v1.1. "v2" is the document's version, not a URL prefix: create, detail, status,
 comments and rates still live under `/api/v1/`. What changed from the previous
 document is in [api-contract.md](references/api-contract.md#changes-from-the-v1-doc).
 
-**Core rule:** keep NCM's documented contract exactly. Nothing in this package
-was checked against the live API, so anything marked [observed], [reported],
-[inferred] or [unknown] must be confirmed with NCM or a demo token before you
-depend on it. Anything marked [v1 doc] is superseded: use it to recognise old
-code, never build on it. Adapt everything else (states, stock, money, jobs) to
-the destination project, with the user deciding the business rules.
+**Core rule:** keep NCM's documented contract exactly. Only a set of read-only
+calls was checked against the live production API, on 2026-11-16; what they
+returned is marked [observed 2026-11-16] and is real but unconfirmed by NCM.
+Anything marked [observed 2026-11-16], [observed], [reported], [inferred] or
+[unknown] must be confirmed with NCM before you depend on it. Test anything
+that creates or changes data (create, comments, tickets, returns, redirects,
+webhooks) with a demo token on the demo host, never on production. Anything marked
+[v1 doc] is superseded: use it to recognise old code, never build on it. Adapt
+everything else (states, stock, money, jobs) to the destination project, with
+the user deciding the business rules.
 
 ## When to use
 
@@ -70,12 +74,12 @@ Don't assume a particular framework, ORM, queue or cloud provider. Use what the 
 | Need | NCM call |
 |---|---|
 | Create a parcel | `POST /api/v1/order/create` → `{"Message", "orderid"}` |
-| A parcel's detail, COD, delivery charge | `GET /api/v1/order?id=` |
+| A parcel's detail, COD, delivery charge | `GET /api/v1/order?id=` (money as decimal strings; live, `vendor_return` is the string `"False"`) |
 | A parcel's status history | `GET /api/v1/order/status?id=` (newest first) |
-| Many parcels' current status | `POST /api/v1/orders/statuses` `{"orders": [...]}` → `result` and `errors` |
-| Delivery charge | `GET /api/v1/shipping-rate?creation=&destination=&type=` |
-| Branches; the account's pickup branches | `GET /api/v2/branches`; `GET /api/v2/vendor/assigned-branches` (names) |
-| Comments | `GET /api/v1/order/comment?id=`, `GET /api/v1/order/getbulkcomments`, `POST /api/v1/comment` |
+| Many parcels' current status | `POST /api/v1/orders/statuses` `{"orders": [...]}` → `result` and `errors` (unknown ids land in `errors`) |
+| Delivery charge | `GET /api/v1/shipping-rate?creation=&destination=&type=` → `{"charge": "<decimal string>"}`; branch **names** only |
+| Branches; the account's pickup branches | `GET /api/v2/branches` (one unpaged array; `pk`, `code`, `name`; answered without a token, but send it); `GET /api/v2/vendor/assigned-branches` (names) |
+| Comments | `GET /api/v1/order/comment?id=`, `GET /api/v1/order/getbulkcomments` (rows carry `pk`), `POST /api/v1/comment` |
 | Return, exchange, redirect | `POST /api/v2/vendor/order/return`, `…/exchange-create`, `…/redirect` |
 | Tickets, including pickup requests | `POST /api/v2/vendor/ticket/create/new` (`branch` required for `Pickup`), `…/ticket/cod/create`, `…/ticket/close/<id>` |
 | Ticket detail; reply | `GET /api/v1/tickets/<id>/detail`; `POST /api/v1/vendor/tickets/<id>/response` (reopens a closed ticket) |
@@ -84,8 +88,10 @@ Don't assume a particular framework, ORM, queue or cloud provider. Use what the 
 | Register; test the webhook URL | `POST /api/v2/vendor/webhook` `{"webhook_url"}`; `POST /api/v2/vendor/webhook/test` |
 | Webhooks in | `POST` to your URL; 2xx within 10 s; one shot, no retry |
 
-Auth on every call: `Authorization: Token <token>`. Limits: 1,000 creates and
-20,000 reads (detail, comments, status) a day. Full contract:
+Hosts: the documents use `https://demo.nepalcanmove.com`; production is
+`https://portal.nepalcanmove.com` [observed 2026-11-16]. Demo and production
+tokens are separate [reported]. Auth on every call: `Authorization: Token <token>`. Limits:
+1,000 creates and 20,000 reads (detail, comments, status) a day. Full contract:
 [api-contract.md](references/api-contract.md). Events, payloads and statuses:
 [webhooks-and-statuses.md](references/webhooks-and-statuses.md).
 
@@ -106,6 +112,13 @@ Auth on every call: `Authorization: Token <token>`. Limits: 1,000 creates and
 | Relying on webhooks alone | Poll and reconcile; NCM never retries. |
 | Calling NCM before claiming the local record (create, redirect, comment, ticket) | Claim first, call, then record. NCM has no idempotency keys. |
 | Sending the rate `type` (`D2B`) or the label's `Office`/`Home` to create | Create takes `Door2Branch` and its three siblings; map between the vocabularies. |
+| Showing a rate of `"0"` as free delivery, or quoting with `type=B2D` | Rate types are `Pickup/Collect`, `Send`, `D2B`, `B2B`. Any other `type` gets `200 {"charge": "0"}`; treat it as a failed quote. |
+| Quoting rates by branch `code` or `pk` | Rates take branch **names**. Codes, pks and unknown names get HTTP 200 with an HTML error page; check that the body is JSON. |
+| Reading `vendor_return` as a boolean | Live, it is the string `"False"`, which is truthy. Compare the text, and accept a real boolean too. |
+| Assuming every money field is a string | Order detail and rates send decimal strings; the label's `cod_charge` came back as a JSON number. Parse both to a decimal. |
+| Reading `id` from staff rows | Staff, branch and comment rows carry `pk`; customers carry `id`. |
+| Reading `comment_id` from API comment rows, or matching comments on exact time | API rows carry `pk`, which equals the webhook's `comment_id` [reported]; the two channels' times differ by a fraction of a second. One integration stored every NCM comment twice this way. |
+| Trusting NCM to reject a repeated `vref_id` | It doesn't: duplicates were all created [reported]. Make references unique per account. |
 | Reading the webhook test's `success: true` as a pass | It answers 200 with `success: true` even when your server returned 400. Check `status_code`. |
 | Assuming bulk labels come back in request order | Match on `orderid`; ids that aren't yours land in `not_found`. |
 | Trusting the URL token in the receiver without checking it | Verify it in constant time before storing anything. |
