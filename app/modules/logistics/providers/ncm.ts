@@ -19,9 +19,10 @@ import type {
 /*
  * The Nepal Can Move adapter (ADR-0019 decision 6, Proposed until VX-16).
  * Its contract is NCM's API document v2 as the `ncm-integration` skill
- * records it (.agents/skills/ncm-integration/references/api-contract.md);
- * nothing here has been checked against NCM's API yet. T-FUL-109 tests it
- * on synthetic responses.
+ * records it (.agents/skills/ncm-integration/references/api-contract.md),
+ * with the read-only production responses that file labels
+ * [observed 2026-11-16]. NCM has confirmed none of it, and nothing here has
+ * been run against NCM's API. T-FUL-109 tests it on synthetic responses.
  *
  * Rules it keeps:
  * - Only this file talks to NCM (docs/09 §2, T-SEC-016) and only outside a
@@ -194,11 +195,13 @@ function boundedLabel(value: unknown): string | null {
 }
 
 /*
- * NCM's undocumented `vendor_return` (VX-16). Production sends the string
- * "False" (observed 2026-11-16), and the return endpoint a boolean, so both
- * are read; a truthiness test would take "False" for a return. Missing or
- * JSON null is unknown (`null`). Any other value is not guessed: `undefined`
- * makes the read unexpected, so the delivered check is not applied (05 §6.3).
+ * NCM's undocumented `vendor_return` (VX-16). Production sent the string
+ * "False" in the one response observed (2026-11-16); "True" for a returned
+ * parcel is reported, not observed; NCM's document shows the return endpoint
+ * answering a boolean. So both forms are read, and a truthiness test would
+ * take "False" for a return. A missing or null flag is unknown (`null`). Any
+ * other value is not guessed: `undefined` makes the read unexpected, so the
+ * delivered check is not applied (05 §6.3).
  */
 function parseVendorReturn(value: unknown): boolean | null | undefined {
   if (value === undefined || value === null) return null

@@ -397,6 +397,7 @@ test.group('T-FUL-109 NCM adapter: reads', () => {
       { name: '"True" is true', value: 'True', want: true },
       { name: '"true" is true', value: 'true', want: true },
       { name: '" FALSE " is false', value: ' FALSE ', want: false },
+      { name: '" True " is true', value: ' True ', want: true },
       { name: 'boolean true is true', value: true, want: true },
       { name: 'boolean false is false', value: false, want: false },
       { name: 'JSON null is unknown', value: null, want: null },
@@ -441,7 +442,9 @@ test.group('T-FUL-109 NCM adapter: reads', () => {
       { name: '"None"', value: 'None' },
       { name: '"yes"', value: 'yes' },
       { name: 'an empty string', value: '' },
+      { name: '"1"', value: '1' },
       { name: 'the number 1', value: 1 },
+      { name: 'the number 0', value: 0 },
       { name: 'an object', value: { value: true } },
     ] as { name: string; value: unknown }[])
     .run(async ({ assert }, row) => {
