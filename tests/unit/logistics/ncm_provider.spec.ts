@@ -389,6 +389,78 @@ test.group('T-FUL-109 NCM adapter: reads', () => {
     assert.equal(sent[0].url, 'https://demo.example.test/api/v1/order?id=1001')
   })
 
+  // NCM's production API sends `vendor_return` as a string ("False"), which a
+  // truthiness test would read as a return (observed 2026-11-16, VX-16).
+  test('vendor_return {name}')
+    .with([
+      { name: '"False" (production) is false', value: 'False', want: false },
+      { name: '"True" is true', value: 'True', want: true },
+      { name: '"true" is true', value: 'true', want: true },
+      { name: '" FALSE " is false', value: ' FALSE ', want: false },
+      { name: 'boolean true is true', value: true, want: true },
+      { name: 'boolean false is false', value: false, want: false },
+      { name: 'JSON null is unknown', value: null, want: null },
+    ] as { name: string; value: unknown; want: boolean | null }[])
+    .run(async ({ assert }, row) => {
+      const { ncm } = fakeNcm([
+        json(200, {
+          orderid: 1001,
+          cod_charge: '1710.00',
+          delivery_charge: '99.00',
+          last_delivery_status: 'Delivered',
+          payment_status: 'Completed',
+          vendor_return: row.value,
+        }),
+      ])
+      const result = await ncm.getParcel(account, '1001')
+      assert.isTrue(result.ok)
+      if (!result.ok) return
+      assert.strictEqual(result.value.returnedToVendor, row.want)
+    })
+
+  test('a parcel detail without vendor_return reads it as unknown', async ({ assert }) => {
+    const { ncm } = fakeNcm([
+      json(200, {
+        orderid: 1001,
+        cod_charge: '1710.00',
+        delivery_charge: '99.00',
+        last_delivery_status: 'Delivered',
+        payment_status: 'Completed',
+      }),
+    ])
+    const result = await ncm.getParcel(account, '1001')
+    assert.isTrue(result.ok)
+    if (!result.ok) return
+    assert.isNull(result.value.returnedToVendor)
+  })
+
+  // Any other value is not guessed: the detail is unreadable, so the delivered
+  // check is not applied and ends held for a person (05 §6.3).
+  test('vendor_return {name} makes the detail unexpected')
+    .with([
+      { name: '"None"', value: 'None' },
+      { name: '"yes"', value: 'yes' },
+      { name: 'an empty string', value: '' },
+      { name: 'the number 1', value: 1 },
+      { name: 'an object', value: { value: true } },
+    ] as { name: string; value: unknown }[])
+    .run(async ({ assert }, row) => {
+      const { ncm } = fakeNcm([
+        json(200, {
+          orderid: 1001,
+          cod_charge: '1710.00',
+          delivery_charge: '99.00',
+          last_delivery_status: 'Delivered',
+          payment_status: 'Completed',
+          vendor_return: row.value,
+        }),
+      ])
+      const result = await ncm.getParcel(account, '1001')
+      assert.isFalse(result.ok)
+      if (result.ok) return
+      assert.equal(result.error.code, 'unexpected_response')
+    })
+
   test("the status history comes back oldest first, ties in the courier's order", async ({
     assert,
   }) => {
