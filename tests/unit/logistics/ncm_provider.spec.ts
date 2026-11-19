@@ -611,6 +611,43 @@ test.group('T-FUL-109 NCM adapter: reads', () => {
       value: ['KATHMANDU', 'POKHARA'],
     })
   })
+
+  // The row shape NCM's demo and production hosts returned (2026-11-16 and
+  // 2026-11-19, VX-16): `district_name` and `areas_covered`, not the names
+  // one integration's code reads.
+  test('branches read district_name and areas_covered as NCM sends them', async ({ assert }) => {
+    const { ncm } = fakeNcm([
+      json(200, [
+        {
+          pk: 101,
+          code: 'EXMPL1',
+          name: 'EXAMPLE BRANCH',
+          geocode: null,
+          address: 'Example Road',
+          surcharge: '25.00',
+          phone: '0100000000',
+          phone2: null,
+          branch_type: 'Branch',
+          areas_covered: 'Example Tole, Example Chowk',
+          province_name: 'Example Province',
+          district_name: 'Example District',
+        },
+      ]),
+    ])
+    assert.deepEqual(await ncm.listBranches(account), {
+      ok: true,
+      value: [
+        {
+          name: 'EXAMPLE BRANCH',
+          externalBranchId: '101',
+          code: 'EXMPL1',
+          courierDistrict: 'Example District',
+          coveredAreas: 'Example Tole, Example Chowk',
+          phone: '0100000000',
+        },
+      ],
+    })
+  })
 })
 
 test.group('T-FUL-109 NCM adapter: callbacks and errors', () => {
