@@ -20,8 +20,10 @@ import type {
  * The Nepal Can Move adapter (ADR-0019 decision 6, Proposed until VX-16).
  * Its contract is NCM's API document v2 as the `ncm-integration` skill
  * records it (.agents/skills/ncm-integration/references/api-contract.md);
- * nothing here has been checked against NCM's API yet. T-FUL-109 tests it
- * on synthetic responses.
+ * only `vendor_return` follows a production response that file labels
+ * [observed 2026-11-16]. NCM has confirmed none of the observations, and
+ * nothing here has been run against NCM's API. T-FUL-109 tests it on
+ * synthetic responses.
  *
  * Rules it keeps:
  * - Only this file talks to NCM (docs/09 §2, T-SEC-016) and only outside a
@@ -191,6 +193,26 @@ function boundedLabel(value: unknown): string | null {
   if (raw === null) return null
   const trimmed = raw.trim()
   return trimmed !== '' && trimmed.length <= RAW_LIMIT ? trimmed : null
+}
+
+/*
+ * NCM's undocumented `vendor_return` (VX-16). Production sent the string
+ * "False" in the one response observed (2026-11-16); "True" for a returned
+ * parcel is reported, not observed; NCM's document shows the return endpoint
+ * answering a boolean. So both forms are read, and a truthiness test would
+ * take "False" for a return. A missing or null flag is unknown (`null`). Any
+ * other value is not guessed: `undefined` makes the read unexpected, so the
+ * delivered check is not applied (05 §6.3).
+ */
+function parseVendorReturn(value: unknown): boolean | null | undefined {
+  if (value === undefined || value === null) return null
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'string') {
+    const word = value.trim().toLowerCase()
+    if (word === 'true') return true
+    if (word === 'false') return false
+  }
+  return undefined
 }
 
 // NCM order IDs are integers; anything else cannot be one of ours.
@@ -376,13 +398,15 @@ export class NcmCourierProvider implements CourierProvider {
     if (id === null) return Promise.resolve(notFound<CourierParcelDetail>())
     return this.#read(account, 'GET', `/api/v1/order?id=${id}`, (body) => {
       if (!isRecord(body) || text(body.orderid) !== externalShipmentId) return null
+      const returnedToVendor = parseVendorReturn(body.vendor_return)
+      if (returnedToVendor === undefined) return null
       return {
         externalShipmentId,
         codAmountMinor: parseMoney(body.cod_charge),
         deliveryChargeMinor: parseMoney(body.delivery_charge),
         lastStatus: boundedLabel(body.last_delivery_status),
         paymentStatus: boundedLabel(body.payment_status),
-        returnedToVendor: typeof body.vendor_return === 'boolean' ? body.vendor_return : null,
+        returnedToVendor,
       }
     })
   }

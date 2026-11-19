@@ -5,7 +5,7 @@
       "source": "harublank0-0/ncm-integration-skill",
       "sourceType": "github",
       "skillPath": "skills/ncm-integration/SKILL.md",
-      "computedHash": "82a74b0674e967393e1934de8da2a84e4ef72882705c4cef151ca4f1fd9b60b0"
+      "computedHash": "4a8cfedd9c9d795c68923d64982b6cc3177e48c5dca85775b2b90ced94cd1422"
     },
     "shadcn": {
       "source": "shadcn/ui",

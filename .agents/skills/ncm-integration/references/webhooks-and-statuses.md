@@ -5,6 +5,7 @@ Labels:
 - **[v1 doc]** only in the superseded API doc dated `251222`.
 - **[inferred]** follows from the documents without being stated in them.
 - **[observed]** seen in one production integration's code, not in NCM's documents. Code shows what the integration *handles*, not what NCM *sends*; confirm with NCM.
+- **[observed 2026-11-16]** returned by NCM's production API to a read-only call on that date; not confirmed by NCM (see [api-contract.md](api-contract.md)).
 - **[reported]** that integration's team reports it from production checks; it is not visible in its code.
 - **[recommended]** a design rule for your project.
 - **[unknown]** not settled by any source.
@@ -70,15 +71,33 @@ Notes [doc]:
 - **The event list has no event for "Pickup Order Created" or "Sent for
   Pickup".** The status APIs show them.
 
-Two more events arrive although the webhook doc doesn't list them:
-- `comment_added` [observed]: the integration's code handles it, reading the order id from `order_id` or `order_ids` like any other event, plus `comment` (the text), `timestamp`, `comment_id` (optional) and `added_by` (optional, default "NCM"). No captured payload exists in that code, so this shape is reconstructed from its parser:
+Three more events arrive although the webhook doc doesn't list them. One
+platform's stored webhooks, mid-July to mid-November 2026, show their payloads
+[reported]:
+- `comment_added`, by far the most frequent event. Invented values, reported shape:
 
   ```json
-  {"event": "comment_added", "order_id": "1001", "comment": "Customer asked for evening delivery", "comment_id": "501", "added_by": "NCM Staff", "timestamp": "2026-01-02T09:12:00.000000+00:00"}
+  {"event": "comment_added", "order_id": "1001", "comment_id": "501", "comment": "Customer asked for evening delivery", "comment_type": "Info", "display": "External", "status": "None", "timestamp": "2026-01-02T09:12:00.000000+00:00"}
   ```
 
-  Its notes say NCM's portal has a separate **"Order Comment Webhook URL"**, which can point at the same receiver. The API doc v2 now says the webhook endpoint manages URLs for "order status and comment events", which supports this, but it documents neither a comment payload nor a parameter for the comment URL [doc]; `webhook_url` is the order status URL.
-- `returned_to_warehouse` [reported]: its meaning and payload are [unknown].
+  - `order_id` and `comment_id` are digit strings. `comment_id` equals the `pk` of the same comment in the comment APIs [reported].
+  - `comment_type` was `Info` or, rarely, `Action`; `display` was `External`; `status` is the text `"None"`, not JSON `null`.
+  - There is **no author field**. One integration's parser reads an optional `added_by` (default "NCM") [observed]; it never arrives [reported].
+  - Comments go to NCM's separate portal field, the **"Order Comment Webhook URL"**, per that integration's notes. The API doc v2 says the webhook endpoint manages URLs for "order status and comment events", but it documents neither this payload nor a parameter for the comment URL [doc]; `webhook_url` is the order status URL. Comment webhooks kept arriving at a URL whose secret matched no shop, so an old comment URL stays set until someone changes it in the portal [reported].
+- `returned_to_warehouse`: a bulk event (`order_ids`) that also carries a `returnReason` string [reported]. Its meaning is [unknown]; the order status `Returned to Warehouse` appears in the status history from the same period.
+- `exchange_initiated`: rare. It carries `customer_order` and `exchange_order` objects [reported], like the two orders the exchange endpoint creates; their exact fields weren't recorded here [unknown].
+
+Undocumented fields on documented events [reported]:
+- `delivery_completed` usually carries `cod_charge` and `delivery_charge` as decimal strings (in about 70% of events), next to the documented fields.
+- `order_marked_rtv` carries a `returnReason` string.
+- `rtv_delivery` carries `orders: [{"order_id", "delivery_charge"}]` next to `order_ids`.
+
+Treat all of these as optional: NCM hasn't documented them.
+
+What that platform's data shows about delivery [reported]:
+- **No webhook ever came for `Pickup Order Created` or `Sent for Pickup`**, as the doc says.
+- **The largest bulk event held 100 ids** (`pickup_completed`, averaging under 50); 100 may be NCM's cap [unknown].
+- **No parcel ever received an event older than one it had already received**, across thousands of parcels with two or more events. NCM doesn't promise this; keep the ordering rules below.
 
 ### Payloads [doc]
 
@@ -114,9 +133,10 @@ are included.
 - Both then move like any other order, so their later events arrive too.
 - `cod_charge` may be a string or `null`.
 
-`timestamp` is "ISO 8601 timestamp in UTC" [doc]. The status API's
-`added_time` uses a `+05:45` offset [doc]. Always parse to an instant, and
-store and compare instants.
+`timestamp` is "ISO 8601 timestamp in UTC" [doc], and status and comment
+webhooks did carry `+00:00` [reported]. The status API's `added_time` uses a
+`+05:45` offset [doc], as did most test webhooks [reported]. Always parse to an
+instant, and store and compare instants.
 
 Test payload, from the portal's "Test Webhook" button or from
 `POST /api/v2/vendor/webhook/test` (note the different shape, and its `+05:45`
@@ -141,19 +161,22 @@ are every string the sources show.
 | `Sent for Pickup` | status API example [doc] | No webhook. NCM sets it for every new pickup parcel, whether or not the vendor has packed it [reported]. |
 | `Pickup Complete` | status API [doc]; `pickup_completed` [doc] | |
 | `Drop off Order Collected` | `dropoff_collected` [doc] | |
-| `Dispatched` | `order_dispatched` [doc] | No API example shows it. One integration's poll map accepts `Dispatched to <BRANCH>`, per a code comment, with no captured payload [observed]. |
-| `Arrived` | bulk status example; `order_arrived` [doc] | The same integration accepts `Arrived at <BRANCH>` [observed]. |
+| `Dispatched` | `order_dispatched` [doc] | No API example shows it. The status-history API sends `Dispatched to <BRANCH>`, often, while the webhook says just `Dispatched` [reported]. `<BRANCH>` can be a return branch, such as `RETURN ( TINKUNE)`, spaces included [reported]. |
+| `Arrived` | bulk status example; `order_arrived` [doc] | Likewise `Arrived at <BRANCH>` in the status-history API, `Arrived` in the webhook [reported]. |
 | `Sent for Delivery` | status API; `sent_for_delivery` [doc] | |
-| `Out for Delivery` | one integration's status map [observed] | that integration's own name for the Sent for Delivery stage; its poll map accepts both; whether NCM sends it is unverified |
+| `Out for Delivery` | one integration's status map [observed] | that integration's own name for the Sent for Delivery stage. NCM never sent it in four and a half months of that platform's data [reported]. |
 | `Delivered` | everywhere [doc] | **Also the final status of a return to the vendor** [doc]. |
 | `Order Marked Return` | `order_marked_rtv` [doc] | webhook label |
 | `Send to Vendor` / `Sent to Vendor` | webhook label vs the order's NCM status [doc]; `Sent to Vendor` is also a `last_delivery_status` in the API doc's customer-detail example | two spellings for one stage |
 | `RTV Delivered` | `rtv_delivery` [doc] | the order itself then reads `Delivered` |
 | `Refund Initiated` | `refund_initiated` [doc] | |
 | `In Transit` | test webhook payload only (webhook doc and API doc) [doc] | |
-| `Delivery Attempted` | one integration's status map [observed] | not in the documents; whether NCM sends it is unverified |
-| `returned_to_warehouse` (event) | [reported] | not in the documents; meaning [unknown] |
+| `Delivery Attempted` | one integration's status map [observed] | not in the documents. NCM never sent it in four and a half months of that platform's data [reported]. |
+| `returned_to_warehouse` (event) | [reported] | not in the documents; carries a `returnReason`; meaning [unknown] |
+| `Returned to Warehouse` (status) | status-history API, from late July 2026 [reported]; `last_delivery_status` in the undocumented `/order/redirectable` list [observed 2026-11-16] | not in the documents. Every parcel on the redirectable list's first page had it. Probably the status behind the `returned_to_warehouse` event, and a parcel NCM holds that can be redirected [inferred]; meaning [unknown] |
+| `exchange_initiated` (event) | [reported] | not in the documents; carries `customer_order` and `exchange_order` |
 | `Completed` | `payment_status` in the order detail [doc] | a payment field, not a delivery status |
+| `Delivery Pending` | `payment_status` in the order detail [observed 2026-11-16] | on an undelivered parcel; a payment field, not a delivery status |
 
 [recommended] Match status strings case-insensitively after trimming and turning
 `_`/`-` into spaces; match `Dispatched to …` and `Arrived at …` by prefix; and
@@ -172,6 +195,12 @@ A **return** is a fifth concern. NCM ends a return-to-vendor as `Delivered`;
 only the order detail's `vendor_return` flag [observed] or the RTV events
 (`order_marked_rtv`, `send_to_vendor`, `rtv_delivery`) [doc] tell it apart.
 
+`vendor_return` arrives as a **string**: `"False"` on production
+[observed 2026-11-16]. `"False"` is truthy in most languages, so never test it
+as a boolean. Wherever this file says `vendor_return` "is true" or "turns
+true", read it with the parsing rule in
+[api-contract.md](api-contract.md#order-detail).
+
 ## Mapping template [recommended]
 
 Fill this in **with the user** for the destination project. Every row needs an
@@ -185,7 +214,7 @@ explicit decision; "copy NCM's string onto the order" is not one.
 | `order_dispatched` | in transit | optional | |
 | `order_arrived` | at destination branch | optional | |
 | `sent_for_delivery` | out for delivery | e.g. → "Out for delivery" | customer SMS? |
-| `Delivery Attempted` (poll) [observed] | stays out for delivery; the attempt is recorded | none | staff alert? |
+| `Delivery Attempted` (poll) [observed]; never sent by NCM in one platform's data [reported] | stays out for delivery; the attempt is recorded | none | staff alert? |
 | `delivery_completed`, or `Delivered` from a poll, on a parcel **not** in a return stage | delivered | e.g. → "Delivered", **only if not a return**: no RTV event on record, and the order detail's `vendor_return` isn't true [observed field] | COD becomes *collectable*, not settled; the "delivered" message |
 | `Delivered` from a poll on a parcel in a return stage (`return requested` or `return in transit`) | returned to vendor | as `rtv_delivery` | as `rtv_delivery`. NCM's order reads `Delivered` after `rtv_delivery` [doc], so this is how a return completes when the `rtv_delivery` webhook was lost |
 | a return signal **after** delivered (`vendor_return` turns true, or a late RTV event) | returned | decide: move the order to returned, or alert staff | reverse the COD expectation; restock per D4; no "delivered" message was wrong, but the customer may need a word |
@@ -193,14 +222,15 @@ explicit decision; "copy NCM's string onto the order" is not one.
 | `send_to_vendor` | return in transit | | |
 | `rtv_delivery` | returned to vendor | e.g. → "Returned" | restock? (a business decision) |
 | `refund_initiated` | refund pending on the original; two **child shipments** (customer leg, refund leg) | the original order: refund pending; the legs' own events never move it | money moves back (who refunds a prepaid customer?); finance decision |
-| `returned_to_warehouse` [reported] | record the raw event; no stage | none until NCM explains it | staff alert |
-| `comment_added` [observed] | none | none | store the comment, notify staff |
+| `returned_to_warehouse` [reported], or `Returned to Warehouse` from a poll [observed 2026-11-16] | record the raw event or status; no stage | none until NCM explains it | staff alert |
+| `comment_added` [reported] | none | none | store the comment once (match on comment id with the polled copy), notify staff |
+| `exchange_initiated` [reported] | record the event and the two new orders as child shipments | none until the user decides | staff alert; decide stock and money as for an exchange you requested |
 | unknown event | record it | none | alert; answer 2xx |
 
 If your own system calls `POST /api/v2/vendor/order/return`, record that you
 did. That call sets the order's `vendor_return` flag to `true` [doc], which the
-order detail then shows [observed], and your post-delivery check must not take
-it for a return NCM started.
+order detail then shows [observed], probably as the string `"True"` [inferred],
+and your post-delivery check must not take it for a return NCM started.
 
 No cancel endpoint is documented [doc]. If an order is cancelled locally after
 the parcel exists:
@@ -260,10 +290,11 @@ the parcel exists:
 9. **Treat `Delivered` carefully.** Before you mark the order delivered or text
    the customer, check for a return: the parcel's stage (rule 6), an RTV event
    on record, or the order detail's `vendor_return` [observed] read at that
-   moment. If that read fails, don't send the delivered message: retry the
-   read, or hold the delivered transition for a person. A return you requested
-   yourself (`POST /api/v2/vendor/order/return`) must be on record, so its
-   `vendor_return: true` isn't taken for a return NCM started.
+   moment, parsed from its string form (`"False"` [observed 2026-11-16]). If
+   that read fails, don't send the delivered message: retry the read, or hold
+   the delivered transition for a person. A return you requested yourself
+   (`POST /api/v2/vendor/order/return`) must be on record, so its
+   `vendor_return` reading true isn't taken for a return NCM started.
 10. **Confirm high-impact events with an API read.** A webhook carries no
     signature [doc], so read `GET /api/v1/order/status?id=` or the order detail
     before restocking, refunding, or changing money owed.
