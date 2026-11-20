@@ -13,7 +13,7 @@ import env from '#start/env'
 
 const PAGES = [
   { surface: 'errors (404)', path: '/no-such-page', status: 404, text: 'find that page' },
-  { surface: 'development gallery', path: '/design-system', status: 200, text: 'Light Theme' },
+  { surface: 'development gallery', path: '/dev/design-system', status: 200, text: 'Light Theme' },
 ]
 
 const METHODS = ['log', 'info', 'warn', 'error', 'debug', 'trace', 'dir', 'table'] as const

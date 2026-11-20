@@ -23,10 +23,7 @@ const uuid = {
 }
 router.where('id', uuid)
 
-if (!app.inProduction) {
-  router
-    .get('/design-system', ({ inertia }) => {
-      return inertia.render('design_system/index', {})
-    })
-    .as('design-system')
-}
+// Development-only routes (RF-40): never in the production route list.
+// Test runs load them too, so the route types CI generates under
+// NODE_ENV=test match what `pnpm dev` generates (T-ARCH-016).
+if (!app.inProduction) await import('#start/routes/dev')

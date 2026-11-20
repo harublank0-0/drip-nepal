@@ -11,13 +11,13 @@ How to start the app and look at it the way a person would. Tests (the `dripnepa
 
 The v1 store (storefront, seller dashboard, admin pages, demo logins) was removed with the E4 schema baseline. Until the flows of M1 to M7 are rebuilt ([docs/12](../../../docs/12-roadmap-and-backlog.md)), the app serves:
 
-| Path             | Where            | What                                                                                                                                |
-| ---------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `/design-system` | development only | The theme tokens, buttons and cards: the one Inertia page                                                                           |
-| `/health/live`   | every mode       | `{"status":"ok","release":…}`: the process serves HTTP ([docs/11 §7.1](../../../docs/11-deployment-and-operations.md#71-endpoints)) |
-| `/health/ready`  | every mode       | `{"status":"ok"}`, or 503 when the database does not answer                                                                         |
-| `/uploads/*`     | every mode       | Files in `./storage`, served by the `fs` disk of `config/drive.ts`; nothing uploads yet                                             |
-| anything else    | every mode       | 404, with Adonis's plain default answer until E5 adds the error pages                                                               |
+| Path                 | Where            | What                                                                                                                                |
+| -------------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `/dev/design-system` | development only | The theme tokens, buttons and cards: the one Inertia page                                                                           |
+| `/health/live`       | every mode       | `{"status":"ok","release":…}`: the process serves HTTP ([docs/11 §7.1](../../../docs/11-deployment-and-operations.md#71-endpoints)) |
+| `/health/ready`      | every mode       | `{"status":"ok"}`, or 503 when the database does not answer                                                                         |
+| `/uploads/*`         | every mode       | Files in `./storage`, served by the `fs` disk of `config/drive.ts`; nothing uploads yet                                             |
+| anything else        | every mode       | 404, with Adonis's plain default answer until E5 adds the error pages                                                               |
 
 There is no demo data and no login: the demo seeder waits for OD-59 and the actions of M1 to M6, and the first platform admin comes from `node ace platform:create-admin`, which E8 builds. `node ace list:routes` lists the routes that exist (one JSON line per route in a non-interactive shell, a table in a terminal).
 
@@ -61,7 +61,7 @@ curl -s http://localhost:3333/health/ready
 
 If another checkout's server already holds the port, start this one with `PORT=3340 pnpm dev` and pass `--base http://localhost:3340` to the script below.
 
-**Production build.** It serves no page yet (`/design-system` is development-only), so use it to check that the build compiles, starts and answers the health endpoints:
+**Production build.** It serves no page yet (`/dev/design-system` is development-only), so use it to check that the build compiles, starts and answers the health endpoints:
 
 ```bash
 node ace build
@@ -75,11 +75,11 @@ The build uses the repository's `node_modules`, so no second install is needed. 
 
 ## 4. Check pages
 
-The bundled script visits each path at 390 px and 1280 px, in the light and dark themes, saves screenshots to `tmp/page-checks/` (gitignored), and prints one line per page. With no path it checks `/design-system`:
+The bundled script visits each path at 390 px and 1280 px, in the light and dark themes, saves screenshots to `tmp/page-checks/` (gitignored), and prints one line per page. With no path it checks `/dev/design-system`:
 
 ```bash
 node .agents/skills/dripnepal-run/scripts/check_pages.cjs
-node .agents/skills/dripnepal-run/scripts/check_pages.cjs --widths 390 --full --scale 2 /design-system
+node .agents/skills/dripnepal-run/scripts/check_pages.cjs --widths 390 --full --scale 2 /dev/design-system
 ```
 
 Options: `--base <url>` (another server), `--widths 390,768,1280`, `--themes light`, `--full` (the whole page, clipped to the screen width so it shows what a phone shows), `--scale 2` (sharper screenshots for a person to look at), `--out <dir>`. `--login email:password` fills the login form at `/auth/login` before the visits; no login page exists until M1, so check the form's path and field names when one does. It exits 1 when any page fails.

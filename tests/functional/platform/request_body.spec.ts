@@ -143,7 +143,7 @@ test.group('T-MED-002 multipart is refused on every route', () => {
   }) => {
     const routes = everyRoute()
     // The application's routes and those the spec files of this run register.
-    assert.deepInclude(routes, { method: 'GET', path: '/design-system' })
+    assert.deepInclude(routes, { method: 'GET', path: '/dev/design-system' })
     assert.deepInclude(routes, { method: 'POST', path: '/api/v1/__test__/body-echo' })
     const before = await sessionCount()
 

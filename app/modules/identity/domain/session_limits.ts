@@ -7,6 +7,9 @@
 // Every session with a user: 30 days from `authenticated_at` (docs/07 §3.3 row 4).
 export const ABSOLUTE_SESSION_LIMIT_MS = 30 * 24 * 60 * 60 * 1000
 
+// Seller routes: 12 hours since `seller_seen_at`, else `authenticated_at`.
+export const SELLER_IDLE_LIMIT_MS = 12 * 60 * 60 * 1000
+
 /*
  * Whether a session timestamp is older than `limitMs`. Timestamps are ISO
  * 8601 strings in UTC. A missing or unreadable value never means "no

@@ -7,5 +7,7 @@ export interface ApiDefinition {
       serve: typeof routes['drive.fs.serve']
     }
   }
-  designSystem: typeof routes['design-system']
+  dev: {
+    designSystem: typeof routes['dev.design_system']
+  }
 }
