@@ -467,9 +467,12 @@ export class NcmCourierProvider implements CourierProvider {
   }
 
   /*
-   * `GET /api/v2/branches`. Its response shape is not documented (VX-16),
-   * so this reads only entries with a name, from an array or a paginated
-   * `results`, and the fields one production integration saw.
+   * `GET /api/v2/branches`. Its response shape is not documented. NCM's
+   * production and demo hosts returned one bare array of rows with `pk`,
+   * `code`, `name`, `district_name` and `areas_covered` (2026-11-16 and
+   * 2026-11-19, VX-16); the names one integration's code reads (`district`,
+   * `covered_areas`, `areas`) stay as fallbacks. Only entries with a name
+   * are read, from an array or a paginated `results`.
    */
   listBranches(account: CourierAccount) {
     return this.#read(account, 'GET', '/api/v2/branches', (body) => {
@@ -488,8 +491,8 @@ export class NcmCourierProvider implements CourierProvider {
           name,
           externalBranchId: text(row.pk) ?? text(row.id),
           code: text(row.code),
-          courierDistrict: text(row.district),
-          coveredAreas: text(row.covered_areas) ?? text(row.areas),
+          courierDistrict: text(row.district_name) ?? text(row.district),
+          coveredAreas: text(row.areas_covered) ?? text(row.covered_areas) ?? text(row.areas),
           phone: text(row.phone),
         })
       }

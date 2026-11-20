@@ -611,6 +611,90 @@ test.group('T-FUL-109 NCM adapter: reads', () => {
       value: ['KATHMANDU', 'POKHARA'],
     })
   })
+
+  // The older names stay as fallbacks, and NCM's own names win when a row
+  // carries both; a null NCM name falls through to the older one.
+  test('branches fall back to the older field names, and NCM names win', async ({ assert }) => {
+    const row = (pk: number, name: string, fields: Record<string, unknown>) => ({
+      pk,
+      name,
+      ...fields,
+    })
+    const read = (pk: number, name: string, district: string | null, areas: string | null) => ({
+      name,
+      externalBranchId: String(pk),
+      code: null,
+      courierDistrict: district,
+      coveredAreas: areas,
+      phone: null,
+    })
+    const { ncm } = fakeNcm([
+      json(200, [
+        row(1, 'OLD NAMES', { district: 'Old District', covered_areas: 'Old Tole' }),
+        row(2, 'OLDEST NAME', { areas: 'Oldest Tole' }),
+        row(3, 'BOTH NAMES', {
+          district_name: 'New District',
+          district: 'Old District',
+          areas_covered: 'New Tole',
+          covered_areas: 'Old Tole',
+          areas: 'Oldest Tole',
+        }),
+        row(4, 'NULL NEW NAMES', {
+          district_name: null,
+          district: 'Old District',
+          areas_covered: null,
+          covered_areas: 'Old Tole',
+          areas: 'Oldest Tole',
+        }),
+      ]),
+    ])
+    assert.deepEqual(await ncm.listBranches(account), {
+      ok: true,
+      value: [
+        read(1, 'OLD NAMES', 'Old District', 'Old Tole'),
+        read(2, 'OLDEST NAME', null, 'Oldest Tole'),
+        read(3, 'BOTH NAMES', 'New District', 'New Tole'),
+        read(4, 'NULL NEW NAMES', 'Old District', 'Old Tole'),
+      ],
+    })
+  })
+
+  // The row shape NCM's production and demo hosts returned (2026-11-16 and
+  // 2026-11-19, VX-16): `district_name` and `areas_covered`, not the names
+  // one integration's code reads.
+  test('branches read district_name and areas_covered as NCM sends them', async ({ assert }) => {
+    const { ncm } = fakeNcm([
+      json(200, [
+        {
+          pk: 101,
+          code: 'EXMPL1',
+          name: 'EXAMPLE BRANCH',
+          geocode: null,
+          address: 'Example Road',
+          surcharge: '25.00',
+          phone: '0100000000',
+          phone2: null,
+          branch_type: 'Branch',
+          areas_covered: 'Example Tole, Example Chowk',
+          province_name: 'Example Province',
+          district_name: 'Example District',
+        },
+      ]),
+    ])
+    assert.deepEqual(await ncm.listBranches(account), {
+      ok: true,
+      value: [
+        {
+          name: 'EXAMPLE BRANCH',
+          externalBranchId: '101',
+          code: 'EXMPL1',
+          courierDistrict: 'Example District',
+          coveredAreas: 'Example Tole, Example Chowk',
+          phone: '0100000000',
+        },
+      ],
+    })
+  })
 })
 
 test.group('T-FUL-109 NCM adapter: callbacks and errors', () => {
