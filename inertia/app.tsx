@@ -1,5 +1,4 @@
 import './css/app.css'
-import './css/style.css'
 import { StrictMode, type ComponentType, type ReactElement } from 'react'
 import { client } from './client'
 import RootLayout from '~/layouts/root_layout'
@@ -51,7 +50,6 @@ createInertiaApp({
       )
     }
   },
-  progress: {
-    color: '#4B5563',
-  },
+  // The bar's styles are in app.css: an injected <style> has no CSP nonce (docs/08 §8.1).
+  progress: { includeCSS: false },
 })

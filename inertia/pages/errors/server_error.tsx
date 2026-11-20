@@ -1,5 +1,6 @@
 import { ErrorScreen } from '~/components/errors/error_screen'
 import { Button } from '~/components/ui/button'
+import { t } from '~/lib/i18n'
 
 /*
  * 500–599 (docs/08 §8.3): an apology, a retry of the same URL and the
@@ -8,16 +9,15 @@ import { Button } from '~/components/ui/button'
  */
 export default function ServerError({ request_id }: { request_id: string | null }) {
   return (
-    <ErrorScreen title="Something went wrong" heading="Sorry, something went wrong">
-      <p className="text-muted-foreground">
-        This is a problem on our side. Please try again in a moment.
-      </p>
+    <ErrorScreen title={t('errors.server_error.title')} heading={t('errors.server_error.heading')}>
+      <p className="text-muted-foreground">{t('errors.server_error.body')}</p>
       <Button className="self-start" onClick={() => window.location.reload()}>
-        Try again
+        {t('errors.server_error.retry')}
       </Button>
       {request_id ? (
         <p className="text-sm text-muted-foreground">
-          Reference: <code className="font-mono select-all">{request_id}</code>
+          {t('errors.server_error.reference')}{' '}
+          <code className="font-mono select-all">{request_id}</code>
         </p>
       ) : null}
     </ErrorScreen>

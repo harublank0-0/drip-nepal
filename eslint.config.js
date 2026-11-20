@@ -218,6 +218,11 @@ const SERVER_AND_UI = [
 ]
 const A11Y_FILES = ['inertia/**/*.tsx']
 const A11Y_IGNORES = ['inertia/components/ui/**']
+// UI text comes from resources/lang/en through t() (docs/08 §11.8). The
+// upstream ui/ copies and the development fixtures under pages/dev/ are
+// exempt; a surface's pages join as M1 to M4 move their text to catalogs.
+const RAW_TEXT_FILES = ['inertia/**/*.tsx']
+const RAW_TEXT_IGNORES = ['inertia/components/ui/**', 'inertia/pages/dev/**']
 
 export default configApp(
   ...react,
@@ -263,6 +268,13 @@ export default configApp(
       'no-restricted-globals': ['error', ...OUTBOUND_GLOBALS],
       'no-restricted-properties': ['error', ...OUTBOUND_PROPERTIES],
     },
+  },
+
+  // ---- raw text (docs/08 §11.8, NFR-I18N-001); T-UI-022's lint part --------
+  {
+    files: RAW_TEXT_FILES,
+    ignores: RAW_TEXT_IGNORES,
+    rules: { 'react/jsx-no-literals': ['error', { noStrings: false, ignoreProps: true }] },
   },
 
   // ---- server layers (docs/09 §2.4, §3, §6.3, docs/07 §7.4) ----------------

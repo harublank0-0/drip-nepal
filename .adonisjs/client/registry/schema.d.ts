@@ -31,4 +31,16 @@ export interface Registry {
       errorResponse: unknown
     }
   }
+  'dev.overlays': {
+    methods: ["GET","HEAD"]
+    pattern: '/dev/overlays'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: unknown
+      errorResponse: unknown
+    }
+  }
 }

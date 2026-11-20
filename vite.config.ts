@@ -25,6 +25,8 @@ export default defineConfig({
       '~/': `${import.meta.dirname}/inertia/`,
       '@generated': `${import.meta.dirname}/.adonisjs/client/`,
       '@shared': `${import.meta.dirname}/shared/`,
+      // The message catalogs (docs/08 §11.8), shared data, not server code.
+      '@lang': `${import.meta.dirname}/resources/lang/`,
     },
   },
 

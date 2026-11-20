@@ -18,6 +18,12 @@ const routes = {
     tokens: [{"old":"/dev/design-system","type":0,"val":"dev","end":""},{"old":"/dev/design-system","type":0,"val":"design-system","end":""}],
     types: placeholder as Registry['dev.design_system']['types'],
   },
+  'dev.overlays': {
+    methods: ["GET","HEAD"],
+    pattern: '/dev/overlays',
+    tokens: [{"old":"/dev/overlays","type":0,"val":"dev","end":""},{"old":"/dev/overlays","type":0,"val":"overlays","end":""}],
+    types: placeholder as Registry['dev.overlays']['types'],
+  },
 } as const satisfies Record<string, AdonisEndpoint>
 
 export { routes }

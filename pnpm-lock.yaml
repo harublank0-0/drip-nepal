@@ -94,6 +94,9 @@ importers:
       framer-motion:
         specifier: ^12.41.0
         version: 12.42.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      intl-messageformat:
+        specifier: ^12.1.5
+        version: 12.1.5
       lucide-react:
         specifier: ^1.17.0
         version: 1.21.0(react@19.2.7)
@@ -1489,6 +1492,24 @@ packages:
     resolution:
       {
         integrity: sha512-wyFgKkFu7jki5kEL8qv7avjQ8rxHX0J/nhLWvbR9T0hOH1HRKZEvb9EW9lMjZfWHHfEzKkYf5J+NadwgCS7TXA==,
+      }
+
+  '@formatjs/fast-memoize@3.1.7':
+    resolution:
+      {
+        integrity: sha512-zXfhLpvA6T7+efdt9JLbBwZ00tT7NsBMDVnDu8rpHeNNv8KfRZAMo2gkG0k9lK/Nzc//3kJ9pImsfuJxk3KhUA==,
+      }
+
+  '@formatjs/icu-messageformat-parser@3.5.23':
+    resolution:
+      {
+        integrity: sha512-iB1fYfhtSGd8uH9A8b1m01Ujcv6QtQnJasefP3jPApmz72L/zNipzf3BdoinTMd1xuviVChjUJWL60iTwjUQ+w==,
+      }
+
+  '@formatjs/icu-skeleton-parser@2.1.13':
+    resolution:
+      {
+        integrity: sha512-IdAJ9NrHn7AF0zqncD9UpxQozTYyJtbwwrZnJMEKVxTcOOXtVkUb2XYTpNOGTAv58NCsk0rjRB9G+i2SvBmGAQ==,
       }
 
   '@hono/node-server@1.19.14':
@@ -6104,6 +6125,12 @@ packages:
       }
     engines: { node: '>=10.13.0' }
 
+  intl-messageformat@12.1.5:
+    resolution:
+      {
+        integrity: sha512-quhcDFAxy4wr/GrgWgmMjuegoedNUIxGNLORfXgDgdjuv8cBM88ClLTLXmfYC1roMSR1PPc55yUEkpJ5m67W2g==,
+      }
+
   ip-address@10.7.6:
     resolution:
       {
@@ -10247,6 +10274,14 @@ snapshots:
 
   '@fontsource-variable/noto-sans@5.2.10': {}
 
+  '@formatjs/fast-memoize@3.1.7': {}
+
+  '@formatjs/icu-messageformat-parser@3.5.23':
+    dependencies:
+      '@formatjs/icu-skeleton-parser': 2.1.13
+
+  '@formatjs/icu-skeleton-parser@2.1.13': {}
+
   '@hono/node-server@1.19.14(hono@4.12.27)':
     dependencies:
       hono: 4.12.27
@@ -13345,6 +13380,11 @@ snapshots:
   interpret@2.2.0: {}
 
   interpret@3.1.1: {}
+
+  intl-messageformat@12.1.5:
+    dependencies:
+      '@formatjs/fast-memoize': 3.1.7
+      '@formatjs/icu-messageformat-parser': 3.5.23
 
   ip-address@10.7.6: {}
 

@@ -9,5 +9,6 @@ export interface ApiDefinition {
   }
   dev: {
     designSystem: typeof routes['dev.design_system']
+    overlays: typeof routes['dev.overlays']
   }
 }
