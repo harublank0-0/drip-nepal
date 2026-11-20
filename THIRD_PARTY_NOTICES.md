@@ -1,0 +1,79 @@
+# Third-party notices
+
+Third-party source code copied into this repository, as [docs/08 §12.4](docs/08-ui-ux-and-design-system.md#124-licence-tracking-file) requires. npm packages are covered by their own `package.json` licence fields and the CI licence report, and font files by their package metadata ([ADR-0015](docs/adr/0015-ui-foundation-shadcn-and-kit-policy.md)). The vendored agent skills are recorded in `skills-lock.json`. `scripts/check_notices.mjs` (`T-UI-024`) fails when a file in `inertia/components/ui/` or `inertia/components/kit/` has no row, or a row has no file.
+
+## Copied components
+
+How the columns are read:
+
+- **Source** is the registry item the shadcn CLI read, with the `radix-nova` style of `components.json`.
+- **Retrieved** and **Last compared** are the dates of the CLI's output and of the last comparison with it (08 §12.2). Every file below was rewritten from the CLI's output on 2026-11-20, so the two dates agree.
+- **Local changes** lists what differs from the CLI's output. Three differences are not listed, because every file has them: Prettier's formatting, the `cn` import from `~/lib/utils` instead of the `cn` package (ADR-0015), and the file name the CLI writes. A listed change carries a `// dripnepal-change:` comment in the file (08 §12.1).
+- **Added by, reviewed by**: the developer who added or last upgraded the file, and the second reviewer of 08 §12.1, who reviews it with the checklist of 08 §12.3. "Review pending" means that review has not happened yet.
+
+`inertia/components/kit/` does not exist: it stays empty until VX-13 is answered in writing (08 §4.2).
+
+| Path                                      | Source                                                         | Licence     | Retrieved                 | Last compared | Local changes                                                                                                                                                                  | Added by, reviewed by        |
+| ----------------------------------------- | -------------------------------------------------------------- | ----------- | ------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------- |
+| `inertia/components/ui/accordion.tsx`     | `https://ui.shadcn.com/r/styles/radix-nova/accordion.json`     | MIT (below) | 2026-11-20, shadcn 4.11.0 | 2026-11-20    | None                                                                                                                                                                           | haruBlank0-0; review pending |
+| `inertia/components/ui/alert.tsx`         | `https://ui.shadcn.com/r/styles/radix-nova/alert.json`         | MIT (below) | 2026-11-20, shadcn 4.11.0 | 2026-11-20    | None                                                                                                                                                                           | haruBlank0-0; review pending |
+| `inertia/components/ui/avatar.tsx`        | `https://ui.shadcn.com/r/styles/radix-nova/avatar.json`        | MIT (below) | 2026-11-20, shadcn 4.11.0 | 2026-11-20    | None                                                                                                                                                                           | haruBlank0-0; review pending |
+| `inertia/components/ui/badge.tsx`         | `https://ui.shadcn.com/r/styles/radix-nova/badge.json`         | MIT (below) | 2026-11-20, shadcn 4.11.0 | 2026-11-20    | None                                                                                                                                                                           | haruBlank0-0; review pending |
+| `inertia/components/ui/button.tsx`        | `https://ui.shadcn.com/r/styles/radix-nova/button.json`        | MIT (below) | 2026-11-20, shadcn 4.11.0 | 2026-11-20    | None                                                                                                                                                                           | haruBlank0-0; review pending |
+| `inertia/components/ui/card.tsx`          | `https://ui.shadcn.com/r/styles/radix-nova/card.json`          | MIT (below) | 2026-11-20, shadcn 4.11.0 | 2026-11-20    | None                                                                                                                                                                           | haruBlank0-0; review pending |
+| `inertia/components/ui/carousel.tsx`      | `https://ui.shadcn.com/r/styles/radix-nova/carousel.json`      | MIT (below) | 2026-11-20, shadcn 4.11.0 | 2026-11-20    | None                                                                                                                                                                           | haruBlank0-0; review pending |
+| `inertia/components/ui/checkbox.tsx`      | `https://ui.shadcn.com/r/styles/radix-nova/checkbox.json`      | MIT (below) | 2026-11-20, shadcn 4.11.0 | 2026-11-20    | None                                                                                                                                                                           | haruBlank0-0; review pending |
+| `inertia/components/ui/command.tsx`       | `https://ui.shadcn.com/r/styles/radix-nova/command.json`       | MIT (below) | 2026-11-20, shadcn 4.11.0 | 2026-11-20    | None                                                                                                                                                                           | haruBlank0-0; review pending |
+| `inertia/components/ui/dialog.tsx`        | `https://ui.shadcn.com/r/styles/radix-nova/dialog.json`        | MIT (below) | 2026-11-20, shadcn 4.11.0 | 2026-11-20    | None                                                                                                                                                                           | haruBlank0-0; review pending |
+| `inertia/components/ui/dropdown-menu.tsx` | `https://ui.shadcn.com/r/styles/radix-nova/dropdown-menu.json` | MIT (below) | 2026-11-20, shadcn 4.11.0 | 2026-11-20    | None                                                                                                                                                                           | haruBlank0-0; review pending |
+| `inertia/components/ui/empty.tsx`         | `https://ui.shadcn.com/r/styles/radix-nova/empty.json`         | MIT (below) | 2026-11-20, shadcn 4.11.0 | 2026-11-20    | None                                                                                                                                                                           | haruBlank0-0; review pending |
+| `inertia/components/ui/field.tsx`         | `https://ui.shadcn.com/r/styles/radix-nova/field.json`         | MIT (below) | 2026-11-20, shadcn 4.11.0 | 2026-11-20    | None                                                                                                                                                                           | haruBlank0-0; review pending |
+| `inertia/components/ui/input-group.tsx`   | `https://ui.shadcn.com/r/styles/radix-nova/input-group.json`   | MIT (below) | 2026-11-20, shadcn 4.11.0 | 2026-11-20    | None                                                                                                                                                                           | haruBlank0-0; review pending |
+| `inertia/components/ui/input.tsx`         | `https://ui.shadcn.com/r/styles/radix-nova/input.json`         | MIT (below) | 2026-11-20, shadcn 4.11.0 | 2026-11-20    | None                                                                                                                                                                           | haruBlank0-0; review pending |
+| `inertia/components/ui/label.tsx`         | `https://ui.shadcn.com/r/styles/radix-nova/label.json`         | MIT (below) | 2026-11-20, shadcn 4.11.0 | 2026-11-20    | None                                                                                                                                                                           | haruBlank0-0; review pending |
+| `inertia/components/ui/popover.tsx`       | `https://ui.shadcn.com/r/styles/radix-nova/popover.json`       | MIT (below) | 2026-11-20, shadcn 4.11.0 | 2026-11-20    | None                                                                                                                                                                           | haruBlank0-0; review pending |
+| `inertia/components/ui/progress.tsx`      | `https://ui.shadcn.com/r/styles/radix-nova/progress.json`      | MIT (below) | 2026-11-20, shadcn 4.11.0 | 2026-11-20    | None                                                                                                                                                                           | haruBlank0-0; review pending |
+| `inertia/components/ui/scroll-area.tsx`   | `https://ui.shadcn.com/r/styles/radix-nova/scroll-area.json`   | MIT (below) | 2026-11-20, shadcn 4.11.0 | 2026-11-20    | None                                                                                                                                                                           | haruBlank0-0; review pending |
+| `inertia/components/ui/select.tsx`        | `https://ui.shadcn.com/r/styles/radix-nova/select.json`        | MIT (below) | 2026-11-20, shadcn 4.11.0 | 2026-11-20    | None                                                                                                                                                                           | haruBlank0-0; review pending |
+| `inertia/components/ui/separator.tsx`     | `https://ui.shadcn.com/r/styles/radix-nova/separator.json`     | MIT (below) | 2026-11-20, shadcn 4.11.0 | 2026-11-20    | None                                                                                                                                                                           | haruBlank0-0; review pending |
+| `inertia/components/ui/sheet.tsx`         | `https://ui.shadcn.com/r/styles/radix-nova/sheet.json`         | MIT (below) | 2026-11-20, shadcn 4.11.0 | 2026-11-20    | None                                                                                                                                                                           | haruBlank0-0; review pending |
+| `inertia/components/ui/skeleton.tsx`      | `https://ui.shadcn.com/r/styles/radix-nova/skeleton.json`      | MIT (below) | 2026-11-20, shadcn 4.11.0 | 2026-11-20    | None                                                                                                                                                                           | haruBlank0-0; review pending |
+| `inertia/components/ui/slider.tsx`        | `https://ui.shadcn.com/r/styles/radix-nova/slider.json`        | MIT (below) | 2026-11-20, shadcn 4.11.0 | 2026-11-20    | None                                                                                                                                                                           | haruBlank0-0; review pending |
+| `inertia/components/ui/sonner.tsx`        | `https://ui.shadcn.com/r/styles/radix-nova/sonner.json`        | MIT (below) | 2026-11-20, shadcn 4.11.0 | 2026-11-20    | The theme comes from the caller (the app's `ThemeProvider`), not `next-themes`, which the app does not use and `ui/` may not import (08 §12.1); `next-themes` is not installed | haruBlank0-0; review pending |
+| `inertia/components/ui/spinner.tsx`       | `https://ui.shadcn.com/r/styles/radix-nova/spinner.json`       | MIT (below) | 2026-11-20, shadcn 4.11.0 | 2026-11-20    | None                                                                                                                                                                           | haruBlank0-0; review pending |
+| `inertia/components/ui/switch.tsx`        | `https://ui.shadcn.com/r/styles/radix-nova/switch.json`        | MIT (below) | 2026-11-20, shadcn 4.11.0 | 2026-11-20    | None                                                                                                                                                                           | haruBlank0-0; review pending |
+| `inertia/components/ui/tabs.tsx`          | `https://ui.shadcn.com/r/styles/radix-nova/tabs.json`          | MIT (below) | 2026-11-20, shadcn 4.11.0 | 2026-11-20    | None                                                                                                                                                                           | haruBlank0-0; review pending |
+| `inertia/components/ui/textarea.tsx`      | `https://ui.shadcn.com/r/styles/radix-nova/textarea.json`      | MIT (below) | 2026-11-20, shadcn 4.11.0 | 2026-11-20    | None                                                                                                                                                                           | haruBlank0-0; review pending |
+| `inertia/components/ui/toggle-group.tsx`  | `https://ui.shadcn.com/r/styles/radix-nova/toggle-group.json`  | MIT (below) | 2026-11-20, shadcn 4.11.0 | 2026-11-20    | None                                                                                                                                                                           | haruBlank0-0; review pending |
+| `inertia/components/ui/toggle.tsx`        | `https://ui.shadcn.com/r/styles/radix-nova/toggle.json`        | MIT (below) | 2026-11-20, shadcn 4.11.0 | 2026-11-20    | None                                                                                                                                                                           | haruBlank0-0; review pending |
+| `inertia/components/ui/tooltip.tsx`       | `https://ui.shadcn.com/r/styles/radix-nova/tooltip.json`       | MIT (below) | 2026-11-20, shadcn 4.11.0 | 2026-11-20    | None                                                                                                                                                                           | haruBlank0-0; review pending |
+
+## Licence texts
+
+### shadcn/ui (MIT)
+
+Copied from `https://github.com/shadcn-ui/ui/blob/main/LICENSE.md` on 2026-11-20.
+
+```text
+MIT License
+
+Copyright (c) 2023 shadcn
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```

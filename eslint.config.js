@@ -242,9 +242,18 @@ export default configApp(
     ignores: ['.agents/**', 'docs/**', 'tmp/**', '.claude/worktrees/**'],
   },
   {
-    // shadcn copies keep their upstream registry names (docs/09 §1.1 principle 5, §11.2)
+    // shadcn copies stay as the registry publishes them (docs/08 §12.1): their
+    // registry file names (09 §1.1 principle 5), and none of the style rules
+    // that upstream code breaks, which would force unmarked local edits
+    // (09 §11.2). §12.3's review checks them instead.
     files: ['inertia/components/ui/**'],
-    rules: { '@unicorn/filename-case': 'off' },
+    rules: {
+      '@unicorn/filename-case': 'off',
+      '@typescript-eslint/no-shadow': 'off',
+      '@typescript-eslint/naming-convention': 'off',
+      'eqeqeq': 'off',
+      'react-hooks/set-state-in-effect': 'off',
+    },
   },
   {
     // No console output: server code logs through pino, the browser logs no
