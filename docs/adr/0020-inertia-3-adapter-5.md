@@ -18,7 +18,7 @@ OD-25 was decided on 2026-09-30: try the upgrade to `@adonisjs/inertia` 5, `@ine
 
 - Adapter 5.0.5 needs `@inertiajs/react` ^3.4.0 and `@adonisjs/vite` ^6. Version 6.0.4 of `@adonisjs/vite` needs Vite ^8 and `@adonisjs/core` ^7.5.0, and core 7.7.0 needs `@adonisjs/assembler` ^8.6.0. So the upgrade cannot be the three packages alone that 09 §10.5 named: Vite 8.3.8, `@vitejs/plugin-react` 6.3.0, `@tailwindcss/vite` 4.3.5, `@adonisjs/core` 7.7.0 and `@adonisjs/assembler` 8.6.0 move with them.
 - The `@adonisjs/inertia/vite` plugin is gone. `@adonisjs/vite` builds the SSR entry from `serverEntryPoints` into `public/assets/server/ssr.js`, with a manifest the runtime reads. The 6.0.4 types spell the options `entryPoints` and `serverEntryPoints`, unlike the 5.0.0 release notes.
-- Inertia 3 resolves a page to its component. The adapter's `resolvePageComponent` still returns the module, so the resolver returns its `default`. The root layout, attached as a one-argument function, still renders: Inertia 3 calls it as a layout resolver and, because it returns an element, wraps the page with it.
+- Inertia 3.11.0's resolver type takes the component (its runtime still accepts a module). The adapter's `resolvePageComponent` returns the module, so the resolver returns its `default` to satisfy the type. The root layout, attached as a one-argument function, still renders: Inertia 3 calls it as a layout resolver and, because it returns an element, wraps the page with it.
 - The page object is now in `<script data-page="app" type="application/json">`, not a `data-page` attribute. The page's only executable script is the external bundle.
 - No code used the Inertia 3 breaking changes: the renamed events, `router.cancel()`, the progress-bar exports or Axios.
 
@@ -28,9 +28,9 @@ OD-25 was decided on 2026-09-30: try the upgrade to `@adonisjs/inertia` 5, `@ine
    - the SSR bundle builds, and a production build booted in a staging-shaped environment renders the 404 page on the server, which React then hydrates with no console error;
    - the Tuyau client compiles against the generated registry, and its provider renders on the server and in the browser;
    - every existing page renders: the error pages, and the development gallery, which hydrates with no error;
-   - the unit, functional and concurrency suites pass (869 tests), and CI is green on the pull request;
+   - the unit, functional and concurrency suites pass (869 tests), and CI must be green on the pull request before it merges;
    - the CSP check of 09 §10.5: the page object is a JSON data block, which a browser never executes, so it needs no nonce under [07 §7.3](../07-security-threat-model-and-permissions.md#73-csp-and-security-headers), and no inline executable script remains.
-2. **SSR is configured in two places that must agree**: `ssr.entrypoint` in `config/inertia.ts` and `serverEntryPoints` in `vite.config.ts`. The production boot check (`start/boot_checks.ts`), the Dockerfile, CI's build step and the image check (`T-OPS-010`) look for `public/assets/server/.vite/manifest.json`.
+2. **SSR is configured in two places that must agree**: `ssr.entrypoint` in `config/inertia.ts` and `serverEntryPoints` in `vite.config.ts`. The production boot check (`start/boot_checks.ts`) reads `public/assets/server/.vite/manifest.json` from the working directory, as `@adonisjs/vite` does, and refuses to boot unless it has an entry for `ssr.entrypoint` whose bundle exists; the Dockerfile, CI's build step and the image check (`T-OPS-010`) look for the manifest.
 3. **Examples follow adapter 5 and Inertia 3** from now on. 08 and 09 drop their 4.2.0 marks; the 2026-09 research and audit records keep theirs as history.
 
 ## Alternatives considered
@@ -49,13 +49,13 @@ OD-25 was decided on 2026-09-30: try the upgrade to `@adonisjs/inertia` 5, `@ine
 
 - Inertia 4 or `@adonisjs/inertia` 6 is released.
 - E10's SSR work (RF-08) or E11's CSP finds a problem in the page payload or the bundle path.
-- `@adonisjs/inertia`'s `resolvePageComponent` changes what it returns, so the resolvers in `inertia/app.tsx` and `inertia/ssr.tsx` can return it directly.
+- `@adonisjs/inertia`'s `resolvePageComponent` or Inertia's resolver type changes, so the resolvers in `inertia/app.tsx` and `inertia/ssr.tsx` can return the helper's result directly.
 
 ## Verification
 
-- The full test suite, including `T-ARCH-025` (server rendering writes nothing to the console), passes on the upgraded stack.
-- `T-OPS-010` and CI's production build step check the SSR manifest at its new path; `start/boot_checks.ts` refuses a production boot without it (its unit test covers the path).
-- The hydration check of the production 404 page and of the development gallery: the `dripnepal-run` skill's page check and a script that confirms React's root on `#app`, recorded in the pull request.
+- The full test suite passes on the upgraded stack, including `T-ARCH-025` (server rendering writes nothing to the console), which now also skips Vite 8's time-prefixed status line, so it passes run alone.
+- `T-OPS-010` and CI's production build step check the SSR manifest at its new path; `start/boot_checks.ts` refuses a production boot without it, or without the `ssr.entrypoint` entry or its bundle (`T-ARCH-024`'s unit cases; a production boot with the manifest hidden was refused).
+- The hydration check of the production 404 page and of the development gallery: the `dripnepal-run` skill's page check and a script that confirms React's root on `#app`, with the results in the pull request's description.
 
 ## Related
 

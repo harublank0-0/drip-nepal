@@ -12,7 +12,8 @@ import { resolvePageComponent } from '@adonisjs/inertia/helpers'
 const appName = import.meta.env.VITE_APP_NAME || 'Drip Nepal'
 createInertiaApp({
   title: (title) => (title ? `${title} - ${appName}` : appName),
-  // Inertia 3 takes the component; the adapter's helper returns its module.
+  // Inertia 3.11's resolver type takes the component; the adapter's helper
+  // returns its module.
   resolve: async (name) => {
     const page = await resolvePageComponent(
       `./pages/${name}.tsx`,
