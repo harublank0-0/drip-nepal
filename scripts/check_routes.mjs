@@ -6,9 +6,11 @@
 // Without files the script lists the routes itself, twice, with
 // `node ace list:routes --json`: once in development, where
 // start/routes.ts also imports start/routes/dev.ts, and once in production.
-// It sets every variable a boot needs, with placeholder values and
-// throwaway keys, so the lists are the same on a laptop and in CI; listing
-// routes opens no connection. The script test passes saved copies.
+// Each listing gets only PATH, HOME and every variable a boot needs, with
+// placeholder values and throwaway keys, and ENV_PATH points at an empty
+// folder, so neither the caller's environment nor a .env file reaches it:
+// the lists are the same on a laptop and in CI. Listing routes opens no
+// connection. The script test passes saved copies.
 // The development list holds every route, so rules 1 to 3 read it. It
 // fails on:
 // 1. T-SEC-005: a seller route (any route under `/seller/` or
@@ -27,7 +29,9 @@
 // exits 1 on a rule, and 2 on a usage error or when a listing fails.
 import { execFileSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
-import { readFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { parseArgs } from 'node:util'
 
 const { values: args } = parseArgs({
@@ -59,17 +63,20 @@ const isDevRoute = (route) =>
 const key = () => randomBytes(32).toString('base64')
 
 function listRoutes(env) {
+  const envPath = mkdtempSync(join(tmpdir(), 'route-check-'))
   try {
     return execFileSync('node', ['ace', 'list:routes', '--json'], {
       encoding: 'utf8',
-      env: { ...process.env, ...env },
+      env: { PATH: process.env.PATH, HOME: process.env.HOME, ENV_PATH: envPath, ...env },
       stdio: ['ignore', 'pipe', 'pipe'],
     })
   } catch (error) {
-    console.error(
-      `node ace list:routes failed under NODE_ENV=${env.NODE_ENV}:\n${error.stderr ?? error}`
-    )
+    // The application reports a refused environment on stdout.
+    const output = [error.stdout, error.stderr].filter(Boolean).join('\n') || String(error)
+    console.error(`node ace list:routes failed under NODE_ENV=${env.NODE_ENV}:\n${output}`)
     process.exit(2)
+  } finally {
+    rmSync(envPath, { recursive: true, force: true })
   }
 }
 
