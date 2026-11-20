@@ -1,41 +1,74 @@
 import app from '@adonisjs/core/services/app'
 import { defineConfig } from '@adonisjs/shield'
+import env from '#start/env'
+import { definePolicy, NONCE } from '#modules/platform/content_security_policy'
 
-const shieldConfig = defineConfig({
-  /**
-   * Configure CSP policies for your app. Refer documentation
-   * to learn more.
+/*
+ * Content-Security-Policy (docs/07 §7.3, RF-34, NFR-SEC-007), sent by
+ * security_headers_middleware on every answer outside development, where
+ * Vite injects inline scripts and a websocket for hot reload.
+ *
+ * `target` is the policy of docs/07 §7.3. Until M7 it is sent as
+ * Content-Security-Policy-Report-Only, so its violations are reported and
+ * nothing is blocked. `enforced` is the same policy with inline styles
+ * allowed: `<style>` elements without the nonce (sonner's stylesheet on every
+ * page, the scroll lock of Radix dialogs) and style attributes (OD-52). M7
+ * enforces `target`, once sonner's injection has stopped (docs/07 note 36).
+ *
+ * The environment-specific origins of 07 §7.3 join with their work: the media
+ * origin in img-src and the upload origin in connect-src with uploads (M3),
+ * the error tracker's browser ingest origin with @sentry/react.
+ * NONCE is the request's nonce, written unquoted.
+ */
+const target = definePolicy({
+  defaultSrc: ["'self'"],
+  // The root view's inline theme script for `system` carries the nonce (docs/08 §1.2).
+  // 'report-sample': a report quotes the first 40 characters of what was refused.
+  scriptSrc: ["'self'", NONCE, "'report-sample'"],
+  styleSrc: ["'self'", NONCE, "'report-sample'"],
+  styleSrcAttr: ["'unsafe-inline'"],
+  // data: for inline images, blob: for the previews of selected files.
+  imgSrc: ["'self'", 'data:', 'blob:'],
+  fontSrc: ["'self'"],
+  connectSrc: ["'self'"],
+  formAction: ["'self'"],
+  frameAncestors: ["'none'"],
+  baseUri: ["'self'"],
+  objectSrc: ["'none'"],
+})
+
+export const csp = {
+  enabled: !app.inDev,
+  target,
+  // The target with inline styles allowed: `style-src-attr` is then redundant.
+  enforced: definePolicy({
+    ...Object.fromEntries(Object.entries(target).filter(([name]) => name !== 'styleSrcAttr')),
+    styleSrc: ["'self'", "'unsafe-inline'"],
+  }),
+  /*
+   * The error tracker's CSP report endpoint of the environment's project
+   * (docs/11 §9.6). Unset, the browser reports violations only to its console.
    */
-  csp: {
-    /*
-     * Enforced in production only: the dev server injects an inline React
-     * refresh script and a websocket for hot reload (RF-34).
-     *
-     * Scripts: this origin (the built Vite bundles) and the one inline script
-     * that carries the request's nonce: the root view's theme script for
-     * `system` (docs/08 §1.2).
-     * Styles: inline allowed, because Radix and framer-motion set style
-     * attributes and sonner injects a <style> element (OD-52 option a).
-     * Images: this origin and uploads, data: and blob: for previews in the
-     * product form, and Unsplash for the category and demo images.
-     */
-    enabled: app.inProduction,
-    directives: {
-      defaultSrc: ["'self'"],
-      // @nonce: the theme script of the root view for `system` (docs/08 §1.2).
-      scriptSrc: ["'self'", '@nonce'],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", 'data:', 'blob:', 'https://images.unsplash.com'],
-      fontSrc: ["'self'", 'data:'],
-      connectSrc: ["'self'"],
-      objectSrc: ["'none'"],
-      baseUri: ["'self'"],
-      formAction: ["'self'"],
-      frameAncestors: ["'none'"],
-    },
-    reportOnly: false,
-  },
+  reportUri: env.get('CSP_REPORT_URI'),
+}
 
+/*
+ * The other browser headers of docs/07 §7.3, sent with the CSP headers.
+ * Caddy adds Referrer-Policy and Permissions-Policy (docker/Caddyfile).
+ */
+export const browserHeaders = {
+  // Never framed, as frame-ancestors 'none' says for browsers that know CSP.
+  frameOptions: 'DENY',
+  // 180 days; one year after launch [Assumption, docs/07 §7.3].
+  strictTransportSecurity: 'max-age=15552000',
+}
+
+/*
+ * Shield checks CSRF tokens only: it runs in the router middleware, which an
+ * unknown URL never reaches, so the browser headers above are set by
+ * security_headers_middleware in the server stack instead (docs/07 note 35).
+ */
+const shieldConfig = defineConfig({
   csrf: {
     /**
      * Enable CSRF token verification for state-changing requests.
@@ -65,48 +98,6 @@ const shieldConfig = defineConfig({
      * HTTP methods protected by CSRF validation.
      */
     methods: ['POST', 'PUT', 'PATCH', 'DELETE'],
-  },
-
-  /**
-   * Control how your website should be embedded inside
-   * iframes.
-   */
-  xFrame: {
-    /**
-     * Enable the X-Frame-Options header.
-     */
-    enabled: true,
-
-    /**
-     * Block all framing attempts. Default value is DENY.
-     */
-    action: 'DENY',
-  },
-
-  /**
-   * Force browser to always use HTTPS.
-   */
-  hsts: {
-    /**
-     * Enable the Strict-Transport-Security header.
-     */
-    enabled: true,
-
-    /**
-     * HSTS policy duration remembered by browsers.
-     */
-    maxAge: '180 days',
-  },
-
-  /**
-   * Disable browsers from sniffing content types and rely only
-   * on the response content-type header.
-   */
-  contentTypeSniffing: {
-    /**
-     * Enable X-Content-Type-Options: nosniff.
-     */
-    enabled: true,
   },
 })
 

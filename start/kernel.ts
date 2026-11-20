@@ -27,6 +27,8 @@ server.use([
   () => import('#middleware/request_context_middleware'),
   () => import('#middleware/access_log_middleware'),
   () => import('#middleware/health_middleware'),
+  // Browser headers and the CSP nonce on every answer, unknown URLs included (docs/07 §7.3).
+  () => import('#middleware/security_headers_middleware'),
   () => import('#middleware/container_bindings_middleware'),
   () => import('@adonisjs/static/static_middleware'),
   () => import('@adonisjs/cors/cors_middleware'),

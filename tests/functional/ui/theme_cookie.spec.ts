@@ -1,6 +1,7 @@
 import { test } from '@japa/runner'
 import env from '#start/env'
-import shieldConfig from '#config/shield'
+import { csp } from '#config/shield'
+import { NONCE } from '#modules/platform/content_security_policy'
 import { THEME_COLORS } from '#shared/ui/theme'
 
 /*
@@ -68,8 +69,8 @@ test.group('T-UI-001 the theme class from the dn_theme cookie', () => {
     })
 
   test('T-UI-001 the production CSP lets the nonce-carrying theme script run', ({ assert }) => {
-    // config/shield.ts, enforced in production only (docs/07 §7.3).
-    const scriptSrc = (shieldConfig.csp.directives?.scriptSrc ?? []) as string[]
-    assert.includeMembers(scriptSrc, ["'self'", '@nonce'])
+    // config/shield.ts: both policies, outside development (docs/07 §7.3).
+    assert.includeMembers([...csp.enforced.scriptSrc], ["'self'", NONCE])
+    assert.includeMembers([...csp.target.scriptSrc], ["'self'", NONCE])
   })
 })
