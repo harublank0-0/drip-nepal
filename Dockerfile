@@ -23,7 +23,7 @@ FROM deps AS build
 COPY . .
 RUN node ace build
 # RF-08 guard: every page would answer 500 without the SSR bundle (docs/11 §4.2).
-RUN test -f build/ssr/ssr.js
+RUN test -f build/public/assets/server/.vite/manifest.json
 
 # Runtime: the compiled app and production dependencies only.
 FROM base AS production

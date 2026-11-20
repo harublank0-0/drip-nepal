@@ -7,7 +7,13 @@ import inertiaConfig from '#config/inertia'
  * without the SSR bundle would answer every page with a 500, so it refuses
  * to start instead and the deploy fails before taking traffic. Registered
  * for the `web` environment only (adonisrc.ts).
+ *
+ * @adonisjs/vite 6 builds the `serverEntryPoints` of vite.config.ts into
+ * `public/assets/server/` and imports them through the manifest there, so
+ * the manifest is what must exist (OD-25, Inertia adapter 5).
  */
+export const SSR_MANIFEST = 'public/assets/server/.vite/manifest.json'
+
 export function ssrBundleProblem(options: {
   inProduction: boolean
   ssrEnabled: boolean
@@ -21,7 +27,7 @@ export function ssrBundleProblem(options: {
 const problem = ssrBundleProblem({
   inProduction: app.inProduction,
   ssrEnabled: inertiaConfig.ssr?.enabled ?? false,
-  bundle: app.makePath(inertiaConfig.ssr?.bundle ?? 'ssr/ssr.js'),
+  bundle: app.makePath(SSR_MANIFEST),
   exists: existsSync,
 })
 if (problem) throw new Error(problem)

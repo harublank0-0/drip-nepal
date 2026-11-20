@@ -6,13 +6,17 @@ import { ssrBundleProblem } from '#start/boot_checks'
  * T-ARCH-024's boot rules: a production web process without the bundle
  * refuses to start; development, a present bundle or SSR off do not.
  */
-const base = { inProduction: true, ssrEnabled: true, bundle: '/app/ssr/ssr.js' }
+const base = {
+  inProduction: true,
+  ssrEnabled: true,
+  bundle: '/app/public/assets/server/.vite/manifest.json',
+}
 
 test.group('T-ARCH-024 SSR bundle boot check', () => {
   test('production without the bundle refuses to boot', ({ assert }) => {
     assert.equal(
       ssrBundleProblem({ ...base, exists: () => false }),
-      'The SSR bundle /app/ssr/ssr.js is missing: run node ace build (docs/09 §6.5)'
+      'The SSR bundle /app/public/assets/server/.vite/manifest.json is missing: run node ace build (docs/09 §6.5)'
     )
   })
 
