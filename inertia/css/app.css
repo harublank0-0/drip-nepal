@@ -1,11 +1,14 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
-@import '@fontsource-variable/geist';
-@import 'tw-animate-css';
-@import 'shadcn/tailwind.css';
 @import '@fontsource-variable/noto-sans';
 @import '@fontsource-variable/lora';
+/*
+ * sonner 2.0.7 also injects this stylesheet at runtime in a <style> element
+ * with no nonce, which the CSP of docs/07 §7.3 refuses; bundled here, toasts
+ * stay styled either way (docs/08 §5.7).
+ */
+@import 'sonner/dist/styles.css';
 
 @custom-variant dark (&:is(.dark *));
 
@@ -131,5 +134,67 @@
   }
   html {
     @apply font-sans;
+  }
+}
+
+/*
+ * Inertia's progress bar (docs/08 §8.1). inertia/app.tsx turns off the
+ * <style> element Inertia would inject (`includeCSS: false`), which the CSP
+ * of docs/07 §7.3 refuses, so the bar is styled here, in the brand colour.
+ * Inertia shows it as a top-layer element with the id `nprogress`.
+ */
+#nprogress {
+  pointer-events: none;
+  position: fixed;
+  inset: 0 auto auto 0;
+  width: 100%;
+  height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: visible;
+  border: none;
+  background: none;
+}
+
+#nprogress::backdrop {
+  display: none;
+}
+
+#nprogress .bar {
+  position: fixed;
+  z-index: 1031; /* above sticky bars where the Popover API is missing (docs/08 §5.9) */
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: var(--primary);
+}
+
+#nprogress .peg {
+  display: block;
+  position: absolute;
+  right: 0;
+  width: 100px;
+  height: 100%;
+  box-shadow:
+    0 0 10px var(--primary),
+    0 0 5px var(--primary);
+  transform: rotate(3deg) translate(0, -4px);
+}
+
+/*
+ * Reduced motion (docs/08 §5.7): the enter and exit animations of the
+ * overlay primitives (tw-animate-css and shadcn/tailwind.css) do not check
+ * prefers-reduced-motion, so this stops every animation and transition for
+ * a user who asks for less motion. They still end in their final state.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

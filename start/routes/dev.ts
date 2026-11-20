@@ -13,6 +13,8 @@ router
     router
       .get('/design-system', ({ inertia }) => inertia.render('dev/design_system/index', {}))
       .as('design_system')
+    // Overlay layering and motion checks (docs/08 §5.7, §5.9).
+    router.get('/overlays', ({ inertia }) => inertia.render('dev/overlays', {})).as('overlays')
   })
   .prefix('/dev')
   .as('dev')

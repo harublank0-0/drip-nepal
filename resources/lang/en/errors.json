@@ -1,0 +1,13 @@
+{
+  "not_found.title": "Page not found",
+  "not_found.heading": "We couldn't find that page",
+  "not_found.body": "The link may be broken, or the page may have been removed.",
+  "not_found.search_label": "Search products",
+  "not_found.search_submit": "Search",
+  "not_found.home": "Go to the home page",
+  "server_error.title": "Something went wrong",
+  "server_error.heading": "Sorry, something went wrong",
+  "server_error.body": "This is a problem on our side. Please try again in a moment.",
+  "server_error.retry": "Try again",
+  "server_error.reference": "Reference:"
+}

@@ -1,6 +1,7 @@
 import { type Data } from '@generated/data'
 import { Head, usePage } from '@inertiajs/react'
 import { type ReactNode } from 'react'
+import { t } from '~/lib/i18n'
 
 /*
  * The frame of the full-page error screens of docs/08 §8.3. Help is the
@@ -26,9 +27,9 @@ export function ErrorScreen({
       {children}
       {help ? (
         <p className="text-sm text-muted-foreground">
-          Need help?{' '}
+          {t('common.support.need_help')}{' '}
           <a className="underline underline-offset-4" href={help}>
-            Contact support
+            {t('common.support.contact')}
           </a>
         </p>
       ) : null}

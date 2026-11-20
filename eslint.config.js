@@ -218,6 +218,21 @@ const SERVER_AND_UI = [
 ]
 const A11Y_FILES = ['inertia/**/*.tsx']
 const A11Y_IGNORES = ['inertia/components/ui/**']
+// UI text comes from resources/lang/en through t() (docs/08 §11.8). The
+// upstream ui/ copies and the development fixtures under pages/dev/ are
+// exempt; a surface's pages join as M1 to M4 move their text to catalogs.
+const RAW_TEXT_FILES = ['inertia/**/*.tsx']
+const RAW_TEXT_IGNORES = ['inertia/components/ui/**', 'inertia/pages/dev/**']
+// Attributes a user sees or a screen reader speaks: their text comes from t()
+// too, written as "…", {'…'} or a template literal.
+const VISIBLE_ATTRIBUTE =
+  'JSXAttribute[name.name=/^(placeholder|title|alt|label|aria-label|aria-description|aria-roledescription|aria-valuetext)$/]'
+const VISIBLE_TEXT_MESSAGE = 'Visible text comes from the catalogs through t() (docs/08 §11.8)'
+const VISIBLE_TEXT_ATTRIBUTES = [
+  `${VISIBLE_ATTRIBUTE} > Literal[value=/\\S/]`,
+  `${VISIBLE_ATTRIBUTE} > JSXExpressionContainer > Literal[value=/\\S/]`,
+  `${VISIBLE_ATTRIBUTE} > JSXExpressionContainer > TemplateLiteral`,
+].map((selector) => ({ selector, message: VISIBLE_TEXT_MESSAGE }))
 
 export default configApp(
   ...react,
@@ -262,6 +277,22 @@ export default configApp(
     rules: {
       'no-restricted-globals': ['error', ...OUTBOUND_GLOBALS],
       'no-restricted-properties': ['error', ...OUTBOUND_PROPERTIES],
+    },
+  },
+
+  // ---- raw text (docs/08 §11.8, NFR-I18N-001); T-UI-022's lint part --------
+  {
+    files: RAW_TEXT_FILES,
+    ignores: RAW_TEXT_IGNORES,
+    rules: {
+      // Text children and string literals in JSX ({'…'}); a lone space is allowed.
+      'react/jsx-no-literals': [
+        'error',
+        { noStrings: true, allowedStrings: [' '], ignoreProps: true },
+      ],
+      // A later block that sets no-restricted-syntax for inertia/** replaces
+      // this list instead of adding to it: spread VISIBLE_TEXT_ATTRIBUTES there.
+      'no-restricted-syntax': ['error', ...VISIBLE_TEXT_ATTRIBUTES],
     },
   },
 
