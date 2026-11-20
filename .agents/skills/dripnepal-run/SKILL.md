@@ -17,7 +17,7 @@ The v1 store (storefront, seller dashboard, admin pages, demo logins) was remove
 | `/health/live`       | every mode       | `{"status":"ok","release":…}`: the process serves HTTP ([docs/11 §7.1](../../../docs/11-deployment-and-operations.md#71-endpoints)) |
 | `/health/ready`      | every mode       | `{"status":"ok"}`, or 503 when the database does not answer                                                                         |
 | `/uploads/*`         | every mode       | Files in `./storage`, served by the `fs` disk of `config/drive.ts`; nothing uploads yet                                             |
-| anything else        | every mode       | 404, with Adonis's plain default answer until E5 adds the error pages                                                               |
+| anything else        | every mode       | 404: the server-rendered error page (`errors/not_found`), or a problem+json body under `/api/`                                      |
 
 There is no demo data and no login: the demo seeder waits for OD-59 and the actions of M1 to M6, and the first platform admin comes from `node ace platform:create-admin`, which E8 builds. `node ace list:routes` lists the routes that exist (one JSON line per route in a non-interactive shell, a table in a terminal).
 
@@ -26,13 +26,13 @@ There is no demo data and no login: the demo seeder waits for OD-59 and the acti
 The app uses the same PostgreSQL as the tests. In a fresh checkout, do steps 1 and 2 of the `dripnepal-testing` skill first: `pnpm install`, a running PostgreSQL (Docker on a laptop, the cluster tools in a cloud session) with the three roles, and `.env` with an `APP_KEY`. A running server is not enough on its own: also check that the development database exists, because a server set up for tests may only have `dripnepal_test`:
 
 ```bash
-psql -h localhost -U postgres -lqt | cut -d'|' -f1 | grep -qw dripnepal && echo "dripnepal exists"
+psql -h localhost -U postgres -lqt | cut -d'|' -f1 | grep -qw dripnepal_dev && echo "dripnepal_dev exists"
 ```
 
-The development database is `dripnepal`, the `DB_DATABASE` in `.env`. Docker Compose creates it; without Docker, create it once, and on PostgreSQL older than 18 give it the local `uuidv7()` that step 1 of the `dripnepal-testing` skill describes, connected as `dripnepal`:
+The development database is `dripnepal_dev`, the `DB_DATABASE` in `.env`. Docker Compose creates it; without Docker, create it once, and on PostgreSQL older than 18 give it the local `uuidv7()` that step 1 of the `dripnepal-testing` skill describes, connected as `dripnepal`:
 
 ```bash
-psql -h localhost -U postgres -c "create database dripnepal owner dripnepal encoding 'UTF8' template template0"
+psql -h localhost -U postgres -c "create database dripnepal_dev owner dripnepal encoding 'UTF8' template template0"
 ```
 
 To keep a second checkout's data apart, give one command or server another database, such as `DB_DATABASE=dripnepal_feature_dev node ace …`: a variable set in the shell wins over `.env`.
@@ -65,7 +65,7 @@ If another checkout's server already holds the port, start this one with `PORT=3
 
 ```bash
 node ace build
-test -f build/ssr/ssr.js && echo "SSR bundle built"
+test -f build/public/assets/server/.vite/manifest.json && echo "SSR bundle built"
 cp .env build/.env
 cd build && NODE_ENV=production PORT=3334 APP_URL=http://localhost:3334 node bin/server.js
 curl -s http://localhost:3334/health/live

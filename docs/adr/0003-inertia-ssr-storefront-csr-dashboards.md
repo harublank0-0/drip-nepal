@@ -39,7 +39,7 @@ DripNepal has three UI surfaces: the **public storefront** (SEO, fast first pain
 4. **SSR-safety rules for shared components.** No `window`, `localStorage` or `matchMedia` during render. Money and dates use the one shared formatter with an explicit locale (`en-IN`, NPR, `Asia/Kathmandu`; ADR-0007) so Node and browser output match. Browser-only widgets (charts, drag and drop) appear only on CSR pages.
 5. **Slow-network data loading** ([08](../08-ui-ux-and-design-system.md)): SEO-critical product data (title, price, availability, main image) is in the initial props, never deferred; below-the-fold data uses `inertia.defer()` with few groups; product cards use `prefetch="click"`, not hover.
 6. **Private-page hygiene.** `encryptHistory` for every authenticated surface (`/account`, `/seller`, `/admin`, `/checkout`). The client's `logOut` success handler calls `router.clearHistory()`, and the server renders `/login`, `/mfa` and every page for a guest with `inertia.clearHistory()` ([07 §3.11](../07-security-threat-model-and-permissions.md#311-logout-and-inertia-history), ADR-0005).
-7. **Version.** Examples target @adonisjs/inertia 4.2.0 and Inertia v2 until OD-25 closes. An upgrade changes APIs (`useHttp`, `once()`, the removed `@adonisjs/inertia/vite` plugin) but not this decision.
+7. **Version.** Examples target @adonisjs/inertia 4.2.0 and Inertia v2 until OD-25 closes. An upgrade changes APIs (`useHttp`, `once()`, the removed `@adonisjs/inertia/vite` plugin) but not this decision. Edited 2026-11-20: OD-25 closed with the upgrade ([ADR-0020](0020-inertia-3-adapter-5.md)); examples now target adapter 5 and Inertia 3, and SSR is built from `serverEntryPoints` in `vite.config.ts`.
 
 ## Alternatives considered
 
