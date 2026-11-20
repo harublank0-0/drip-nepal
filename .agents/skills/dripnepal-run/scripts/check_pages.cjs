@@ -185,12 +185,9 @@ async function main() {
         viewport: { width, height: width < 768 ? 844 : 900 },
         deviceScaleFactor: options.scale,
       })
-      // The theme provider reads localStorage['drip-ui-theme'] (dark when unset).
-      await context.addInitScript((value) => {
-        try {
-          localStorage.setItem('drip-ui-theme', value)
-        } catch {}
-      }, theme)
+      // The server renders the theme from the dn_theme cookie (docs/08 §1.2,
+      // light when unset), so the cookie picks it before the first request.
+      await context.addCookies([{ name: 'dn_theme', value: theme, url: options.base }])
       if (options.login) await logIn(context, options.base, options.login)
 
       for (const pagePath of options.paths) {

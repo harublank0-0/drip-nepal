@@ -14,7 +14,9 @@ const ThemeProviderContext = createContext<ThemeProviderState | null>(null)
  * the server read from the `dn_theme` cookie and also used for the class on
  * <html>, so the server markup and the first client render agree and
  * nothing flips after JavaScript loads (RF-08). A change writes the cookie,
- * so the next page arrives in the chosen theme.
+ * so the next page arrives in the chosen theme. Other open tabs take the new
+ * theme on their next full page load: unlike the old localStorage `storage`
+ * event, a cookie change notifies nobody.
  */
 export function ThemeProvider({
   children,

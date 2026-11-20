@@ -2,7 +2,7 @@ import { type Data } from '@generated/data'
 import { toast, Toaster } from 'sonner'
 import { Head, usePage } from '@inertiajs/react'
 import { type ReactElement, useEffect } from 'react'
-import { ThemeProvider } from '~/components/providers/theme_provider'
+import { ThemeProvider, useTheme } from '~/components/providers/theme_provider'
 import { TooltipProvider } from '~/components/ui/tooltip'
 import { SocialMeta } from '~/components/seo/social_meta'
 
@@ -29,9 +29,15 @@ export default function RootLayout({ children }: { children: ReactElement<Data.S
       <ThemeProvider initialTheme={props.theme}>
         <TooltipProvider>
           {children}
-          <Toaster position="top-center" richColors theme={props.theme} />
+          <ThemedToaster />
         </TooltipProvider>
       </ThemeProvider>
     </>
   )
+}
+
+// Toasts follow the provider's theme, so a change shows at once, not on the next visit.
+function ThemedToaster() {
+  const { theme } = useTheme()
+  return <Toaster position="top-center" richColors theme={theme} />
 }

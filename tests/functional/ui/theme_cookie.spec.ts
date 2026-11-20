@@ -1,5 +1,6 @@
 import { test } from '@japa/runner'
 import env from '#start/env'
+import shieldConfig from '#config/shield'
 
 /*
  * T-UI-001: the server writes the theme class on <html> from the
@@ -51,5 +52,13 @@ test.group('T-UI-001 the theme class from the dn_theme cookie', () => {
       assert.isTrue(themeScript(page), 'the inline theme script')
       const head = page.slice(0, page.indexOf('</head>'))
       assert.isTrue(themeScript(head), 'the script runs in <head>, before first paint')
+      // CSP is off outside production; the attribute is what production fills.
+      assert.match(head, /<script nonce="[^"]*">[^<]*prefers-color-scheme/)
     })
+
+  test('T-UI-001 the production CSP lets the nonce-carrying theme script run', ({ assert }) => {
+    // config/shield.ts, enforced in production only (docs/07 §7.3).
+    const scriptSrc = (shieldConfig.csp.directives?.scriptSrc ?? []) as string[]
+    assert.includeMembers(scriptSrc, ["'self'", '@nonce'])
+  })
 })
