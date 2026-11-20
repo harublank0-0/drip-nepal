@@ -162,6 +162,7 @@
 
 #nprogress .bar {
   position: fixed;
+  z-index: 1031; /* above sticky bars where the Popover API is missing (docs/08 §5.9) */
   top: 0;
   left: 0;
   width: 100%;

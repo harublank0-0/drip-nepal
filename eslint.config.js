@@ -223,6 +223,14 @@ const A11Y_IGNORES = ['inertia/components/ui/**']
 // exempt; a surface's pages join as M1 to M4 move their text to catalogs.
 const RAW_TEXT_FILES = ['inertia/**/*.tsx']
 const RAW_TEXT_IGNORES = ['inertia/components/ui/**', 'inertia/pages/dev/**']
+// Attributes a user sees or a screen reader speaks: their text comes from t() too.
+const VISIBLE_TEXT_ATTRIBUTES = [
+  {
+    selector:
+      'JSXAttribute[name.name=/^(placeholder|title|alt|label|aria-label|aria-description|aria-roledescription|aria-valuetext)$/] > Literal[value=/\\S/]',
+    message: 'Visible text comes from the catalogs through t() (docs/08 §11.8)',
+  },
+]
 
 export default configApp(
   ...react,
@@ -274,7 +282,14 @@ export default configApp(
   {
     files: RAW_TEXT_FILES,
     ignores: RAW_TEXT_IGNORES,
-    rules: { 'react/jsx-no-literals': ['error', { noStrings: false, ignoreProps: true }] },
+    rules: {
+      // Text children and string literals in JSX ({'…'}); a lone space is allowed.
+      'react/jsx-no-literals': [
+        'error',
+        { noStrings: true, allowedStrings: [' '], ignoreProps: true },
+      ],
+      'no-restricted-syntax': ['error', ...VISIBLE_TEXT_ATTRIBUTES],
+    },
   },
 
   // ---- server layers (docs/09 §2.4, §3, §6.3, docs/07 §7.4) ----------------
