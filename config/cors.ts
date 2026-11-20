@@ -1,5 +1,5 @@
-import app from '@adonisjs/core/services/app'
 import { defineConfig } from '@adonisjs/cors'
+import env from '#start/env'
 
 /**
  * Configuration options to tweak the CORS policy. The following
@@ -14,11 +14,12 @@ const corsConfig = defineConfig({
   enabled: true,
 
   /**
-   * In development, allow every origin to simplify local front/backend setup.
-   * In production, keep an explicit allowlist (empty by default, so no
-   * cross-origin browser access is allowed until configured).
+   * Only the application's own origin, in every environment (docs/11 §4.3,
+   * RF-43, T-SEC-042). Pages and the API are served from `APP_URL`, so no
+   * other origin needs credentialed access; reflecting any origin in
+   * development would let any local page act with the developer's session.
    */
-  origin: app.inDev ? true : [],
+  origin: [new URL(env.get('APP_URL')).origin],
 
   /**
    * HTTP methods accepted for cross-origin requests.

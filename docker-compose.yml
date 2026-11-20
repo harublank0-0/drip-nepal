@@ -1,3 +1,6 @@
+# Development only (docs/11 §4.3, RF-43). Staging and production use
+# deploy/compose.yml (docs/11 §4.5). Compose reads DB_PASSWORD from .env,
+# and every port listens on this machine only.
 services:
   postgres:
     image: docker.io/postgres:18.4
@@ -5,30 +8,37 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: dripnepal
-      POSTGRES_PASSWORD: secret
-      POSTGRES_DB: dripnepal
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+      POSTGRES_DB: dripnepal_dev
     ports:
-      - '5432:5432'
+      - '127.0.0.1:5432:5432'
     volumes:
       - postgres_data:/var/lib/postgresql
-      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro # creates dripnepal_test (RF-32)
-
-  redis:
-    image: docker.io/redis:8.6
-    container_name: dripnepal-redis
-    restart: unless-stopped
-    ports:
-      - '6379:6379'
+      # Creates the roles and dripnepal_test on an empty volume (RF-32).
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U dripnepal -d dripnepal_dev']
+      interval: 5s
+      retries: 10
 
   # Mail capture for development. Nothing sends email yet: @adonisjs/mail
   # returns with M1's notifications work (docs/12 §5.1), which uses it.
   mailpit:
-    image: docker.io/axllent/mailpit:latest
+    image: docker.io/axllent/mailpit:v1.33.1
     container_name: dripnepal-mailpit
     restart: unless-stopped
     ports:
-      - '8025:8025'
-      - '1025:1025'
+      - '127.0.0.1:1025:1025'
+      - '127.0.0.1:8025:8025'
+
+  # Nothing in R1 uses Redis (docs/11 §2.2): start it with
+  # `docker compose --profile redis up -d` when a spike needs it.
+  redis:
+    image: docker.io/redis:8.6
+    container_name: dripnepal-redis
+    profiles: [redis]
+    ports:
+      - '127.0.0.1:6379:6379'
 
 volumes:
   postgres_data:
