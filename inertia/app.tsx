@@ -33,8 +33,9 @@ createInertiaApp({
       </StrictMode>
     )
 
-    // The server renders every page (config/inertia.ts), so React adopts
-    // that HTML instead of throwing it away and painting again (RF-08).
+    // The server renders the SSR surfaces of config/inertia.ts: React adopts
+    // that HTML instead of throwing it away and painting again (RF-08). Every
+    // other page arrives empty and renders here.
     if (el.hasChildNodes()) {
       hydrateRoot(el, app)
     } else {

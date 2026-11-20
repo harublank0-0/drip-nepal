@@ -2,6 +2,7 @@ import type { HttpContext } from '@adonisjs/core/http'
 import type { NextFn } from '@adonisjs/core/types/http'
 import BaseInertiaMiddleware from '@adonisjs/inertia/inertia_middleware'
 import { appUrl, support } from '#config/storefront'
+import { parseTheme, THEME_COOKIE } from '#shared/ui/theme'
 
 export default class InertiaMiddleware extends BaseInertiaMiddleware {
   async share(ctx: HttpContext) {
@@ -38,6 +39,12 @@ export default class InertiaMiddleware extends BaseInertiaMiddleware {
        */
       support,
       appUrl,
+      /*
+       * The theme from the `dn_theme` cookie (docs/08 §1.2, docs/09 §13.10):
+       * the root view writes its class on <html>, and ThemeProvider starts
+       * from it, so the server markup and the first client render agree.
+       */
+      theme: parseTheme(ctx.request.plainCookie(THEME_COOKIE, { encoded: false })),
     }
   }
 

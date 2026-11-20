@@ -20,7 +20,16 @@ export default function render(page: ReturnType<typeof usePage>) {
     resolve: async (name) => {
       const resolved = await resolvePageComponent(
         `./pages/${name}.tsx`,
-        import.meta.glob<{ default: ComponentType }>('./pages/**/*.tsx', { eager: true }),
+        // Only the server-rendered surfaces of config/inertia.ts (docs/09 §13.8 rule 4).
+        import.meta.glob<{ default: ComponentType }>(
+          [
+            './pages/storefront/**/*.tsx',
+            './pages/auth/**/*.tsx',
+            './pages/payments/**/*.tsx',
+            './pages/errors/**/*.tsx',
+          ],
+          { eager: true }
+        ),
         (child: ReactElement<Data.SharedProps>) => <RootLayout children={child} />
       )
       return resolved.default

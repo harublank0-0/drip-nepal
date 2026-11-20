@@ -98,7 +98,7 @@ What a line means:
 
 - **`external requests failed (not counted)`**: other hosts, such as fonts a cloud session's network policy blocks. They don't fail the run.
 
-The script catches errors, not ugliness. **Look at the screenshots** (open the PNG files) for layout, contrast and spacing, compare with docs/08, and check both themes: the default theme when nothing is saved is dark, and a page that only looks right in one theme is a bug.
+The script catches errors, not ugliness. **Look at the screenshots** (open the PNG files) for layout, contrast and spacing, compare with docs/08, and check both themes: the default theme when no `dn_theme` cookie is set is light (docs/08 §1.2), and a page that only looks right in one theme is a bug.
 
 The script loads Playwright from `require('playwright')` (pre-installed in Claude Code cloud sessions), falling back to the copy pnpm installs for `@japa/browser-client`. If neither has a browser, it says how to install one.
 
