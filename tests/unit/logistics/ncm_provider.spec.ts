@@ -644,6 +644,7 @@ test.group('T-FUL-109 NCM adapter: reads', () => {
           district: 'Old District',
           areas_covered: null,
           covered_areas: 'Old Tole',
+          areas: 'Oldest Tole',
         }),
       ]),
     ])
