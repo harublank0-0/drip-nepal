@@ -122,6 +122,16 @@ test.group('T-UI-012 initial JavaScript per route', (group) => {
     assert.match(result.stdout, /^seller\/orders\/index: .* of 500 KB \(dashboard\)$/m)
   })
 
+  test('T-UI-012 an import the manifest does not list fails, not goes uncounted', async ({
+    assert,
+  }) => {
+    const result = await check({
+      chunks: { 'inertia/app.tsx': { file: 'app.js', isEntry: true, imports: ['_gone.js'] } },
+    })
+    assert.equal(result.code, 1)
+    assert.include(result.stderr, 'the client manifest imports _gone.js, which it does not list')
+  })
+
   test('T-UI-012 a build with no client entry fails', async ({ assert }) => {
     const noEntry = await check({
       chunks: { 'inertia/app.tsx': { file: 'app.js' } },

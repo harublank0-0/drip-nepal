@@ -2067,7 +2067,7 @@ Storage from these figures: 50,000 × 2 MB = 100 GB of originals and 50,000 × 0
 
 ### 13.2 Droplet sizing: 4 GB / 2 vCPU
 
-The memory split below is [Assumption] until M0 measures SSR memory and M3 measures image processing. **SSR measured 2026-11-20** (E10, note 116): the production image, on Linux arm64 under Docker, used 90 MiB after boot and about 210 MiB (209 MB anonymous memory) after 30,000 renders of the server-rendered 404 page, 20,000 of them at 50 concurrent requests (8,000 a second, p99 10 ms), which leaves the `web` budget of 1.0 GB room. The 404 page is the only server-rendered page before M4, so M4 measures again with the storefront pages [Verified-repo, a single local run]. It decides whether 4 GB is enough, and whether the `mem_limit` hardening of §4.5 can be switched on.
+The memory split below is [Assumption] until M0 measures SSR memory and M3 measures image processing. **SSR measured 2026-11-20** (E10, note 116): the production image, on Linux arm64 under Docker, used 90 MiB after boot and about 210 MiB (209 MB anonymous memory) after 30,000 renders of the server-rendered 404 page, 20,000 of them at 50 concurrent requests (8,000 a second, p99 10 ms), which leaves the `web` budget of 1.0 GB room. The 404 page is the only server-rendered page before M4, so M4 measures again with the storefront pages (measured once, locally, with `docker stats` and the container's cgroup counters). It decides whether 4 GB is enough, and whether the `mem_limit` hardening of §4.5 can be switched on.
 
 | Consumer                                                                      | Budget |
 | ----------------------------------------------------------------------------- | ------ |

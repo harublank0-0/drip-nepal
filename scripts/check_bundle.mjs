@@ -54,7 +54,11 @@ const manifest = readManifest(assets)
 if (!manifest[ENTRY]?.isEntry) problems.push(`the client manifest has no ${ENTRY} entry`)
 
 function staticClosure(key, seen = new Set()) {
-  if (seen.has(key) || !manifest[key]) return seen
+  if (seen.has(key)) return seen
+  if (!manifest[key]) {
+    problems.push(`the client manifest imports ${key}, which it does not list`)
+    return seen
+  }
   seen.add(key)
   for (const imported of manifest[key].imports ?? []) staticClosure(imported, seen)
   return seen
