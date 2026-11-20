@@ -51,7 +51,7 @@ const problem = ssrBundleProblem({
   ssrEnabled: inertiaConfig.ssr?.enabled ?? false,
   // @adonisjs/vite resolves its build directory from the working directory.
   manifest: resolve(SSR_MANIFEST),
-  entry: inertiaConfig.ssr?.entrypoint ?? '',
+  entry: inertiaConfig.ssr?.entrypoint ?? '(ssr.entrypoint is not set in config/inertia.ts)',
   read: (path) => (existsSync(path) ? readFileSync(path, 'utf8') : null),
   exists: existsSync,
 })
