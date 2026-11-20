@@ -102,4 +102,22 @@ test.group('T-SEC-035 browser headers on every answer', () => {
       csp.reportUri = saved
     }
   })
+
+  // Every inline script the server writes must carry the nonce, or the enforced
+  // policy refuses it: here the Vite refresh preamble, written because the dev
+  // server runs under `node ace test`, and the theme script for `system`.
+  test('T-SEC-035 every inline script of a page carries the header nonce', async ({ assert }) => {
+    const response = await fetch(`${base()}/dev/design-system`, {
+      headers: { Accept: 'text/html', Cookie: 'dn_theme=system' },
+    })
+    const html = await response.text()
+    const nonce = nonceOf(response.headers.get('content-security-policy'))
+    const inline = [...html.matchAll(/<script\b([^>]*)>/g)]
+      .map((match) => match[1])
+      .filter(
+        (attributes) => !/\bsrc=/.test(attributes) && !/type="application\/json"/.test(attributes)
+      )
+    assert.isAtLeast(inline.length, 2)
+    for (const attributes of inline) assert.include(attributes, `nonce="${nonce}"`)
+  })
 })
