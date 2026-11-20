@@ -112,6 +112,8 @@ jobs:
         run: node scripts/check_portability.mjs
       - name: T-ARCH-033 test IDs are registered
         run: node scripts/check_test_ids.mjs
+      - name: T-UI-024 notices file matches ui/ and kit/
+        run: node scripts/check_notices.mjs
 
   # docs/10 §5.1 Supply chain (docs/07 §7.1, §7.2).
   supply-chain:

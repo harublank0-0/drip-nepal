@@ -61,8 +61,14 @@ Typography.P = P
 
 function BlockQuote({ children, className }: TypographyProps) {
   return (
-    <blockquote className={cn('mt-6 border-l-2 pl-6 italic', className)}>
-      &quot;{children}&quot;
+    // The quote marks come from CSS, so they follow the page language (docs/08 §11.8).
+    <blockquote
+      className={cn(
+        'mt-6 border-l-2 pl-6 italic before:content-[open-quote] after:content-[close-quote]',
+        className
+      )}
+    >
+      {children}
     </blockquote>
   )
 }
