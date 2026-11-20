@@ -54,6 +54,8 @@ test.group('T-SEC-035 browser headers on every answer', () => {
       assert.equal(enforcedHeader, enforced(nonce!))
       assert.equal(response.headers.get('content-security-policy-report-only'), target(nonce!))
       assert.isNull(response.headers.get('reporting-endpoints'))
+      // The headers come without a session: health answers create none (T-SEC-009).
+      if (path === '/health/live') assert.isNull(response.headers.get('set-cookie'))
     })
 
   test('T-SEC-035 the theme script carries the header nonce, new on every request', async ({
