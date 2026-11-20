@@ -74,6 +74,8 @@ function listRoutes(env) {
     // The application reports a refused environment on stdout.
     const output = [error.stdout, error.stderr].filter(Boolean).join('\n') || String(error)
     console.error(`node ace list:routes failed under NODE_ENV=${env.NODE_ENV}:\n${output}`)
+    // process.exit() skips `finally`, so the folder goes first.
+    rmSync(envPath, { recursive: true, force: true })
     process.exit(2)
   } finally {
     rmSync(envPath, { recursive: true, force: true })
