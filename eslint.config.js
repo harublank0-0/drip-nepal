@@ -223,14 +223,16 @@ const A11Y_IGNORES = ['inertia/components/ui/**']
 // exempt; a surface's pages join as M1 to M4 move their text to catalogs.
 const RAW_TEXT_FILES = ['inertia/**/*.tsx']
 const RAW_TEXT_IGNORES = ['inertia/components/ui/**', 'inertia/pages/dev/**']
-// Attributes a user sees or a screen reader speaks: their text comes from t() too.
+// Attributes a user sees or a screen reader speaks: their text comes from t()
+// too, written as "…", {'…'} or a template literal.
+const VISIBLE_ATTRIBUTE =
+  'JSXAttribute[name.name=/^(placeholder|title|alt|label|aria-label|aria-description|aria-roledescription|aria-valuetext)$/]'
+const VISIBLE_TEXT_MESSAGE = 'Visible text comes from the catalogs through t() (docs/08 §11.8)'
 const VISIBLE_TEXT_ATTRIBUTES = [
-  {
-    selector:
-      'JSXAttribute[name.name=/^(placeholder|title|alt|label|aria-label|aria-description|aria-roledescription|aria-valuetext)$/] > Literal[value=/\\S/]',
-    message: 'Visible text comes from the catalogs through t() (docs/08 §11.8)',
-  },
-]
+  `${VISIBLE_ATTRIBUTE} > Literal[value=/\\S/]`,
+  `${VISIBLE_ATTRIBUTE} > JSXExpressionContainer > Literal[value=/\\S/]`,
+  `${VISIBLE_ATTRIBUTE} > JSXExpressionContainer > TemplateLiteral`,
+].map((selector) => ({ selector, message: VISIBLE_TEXT_MESSAGE }))
 
 export default configApp(
   ...react,
@@ -288,6 +290,8 @@ export default configApp(
         'error',
         { noStrings: true, allowedStrings: [' '], ignoreProps: true },
       ],
+      // A later block that sets no-restricted-syntax for inertia/** replaces
+      // this list instead of adding to it: spread VISIBLE_TEXT_ATTRIBUTES there.
       'no-restricted-syntax': ['error', ...VISIBLE_TEXT_ATTRIBUTES],
     },
   },

@@ -33,7 +33,7 @@ function frontendKeys(): string[] {
   for (const entry of readdirSync(FRONTEND_DIR, { recursive: true, encoding: 'utf8' })) {
     if (!/\.tsx?$/.test(entry) || entry.startsWith(join('components', 'ui'))) continue
     const source = readFileSync(join(FRONTEND_DIR, entry), 'utf8')
-    for (const match of source.matchAll(/\bt\(\s*'([^']+)'/g)) keys.add(match[1])
+    for (const match of source.matchAll(/\bt\(\s*(['"`])([^'"`]+)\1/g)) keys.add(match[2])
   }
   return [...keys]
 }

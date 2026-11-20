@@ -42,6 +42,16 @@ test.group('T-UI-022 raw text in JSX', () => {
         rule: 'no-restricted-syntax',
       },
       {
+        label: 'a string literal in an attribute',
+        body: "<input placeholder={'Search'} />",
+        rule: 'no-restricted-syntax',
+      },
+      {
+        label: 'a template literal in an attribute',
+        body: '<input placeholder={`Search ${0}`} />',
+        rule: 'no-restricted-syntax',
+      },
+      {
         label: 'a literal aria-label',
         body: '<button aria-label="Close" />',
         rule: 'no-restricted-syntax',
