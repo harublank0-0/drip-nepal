@@ -84,6 +84,11 @@ jobs:
           node ace build
           test -f build/public/assets/server/.vite/manifest.json
           test -f build/public/assets/server/ssr.js
+      # docs/08 §10.1: T-UI-012 (initial JavaScript per route within budget),
+      # T-UI-013 (no devtools strings) and T-ARCH-002's build-output part (the
+      # SSR bundle holds only the server-rendered surfaces).
+      - name: T-UI-012, T-UI-013 and T-ARCH-002 bundle checks
+        run: node scripts/check_bundle.mjs
 
   # docs/10 §5.1 Repository. T-ARCH-016 runs in the Tests job, after the
   # suites have regenerated .adonisjs/.
@@ -304,7 +309,18 @@ jobs:
         env:
           APP_RELEASE: ${{ github.event.pull_request.head.sha || github.sha }}
         run: docker build --build-arg APP_RELEASE="$APP_RELEASE" --tag dripnepal:ci .
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+      - name: Chromium for the hydration check
+        run: pnpm exec playwright install --with-deps chromium
       # T-OPS-010 (docs/11 §4.2): non-root, no .env*, SSR bundle present, and
-      # the image boots in a staging-shaped environment.
-      - name: T-OPS-010 image checks
-        run: scripts/check_image.sh dripnepal:ci
+      # the image boots in a staging-shaped environment. Then, with it
+      # running, T-ARCH-002 (docs/03 §3.3): the 404 page is server-rendered
+      # and React hydrates it in Chromium with no error.
+      - name: T-OPS-010 image checks and T-ARCH-002 hydration
+        run: scripts/check_image.sh dripnepal:ci node scripts/check_hydration.mjs --base http://127.0.0.1:3399

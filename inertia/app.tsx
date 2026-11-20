@@ -9,6 +9,14 @@ import { TuyauProvider } from '@adonisjs/inertia/react'
 import { resolvePageComponent } from '@adonisjs/inertia/helpers'
 
 const appName = import.meta.env.VITE_APP_NAME || 'Drip Nepal'
+
+// The development pages (routed only outside production, RF-40) are not built
+// into the production bundle: `vite build` replaces import.meta.env.DEV with
+// false, so the first glob and its chunks drop out (docs/08 §10.1).
+const pages = import.meta.env.DEV
+  ? import.meta.glob<{ default: ComponentType }>('./pages/**/*.tsx')
+  : import.meta.glob<{ default: ComponentType }>(['./pages/**/*.tsx', '!./pages/dev/**'])
+
 createInertiaApp({
   title: (title) => (title ? `${title} - ${appName}` : appName),
   // Inertia 3.11's resolver type takes the component; the adapter's helper
@@ -16,7 +24,7 @@ createInertiaApp({
   resolve: async (name) => {
     const page = await resolvePageComponent(
       `./pages/${name}.tsx`,
-      import.meta.glob<{ default: ComponentType }>('./pages/**/*.tsx'),
+      pages,
       (child: ReactElement<Data.SharedProps>) => <RootLayout children={child} />
     )
     return page.default

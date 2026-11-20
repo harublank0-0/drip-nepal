@@ -5,10 +5,14 @@
 #   3. the SSR bundle is present;
 #   4. it boots: /health/live answers 200 with the image's release, and
 #      /health/ready answers 503 because no database is reachable.
-# Usage: scripts/check_image.sh <image>
+# Any further arguments are a command run while the container listens on
+# http://127.0.0.1:3399; its failure fails the script. CI passes the
+# T-ARCH-002 hydration check (scripts/check_hydration.mjs).
+# Usage: scripts/check_image.sh <image> [command ...]
 set -eu
 
 IMAGE="$1"
+shift
 NAME="dripnepal-image-check-$$"
 trap 'docker rm -f "$NAME" >/dev/null 2>&1 || true' EXIT
 
@@ -53,6 +57,10 @@ echo "$live" | grep -q "\"release\":\"$release\"" || fail "/health/live does not
 
 ready=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3399/health/ready)
 [ "$ready" = "503" ] || fail "/health/ready answered $ready without a database"
+
+if [ "$#" -gt 0 ]; then
+  "$@" || fail "the command run against the image failed: $*"
+fi
 
 docker rm -f "$NAME" >/dev/null
 echo "T-OPS-010: image checks passed (uid $uid, release $release)"

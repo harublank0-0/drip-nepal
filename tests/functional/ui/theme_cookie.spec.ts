@@ -1,6 +1,7 @@
 import { test } from '@japa/runner'
 import env from '#start/env'
 import shieldConfig from '#config/shield'
+import { THEME_COLORS } from '#shared/ui/theme'
 
 /*
  * T-UI-001: the server writes the theme class on <html> from the
@@ -23,6 +24,8 @@ async function html(path: string, cookie?: string) {
 
 const htmlTag = (page: string) => page.match(/<html[^>]*>/)?.[0] ?? ''
 const themeScript = (page: string) => /<script[^>]*>[^<]*prefers-color-scheme/.test(page)
+const themeColors = (page: string) =>
+  [...page.matchAll(/<meta name="theme-color"([^>]*)>/g)].map((match) => match[1].trim())
 const themeProp = (page: string) =>
   page.match(/&quot;theme&quot;:&quot;(\w+)&quot;|"theme":"(\w+)"/)
 
@@ -42,6 +45,9 @@ test.group('T-UI-001 the theme class from the dn_theme cookie', () => {
       assert.isFalse(themeScript(page), 'no inline theme script')
       const prop = themeProp(page)
       assert.equal(prop?.[1] ?? prop?.[2], expected, 'the theme page prop')
+      assert.deepEqual(themeColors(page), [
+        `content="${THEME_COLORS[expected as 'light' | 'dark']}" /`,
+      ])
     })
 
   test('T-UI-001 system leaves the class to the inline script on {path}')
@@ -54,6 +60,11 @@ test.group('T-UI-001 the theme class from the dn_theme cookie', () => {
       assert.isTrue(themeScript(head), 'the script runs in <head>, before first paint')
       // CSP is off outside production; the attribute is what production fills.
       assert.match(head, /<script nonce="[^"]*">[^<]*prefers-color-scheme/)
+      // The browser picks the chrome colour from the colour scheme.
+      assert.deepEqual(themeColors(head), [
+        `content="${THEME_COLORS.light}" media="(prefers-color-scheme: light)" /`,
+        `content="${THEME_COLORS.dark}" media="(prefers-color-scheme: dark)" /`,
+      ])
     })
 
   test('T-UI-001 the production CSP lets the nonce-carrying theme script run', ({ assert }) => {
