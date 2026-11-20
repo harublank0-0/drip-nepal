@@ -468,7 +468,7 @@ export class NcmCourierProvider implements CourierProvider {
 
   /*
    * `GET /api/v2/branches`. Its response shape is not documented. NCM's
-   * demo and production hosts returned one bare array of rows with `pk`,
+   * production and demo hosts returned one bare array of rows with `pk`,
    * `code`, `name`, `district_name` and `areas_covered` (2026-11-16 and
    * 2026-11-19, VX-16); the names one integration's code reads (`district`,
    * `covered_areas`, `areas`) stay as fallbacks. Only entries with a name
