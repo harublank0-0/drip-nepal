@@ -7,7 +7,7 @@ import {
   Loader2Icon,
 } from 'lucide-react'
 
-// dripnepal-change: the theme comes from the caller, the app's ThemeProvider (docs/08 §1.2), not next-themes, which the app does not use; ui/ imports nothing from the project (08 §12.1).
+// dripnepal-change: three edits (this import list, the signature, theme={theme}): the theme comes from the caller, the app's ThemeProvider (docs/08 §1.2), not next-themes, which the app does not use; ui/ imports nothing from the project (08 §12.1).
 const Toaster = ({ theme = 'system', ...props }: ToasterProps) => {
   return (
     <Sonner

@@ -7,8 +7,11 @@
 // one row in the notices file, whose first cell is the file's path in
 // backticks, and every such row needs its file. In ui/, a file with a
 // `dripnepal-change:` comment needs a row whose "Local changes" cell is not
-// "None", and a row that lists local changes needs that comment in its file
-// (08 §12.1). `--root` points it at a fixture tree
+// "None" (an empty cell counts as None), and a row that lists local changes
+// needs that comment in its file (08 §12.1). A row must have as many cells
+// as the header; `\|` inside a cell is not a separator. Dotfiles (an
+// editor's or the OS's own) are not copied components. `--root` points it at
+// a fixture tree
 // (tests/unit/scripts/check_notices.spec.ts).
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -24,7 +27,7 @@ function filesIn(folder) {
   const directory = join(root, folder)
   if (!existsSync(directory)) return []
   return readdirSync(directory, { recursive: true, withFileTypes: true })
-    .filter((entry) => entry.isFile())
+    .filter((entry) => entry.isFile() && !entry.name.startsWith('.'))
     .map((entry) =>
       join(entry.parentPath, entry.name)
         .slice(root.length + 1)
@@ -46,12 +49,17 @@ let header
 for (const [index, line] of readFileSync(noticesPath, 'utf8').split('\n').entries()) {
   if (!line.startsWith('|')) continue
   const cells = line
-    .slice(1, line.endsWith('|') ? -1 : undefined)
-    .split('|')
+    .trim()
+    .replace(/^\|/, '')
+    .replace(/(?<!\\)\|$/, '')
+    .split(/(?<!\\)\|/)
     .map((cell) => cell.trim())
   if (cells[0] === 'Path') header = cells
   const path = /^`([^`]+)`$/.exec(cells[0])?.[1]
   if (!path || !FOLDERS.some((folder) => path.startsWith(`${folder}/`))) continue
+  if (header && cells.length !== header.length) {
+    problems.push(`${NOTICES}:${index + 1}: ${cells.length} cells, the header has ${header.length}`)
+  }
   if (rows.has(path)) problems.push(`${NOTICES}:${index + 1}: a second row for ${path}`)
   rows.set(path, { cells, line: index + 1 })
 }
@@ -67,7 +75,8 @@ for (const file of files) {
   }
   if (!file.startsWith('inertia/components/ui/') || localChanges === -1) continue
   const marked = readFileSync(join(root, file), 'utf8').includes(MARKER)
-  const listed = (row.cells[localChanges] ?? '') !== 'None'
+  const cell = (row.cells[localChanges] ?? '').toLowerCase()
+  const listed = cell !== '' && cell !== 'none'
   if (marked && !listed) {
     problems.push(`${NOTICES}:${row.line}: ${file} has a ${MARKER} comment, but its row says None`)
   }
