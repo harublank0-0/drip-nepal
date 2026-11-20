@@ -48,3 +48,27 @@ export async function endSession(ctx: HttpContext) {
   ctx.session.clear()
   ctx.session.regenerate()
 }
+
+/*
+ * Inertia props a poll asks for (docs/07 §3.4); today the seller
+ * dashboard's new-order count (FR-NOT-003).
+ */
+export const POLL_PROPS: ReadonlySet<string> = new Set(['newOrderCount'])
+
+/*
+ * Whether a request is user-initiated, so it refreshes an idle clock
+ * (`seller_seen_at`, `admin_seen_at`; docs/07 §3.4): a page visit, full or
+ * Inertia, or an unsafe API method. A poll never is: a request with
+ * `X-Poll: 1`, or an Inertia partial reload that asks only for poll props.
+ */
+export function isUserInitiated(ctx: HttpContext) {
+  const request = ctx.request
+  if (request.header('x-poll') === '1') return false
+  const method = request.method()
+  if (request.url().startsWith('/api/')) return !['GET', 'HEAD', 'OPTIONS'].includes(method)
+  if (method !== 'GET') return false
+  const partial = request.header('x-inertia-partial-data')
+  if (!partial) return true
+  const props = partial.split(',').map((prop) => prop.trim())
+  return !props.every((prop) => POLL_PROPS.has(prop))
+}

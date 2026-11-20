@@ -1,6 +1,10 @@
 import db from '@adonisjs/lucid/services/db'
 import { maySignIn } from '#modules/identity/domain/user_status'
-import { ABSOLUTE_SESSION_LIMIT_MS, olderThan } from '#modules/identity/domain/session_limits'
+import {
+  ABSOLUTE_SESSION_LIMIT_MS,
+  SELLER_IDLE_LIMIT_MS,
+  olderThan,
+} from '#modules/identity/domain/session_limits'
 
 /*
  * The identity module's reads for other layers (docs/09 §2.2: a module's
@@ -27,6 +31,20 @@ export function accountStanding(
   if (typeof stamp !== 'string' || stamp !== user.securityStamp) return 'signed_out'
   if (olderThan(session.authenticatedAt, ABSOLUTE_SESSION_LIMIT_MS, now)) return 'signed_out'
   return 'valid'
+}
+
+/*
+ * The seller idle limit of docs/07 §3.4: a session whose `seller_seen_at`
+ * is older than 12 hours is idle. A session without one starts the clock at
+ * `authenticated_at`; an unreadable value counts as idle. `seller_context`
+ * asks only after it has found the caller in the shop.
+ */
+export function sellerSessionIdle(
+  session: { sellerSeenAt: unknown; authenticatedAt: unknown },
+  now = Date.now()
+): boolean {
+  const seenAt = session.sellerSeenAt ?? session.authenticatedAt
+  return olderThan(seenAt, SELLER_IDLE_LIMIT_MS, now)
 }
 
 /*

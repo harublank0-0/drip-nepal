@@ -112,12 +112,51 @@ test.group('T-SEC-005 every {shopSlug} seller route has seller_context', (group)
         label: 'sellerContext on a storefront shop page',
         route: { pattern: '/shops/:shopSlug', middleware: ['auth', 'sellerContext'] },
       },
+      {
+        label: 'a seller page whose shop segment has another name',
+        route: { pattern: '/seller/:slug/products', middleware: ['auth'] },
+      },
+      {
+        label: 'a seller API route with an optional shop segment',
+        route: { pattern: '/api/v1/seller/shops/:shopSlug?', middleware: ['auth'] },
+      },
+      {
+        label: 'a HEAD-only seller route without sellerContext',
+        route: { pattern: '/seller/:shopSlug/export', methods: ['HEAD'], middleware: ['auth'] },
+      },
     ])
     .run(async ({ assert }, row: { label: string; route: Route }) => {
       const result = await check([...DEVELOPMENT, row.route], [...PRODUCTION, row.route])
+      const method = row.route.methods?.join(',') === 'HEAD' ? 'HEAD' : 'GET'
       assert.equal(result.code, 1)
-      assert.include(result.stderr, `T-SEC-005 GET ${row.route.pattern}`)
+      assert.include(result.stderr, `T-SEC-005 ${method} ${row.route.pattern}`)
     })
+
+  test('T-SEC-005 {label} fails even with sellerContext')
+    .with([
+      { label: 'a shop segment with another name', pattern: '/seller/:slug/products' },
+      { label: 'an optional shop segment', pattern: '/api/v1/seller/shops/:shopSlug?' },
+      { label: 'a fixed shop segment', pattern: '/seller/new' },
+    ])
+    .run(async ({ assert }, row: { label: string; pattern: string }) => {
+      const route = { pattern: row.pattern, middleware: ['auth', 'sellerContext'] }
+      const result = await check([...DEVELOPMENT, route], [...PRODUCTION, route])
+      assert.equal(result.code, 1)
+      assert.include(
+        result.stderr,
+        `T-SEC-005 GET ${row.pattern}: a seller route whose shop segment`
+      )
+    })
+
+  test('T-SEC-005 the shop list outside a shop needs no sellerContext', async ({ assert }) => {
+    const listMyShops = {
+      name: 'listMyShops',
+      pattern: '/api/v1/seller/shops',
+      middleware: ['auth'],
+    }
+    const result = await check([...DEVELOPMENT, listMyShops], [...PRODUCTION, listMyShops])
+    assert.equal(result.code, 0, result.stderr)
+  })
 })
 
 test.group('T-SEC-037 seller routes run auth before seller_context', (group) => {
@@ -150,6 +189,10 @@ test.group('T-UI-025 no storefront route uses guest()', (group) => {
         label: 'guest on a write to a sign-in page path',
         route: { pattern: '/login', methods: ['POST'], middleware: ['guest'] },
       },
+      {
+        label: 'guest on a HEAD-only route',
+        route: { pattern: '/p/:productSlug', methods: ['HEAD'], middleware: ['guest'] },
+      },
     ])
     .run(async ({ assert }, row: { label: string; route: Route }) => {
       const result = await check([...DEVELOPMENT, row.route], [...PRODUCTION, row.route])
@@ -178,6 +221,10 @@ test.group('T-UI-026 the production route list has no development routes', (grou
       {
         label: 'a dev.* name in production',
         production: [...PRODUCTION, { name: 'dev.mail_preview', pattern: '/mail-preview' }],
+      },
+      {
+        label: 'a HEAD-only development route in production',
+        production: [...PRODUCTION, { name: 'dev.ping', pattern: '/dev/ping', methods: ['HEAD'] }],
       },
     ])
     .run(async ({ assert }, row: { label: string; production: Route[] }) => {

@@ -19,9 +19,9 @@ export interface Registry {
       errorResponse: unknown
     }
   }
-  'design-system': {
+  'dev.design_system': {
     methods: ["GET","HEAD"]
-    pattern: '/design-system'
+    pattern: '/dev/design-system'
     types: {
       body: {}
       paramsTuple: []

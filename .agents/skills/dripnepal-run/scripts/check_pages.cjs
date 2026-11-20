@@ -5,8 +5,8 @@
  * reviewer needs: HTTP status, console errors (hydration and CSP problems
  * show up there), page errors, and failed requests.
  *
- *   node .agents/skills/dripnepal-run/scripts/check_pages.cjs              # /design-system
- *   node .agents/skills/dripnepal-run/scripts/check_pages.cjs --widths 390 /design-system
+ *   node .agents/skills/dripnepal-run/scripts/check_pages.cjs              # /dev/design-system
+ *   node .agents/skills/dripnepal-run/scripts/check_pages.cjs --widths 390 /dev/design-system
  *
  * Options:
  *   --base <url>        Server to check (default http://localhost:3333)
@@ -70,7 +70,7 @@ function parseArgs(argv) {
     else options.paths.push(arg)
   }
   // The one page today (development only); the storefront returns with M4.
-  if (options.paths.length === 0) options.paths = ['/design-system']
+  if (options.paths.length === 0) options.paths = ['/dev/design-system']
   return options
 }
 

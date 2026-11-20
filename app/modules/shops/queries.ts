@@ -1,5 +1,6 @@
 import db from '@adonisjs/lucid/services/db'
 import type { ShopMemberRole } from '#modules/shops/domain/shop_member_role'
+import { hasShopSlugShape } from '#modules/shops/domain/shop_slug'
 
 /*
  * The shops module's reads for other layers (docs/09 §2.2: a module's
@@ -38,12 +39,14 @@ type SellerContextRow = {
  * `shops.slug` and `slug_redirects.old_slug` are citext, so a case variant
  * matches without counting as a redirect. One round trip on
  * `shops_slug_key`, `slug_redirects_pkey` and
- * `shop_memberships_shop_user_key` (T-SHOP-001).
+ * `shop_memberships_shop_user_key` (T-SHOP-001). A value that is not
+ * shaped like a slug is answered without a query.
  */
 export async function resolveSellerContext(
   slug: string,
   userId: string
 ): Promise<SellerContext | null> {
+  if (!hasShopSlugShape(slug)) return null
   const result = await db.rawQuery<{ rows: SellerContextRow[] }>(
     `SELECT s.id, s.slug, s.name, s.status, s.suspension_mode,
             CASE WHEN s.owner_user_id = :user THEN 'owner' ELSE m.role END AS actor,

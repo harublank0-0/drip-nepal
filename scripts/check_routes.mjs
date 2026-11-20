@@ -11,9 +11,10 @@
 // routes opens no connection. The script test passes saved copies.
 // The development list holds every route, so rules 1 to 3 read it. It
 // fails on:
-// 1. T-SEC-005: a seller route with `:shopSlug` (`/seller/:shopSlug…` or
-//    `/api/v1/seller/shops/:shopSlug…`) without `sellerContext`, or
-//    `sellerContext` on any other route;
+// 1. T-SEC-005: a seller route (any route under `/seller/` or
+//    `/api/v1/seller/shops/`) whose shop segment is not exactly
+//    `:shopSlug`, or that lacks `sellerContext`; and `sellerContext` on
+//    any other route;
 // 2. T-SEC-037: `sellerContext` without `auth` before it;
 // 3. T-UI-025: `guest` on a route other than the sign-in, sign-up and
 //    password-reset pages and `logIn` (docs/09 §3.4 row 3), so no
@@ -22,6 +23,8 @@
 //    development-only route (listed in development, not in production)
 //    outside `/dev` or not named `dev.*`: the first half finds a leaked
 //    development route by that convention, the second keeps it true.
+// A route listed for HEAD alone is read as HEAD, so no rule skips it. It
+// exits 1 on a rule, and 2 on a usage error or when a listing fails.
 import { execFileSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { readFileSync } from 'node:fs'
@@ -39,7 +42,8 @@ if (Boolean(args.routes) !== Boolean(args['production-routes'])) {
   process.exit(2)
 }
 
-const SELLER_ROUTE = /^\/(?:api\/v1\/seller\/shops|seller)\/:shopSlug(?:\/|$)/
+// The shop segment of a seller route: the one after the prefix.
+const SELLER_PREFIX = /^\/(?:api\/v1\/seller\/shops|seller)\/([^/]+)/
 const GUEST_ROUTES = new Set([
   'GET /login',
   'GET /signup',
@@ -55,10 +59,18 @@ const isDevRoute = (route) =>
 const key = () => randomBytes(32).toString('base64')
 
 function listRoutes(env) {
-  return execFileSync('node', ['ace', 'list:routes', '--json'], {
-    encoding: 'utf8',
-    env: { ...process.env, ...env },
-  })
+  try {
+    return execFileSync('node', ['ace', 'list:routes', '--json'], {
+      encoding: 'utf8',
+      env: { ...process.env, ...env },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+  } catch (error) {
+    console.error(
+      `node ace list:routes failed under NODE_ENV=${env.NODE_ENV}:\n${error.stderr ?? error}`
+    )
+    process.exit(2)
+  }
 }
 
 function readRoutes(json) {
@@ -67,7 +79,9 @@ function readRoutes(json) {
     .map((route) => ({
       name: route.name || null,
       pattern: route.pattern,
-      methods: route.methods.filter((method) => method !== 'HEAD'),
+      methods: route.methods.some((method) => method !== 'HEAD')
+        ? route.methods.filter((method) => method !== 'HEAD')
+        : route.methods,
       middleware: route.middleware
         .filter((entry) => entry.type === 'named')
         .map((entry) => entry.name),
@@ -126,8 +140,12 @@ const label = (route) => `${route.methods.join(',')} ${route.pattern}`
 const problems = []
 
 for (const route of routes) {
-  const seller = SELLER_ROUTE.test(route.pattern)
+  const shopSegment = SELLER_PREFIX.exec(route.pattern)?.[1]
+  const seller = shopSegment !== undefined
   const context = route.middleware.indexOf('sellerContext')
+  if (seller && shopSegment !== ':shopSlug') {
+    problems.push(`T-SEC-005 ${label(route)}: a seller route whose shop segment is not :shopSlug`)
+  }
   if (seller && context === -1) {
     problems.push(`T-SEC-005 ${label(route)}: a seller route without sellerContext`)
   }

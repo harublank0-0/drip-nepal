@@ -2,8 +2,8 @@ import router from '@adonisjs/core/services/router'
 
 /*
  * Development-only routes (RF-40, docs/09 §1.2). `start/routes.ts` imports
- * this file only when `app.inDev`, so production and test route lists never
- * hold these routes. Every route here sits under `/dev` and is named
+ * this file outside production only, so the production route list never
+ * holds these routes. Every route here sits under `/dev` and is named
  * `dev.*`; T-UI-026 refuses either in the production route list
  * (scripts/check_routes.mjs).
  */

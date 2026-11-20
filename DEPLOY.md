@@ -23,5 +23,5 @@ The first deploy of any environment also follows the bootstrap checklist of [doc
 Only a local development setup:
 
 - [README.md](README.md#running-it-locally): install, the local database, migrations, reference data and `pnpm dev`. M0 brings it to the five commands of [docs/11 §4.4](docs/11-deployment-and-operations.md#44-local-setup-in-five-commands).
-- The `dripnepal-run` skill (`.agents/skills/dripnepal-run/`): what the app serves today (`/design-system` in development, `/health/live`, `/health/ready`) and how to check a production build locally.
+- The `dripnepal-run` skill (`.agents/skills/dripnepal-run/`): what the app serves today (`/dev/design-system` in development, `/health/live`, `/health/ready`) and how to check a production build locally.
 - The `dripnepal-testing` skill: the test database and the suites.

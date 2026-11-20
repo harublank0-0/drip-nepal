@@ -23,5 +23,7 @@ const uuid = {
 }
 router.where('id', uuid)
 
-// Development-only routes (RF-40): never in a production or test route list.
-if (app.inDev) await import('#start/routes/dev')
+// Development-only routes (RF-40): never in the production route list.
+// Test runs load them too, so the route types CI generates under
+// NODE_ENV=test match what `pnpm dev` generates (T-ARCH-016).
+if (!app.inProduction) await import('#start/routes/dev')
