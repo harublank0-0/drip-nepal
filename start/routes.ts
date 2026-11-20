@@ -23,10 +23,5 @@ const uuid = {
 }
 router.where('id', uuid)
 
-if (!app.inProduction) {
-  router
-    .get('/design-system', ({ inertia }) => {
-      return inertia.render('design_system/index', {})
-    })
-    .as('design-system')
-}
+// Development-only routes (RF-40): never in a production or test route list.
+if (app.inDev) await import('#start/routes/dev')

@@ -76,7 +76,7 @@ docker compose up -d     # PostgreSQL 18 with the three database roles, Redis an
 node ace migration:run --no-schema-generate   # the 14 baseline files; leaves the generated database/schema.ts alone
 node ace jobs:install    # the pg-boss schema, its queues and its grants (docs/11 §6.1)
 node ace db:seed         # reference data only: no demo shops, products, orders or logins yet (OD-59)
-pnpm dev                 # http://localhost:3333/design-system and /health/live
+pnpm dev                 # http://localhost:3333/dev/design-system and /health/live
 ```
 
 No seeder creates a login, in any environment. The first platform admin comes from `node ace platform:create-admin --interactive`, which asks for the e-mail and the name, then the password at a masked prompt (only the password is masked); it has no password flag and needs a terminal ([docs/09 §9.1](docs/09-code-structure-and-engineering-standards.md#91-node-ace-platformcreate-admin)). Nothing can sign in until M1 builds the login and TOTP enrolment. The enrolment link the command queues is valid for 24 hours and waits for M1's worker, so it will have expired by then: an admin created in M0 enrols through `platform:create-admin --recover`, which comes with M1. Production and staging follow [docs/11](docs/11-deployment-and-operations.md) instead of this section: the release step runs the migrations, `jobs:install`, the reference seeders and `node ace release:check`.

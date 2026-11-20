@@ -184,6 +184,10 @@ jobs:
       # database connection.
       - name: T-API-010 route parity
         run: node scripts/check_api_contract.mjs
+      # Lists the routes twice, in development and in production, with
+      # placeholder settings and throwaway keys it sets itself.
+      - name: T-SEC-005, T-SEC-037, T-UI-025 and T-UI-026 route rules
+        run: node scripts/check_routes.mjs
       # `--files` with a path that matches nothing prints "NO TESTS EXECUTED"
       # and exits 0, so the step also requires a passed-test count.
       - name: T-API-011 problem-code registry
