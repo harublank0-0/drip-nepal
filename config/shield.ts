@@ -1,7 +1,12 @@
 import app from '@adonisjs/core/services/app'
 import { defineConfig } from '@adonisjs/shield'
 import env from '#start/env'
-import { definePolicy, NONCE } from '#modules/platform/content_security_policy'
+import {
+  checkedReportUri,
+  definePolicy,
+  NONCE,
+  omitDirective,
+} from '#modules/platform/content_security_policy'
 
 /*
  * Content-Security-Policy (docs/07 §7.3, RF-34, NFR-SEC-007), sent by
@@ -42,14 +47,14 @@ export const csp = {
   target,
   // The target with inline styles allowed: `style-src-attr` is then redundant.
   enforced: definePolicy({
-    ...Object.fromEntries(Object.entries(target).filter(([name]) => name !== 'styleSrcAttr')),
+    ...omitDirective(target, 'styleSrcAttr'),
     styleSrc: ["'self'", "'unsafe-inline'"],
   }),
   /*
    * The error tracker's CSP report endpoint of the environment's project
    * (docs/11 §9.6). Unset, the browser reports violations only to its console.
    */
-  reportUri: env.get('CSP_REPORT_URI'),
+  reportUri: checkedReportUri(env.get('CSP_REPORT_URI')),
 }
 
 /*
@@ -59,8 +64,9 @@ export const csp = {
 export const browserHeaders = {
   // Never framed, as frame-ancestors 'none' says for browsers that know CSP.
   frameOptions: 'DENY',
-  // 180 days; one year after launch [Assumption, docs/07 §7.3].
-  strictTransportSecurity: 'max-age=15552000',
+  // 180 days, one year after launch [Assumption, docs/07 §7.3]; subdomains
+  // from the first production deploy, preload off (docs/11 §3.2).
+  strictTransportSecurity: 'max-age=15552000; includeSubDomains',
 }
 
 /*

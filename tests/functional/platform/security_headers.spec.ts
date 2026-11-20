@@ -1,15 +1,17 @@
 import { test } from '@japa/runner'
 import env from '#start/env'
+import { csp } from '#config/shield'
 
 /*
  * T-SEC-035, the report-only part (docs/07 §7.3, RF-34): every answer of the
  * server carries the browser headers, because they are set in the server
- * middleware stack. That includes an unknown URL's 404 page, which never
- * reaches the router middleware (docs/07 note 35), and static files. The CSP
+ * middleware stack, before the health answers. That includes an unknown URL's
+ * 404 page, which never reaches the router middleware (docs/07 note 35), the
+ * API's problem answers, health answers and static files. The CSP
  * headers carry one nonce, new on every request, and the root view's inline
  * theme script carries the same one. They are on in every environment except
- * development, this test run included. CSP_REPORT_URI is unset here, so no
- * report endpoint is named.
+ * development, this test run included. CSP_REPORT_URI is unset here
+ * (.env.test), so no report endpoint is named unless a test sets one.
  */
 
 const base = () => `http://${env.get('HOST')}:${env.get('PORT')}`
@@ -33,6 +35,8 @@ test.group('T-SEC-035 browser headers on every answer', () => {
       { label: 'an unknown URL (the 404 page)', path: '/t-sec-035-no-such-page', status: 404 },
       { label: 'a routed page', path: '/dev/design-system', status: 200 },
       { label: 'a static file', path: '/favicon.png', status: 200 },
+      { label: 'a health answer', path: '/health/live', status: 200 },
+      { label: 'an API problem answer', path: '/api/v1/t-sec-035-no-such-operation', status: 404 },
     ])
     .run(async ({ assert }, { path, status }) => {
       const response = await fetch(`${base()}${path}`, { headers: { Accept: 'text/html' } })
@@ -40,7 +44,10 @@ test.group('T-SEC-035 browser headers on every answer', () => {
       assert.equal(response.status, status)
       assert.equal(response.headers.get('x-frame-options'), 'DENY')
       assert.equal(response.headers.get('x-content-type-options'), 'nosniff')
-      assert.equal(response.headers.get('strict-transport-security'), 'max-age=15552000')
+      assert.equal(
+        response.headers.get('strict-transport-security'),
+        'max-age=15552000; includeSubDomains'
+      )
       const enforcedHeader = response.headers.get('content-security-policy')
       const nonce = nonceOf(enforcedHeader)
       assert.match(nonce ?? '', /^[\w-]{16,}$/)
@@ -67,5 +74,30 @@ test.group('T-SEC-035 browser headers on every answer', () => {
       nonces.push(scriptNonce)
     }
     assert.notEqual(nonces[0], nonces[1])
+  })
+
+  test('T-SEC-035 a report endpoint is named in both policies and Reporting-Endpoints', async ({
+    assert,
+  }) => {
+    const uri = 'https://o1.ingest.sentry.io/api/2/security/?sentry_key=k'
+    const saved = csp.reportUri
+    csp.reportUri = uri
+    try {
+      const response = await fetch(`${base()}/t-sec-035-no-such-page`, {
+        headers: { Accept: 'text/html' },
+      })
+      await response.arrayBuffer()
+      const enforcedHeader = response.headers.get('content-security-policy')
+      const nonce = nonceOf(enforcedHeader)!
+      const reporting = `; report-uri ${uri}; report-to csp-endpoint`
+      assert.equal(enforcedHeader, enforced(nonce) + reporting)
+      assert.equal(
+        response.headers.get('content-security-policy-report-only'),
+        target(nonce) + reporting
+      )
+      assert.equal(response.headers.get('reporting-endpoints'), `csp-endpoint="${uri}"`)
+    } finally {
+      csp.reportUri = saved
+    }
   })
 })

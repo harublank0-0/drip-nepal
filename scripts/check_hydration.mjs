@@ -40,25 +40,27 @@ const CASES = [
  * its stylesheet as a <style> element without the nonce, which the report-only
  * target policy refuses. The same CSS is in the CSS bundle, so toasts keep
  * their styles once M7 enforces the target; before then the injection has to
- * stop, or every page load sends a report (docs/07 note 36). sonner appends
- * the element empty, then writes its text, so each insertion gives two
- * reports: one with no sample, then one whose sample ('report-sample') is the
- * start of sonner's CSS. Each sonner report excuses one empty one.
+ * stop, or every page load sends a report (docs/07 note 36). sonner inserts
+ * it once, when its module loads, appending the element empty and then
+ * writing its text, so it gives two reports in a row: one with no sample,
+ * then one whose sample ('report-sample') is the start of sonner's CSS. Only
+ * that one adjacent pair is excused; any other report fails the check.
  */
 const SONNER_SAMPLE = '[data-sonner-toaster]'
 const isStyleReport = (violation) =>
   violation.disposition === 'report' && violation.directive === 'style-src-elem'
 function unexpectedViolations(violations) {
-  const sonner = violations.filter((v) => isStyleReport(v) && v.sample.startsWith(SONNER_SAMPLE))
-  let emptyAllowed = sonner.length
-  return violations.filter((v) => {
-    if (sonner.includes(v)) return false
-    if (isStyleReport(v) && v.sample === '' && emptyAllowed > 0) {
-      emptyAllowed -= 1
-      return false
-    }
-    return true
-  })
+  const pair = violations.findIndex(
+    (violation, index) =>
+      index > 0 &&
+      isStyleReport(violation) &&
+      violation.sample.startsWith(SONNER_SAMPLE) &&
+      isStyleReport(violations[index - 1]) &&
+      violations[index - 1].sample === ''
+  )
+  return pair === -1
+    ? violations
+    : violations.filter((_, index) => index !== pair && index !== pair - 1)
 }
 
 const problems = []

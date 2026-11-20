@@ -1,5 +1,10 @@
 import { test } from '@japa/runner'
-import { definePolicy, serializePolicy } from '#modules/platform/content_security_policy'
+import {
+  checkedReportUri,
+  definePolicy,
+  omitDirective,
+  serializePolicy,
+} from '#modules/platform/content_security_policy'
 import { csp } from '#config/shield'
 
 /*
@@ -50,6 +55,8 @@ test.group('T-SEC-035 Content-Security-Policy policies', () => {
       { label: 'a comma inside a value', value: "'self',data:" },
       { label: 'an empty value', value: '' },
       { label: 'an unquoted keyword', value: 'self' },
+      { label: 'an unquoted nonce', value: 'nonce-abc' },
+      { label: 'an unquoted hash', value: 'sha256-abc=' },
     ])
     .run(({ assert }, { value }) => {
       assert.throws(() => definePolicy({ defaultSrc: [value] }))
@@ -57,5 +64,38 @@ test.group('T-SEC-035 Content-Security-Policy policies', () => {
 
   test('T-SEC-035 definePolicy refuses a directive without values', ({ assert }) => {
     assert.throws(() => definePolicy({ defaultSrc: [] }))
+  })
+
+  test('T-SEC-035 definePolicy refuses a directive name that is not camelCase', ({ assert }) => {
+    assert.throws(() => definePolicy({ 'default-src': ["'self'"] }))
+    assert.throws(() => definePolicy({ 'defaultSrc; script-src': ["'self'"] }))
+  })
+
+  test('T-SEC-035 a defined policy and its values cannot change', ({ assert }) => {
+    const policy = definePolicy({ defaultSrc: ["'self'"] })
+    assert.isTrue(Object.isFrozen(policy))
+    assert.isTrue(Object.isFrozen(policy.defaultSrc))
+  })
+
+  test('T-SEC-035 omitDirective keeps the other directives in order', ({ assert }) => {
+    const policy = definePolicy({ a: ["'self'"], b: ["'none'"], c: ['data:'] })
+    assert.deepEqual(Object.keys(omitDirective(policy, 'b')), ['a', 'c'])
+  })
+
+  test('T-SEC-035 CSP_REPORT_URI refuses {label}')
+    .with([
+      { label: 'a semicolon', uri: 'https://r.example/a;script-src' },
+      { label: 'a comma', uri: 'https://r.example/a,b' },
+      { label: 'a double quote', uri: 'https://r.example/a"b' },
+      { label: 'a space', uri: 'https://r.example/a b' },
+    ])
+    .run(({ assert }, { uri }) => {
+      assert.throws(() => checkedReportUri(uri))
+    })
+
+  test('T-SEC-035 CSP_REPORT_URI passes a plain URL and no value', ({ assert }) => {
+    const uri = 'https://o1.ingest.sentry.io/api/2/security/?sentry_key=k'
+    assert.equal(checkedReportUri(uri), uri)
+    assert.isUndefined(checkedReportUri(undefined))
   })
 })

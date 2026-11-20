@@ -68,7 +68,7 @@ test.group('T-UI-001 the theme class from the dn_theme cookie', () => {
       ])
     })
 
-  test('T-UI-001 the production CSP lets the nonce-carrying theme script run', ({ assert }) => {
+  test('T-UI-001 the CSP lets the nonce-carrying theme script run', ({ assert }) => {
     // config/shield.ts: both policies, outside development (docs/07 §7.3).
     assert.includeMembers([...csp.enforced.scriptSrc], ["'self'", NONCE])
     assert.includeMembers([...csp.target.scriptSrc], ["'self'", NONCE])
