@@ -62,6 +62,8 @@ export default class SellerContextMiddleware {
     }
 
     ctx.shop = found
+    // Refreshed only when the request passes (docs/07 §3.4): M2 keeps this
+    // after the permission check and the status gate.
     if (isUserInitiated(ctx)) {
       ctx.session.put(SESSION_KEYS.sellerSeenAt, new Date().toISOString())
     }
