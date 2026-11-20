@@ -25,7 +25,8 @@ uid=$(docker run --rm --entrypoint id "$IMAGE" -u)
 envfiles=$(docker run --rm --entrypoint find "$IMAGE" /app -name '.env*')
 [ -z "$envfiles" ] || fail "the image contains env files: $envfiles"
 
-docker run --rm --entrypoint test "$IMAGE" -f /app/ssr/ssr.js || fail "the SSR bundle /app/ssr/ssr.js is missing"
+docker run --rm --entrypoint test "$IMAGE" -f /app/public/assets/server/.vite/manifest.json ||
+  fail "the SSR bundle manifest /app/public/assets/server/.vite/manifest.json is missing"
 
 # A staging-shaped environment with throwaway keys; nothing listens on DB_HOST.
 key() { openssl rand -base64 32; }

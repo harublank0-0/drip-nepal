@@ -70,7 +70,7 @@ Keep AdonisJS 7 + Lucid + PostgreSQL 18 and structure the application as a **mod
 **Risks**
 
 - _Boundary erosion_ ("import the model just once"). Mitigation: T-ARCH-001 on every PR; module-private files are not exported.
-- _Adapter version drift_: @adonisjs/inertia 4.2.0 targets Inertia v2 while current Adonis docs target adapter 5 and Inertia v3 (OD-25, R-22). See ADR-0003.
+- _Adapter version drift_: @adonisjs/inertia 4.2.0 targets Inertia v2 while current Adonis docs target adapter 5 and Inertia v3 (OD-25, R-22). See ADR-0003. Edited 2026-11-20: resolved; the app runs adapter 5 with Inertia 3 ([ADR-0020](0020-inertia-3-adapter-5.md)).
 
 ## When to revisit
 

@@ -77,7 +77,7 @@ Edited 2026-09-30 (consistency review): decision 6 names the `start/routes/api_v
 
 ## When to revisit
 
-- The OD-25 spike moves the app to Inertia v3: `useHttp` and optimistic updates may simplify client calls; the API contract stays.
+- The OD-25 spike moves the app to Inertia v3: `useHttp` and optimistic updates may simplify client calls; the API contract stays. Edited 2026-11-20: the spike passed, and the app runs Inertia 3 with adapter 5 ([ADR-0020](0020-inertia-3-adapter-5.md)); this decision is unchanged.
 - External partners (R3 couriers, marketing tools) need OAuth or API keys: add a token guard in a new ADR.
 - More than 3 T-API-001 failures from spec drift in one milestone: evaluate a generator such as `@foadonis/openapi` 1.1.0 (peers `@adonisjs/core ^6.2 || ^7`) [Verified-doc, https://registry.npmjs.org/@foadonis/openapi, accessed 2026-09-25].
 

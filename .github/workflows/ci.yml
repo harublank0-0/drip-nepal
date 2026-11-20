@@ -82,7 +82,8 @@ jobs:
       - name: Production build
         run: |
           node ace build
-          test -f build/ssr/ssr.js
+          test -f build/public/assets/server/.vite/manifest.json
+          test -f build/public/assets/server/ssr.js
 
   # docs/10 §5.1 Repository. T-ARCH-016 runs in the Tests job, after the
   # suites have regenerated .adonisjs/.

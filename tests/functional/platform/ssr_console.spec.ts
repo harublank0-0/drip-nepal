@@ -17,6 +17,8 @@ const PAGES = [
 ]
 
 const METHODS = ['log', 'info', 'warn', 'error', 'debug', 'trace', 'dir', 'table'] as const
+// Vite's status lines, which Vite 8 prefixes with the time (`8:32:19 AM [vite] …`).
+const VITE_STATUS = /^(?:\d{1,2}:\d{2}:\d{2}\s?(?:AM|PM)?\s+)?\[vite\]/i
 
 const baseUrl = () => `http://${env.get('HOST')}:${env.get('PORT')}`
 
@@ -29,7 +31,7 @@ test.group('T-ARCH-025 SSR writes nothing to console', () => {
       for (const method of METHODS) {
         console[method] = (...args: unknown[]) => {
           const line = args.map(String).join(' ')
-          if (!line.startsWith('[vite]')) written.push(`${method}: ${line}`)
+          if (!VITE_STATUS.test(line)) written.push(`${method}: ${line}`)
         }
       }
       try {
