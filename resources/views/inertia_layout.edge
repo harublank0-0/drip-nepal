@@ -1,9 +1,16 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+{{-- The theme class comes from the dn_theme cookie, shared as page.props.theme
+     (docs/08 §1.2, docs/09 §13.10), so the first paint is already right (RF-08). --}}
+@let(theme = page.props.theme)
+<html lang="en" class="{{ theme === 'system' ? '' : theme === 'dark' ? 'dark' : 'light' }}">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#000000" />
+    @if(theme === 'system')
+      {{-- The server cannot know the system theme: set it before first paint. --}}
+      <script nonce="{{ cspNonce ?? '' }}">document.documentElement.classList.add(matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')</script>
+    @end
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 

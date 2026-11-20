@@ -11,7 +11,9 @@ const shieldConfig = defineConfig({
      * Enforced in production only: the dev server injects an inline React
      * refresh script and a websocket for hot reload (RF-34).
      *
-     * Scripts: only this origin (the built Vite bundles; no inline scripts).
+     * Scripts: this origin (the built Vite bundles) and the one inline script
+     * that carries the request's nonce: the root view's theme script for
+     * `system` (docs/08 §1.2).
      * Styles: inline allowed, because Radix and framer-motion set style
      * attributes and sonner injects a <style> element (OD-52 option a).
      * Images: this origin and uploads, data: and blob: for previews in the
@@ -20,7 +22,8 @@ const shieldConfig = defineConfig({
     enabled: app.inProduction,
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'"],
+      // @nonce: the theme script of the root view for `system` (docs/08 §1.2).
+      scriptSrc: ["'self'", '@nonce'],
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", 'data:', 'blob:', 'https://images.unsplash.com'],
       fontSrc: ["'self'", 'data:'],

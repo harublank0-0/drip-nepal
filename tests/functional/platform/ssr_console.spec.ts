@@ -4,16 +4,16 @@ import env from '#start/env'
 /*
  * T-ARCH-025: rendering one page of each surface on the server writes
  * nothing to `console` (docs/09 §7.5, RF-26): no page props, no debug
- * output. Today's surfaces are the error pages and the development gallery;
- * the storefront, seller and admin pages join this list as M1 to M4
- * rebuild them. The SSR renderer runs in the test process (Vite's dev SSR),
+ * output. Today's only server-rendered surface is the error pages; the
+ * storefront, sign-in and payment-return pages join this list as M1 to M5
+ * build them (config/inertia.ts `SSR_SURFACES`). The development gallery
+ * renders in the browser since E10 (docs/09 §13.8 rule 4). The SSR renderer runs in the test process (Vite's dev SSR),
  * so a spy on `console` sees what a page writes. Vite's own `[vite]` status
  * lines come from the development server, not from a page, and are skipped.
  */
 
 const PAGES = [
   { surface: 'errors (404)', path: '/no-such-page', status: 404, text: 'find that page' },
-  { surface: 'development gallery', path: '/dev/design-system', status: 200, text: 'Light Theme' },
 ]
 
 const METHODS = ['log', 'info', 'warn', 'error', 'debug', 'trace', 'dir', 'table'] as const

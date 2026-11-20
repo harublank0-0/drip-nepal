@@ -1,88 +1,49 @@
-import { createContext, useContext, useEffect, useState, useSyncExternalStore } from 'react'
-import { isBrowser } from '~/lib/utils'
-
-type Theme = 'dark' | 'light' | 'system'
-
-type ThemeProviderProps = {
-  children: React.ReactNode
-  defaultTheme?: Theme
-  storageKey?: string
-}
+import { createContext, useContext, useEffect, useState } from 'react'
+import { type Theme } from '@shared/ui/theme'
+import { applyTheme, watchSystemTheme, writeThemeCookie } from '~/lib/theme'
 
 type ThemeProviderState = {
   theme: Theme
   setTheme: (theme: Theme) => void
 }
 
-const initialState: ThemeProviderState = {
-  theme: 'system',
-  setTheme: () => null,
-}
+const ThemeProviderContext = createContext<ThemeProviderState | null>(null)
 
-const ThemeProviderContext = createContext<ThemeProviderState>(initialState)
-
-function subscribeToStorage(onChange: () => void) {
-  window.addEventListener('storage', onChange)
-  return () => window.removeEventListener('storage', onChange)
-}
-
+/*
+ * The theme of docs/08 §1.2. Its first value is the `theme` page prop, which
+ * the server read from the `dn_theme` cookie and also used for the class on
+ * <html>, so the server markup and the first client render agree and
+ * nothing flips after JavaScript loads (RF-08). A change writes the cookie,
+ * so the next page arrives in the chosen theme.
+ */
 export function ThemeProvider({
   children,
-  defaultTheme = 'dark',
-  storageKey = 'drip-ui-theme',
-  ...props
-}: ThemeProviderProps) {
-  // The server has no saved theme, so hydration renders the default; React
-  // then switches to the saved one without a mismatch (useSyncExternalStore
-  // uses getServerSnapshot while hydrating).
-  const savedTheme = useSyncExternalStore(
-    subscribeToStorage,
-    // eslint-disable-next-line no-restricted-globals -- the theme moves to a cookie in E10 (docs/12 §4.1, 08 §1.2)
-    () => localStorage.getItem(storageKey) as Theme | null,
-    () => null
-  )
-  const [chosenTheme, setTheme] = useState<Theme | null>(null)
-  const theme = chosenTheme ?? savedTheme ?? defaultTheme
+  initialTheme,
+}: {
+  children: React.ReactNode
+  initialTheme: Theme
+}) {
+  const [theme, setThemeState] = useState<Theme>(initialTheme)
 
   useEffect(() => {
-    if (!isBrowser) return
-
-    const root = window.document.documentElement
-
-    root.classList.remove('light', 'dark')
-
-    if (theme === 'system') {
-      const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches
-        ? 'dark'
-        : 'light'
-
-      root.classList.add(systemTheme)
-      return
-    }
-
-    root.classList.add(theme)
+    applyTheme(theme)
+    if (theme !== 'system') return
+    return watchSystemTheme(() => applyTheme('system'))
   }, [theme])
 
   const value = {
     theme,
-    setTheme: (themeValue: Theme) => {
-      // eslint-disable-next-line no-restricted-globals -- the theme moves to a cookie in E10 (docs/12 §4.1, 08 §1.2)
-      localStorage.setItem(storageKey, themeValue)
-      setTheme(themeValue)
+    setTheme: (next: Theme) => {
+      writeThemeCookie(next)
+      setThemeState(next)
     },
   }
 
-  return (
-    <ThemeProviderContext.Provider {...props} value={value}>
-      {children}
-    </ThemeProviderContext.Provider>
-  )
+  return <ThemeProviderContext.Provider value={value}>{children}</ThemeProviderContext.Provider>
 }
 
-export const useTheme = () => {
+export function useTheme() {
   const context = useContext(ThemeProviderContext)
-
-  if (context === undefined) throw new Error('useTheme must be used within a ThemeProvider')
-
+  if (context === null) throw new Error('useTheme must be used within a ThemeProvider')
   return context
 }

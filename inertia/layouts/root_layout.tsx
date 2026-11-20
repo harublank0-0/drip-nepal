@@ -7,7 +7,7 @@ import { TooltipProvider } from '~/components/ui/tooltip'
 import { SocialMeta } from '~/components/seo/social_meta'
 
 export default function RootLayout({ children }: { children: ReactElement<Data.SharedProps> }) {
-  const { url } = usePage()
+  const { url, props } = usePage<Data.SharedProps>()
   useEffect(() => {
     toast.dismiss()
   }, [url])
@@ -26,10 +26,10 @@ export default function RootLayout({ children }: { children: ReactElement<Data.S
       {/* Default title; a page's own <Head title> overrides it. */}
       <Head title="" />
       <SocialMeta />
-      <ThemeProvider defaultTheme="dark">
+      <ThemeProvider initialTheme={props.theme}>
         <TooltipProvider>
           {children}
-          <Toaster position="top-center" richColors />
+          <Toaster position="top-center" richColors theme={props.theme} />
         </TooltipProvider>
       </ThemeProvider>
     </>
