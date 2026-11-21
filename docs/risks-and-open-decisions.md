@@ -247,7 +247,8 @@ Evidence: VX-16 demo-host observations of 2026-11-19 (16 characters refused, 15 
           2026-11-21 (the longest R1 shape, 14 characters, booked; a 16-character reference refused
           before any call).
 ADR: none (an adapter detail; ADR-0019 decision 6 unchanged).
-Docs updated: §2.2, §5, 00 (§7.2, §7.3), 04a (§11.5), 05 (§6.3), 10 (T-FUL-109), 12 (§3, §5.6)
+Docs updated: §2.2, §5, 00 (§7.2, §7.3), 04a (§11.5), 05 (§6.3), 06 (§13.8 `courier_reference`),
+              10 (T-FUL-109), 12 (§3, §5.6), openapi.yaml
               |  Status: Decided → Resolved on 2026-11-21
 ```
 
@@ -263,8 +264,8 @@ Ruling: Option (c), and further: R1 offers no platform-owned courier account. Sh
 Evidence: The product owner's M6 instruction of 2026-11-21 ("For R1, use shop-owned NCM accounts
           only and keep platform-owned COD disabled"). VX-17 and VX-18 are unanswered by NCM.
 ADR: ADR-0019 (dated note 2026-11-21; the schema decisions stand).
-Docs updated: §2.2, §3.1 (VX-17, VX-18), §4.2 (R-33), §5, ADR-0019, 00, 01, 02, 04a, 05, 06, 07,
-              10, 12  |  Status: Decided → Resolved on 2026-11-21
+Docs updated: §2.2, §3.1 (VX-17, VX-18), §4.2 (R-33), §5, ADR-0019, ADR-0009, 00, 01, 02, 03,
+              04a, 05, 06, 07, 10, 12  |  Status: Decided → Resolved on 2026-11-21
 ```
 
 ```text

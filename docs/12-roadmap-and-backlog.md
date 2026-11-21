@@ -328,7 +328,7 @@ Each subsection gives the goal, the scope with its FR IDs and pointers, what is 
 - the callback receiver;
 - the admin booking queue, resolution, status refresh, held readings and order verification.
 
-The M6 courier exit tests run green on the job and HTTP level: `T-FUL-006` (without the admin-cancel cases), `T-FUL-107`, `T-ORD-011`, `T-SHOP-113` (deactivation), `T-SHOP-006`, `T-SEC-040`, `T-SEC-041`, `T-FUL-108`, `T-FUL-109`, `T-FUL-110`, `T-FUL-111`, `T-FUL-112`, `T-SHOP-114` and `T-SHOP-115`, plus `T-SHOP-116`, `T-FUL-113` and `T-ORD-012`. The wired path booked and tracked a parcel on NCM's demo host (VX-16, 2026-11-21).
+The M6 courier exit tests run green on the job and HTTP level for the cases this part builds: `T-FUL-006` (without the admin-cancel cases), `T-FUL-107`, `T-ORD-011` (the booking case; the `shipped` case comes with `recordFulfillmentEvent`), `T-SHOP-113` (deactivation), `T-SHOP-006` (the archive-and-copy case; the purge case comes with `platform.retention_purge`), `T-SEC-040` (without page props, which come with the courier pages), `T-SEC-041`, `T-FUL-108`, `T-FUL-109`, `T-FUL-110`, `T-FUL-111` (without the `adminCancelShopOrder` case, M7), `T-FUL-112`, `T-SHOP-114` and `T-SHOP-115`, plus `T-SHOP-116`, `T-FUL-113` and `T-ORD-012`. The wired path booked and tracked a parcel on NCM's demo host (VX-16, 2026-11-21).
 
 Still to come with M6's other work:
 
@@ -336,7 +336,8 @@ Still to come with M6's other work:
 - sign-in and MFA (M1), so the seller and admin courier operations cannot be used in production before M1;
 - the locations seeder;
 - the seller and customer notices (M1 notifications; logged until then);
-- `recordFulfillmentEvent` on the courier path, `adminRecordFulfillmentEvent` and `adminCancelShopOrder` (M7);
+- `recordFulfillmentEvent` (M6's order work), which the courier path needs for the vendor's `returned_to_origin`;
+- `adminRecordFulfillmentEvent` and `adminCancelShopOrder` (M7);
 - the ledger effects of a delivery (M7);
 - the support case on a second failed delivery;
 - `orders.cod_outcome_reminder`.

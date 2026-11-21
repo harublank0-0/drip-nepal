@@ -68,7 +68,7 @@ drip-nepal/
 │   │   │   ├── money.ts         # Minor, CURRENCIES, toMinor, sumMinor (04 §2.4, §18.4)
 │   │   │   ├── idempotency.ts   # idempotentTx, requestFingerprint, IDEMPOTENCY_KEY_PATTERN (06 §7.9; built M6)
 │   │   │   ├── state_machine.ts # defineMachine, assertTransition, allowedTargets (§3.8; built M6)
-│   │   │   ├── actor.ts         # Actor, SYSTEM_ACTOR, systemActor (built M6)
+│   │   │   ├── actor.ts         # Actor: who performs an action (built M6)
 │   │   │   ├── alerts.ts        # raiseAlert: the admin alert log line (05 §6.3, 11 §9.7; built M6)
 │   │   │   ├── settings.ts      # settingIn: a platform_settings value inside a transaction (built M6)
 │   │   │   ├── jobs.ts          # JobPayloads, sendJob, pg-boss instance (§2.3)
