@@ -23,6 +23,11 @@ const uuid = {
 }
 router.where('id', uuid)
 
+// The JSON operations (docs/06 §13) and webhooks (§12).
+await import('#start/routes/seller')
+await import('#start/routes/admin')
+await import('#start/routes/webhooks')
+
 // Development-only routes (RF-40): never in the production route list.
 // Test runs load them too, so the route types CI generates under
 // NODE_ENV=test match what `pnpm dev` generates (T-ARCH-016).

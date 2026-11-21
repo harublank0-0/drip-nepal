@@ -5,18 +5,80 @@ type ParamValue = string | number | bigint | boolean
 export type ScannedRoutes = {
   ALL: {
     'drive.fs.serve': { paramsTuple: [...ParamValue[]]; params: {'*': ParamValue[]} }
+    'getLogisticsSettings': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
+    'replaceLogisticsSettings': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
+    'createShopCourierAccount': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
+    'rekeyShopCourierAccount': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'accountId': ParamValue} }
+    'disableShopCourierAccount': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'accountId': ParamValue} }
+    'createPickupAddress': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
+    'updatePickupAddress': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'addressId': ParamValue} }
+    'archivePickupAddress': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'addressId': ParamValue} }
+    'getCourierBookingOptions': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'shopOrderNumber': ParamValue} }
+    'bookCourierShipment': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'shopOrderNumber': ParamValue} }
+    'cancelCourierBooking': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'shopOrderNumber': ParamValue} }
+    'adminListLogisticsAccounts': { paramsTuple?: []; params?: {} }
+    'adminSetLogisticsAccountStatus': { paramsTuple: [ParamValue]; params: {'accountId': ParamValue} }
+    'adminSetShopLogisticsEnabled': { paramsTuple: [ParamValue]; params: {'shopId': ParamValue} }
+    'adminListLogisticsBranches': { paramsTuple?: []; params?: {} }
+    'adminSyncLogisticsBranches': { paramsTuple?: []; params?: {} }
+    'adminUpdateLogisticsBranch': { paramsTuple: [ParamValue]; params: {'branchId': ParamValue} }
+    'adminListCourierBookings': { paramsTuple?: []; params?: {} }
+    'adminResolveCourierBooking': { paramsTuple: [ParamValue]; params: {'shopOrderNumber': ParamValue} }
+    'adminRefreshCourierStatus': { paramsTuple: [ParamValue]; params: {'shopOrderNumber': ParamValue} }
+    'adminListCourierEvents': { paramsTuple?: []; params?: {} }
+    'adminResolveCourierEvent': { paramsTuple: [ParamValue]; params: {'courierEventId': ParamValue} }
+    'adminRecordOrderVerification': { paramsTuple: [ParamValue]; params: {'orderNumber': ParamValue} }
+    'receiveCourierCallback': { paramsTuple: [ParamValue,ParamValue]; params: {'providerCode': ParamValue,'accountId': ParamValue} }
     'dev.design_system': { paramsTuple?: []; params?: {} }
     'dev.overlays': { paramsTuple?: []; params?: {} }
   }
   GET: {
     'drive.fs.serve': { paramsTuple: [...ParamValue[]]; params: {'*': ParamValue[]} }
+    'getLogisticsSettings': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
+    'getCourierBookingOptions': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'shopOrderNumber': ParamValue} }
+    'adminListLogisticsAccounts': { paramsTuple?: []; params?: {} }
+    'adminListLogisticsBranches': { paramsTuple?: []; params?: {} }
+    'adminListCourierBookings': { paramsTuple?: []; params?: {} }
+    'adminListCourierEvents': { paramsTuple?: []; params?: {} }
     'dev.design_system': { paramsTuple?: []; params?: {} }
     'dev.overlays': { paramsTuple?: []; params?: {} }
   }
   HEAD: {
     'drive.fs.serve': { paramsTuple: [...ParamValue[]]; params: {'*': ParamValue[]} }
+    'getLogisticsSettings': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
+    'getCourierBookingOptions': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'shopOrderNumber': ParamValue} }
+    'adminListLogisticsAccounts': { paramsTuple?: []; params?: {} }
+    'adminListLogisticsBranches': { paramsTuple?: []; params?: {} }
+    'adminListCourierBookings': { paramsTuple?: []; params?: {} }
+    'adminListCourierEvents': { paramsTuple?: []; params?: {} }
     'dev.design_system': { paramsTuple?: []; params?: {} }
     'dev.overlays': { paramsTuple?: []; params?: {} }
+  }
+  PUT: {
+    'replaceLogisticsSettings': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
+    'adminSetShopLogisticsEnabled': { paramsTuple: [ParamValue]; params: {'shopId': ParamValue} }
+  }
+  POST: {
+    'createShopCourierAccount': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
+    'rekeyShopCourierAccount': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'accountId': ParamValue} }
+    'disableShopCourierAccount': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'accountId': ParamValue} }
+    'createPickupAddress': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
+    'bookCourierShipment': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'shopOrderNumber': ParamValue} }
+    'cancelCourierBooking': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'shopOrderNumber': ParamValue} }
+    'adminSetLogisticsAccountStatus': { paramsTuple: [ParamValue]; params: {'accountId': ParamValue} }
+    'adminSyncLogisticsBranches': { paramsTuple?: []; params?: {} }
+    'adminResolveCourierBooking': { paramsTuple: [ParamValue]; params: {'shopOrderNumber': ParamValue} }
+    'adminRefreshCourierStatus': { paramsTuple: [ParamValue]; params: {'shopOrderNumber': ParamValue} }
+    'adminResolveCourierEvent': { paramsTuple: [ParamValue]; params: {'courierEventId': ParamValue} }
+    'adminRecordOrderVerification': { paramsTuple: [ParamValue]; params: {'orderNumber': ParamValue} }
+    'receiveCourierCallback': { paramsTuple: [ParamValue,ParamValue]; params: {'providerCode': ParamValue,'accountId': ParamValue} }
+  }
+  PATCH: {
+    'updatePickupAddress': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'addressId': ParamValue} }
+    'adminUpdateLogisticsBranch': { paramsTuple: [ParamValue]; params: {'branchId': ParamValue} }
+  }
+  DELETE: {
+    'archivePickupAddress': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'addressId': ParamValue} }
   }
 }
 declare module '@adonisjs/core/types/http' {

@@ -125,6 +125,8 @@ if (args.routes) {
     HMAC_KEY_LIMITER: key(),
     HMAC_KEY_AUDIT_IP: key(),
     HMAC_KEY_NOTIFY_ADDRESS: key(),
+    COURIER_CALLBACK_KEYS: `routes:${key()}`,
+    COURIER_CALLBACK_ACTIVE_KEY_ID: 'routes',
   }
   developmentJson = listRoutes({
     ...boot,
