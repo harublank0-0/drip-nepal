@@ -88,6 +88,14 @@ async function cancelFailedBooking(
       updated_at: trx.raw('now()'),
     })
   await shipmentEvent(trx, shipment, 'cancelled', actor)
+  // A new `pending` shipment only for a shop order that goes on (05 §6.3: "unless the shop
+  // order is ending"); callers hold its lock.
+  const shopOrder = await trx
+    .from('shop_orders')
+    .where('id', shipment.shop_order_id)
+    .select('status')
+    .first()
+  if (shopOrder?.status !== 'accepted') return shipment.id
   const [fresh] = await trx
     .table('shipments')
     .insert({ shop_order_id: shipment.shop_order_id, shop_id: shipment.shop_id })
@@ -141,10 +149,14 @@ export async function cancelCourierBooking<T>(
           version: trx.raw('version + 1'),
           updated_at: trx.raw('now()'),
         })
-      raiseAlert('courier.cancellation_requested', {
-        shipment_id: shipment.id,
-        requested_by: 'vendor',
-      })
+      raiseAlert(
+        'courier.cancellation_requested',
+        {
+          shipment_id: shipment.id,
+          requested_by: 'vendor',
+        },
+        trx
+      )
       await recordAudit(trx, {
         ...audit(context.actor),
         action: 'shipment.cancel_request',
@@ -384,11 +396,15 @@ export async function recordOrderVerification(
         .where('s.status', 'booked')
         .select('s.id')
       for (const row of booked) {
-        raiseAlert('order.verification_after_booking', {
-          order_id: order.id,
-          shipment_id: row.id,
-          status: command.status,
-        })
+        raiseAlert(
+          'order.verification_after_booking',
+          {
+            order_id: order.id,
+            shipment_id: row.id,
+            status: command.status,
+          },
+          trx
+        )
       }
     }
     return trx

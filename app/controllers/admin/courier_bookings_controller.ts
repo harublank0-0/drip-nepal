@@ -36,7 +36,12 @@ export default class AdminCourierBookingsController {
       ['needs_reconciliation', 'cancel_requested'] as const,
       'needs_reconciliation'
     )!
-    const list = listRequest(ctx, { sort: 'updated_at', parameters: ['queue'], filters: { queue } })
+    const list = listRequest(ctx, {
+      sort: 'updated_at',
+      keyKind: 'timestamp',
+      parameters: ['queue'],
+      filters: { queue },
+    })
     const result = await courierBookingQueue({ queue, limit: list.limit, seek: list.seek })
     const attempts = await attemptsOf(result.shipments.map((shipment) => shipment.id))
     return {
@@ -80,6 +85,7 @@ export default class AdminCourierBookingsController {
     const shipmentId = uuidFilter(ctx, 'shipment_id')
     const list = listRequest(ctx, {
       sort: 'received_at',
+      keyKind: 'timestamp',
       parameters: ['processing_status', 'shipment_id'],
       filters: { processing_status: status, shipment_id: shipmentId },
     })

@@ -81,6 +81,16 @@ export type EventOutcome = {
 }
 
 // Records an event's outcome while it is still open (`pending` or `failed`).
+// After a history read, every open callback or poll trigger of the shipment is answered by it.
+export async function closeTriggers(trx: TransactionClientContract, shipmentId: string) {
+  await trx
+    .from('courier_events')
+    .where('shipment_id', shipmentId)
+    .whereIn('source', ['callback', 'poll'])
+    .whereIn('processing_status', ['pending', 'failed'])
+    .update({ processing_status: 'looked_up', processed_at: trx.raw('now()'), error: null })
+}
+
 export async function setEventOutcome(
   trx: TransactionClientContract,
   eventId: string,
@@ -136,15 +146,22 @@ export async function hasHeldReading(trx: TransactionClientContract, shipmentId:
 }
 
 // Readings whose processing job was lost (sweeper over `courier_events_pending_idx`).
+// Open readings past the age, except for a shipment with a held reading: its replay waits for staff.
 export async function staleOpenEvents(olderThanSeconds: number, limit: number) {
   return db
-    .from('courier_events')
-    .whereIn('processing_status', ['pending', 'failed'])
-    .whereNotNull('shipment_id')
-    .where('received_at', '<', db.raw(`now() - make_interval(secs => ?)`, [olderThanSeconds]))
-    .orderBy('received_at', 'asc')
+    .from('courier_events as e')
+    .whereIn('e.processing_status', ['pending', 'failed'])
+    .whereNotNull('e.shipment_id')
+    .where('e.received_at', '<', db.raw(`now() - make_interval(secs => ?)`, [olderThanSeconds]))
+    .whereNotExists((held) =>
+      held
+        .from('courier_events as h')
+        .whereRaw('h.shipment_id = e.shipment_id')
+        .where('h.processing_status', 'held')
+    )
+    .orderBy('e.received_at', 'asc')
     .limit(limit)
-    .select('id', 'shipment_id', 'shop_id', 'logistics_account_id', 'source')
+    .select('e.id', 'e.shipment_id', 'e.shop_id', 'e.logistics_account_id', 'e.source')
 }
 
 export async function courierEvent(eventId: string) {

@@ -60,9 +60,18 @@ export function uuidFilter(ctx: HttpContext, name: string) {
   return value?.toLowerCase()
 }
 
+// A timestamp sort value as the queries write it: RFC 3339 UTC with microseconds.
+const TIMESTAMP_KEY = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/
+
 export function listRequest(
   ctx: HttpContext,
-  spec: { sort: string; parameters: readonly string[]; filters: Record<string, unknown> }
+  spec: {
+    sort: string
+    // `timestamp` keys are checked before they reach SQL; `text` keys are bound as they are.
+    keyKind: 'timestamp' | 'text'
+    parameters: readonly string[]
+    filters: Record<string, unknown>
+  }
 ): ListRequest {
   const known = new Set(['cursor', 'limit', ...spec.parameters])
   for (const name of Object.keys(ctx.request.qs())) {
@@ -78,7 +87,7 @@ export function listRequest(
     .sort(([a], [b]) => a.localeCompare(b))
   const f = createHash('sha256').update(JSON.stringify(canonical)).digest('hex').slice(0, 8)
   const cursorText = single(ctx, 'cursor')
-  const seek = cursorText === undefined ? null : decode(cursorText, spec.sort, f)
+  const seek = cursorText === undefined ? null : decode(cursorText, spec.sort, f, spec.keyKind)
   return {
     limit,
     seek,
@@ -93,11 +102,14 @@ export function listRequest(
   }
 }
 
-function decode(text: string, sort: string, f: string): Seek {
+function decode(text: string, sort: string, f: string, keyKind: 'timestamp' | 'text'): Seek {
   let value: unknown
   try {
     value = JSON.parse(Buffer.from(text, 'base64url').toString('utf8'))
   } catch {
+    throw invalidParameter('cursor', 'This cursor is not one this list made.')
+  }
+  if (typeof value !== 'object' || value === null) {
     throw invalidParameter('cursor', 'This cursor is not one this list made.')
   }
   const cursor = value as { v?: unknown; s?: unknown; k?: unknown; f?: unknown }
@@ -110,6 +122,7 @@ function decode(text: string, sort: string, f: string): Seek {
     k.length !== 2 ||
     typeof k[0] !== 'string' ||
     k[0].length > 200 ||
+    (keyKind === 'timestamp' && !TIMESTAMP_KEY.test(k[0])) ||
     typeof k[1] !== 'string' ||
     !UUID.test(k[1])
   ) {

@@ -2,11 +2,7 @@ import db from '@adonisjs/lucid/services/db'
 import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
 import LogisticsAccount from '#models/logistics_account'
 import LogisticsBranch from '#models/logistics_branch'
-import {
-  courierProvider,
-  courierProviderCodes as registryProviderCodes,
-} from '#modules/logistics/providers/registry'
-import type { CourierCapabilities } from '#modules/logistics/domain/courier_capability'
+import { courierProviderCodes as registryProviderCodes } from '#modules/logistics/providers/registry'
 import { LOGISTICS_ACCOUNT_OWNER_TYPES } from '#modules/logistics/domain/logistics_account_owner_type'
 import { LOGISTICS_ACCOUNT_STATUSES } from '#modules/logistics/domain/logistics_account_status'
 import { COURIER_EVENT_PROCESSING_STATUSES } from '#modules/logistics/domain/courier_event_processing_status'
@@ -53,10 +49,6 @@ function view(row: LogisticsAccount): AccountView {
 // The provider codes that have an adapter (the admin branch list's `provider_code` filter).
 export function courierProviderCodes() {
   return registryProviderCodes()
-}
-
-export function courierCapabilities(providerCode: string): CourierCapabilities | null {
-  return courierProvider(providerCode)?.capabilities ?? null
 }
 
 export async function shopAccount(shopId: string, accountId: string) {
@@ -174,17 +166,19 @@ export async function bookingTerms(
   shopId: string,
   accountId: string
 ) {
-  const settings = await trx
-    .from('shop_logistics_settings')
-    .where('shop_id', shopId)
-    .forShare()
-    .first()
+  // Lock order of the courier tables: the account, its shop row, then the settings (as
+  // disabling an account takes them).
+  const row = await trx.from('logistics_accounts').where('id', accountId).forShare().first()
   const link = await trx
     .from('logistics_account_shops')
     .where({ account_id: accountId, shop_id: shopId })
     .forShare()
     .first()
-  const row = await trx.from('logistics_accounts').where('id', accountId).forShare().first()
+  const settings = await trx
+    .from('shop_logistics_settings')
+    .where('shop_id', shopId)
+    .forShare()
+    .first()
   const provider = row
     ? await trx.from('logistics_providers').where('code', row.provider_code).first()
     : null

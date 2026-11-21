@@ -127,14 +127,6 @@ export async function sellerShopOrder(shopId: string, number: string) {
     .first()
 }
 
-export async function shopOrderByNumber(number: string) {
-  return db
-    .from('shop_orders')
-    .where('number', number)
-    .select('id', 'order_id', 'number', 'status', 'shop_id')
-    .first()
-}
-
 // The live (not cancelled) shipment of a shop order; R1 has one (A-28).
 export async function liveShipmentOf(reader: Reader, shopOrderId: string) {
   const row = await reader
@@ -164,22 +156,6 @@ export async function accountHasUnfinishedShipments(
 export async function pickupAddressReferenced(trx: TransactionClientContract, addressId: string) {
   const row = await trx.from('shipments').where('pickup_address_id', addressId).first()
   return Boolean(row)
-}
-
-export async function orderByNumber(number: string) {
-  return db
-    .from('orders')
-    .where('number', number)
-    .select(
-      'id',
-      'number',
-      'status',
-      'verification_status',
-      'verification_method',
-      'verified_at',
-      'verification_notes'
-    )
-    .first()
 }
 
 // The admin queue of docs/06 §13.8 `adminListCourierBookings`.
@@ -215,22 +191,4 @@ export async function courierBookingQueue(filters: {
     shipments: rows.slice(0, filters.limit).map(toView),
     last: last ? { key: last.sort_key as string, id: last.id as string } : null,
   }
-}
-
-// The shipment events of a shipment, oldest first.
-export async function shipmentEvents(shipmentId: string) {
-  return db
-    .from('shipment_events')
-    .where('shipment_id', shipmentId)
-    .orderBy('occurred_at', 'asc')
-    .orderBy('id', 'asc')
-    .select(
-      'event',
-      'status',
-      'reason_code',
-      'actor_type',
-      'raw_status',
-      'provider_event_key',
-      'occurred_at'
-    )
 }

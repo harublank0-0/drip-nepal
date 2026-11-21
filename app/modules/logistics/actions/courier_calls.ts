@@ -153,10 +153,6 @@ export function isReturnStage(providerCode: string, label: string) {
   return (RETURN_STAGES[providerCode] ?? []).includes(normaliseLabel(label))
 }
 
-export function normaliseCourierLabel(label: string) {
-  return normaliseLabel(label)
-}
-
 export function courierCallbackToken(accountId: string) {
   return callbackTokenFor(accountId)
 }

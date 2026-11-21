@@ -9,7 +9,7 @@ import { sendJob } from '#modules/platform/jobs'
 import { withTx } from '#modules/platform/tx'
 import { CREDENTIALS_AAD } from '#modules/logistics/providers/courier_accounts'
 import { courierProvider } from '#modules/logistics/providers/registry'
-import { account as readAccount, type AccountView } from '#modules/logistics/queries'
+import type { AccountView } from '#modules/logistics/queries'
 
 /*
  * Courier accounts (docs/04a §9.9, docs/06 §13.8; M6, OD-56). R1 offers
@@ -345,5 +345,3 @@ async function viewIn(trx: TransactionClientContract, accountId: string): Promis
 function validation(field: string, code: string, message: string) {
   return new DomainError('VALIDATION_FAILED', { errors: [{ field, code, message }] })
 }
-
-export { readAccount }

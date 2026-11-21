@@ -38,6 +38,7 @@ export default class AdminLogisticsController {
     const status = oneOf(ctx, 'status', LIST_FILTER_VALUES.accountStatuses)
     const list = listRequest(ctx, {
       sort: 'created_at',
+      keyKind: 'timestamp',
       parameters: ['owner_type', 'status'],
       filters: { owner_type: ownerType, status },
     })
@@ -86,6 +87,7 @@ export default class AdminLogisticsController {
     const unmapped = oneOf(ctx, 'unmapped', ['true', 'false'] as const)
     const list = listRequest(ctx, {
       sort: 'name',
+      keyKind: 'text',
       parameters: ['provider_code', 'is_active', 'unmapped'],
       filters: { provider_code: providerCode, is_active: isActive, unmapped },
     })

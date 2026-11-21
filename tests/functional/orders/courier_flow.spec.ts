@@ -27,6 +27,7 @@ import {
 } from '#tests/support/courier'
 import { FIRST_TRY, LAST_TRY, queued, useJobBoss } from '#tests/support/jobs'
 import { captureLogs } from '#tests/support/logs'
+import { refused } from '#tests/support/schema_rows'
 
 /*
  * The courier path end to end on the job level (docs/05 §6.3, docs/04a
@@ -718,5 +719,157 @@ test.group('T-ORD-012 staff record an order verification', (group) => {
       (e) => e
     )
     assert.equal(error?.problemCode, 'NOT_FOUND')
+  })
+})
+
+test.group('T-FUL-110 and T-FUL-111 the courier tables keep what they recorded', (group) => {
+  let courier: FakeCourier
+  group.setup(async () => {
+    await useJobBoss()
+  })
+  group.each.setup(() => {
+    courier = fakeCourier()
+    return () => courier.restore()
+  })
+
+  test('T-FUL-110 a callback for no shipment of the account is answered and not stored', async ({
+    assert,
+  }) => {
+    const { world } = await bookedWorld(courier)
+    const result = await deliverCallback(world, '99999999', 'pickup_completed')
+    assert.equal(result.ignored, 'unmatched')
+    assert.lengthOf(
+      await db.from('courier_events').where('logistics_account_id', world.accountId),
+      0
+    )
+  })
+
+  test('T-FUL-110 varied bodies for one parcel add at most one row per documented event, plus unknown', async ({
+    assert,
+  }) => {
+    const { world, externalId } = await bookedWorld(courier)
+    const bodies = [
+      {
+        event: 'pickup_completed',
+        order_id: Number(externalId),
+        status: 'Pickup Complete',
+        comment: 'a',
+      },
+      {
+        event: 'pickup_completed',
+        order_id: Number(externalId),
+        timestamp: '2026-11-21T05:00:00Z',
+      },
+      { event: 'made_up_one', order_id: Number(externalId) },
+      { event: 'made_up_two', order_id: Number(externalId), status: 'whatever' },
+    ]
+    for (const body of bodies) {
+      await storeCourierCallback({
+        providerCode: 'ncm',
+        accountId: world.accountId,
+        accountStatus: 'active',
+        rawBody: JSON.stringify(body),
+        requestId: null,
+      })
+    }
+    const rows = await db
+      .from('courier_events')
+      .where({ shipment_id: world.shipmentId, source: 'callback' })
+      .orderBy('event_key')
+    assert.deepEqual(
+      rows.map((row) => String(row.event_key).split(':').at(-1)),
+      ['pickup_completed', 'unknown']
+    )
+  })
+
+  test('T-FUL-110 a stored reading keeps its identity and payload (courier_events_guard, INV-34)', async ({
+    assert,
+  }) => {
+    const { world, externalId } = await bookedWorld(courier)
+    await deliverCallback(world, externalId, 'pickup_completed')
+    const row = await db.from('courier_events').where('shipment_id', world.shipmentId).first()
+    for (const [label, values] of [
+      ['the payload', { payload: { status: 'forged' } }],
+      ['the key', { event_key: `${row.event_key}-x` }],
+      ['the parcel', { external_shipment_id: '1' }],
+      ['the raw status', { raw_status: 'Delivered' }],
+    ] as const) {
+      await refused(
+        assert,
+        (trx) => trx.from('courier_events').where('id', row.id).update(values),
+        { code: 'P0001' },
+        label
+      )
+    }
+  })
+
+  test('T-FUL-111 a written booking outcome cannot change, except unknown to succeeded', async ({
+    assert,
+  }) => {
+    const world = await courierWorld()
+    courier.script.book.push({
+      outcome: 'refused',
+      error: { code: 'invalid_phone', httpStatus: 400, fields: ['phone'], retryable: false },
+    })
+    await book(world)
+    await runBookingJob(world)
+    const attempt = await db
+      .from('shipment_booking_attempts')
+      .where('shipment_id', world.shipmentId)
+      .first()
+    for (const [label, values] of [
+      ['refused to succeeded', { outcome: 'succeeded', external_shipment_id: '1' }],
+      ['the error code', { error_code: 'timeout' }],
+      ['the attempt number', { attempt_no: 2 }],
+    ] as const) {
+      await refused(
+        assert,
+        (trx) => trx.from('shipment_booking_attempts').where('id', attempt.id).update(values),
+        { code: 'P0001', message: /an outcome is written once/ },
+        label
+      )
+    }
+  })
+
+  test('T-FUL-006 a cancellation while the booking outcome is unknown gives 409', async ({
+    assert,
+  }) => {
+    const world = await courierWorld()
+    courier.script.book.push({
+      outcome: 'unknown',
+      error: { code: 'timeout', httpStatus: null, fields: [], retryable: false },
+    })
+    await book(world)
+    await runBookingJob(world)
+    const error = await cancelCourierBooking(
+      { shopId: world.shopId, shopOrderNumber: world.shopOrder.number, reason: null },
+      { actor: vendor(world), idempotency: null, present: (s) => s }
+    ).then(
+      () => null,
+      (e) => e
+    )
+    assert.equal(error?.problemCode, 'INVALID_STATE_TRANSITION')
+    const row = await shipment(world.shipmentId)
+    assert.equal(row.status, 'needs_reconciliation')
+  })
+
+  test('T-FUL-108 a reading that restates the current status applies nothing and holds nothing', async ({
+    assert,
+  }) => {
+    const { world, externalId } = await bookedWorld(courier)
+    courier.script.history.set(externalId, [
+      reading(externalId, 'Pickup Complete', 40),
+      reading(externalId, 'Sent for Delivery', 30),
+      reading(externalId, 'Sent for Delivery', 20),
+      reading(externalId, 'Delivered', 10),
+    ])
+    courier.script.detail.set(externalId, { externalShipmentId: externalId, ...NO_RETURN })
+    await deliverCallback(world, externalId, 'delivery_completed')
+    await processLatest(world)
+    assert.equal(await pick(shipment(world.shipmentId), 'status'), 'delivered')
+    const held = await db
+      .from('courier_events')
+      .where({ shipment_id: world.shipmentId, processing_status: 'held' })
+    assert.lengthOf(held, 0)
   })
 })

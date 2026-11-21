@@ -105,16 +105,43 @@ export async function recordLateSuccess(
  * belong to a worker that died during the call, so their outcome is unknown
  * (docs/03 §11.4). Returns the shipments whose booking is now unresolved.
  */
-export async function markStaleClaimsUnknown(
+// The shipments whose claim is older than the age, for the caller to lock before
+// `markStaleClaimsUnknown` (lock order: shipments, then their attempts).
+export async function staleClaimShipments(
   trx: TransactionClientContract,
   olderThanSeconds: number
 ) {
+  const rows = await trx
+    .from('shipment_booking_attempts')
+    .where('outcome', 'pending')
+    .where('started_at', '<', trx.raw(`now() - make_interval(secs => ?)`, [olderThanSeconds]))
+    .distinct('shipment_id')
+  return rows.map((row) => row.shipment_id as string)
+}
+
+export async function markStaleClaimsUnknown(
+  trx: TransactionClientContract,
+  olderThanSeconds: number,
+  shipmentIds: string[]
+) {
+  if (shipmentIds.length === 0) return []
   return trx
     .from('shipment_booking_attempts')
+    .whereIn('shipment_id', shipmentIds)
     .where('outcome', 'pending')
     .where('started_at', '<', trx.raw(`now() - make_interval(secs => ?)`, [olderThanSeconds]))
     .update({ outcome: 'unknown', error_code: 'timeout', finished_at: trx.raw('now()') })
     .returning(['id', 'shipment_id', 'shop_id', 'kind'])
+}
+
+// A `book` attempt that succeeded, or may have: the parcel may exist at the courier.
+export async function hasDecidedBookAttempt(trx: TransactionClientContract, shipmentId: string) {
+  const row = await trx
+    .from('shipment_booking_attempts')
+    .where({ shipment_id: shipmentId, kind: 'book' })
+    .whereIn('outcome', ['succeeded', 'unknown'])
+    .first()
+  return Boolean(row)
 }
 
 export async function attemptsOf(shipmentIds: string[]) {

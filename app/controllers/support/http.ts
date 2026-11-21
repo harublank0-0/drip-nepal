@@ -38,6 +38,16 @@ export function staffActor(ctx: HttpContext): Actor {
   }
 }
 
+function resolvedParams(ctx: HttpContext) {
+  const params = { ...(ctx.params as Record<string, string>) }
+  const shop = (ctx as { shop?: { id: string } }).shop
+  if (shop && 'shopSlug' in params) {
+    delete params.shopSlug
+    params.shop_id = shop.id
+  }
+  return params
+}
+
 // ⚷: the key of the request, required (400 `IDEMPOTENCY_KEY_REQUIRED`), with its fingerprint.
 export function idempotencyScope(
   ctx: HttpContext,
@@ -53,7 +63,8 @@ export function idempotencyScope(
     fingerprint: requestFingerprint({
       method: ctx.request.method(),
       route: ctx.route?.pattern ?? ctx.request.url(),
-      params: ctx.params as Record<string, string>,
+      // The resolved shop's ID in place of its slug (06 §7.2), so a retry after a rename still matches.
+      params: resolvedParams(ctx),
       body,
       ifMatch: ctx.request.header('if-match') ?? null,
     }),

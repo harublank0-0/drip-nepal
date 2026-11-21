@@ -1,4 +1,5 @@
 import logger from '@adonisjs/core/services/logger'
+import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
 
 /*
  * An admin alert (docs/11 §9.2): one structured log line at `error` with a
@@ -8,6 +9,14 @@ import logger from '@adonisjs/core/services/logger'
  */
 export type AlertFields = Record<string, string | number | boolean | null>
 
-export function raiseAlert(alert: string, fields: AlertFields = {}) {
-  logger.error({ event: 'alert', alert, ...fields }, alert)
+// Inside a transaction, pass it: the alert is written after the commit, never for a rollback or twice
+// for a deadlock retry.
+export function raiseAlert(
+  alert: string,
+  fields: AlertFields = {},
+  trx?: TransactionClientContract
+) {
+  const write = () => logger.error({ event: 'alert', alert, ...fields }, alert)
+  if (trx) trx.after('commit', write)
+  else write()
 }

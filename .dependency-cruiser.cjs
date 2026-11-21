@@ -159,7 +159,7 @@ module.exports = {
         path: '^(app|start|database)/',
         pathNot: [
           '^app/modules/platform/crypto/',
-          '^app/modules/logistics/providers/',
+          '^app/modules/logistics/providers/courier_accounts\\.ts$',
           '^app/modules/orders/jobs/book_courier_shipment\\.ts$',
           '^app/transformers/seller/logistics_transformer\\.ts$',
         ],

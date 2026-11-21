@@ -64,6 +64,15 @@ export async function replaceLogisticsSettings<T>(
   }
   return withTx(async (trx) => {
     await trx.rawQuery('SELECT id FROM shops WHERE id = ? FOR NO KEY UPDATE', [command.shopId])
+    // Lock order of the courier tables: the account, its shop rows, then the settings (as
+    // disabling an account takes them), so a concurrent disable waits instead of deadlocking.
+    if (command.defaultAccountId) {
+      await trx
+        .from('logistics_accounts')
+        .where('id', command.defaultAccountId)
+        .forShare()
+        .select('id')
+    }
     const current = await trx
       .from('shop_logistics_settings')
       .where('shop_id', command.shopId)

@@ -6,6 +6,7 @@ import { jobTx } from '#modules/platform/tx'
 import {
   claimBookingAttempt,
   finishBookingAttempt,
+  hasDecidedBookAttempt,
   isClaimTaken,
   recordLateSuccess,
 } from '#modules/logistics/actions/booking_attempts'
@@ -117,21 +118,33 @@ export async function bookCourierShipmentJob(
   if (!booking) return 'not_waiting'
   const { shipment } = booking
 
-  let attempt: { id: string; attemptNo: number }
+  let attempt: { id: string; attemptNo: number } | null
   try {
-    attempt = await jobTx((trx) =>
-      claimBookingAttempt(trx, {
+    attempt = await jobTx(async (trx) => {
+      // Under the shipment's lock the booking must still wait, with no attempt that succeeded or
+      // may have: a job that read the shipment just before another job finished would otherwise
+      // book the parcel a second time (T-FUL-111). Lock order: the shipment, then its attempts.
+      const current = await trx
+        .from('shipments')
+        .where('id', shipment.id)
+        .forUpdate()
+        .select('status')
+        .first()
+      if (current?.status !== 'booking_requested') return null
+      if (await hasDecidedBookAttempt(trx, shipment.id)) return null
+      return claimBookingAttempt(trx, {
         shipmentId: shipment.id,
         shopId: shipment.shop_id,
         accountId: shipment.logistics_account_id,
         kind: 'book',
         requestId: job.requestId,
       })
-    )
+    })
   } catch (error) {
     if (isClaimTaken(error)) return 'claimed_elsewhere'
     throw error
   }
+  if (!attempt) return 'not_waiting'
 
   const outcome = await bookWithCourier(shipment.logistics_account_id, {
     merchantReference: shipment.merchant_reference,
@@ -148,7 +161,21 @@ export async function bookCourierShipmentJob(
 
   const lastTry = job.retryCount >= job.retryLimit
   const retry = outcome.outcome === 'refused' && outcome.error.retryable && !lastTry
-  const result = await jobTx((trx) => applyOutcome(trx, shipment, attempt.id, outcome, retry))
+  const claimed = attempt
+  let result: string
+  try {
+    result = await jobTx((trx) => applyOutcome(trx, shipment, claimed.id, outcome, retry))
+  } catch (error) {
+    // The courier booked the parcel but its ID could not be saved: the sweeper moves the claim to
+    // `needs_reconciliation`, and this alert names the courier's ID for staff.
+    if (outcome.outcome === 'succeeded') {
+      raiseAlert('courier.booking_outcome_unsaved', {
+        shipment_id: shipment.id,
+        external_shipment_id: outcome.externalShipmentId,
+      })
+    }
+    throw error
+  }
   if (retry) throw new RetryableBookingRefusal(outcome.error.code)
   return result
 }
@@ -162,6 +189,8 @@ async function applyOutcome(
 ) {
   const succeeded = outcome.outcome === 'succeeded'
   const error = outcome.outcome === 'succeeded' ? null : outcome.error
+  // Lock order: the shipment, then its attempt (as the claim and the sweeper take them).
+  const current = await trx.from('shipments').where('id', shipment.id).forUpdate().first()
   const written = await finishBookingAttempt(trx, attemptId, {
     outcome: outcome.outcome,
     httpStatus: error?.httpStatus ?? null,
@@ -174,14 +203,17 @@ async function applyOutcome(
     if (!succeeded) return 'claim_already_closed'
     await recordLateSuccess(trx, attemptId, outcome.externalShipmentId, null)
   }
-  const current = await trx.from('shipments').where('id', shipment.id).forUpdate().first()
   if (succeeded) {
     if (current.status !== 'booking_requested' && current.status !== 'needs_reconciliation') {
-      raiseAlert('courier.late_booking_success', {
-        shipment_id: shipment.id,
-        status: current.status,
-        external_shipment_id: outcome.externalShipmentId,
-      })
+      raiseAlert(
+        'courier.late_booking_success',
+        {
+          shipment_id: shipment.id,
+          status: current.status,
+          external_shipment_id: outcome.externalShipmentId,
+        },
+        trx
+      )
       return 'late_success_after_resolution'
     }
     await trx
@@ -229,7 +261,7 @@ async function applyOutcome(
       updated_at: trx.raw('now()'),
     })
   await event(trx, shipment, 'needs_reconciliation')
-  raiseAlert('courier.booking_unknown', { shipment_id: shipment.id, code: outcome.error.code })
+  raiseAlert('courier.booking_unknown', { shipment_id: shipment.id, code: outcome.error.code }, trx)
   return 'needs_reconciliation'
 }
 

@@ -6,11 +6,14 @@ import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
  * carries, the one `committed` reservation of its kept quantity becomes
  * `consumed`, and the stock row gives up those units from both `on_hand` and
  * `reserved`, with one `ship` movement per variant. A `held` reservation is
- * never consumed (T-FUL-002). Locks follow docs/05 §4.4: `inventory_items`
- * in `variant_id` order (level 7), then the reservations in `id` order (8).
+ * never consumed (T-FUL-002). The committed reservations are read to plan
+ * the change; then, as docs/05 §4.4 orders them, `inventory_items` are
+ * updated in `variant_id` order (level 7) and each reservation moves by a
+ * compare-and-set in `id` order (8). Callers hold the parent `orders` lock.
  *
- * Returns the lines that could not be consumed instead of throwing, so the
- * caller decides: the courier has the parcel already, so nothing is undone.
+ * Returns the lines that could not be consumed instead of throwing; a problem
+ * found after a stock row changed means the caller must roll back (the courier
+ * job does: it throws and holds the reading as failed).
  */
 
 export type ShipmentLine = { orderItemId: string; quantity: number }
@@ -89,10 +92,19 @@ export async function consumeForShipment(
     })
   }
   for (const row of consumable) {
-    await trx
+    const moved = await trx
       .from('inventory_reservations')
       .where({ id: row.id, status: 'committed' })
       .update({ status: 'consumed', resolved_at: trx.raw('now()'), updated_at: trx.raw('now()') })
+      .returning('id')
+    if (moved.length !== 1) {
+      // Another writer moved it since the read: the caller rolls the whole hand-over back.
+      problems.push({
+        orderItemId: reservations.find((r) => r.id === row.id)!.order_item_id as string,
+        reason: 'no_committed_reservation',
+      })
+      return problems
+    }
   }
   return problems
 }

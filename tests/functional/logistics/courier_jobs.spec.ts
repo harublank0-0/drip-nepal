@@ -15,6 +15,7 @@ import {
   sweepCourierBookings,
   sweepCourierEvents,
 } from '#modules/orders/jobs/courier_schedules'
+import { processCourierEventJob } from '#modules/orders/jobs/process_courier_event'
 import { claimBookingAttempt } from '#modules/logistics/actions/booking_attempts'
 import type { Actor } from '#modules/platform/actor'
 import {
@@ -192,8 +193,7 @@ test.group('T-SHOP-114 logistics_branches sync', (group) => {
     await syncBranches({ provider_code: 'ncm' })
     const filled = await db.from('logistics_branches').where('name', 'TINKUNE').first()
     assert.equal(filled.district_code, '306')
-    // Staff cleared it on purpose and set it again by hand: the sync leaves a set value.
-    await db.from('logistics_branches').where('id', filled.id).update({ district_code: null })
+    // Staff set another district by hand: the sync leaves a set value.
     await db
       .table('districts')
       .insert({ code: '399', province_code: '3', name_en: 'Elsewhere', name_ne: 'अन्यत्र' })
@@ -402,7 +402,10 @@ test.group('T-SHOP-116 courier account verification and status', (group) => {
       )
     )
     const audit = await db.from('audit_logs').where({ subject_id: world.accountId }).orderBy('id')
-    assert.isAtLeast(audit.length, 2)
+    assert.deepEqual(
+      audit.map((entry) => entry.action),
+      ['logistics_account.status_change', 'logistics_account.status_change']
+    )
   })
 })
 
@@ -467,7 +470,7 @@ test.group('T-FUL-113 the courier sweepers and the status poll', (group) => {
     )
   })
 
-  test('T-FUL-113 a booking whose job never ran is sent again; one with an attempt is not', async ({
+  test('T-FUL-113 a booking whose job was lost, or whose retries died after a retryable refusal, is sent again', async ({
     assert,
   }) => {
     const world = await requested()
@@ -477,7 +480,8 @@ test.group('T-FUL-113 the courier sweepers and the status poll', (group) => {
     const swept = await sweepCourierBookings(null, undefined, OLD)
     assert.equal(swept.resent, 1)
     assert.lengthOf(await queued('orders.book_courier_shipment'), before.length + 1)
-    // A retryable refusal leaves it waiting with an attempt: pg-boss retries it, not the sweeper.
+    // A retryable refusal leaves it waiting with a finished attempt; if the queue's retries die
+    // too, the sweeper is its way out, so it sends the job again.
     courier.script.book.push({
       outcome: 'refused',
       error: { code: 'rate_limited', httpStatus: 429, fields: [], retryable: true },
@@ -487,8 +491,122 @@ test.group('T-FUL-113 the courier sweepers and the status poll', (group) => {
     )
     const waiting = await db.from('shipments').where('id', world.shipmentId).first()
     assert.equal(waiting.status, 'booking_requested')
-    const afterAttempt = await sweepCourierBookings(null, undefined, OLD)
-    assert.equal(afterAttempt.resent, 0)
+    const afterRefusal = await sweepCourierBookings(null, undefined, OLD)
+    assert.equal(afterRefusal.resent, 1)
+  })
+
+  test('T-FUL-113 a booking with a claim in flight is not sent again', async ({ assert }) => {
+    const world = await requested()
+    await db.transaction((trx) =>
+      claimBookingAttempt(trx, {
+        shipmentId: world.shipmentId,
+        shopId: world.shopId,
+        accountId: world.accountId,
+        kind: 'book',
+        requestId: null,
+      })
+    )
+    const swept = await sweepCourierBookings(null, undefined, OLD)
+    assert.equal(swept.resent, 0)
+  })
+
+  test('T-FUL-111 a job that finds an earlier attempt succeeded makes no courier call', async ({
+    assert,
+  }) => {
+    // The state a second job meets when it read the shipment just before the first job finished.
+    const world = await requested()
+    await db.table('shipment_booking_attempts').insert({
+      shipment_id: world.shipmentId,
+      shop_id: world.shopId,
+      logistics_account_id: world.accountId,
+      kind: 'book',
+      attempt_no: 1,
+      outcome: 'succeeded',
+      external_shipment_id: '7777',
+      finished_at: db.raw('now()'),
+    })
+    const outcome = await bookCourierShipmentJob(
+      { shipment_id: world.shipmentId, shop_id: world.shopId },
+      FIRST_TRY
+    )
+    assert.equal(outcome, 'not_waiting')
+    assert.lengthOf(
+      courier.calls.filter((c) => c.method === 'book'),
+      0
+    )
+    assert.lengthOf(
+      await db.from('shipment_booking_attempts').where('shipment_id', world.shipmentId),
+      1
+    )
+  })
+
+  test('T-FUL-113 a job the sweeper sends closes every open trigger of the shipment', async ({
+    assert,
+  }) => {
+    const world = await requested()
+    await bookCourierShipmentJob(
+      { shipment_id: world.shipmentId, shop_id: world.shopId },
+      FIRST_TRY
+    )
+    const { external_shipment_id: externalId } = await db
+      .from('shipments')
+      .where('id', world.shipmentId)
+      .first()
+    courier.script.statuses.set(externalId, 'Pickup Order Created')
+    await pollCourierStatuses(null)
+    courier.script.history.set(externalId, [])
+    await processCourierEventJob(
+      { shipment_id: world.shipmentId, shop_id: world.shopId, courier_event_id: null },
+      FIRST_TRY
+    )
+    const open = await db
+      .from('courier_events')
+      .where('shipment_id', world.shipmentId)
+      .whereIn('processing_status', ['pending', 'failed'])
+    assert.lengthOf(open, 0, 'the poll trigger was answered by the history read')
+    assert.equal(await pick(sweepCourierEvents(null, OLD), 'resent'), 0)
+  })
+
+  test('T-FUL-113 a shipment with a held reading is not swept, and its job reads no history', async ({
+    assert,
+  }) => {
+    const world = await requested()
+    await bookCourierShipmentJob(
+      { shipment_id: world.shipmentId, shop_id: world.shopId },
+      FIRST_TRY
+    )
+    const { external_shipment_id: externalId } = await db
+      .from('shipments')
+      .where('id', world.shipmentId)
+      .first()
+    const base = {
+      logistics_account_id: world.accountId,
+      external_shipment_id: externalId,
+      shipment_id: world.shipmentId,
+      shop_id: world.shopId,
+      source: 'history',
+      payload: { status: 'x' },
+    }
+    await db.table('courier_events').insert([
+      {
+        ...base,
+        event_key: `history:${externalId}:held`,
+        raw_status: 'Teleported',
+        processing_status: 'held',
+        processed_at: db.raw('now()'),
+        hold_reason: 'unmapped_status',
+      },
+      { ...base, event_key: `history:${externalId}:later`, raw_status: 'Pickup Complete' },
+    ])
+    assert.equal(await pick(sweepCourierEvents(null, OLD), 'resent'), 0)
+    const historyCalls = () => courier.calls.filter((c) => c.method === 'getStatusHistory').length
+    const before = historyCalls()
+    const outcome = await processCourierEventJob(
+      { shipment_id: world.shipmentId, shop_id: world.shopId, courier_event_id: null },
+      FIRST_TRY
+    )
+    assert.equal(outcome, 'held_earlier')
+    assert.equal(historyCalls(), before, 'no courier call while held')
   })
 
   test('T-FUL-113 an open courier event gets its job sent again once it is old', async ({

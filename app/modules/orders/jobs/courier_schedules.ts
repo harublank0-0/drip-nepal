@@ -2,7 +2,10 @@ import db from '@adonisjs/lucid/services/db'
 import { raiseAlert } from '#modules/platform/alerts'
 import { sendJob } from '#modules/platform/jobs'
 import { jobTx } from '#modules/platform/tx'
-import { markStaleClaimsUnknown } from '#modules/logistics/actions/booking_attempts'
+import {
+  markStaleClaimsUnknown,
+  staleClaimShipments,
+} from '#modules/logistics/actions/booking_attempts'
 import {
   eventKeys,
   recordCourierEvents,
@@ -101,7 +104,12 @@ export async function sweepCourierBookings(
   lostSeconds = LOST_BOOKING_JOB_SECONDS
 ) {
   return jobTx(async (trx) => {
-    const stale = await markStaleClaimsUnknown(trx, staleSeconds)
+    // Lock order: the shipments first, then their attempts (as the booking job takes them).
+    const shipmentIds = await staleClaimShipments(trx, staleSeconds)
+    if (shipmentIds.length > 0) {
+      await trx.from('shipments').whereIn('id', shipmentIds).orderBy('id').forUpdate().select('id')
+    }
+    const stale = await markStaleClaimsUnknown(trx, staleSeconds, shipmentIds)
     let unresolved = 0
     for (const claim of stale.filter((row) => row.kind === 'book')) {
       const moved = await trx
@@ -122,14 +130,23 @@ export async function sweepCourierBookings(
         status: 'needs_reconciliation',
         actor_type: 'system',
       })
-      raiseAlert('courier.booking_unknown', { shipment_id: claim.shipment_id, code: 'worker_lost' })
+      raiseAlert(
+        'courier.booking_unknown',
+        { shipment_id: claim.shipment_id, code: 'worker_lost' },
+        trx
+      )
     }
     const lost = await trx
       .from('shipments as s')
       .where('s.status', 'booking_requested')
       .where('s.updated_at', '<', trx.raw(`now() - make_interval(secs => ?)`, [lostSeconds]))
+      // No attempt in flight or decided: a lost job, or retries that died after a retryable
+      // refusal (a refusal for good would have moved the shipment to `booking_failed`).
       .whereNotExists((q) =>
-        q.from('shipment_booking_attempts as a').whereRaw('a.shipment_id = s.id')
+        q
+          .from('shipment_booking_attempts as a')
+          .whereRaw('a.shipment_id = s.id')
+          .whereIn('a.outcome', ['pending', 'succeeded', 'unknown'])
       )
       .select('s.id', 's.shop_id')
     for (const row of lost) {

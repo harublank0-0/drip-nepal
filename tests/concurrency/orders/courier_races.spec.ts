@@ -14,6 +14,7 @@ import {
   type FakeCourier,
 } from '#tests/support/courier'
 import { FIRST_TRY, useJobBoss } from '#tests/support/jobs'
+import { JOB_SCHEMA } from '#modules/platform/jobs'
 
 /*
  * The courier races, committed for real on separate connections (docs/10
@@ -233,7 +234,7 @@ test.group('T-FUL-110 a repeated tracking update is applied once', (group) => {
         .where({ shipment_id: world.shipmentId, source: 'callback' })
       assert.lengthOf(rows, 1, `round ${round}`)
       const jobs = await db
-        .from('pgboss.job')
+        .from(`${JOB_SCHEMA}.job`)
         .where('name', 'orders.process_courier_event')
         .whereRaw(`data->>'shipment_id' = ?`, [world.shipmentId])
       assert.lengthOf(jobs, 1, `round ${round}`)

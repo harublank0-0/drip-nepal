@@ -20,6 +20,8 @@ import {
 } from '#tests/support/courier'
 import { queued, useJobBoss } from '#tests/support/jobs'
 import { insertUser } from '#tests/support/schema_rows'
+import { captureLogs } from '#tests/support/logs'
+import { verifyAccount } from '#modules/logistics/jobs/verify_account'
 import { placeholderCiphertext } from '#database/factories/placeholder_ciphertext'
 
 /*
@@ -268,8 +270,12 @@ test.group('T-SHOP-115 logistics settings and courier accounts', (group) => {
     const path = `/api/v1/seller/shops/${world.slug}/pickup-addresses/${world.addressId}`
     const archived = await send(browser, 'DELETE', path)
     assert.equal(archived.status, 409)
+    assert.equal(archived.body.code, 'INVALID_STATE_TRANSITION')
     const undefault = await send(browser, 'PATCH', path, { is_default: false })
     assert.equal(undefault.status, 422)
+    assert.equal(undefault.body.errors[0].field, 'is_default')
+    const row = await db.from('shop_addresses').where('id', world.addressId).first()
+    assert.deepEqual([row.archived_at, row.is_default], [null, true], 'the address is unchanged')
   })
 })
 
@@ -345,10 +351,12 @@ test.group('T-SHOP-006 and T-SEC-001 on the courier operations', (group) => {
       { 'If-Match': '"1"' }
     )
     assert.equal(rekey.status, 404)
+    assert.equal(rekey.body.code, 'NOT_FOUND')
     const address = await send(browser, 'PATCH', `${base}/pickup-addresses/${theirs.addressId}`, {
       is_default: true,
     })
     assert.equal(address.status, 404)
+    assert.equal(address.body.code, 'NOT_FOUND')
     const booking = await send(
       browser,
       'POST',
@@ -357,6 +365,14 @@ test.group('T-SHOP-006 and T-SEC-001 on the courier operations', (group) => {
       { 'Idempotency-Key': key() }
     )
     assert.equal(booking.status, 404)
+    assert.equal(booking.body.code, 'NOT_FOUND')
+    // Nothing of the other shop changed.
+    const account = await db.from('logistics_accounts').where('id', theirs.accountId).first()
+    assert.equal(account.version, 1)
+    const theirAddress = await db.from('shop_addresses').where('id', theirs.addressId).first()
+    assert.isNull(theirAddress.archived_at)
+    const theirShipment = await db.from('shipments').where('id', theirs.shipmentId).first()
+    assert.equal(theirShipment.status, 'pending')
   })
 })
 
@@ -707,6 +723,8 @@ test.group('T-SEC-008 and T-API-003 on the admin courier lists', (group) => {
     for (const query of [
       `cursor=${forged}`,
       'cursor=not-a-cursor',
+      `cursor=${Buffer.from('null').toString('base64url')}`,
+      `cursor=${Buffer.from(JSON.stringify({ ...decoded, k: ['yesterday', decoded.k[1]] })).toString('base64url')}`,
       `queue=cancel_requested&cursor=${next}`,
       'limit=0',
       'limit=101',
@@ -744,5 +762,109 @@ test.group('T-SEC-008 and T-API-003 on the admin courier lists', (group) => {
       { label: 'Warehouse' }
     )
     assert.equal(labelOnly.status, 422)
+  })
+})
+
+test.group('T-FUL-112, T-SEC-040 and T-SHOP-115: log hygiene and replays', (group) => {
+  let courier: FakeCourier
+  group.setup(async () => {
+    await useJobBoss()
+  })
+  group.each.setup(() => {
+    courier = fakeCourier()
+    return () => courier.restore()
+  })
+
+  test('T-FUL-112 no log line carries the callback URL query string or its token', async ({
+    assert,
+  }) => {
+    const world = await courierWorld()
+    const token = courierCallbackToken(world.accountId)!
+    const lines = await captureLogs(async () => {
+      for (const t of [token, 'wrong-token-value']) {
+        await fetch(
+          `${serverUrl()}/api/v1/webhooks/couriers/ncm/${world.accountId}?token=${encodeURIComponent(t)}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ event: 'pickup_completed', order_id: 1 }),
+          }
+        )
+      }
+    })
+    assert.isAbove(lines.length, 0, 'the receiver logged something')
+    const text = JSON.stringify(lines)
+    assert.notInclude(text, token)
+    assert.notInclude(text, 'wrong-token-value')
+    assert.notInclude(text, '?token=')
+  })
+
+  test('T-SEC-040 no log line holds the token, from creation through the test call', async ({
+    assert,
+  }) => {
+    const { ownerId, slug, shopId } = await activeShop()
+    const browser = await signIn(ownerId)
+    const lines = await captureLogs(async () => {
+      const created = await send(
+        browser,
+        'POST',
+        `/api/v1/seller/shops/${slug}/courier-accounts`,
+        {
+          provider_code: 'ncm',
+          name: 'NCM Bhaktapur',
+          environment: 'sandbox',
+          credentials: { token: NCM_TOKEN },
+          password: OWNER_PASSWORD,
+        },
+        { 'Idempotency-Key': key() }
+      )
+      assert.equal(created.status, 201, created.text)
+      const account = await db.from('logistics_accounts').where('shop_id', shopId).first()
+      await verifyAccount({ account_id: account.id, version: account.version })
+    })
+    const account = await db.from('logistics_accounts').where('shop_id', shopId).first()
+    assert.equal(account.status, 'active')
+    const text = JSON.stringify(lines)
+    assert.notInclude(text, NCM_TOKEN)
+    assert.notInclude(text, account.credentials_enc)
+  })
+
+  test('T-SHOP-115 a replay after the shop slug changed still matches its key', async ({
+    assert,
+  }) => {
+    const { ownerId, slug, shopId } = await activeShop()
+    const browser = await signIn(ownerId)
+    const body = {
+      provider_code: 'ncm',
+      name: 'NCM Patan',
+      environment: 'sandbox',
+      credentials: { token: NCM_TOKEN },
+      password: OWNER_PASSWORD,
+    }
+    const idempotencyKey = key()
+    const first = await send(
+      browser,
+      'POST',
+      `/api/v1/seller/shops/${slug}/courier-accounts`,
+      body,
+      {
+        'Idempotency-Key': idempotencyKey,
+      }
+    )
+    assert.equal(first.status, 201, first.text)
+    const renamed = `${slug}-new`
+    await db.from('shops').where('id', shopId).update({ slug: renamed })
+    const replay = await send(
+      browser,
+      'POST',
+      `/api/v1/seller/shops/${renamed}/courier-accounts`,
+      body,
+      {
+        'Idempotency-Key': idempotencyKey,
+      }
+    )
+    assert.equal(replay.status, 201, replay.text)
+    assert.equal(replay.headers.get('idempotency-replayed'), 'true')
+    assert.lengthOf(await db.from('logistics_accounts').where('shop_id', shopId), 1)
   })
 })

@@ -11,6 +11,7 @@ import {
 } from '#modules/inventory/actions/consume_for_shipment'
 import {
   eventKeys,
+  closeTriggers,
   hasHeldReading,
   openReadings,
   recordCourierEvents,
@@ -91,6 +92,15 @@ export async function processCourierEventJob(
     return 'not_booked'
   }
 
+  // A held reading stops the replay until staff resolve it, and their resolution sends this
+  // job again: reading the history now would only spend the courier's daily quota.
+  const held = await jobTx(async (trx) => {
+    if (!(await hasHeldReading(trx, loaded.id))) return false
+    await closeTriggers(trx, loaded.id)
+    return true
+  })
+  if (held) return 'held_earlier'
+
   const history = await readParcelHistory(loaded.logistics_account_id, loaded.external_shipment_id)
   if (!history.ok) {
     if (lastTry && payload.courier_event_id) {
@@ -129,8 +139,8 @@ export async function processCourierEventJob(
         requestId: job.requestId,
       }))
     )
-    if (payload.courier_event_id)
-      await setEventOutcome(trx, payload.courier_event_id, { status: 'looked_up' })
+    // The history answers every open trigger of the shipment, the sweeper's included.
+    await closeTriggers(trx, loaded.id)
   })
 
   // A delivery is checked against the parcel's detail, which is read outside the transaction.
@@ -155,10 +165,14 @@ export async function processCourierEventJob(
           error: `stock: ${error.problems.map((p) => p.reason).join(',')}`,
         })
       }
-      raiseAlert('courier.pickup_stock_failed', {
-        shipment_id: loaded.id,
-        problems: error.problems.length,
-      })
+      raiseAlert(
+        'courier.pickup_stock_failed',
+        {
+          shipment_id: loaded.id,
+          problems: error.problems.length,
+        },
+        trx
+      )
       return 'stock_failed'
     })
   }
@@ -222,11 +236,15 @@ async function replay(
 
   const hold = async (reading: Reading, reason: string) => {
     await setEventOutcome(trx, reading.id, { status: 'held', holdReason: reason })
-    raiseAlert('courier.reading_held', {
-      shipment_id: shipmentId,
-      courier_event_id: reading.id,
-      reason,
-    })
+    raiseAlert(
+      'courier.reading_held',
+      {
+        shipment_id: shipmentId,
+        courier_event_id: reading.id,
+        reason,
+      },
+      trx
+    )
     return 'held'
   }
 
@@ -238,7 +256,7 @@ async function replay(
     if (mapping.kind === 'unmapped') return hold(reading, 'unmapped_status')
     if (mapping.kind === 'none') {
       await setEventOutcome(trx, reading.id, { status: 'ignored' })
-      notice(mapping.notice, shipmentId)
+      notice(mapping.notice, shipmentId, trx)
       continue
     }
     let statuses = [...mapping.statuses]
@@ -251,7 +269,7 @@ async function replay(
         detail.returnedToVendor === true ||
         (await historyHasReturnStage(trx, shipmentId, providerCode))
       if (returned) {
-        notice('record_returned_to_origin', shipmentId)
+        notice('record_returned_to_origin', shipmentId, trx)
         statuses =
           current.status === 'returning'
             ? []
@@ -261,6 +279,12 @@ async function replay(
       }
     }
     if (statuses.length === 0) {
+      await setEventOutcome(trx, reading.id, { status: 'ignored' })
+      continue
+    }
+    // A reading that restates the current status (NCM sends `Sent for Delivery` again on a
+    // second day) applies nothing; it is not a transition the machine refuses (2026-11-21).
+    if (statuses.length === 1 && statuses[0] === current.status) {
       await setEventOutcome(trx, reading.id, { status: 'ignored' })
       continue
     }
@@ -299,9 +323,16 @@ async function historyHasReturnStage(
   return labels.some((row) => isReturnStage(providerCode, row.raw_status))
 }
 
-function notice(kind: 'record_returned_to_origin' | 'courier_refund' | null, shipmentId: string) {
-  if (kind === 'courier_refund') raiseAlert('courier.refund_initiated', { shipment_id: shipmentId })
-  else if (kind === 'record_returned_to_origin') {
+function notice(
+  kind: 'record_returned_to_origin' | 'courier_refund' | null,
+  shipmentId: string,
+  trx: TransactionClientContract
+) {
+  if (kind === 'courier_refund') {
+    raiseAlert('courier.refund_initiated', { shipment_id: shipmentId }, trx)
+    return
+  }
+  if (kind === 'record_returned_to_origin') {
     logger.info(
       { event: 'courier.vendor_notice', notice: kind, shipment_id: shipmentId },
       'vendor notice'
@@ -339,10 +370,14 @@ async function applyStatus(
     if (current.cancel_requested_at) {
       patch.cancel_requested_at = null
       patch.cancel_requested_by = null
-      raiseAlert('courier.pickup_after_cancel_request', {
-        shipment_id: current.id,
-        requested_by: current.cancel_requested_by,
-      })
+      raiseAlert(
+        'courier.pickup_after_cancel_request',
+        {
+          shipment_id: current.id,
+          requested_by: current.cancel_requested_by,
+        },
+        trx
+      )
     }
   } else if (to === 'out_for_delivery' && current.status === 'delivery_failed') {
     patch.attempt_count = current.attempt_count + 1
