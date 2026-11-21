@@ -284,6 +284,8 @@ export function fakeCourier() {
     historyFails: 0,
     detail: new Map<string, CourierParcelDetail>(),
     detailFails: 0,
+    // Awaited before each detail read: a race test holds the jobs here to start their replays together.
+    beforeDetail: null as (() => Promise<void>) | null,
     statuses: new Map<string, string>(),
     branches: [] as CourierBranch[],
     branchesResult: null as CourierResult<CourierBranch[]> | null,
@@ -316,6 +318,7 @@ export function fakeCourier() {
     },
     async getParcel(account, id) {
       await record('getParcel', account, id)
+      if (script.beforeDetail) await script.beforeDetail()
       if (script.detailFails > 0) {
         script.detailFails--
         return {
