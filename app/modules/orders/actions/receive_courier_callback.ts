@@ -33,20 +33,23 @@ import { withTx } from '#modules/platform/tx'
 
 export type CallbackResult = { stored: number; duplicates: number; ignored: string | null }
 
+const UUID = /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i
+
+const PROVIDER_CODE = /^[a-z][a-z0-9_]{1,31}$/
+
+// The URL's values are the caller's: a value is logged only in its expected shape.
 function rejected(providerCode: string, accountId: string, reason: string, bodySha256: string) {
   logger.warn(
     {
       event: 'logistics.callback_rejected',
-      provider_code: providerCode,
-      account_id: accountId,
+      provider_code: PROVIDER_CODE.test(providerCode) ? providerCode : null,
+      account_id: UUID.test(accountId) ? accountId : null,
       reason,
       body_sha256: bodySha256,
     },
     'courier callback rejected'
   )
 }
-
-const UUID = /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i
 
 export async function authenticateCourierCallback(command: {
   providerCode: string

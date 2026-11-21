@@ -54,6 +54,8 @@ export const runnerHooks: Required<Pick<Config, 'setup' | 'teardown'>> = {
 export const configureSuite: Config['configureSuite'] = (suite) => {
   if (['functional', 'concurrency', 'browser'].includes(suite.name)) {
     suite.setup(() => prepareTestDatabase())
+    // A suite that started the shared pg-boss stops it before the next suite rebuilds its schema.
+    suite.setup(() => () => stopJobBoss())
   }
 
   if (suite.name === 'functional') {

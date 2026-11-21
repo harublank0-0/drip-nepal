@@ -14,5 +14,4 @@ export const COURIER_CALLBACK_PATTERN = '/api/v1/webhooks/couriers/:providerCode
 router
   .post(COURIER_CALLBACK_PATTERN, [CourierCallbacksController, 'receive'])
   .as('receiveCourierCallback')
-  .where('providerCode', /^[a-z][a-z0-9_]{1,31}$/)
   .use(middleware.courierCallbackBody())
