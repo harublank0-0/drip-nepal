@@ -20,7 +20,9 @@
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 
-    @viteReactRefresh()
+    {{-- The refresh preamble is inline: written where the Vite dev server runs,
+         `node ace test` included, where CSP is on (docs/07 §7.3). --}}
+    @viteReactRefresh({ nonce: cspNonce })
     @vite(['inertia/app.tsx'])
     @inertiaHead()
     @stack('dumper')

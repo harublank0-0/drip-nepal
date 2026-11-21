@@ -130,13 +130,16 @@ async function sellerSeenAt(sessionId: string) {
   return data?.seller_seen_at
 }
 
-// A page's HTML with its request ID and the requested slug, which the page
-// echoes in its URL, taken out, so two pages can be compared.
+// A page's HTML with what differs between two requests taken out, so two pages
+// can be compared: the requested slug, which the page echoes in its URL, the
+// request ID, and the CSP nonce of the inline scripts.
 async function pageText(response: Response, slug: string) {
   const body = await response.text()
-  const text = body.replaceAll(slug, '<slug>')
+  let text = body.replaceAll(slug, '<slug>')
   const requestId = response.headers.get('x-request-id')
-  return requestId ? text.replaceAll(requestId, '<request-id>') : text
+  if (requestId) text = text.replaceAll(requestId, '<request-id>')
+  const nonce = /'nonce-([^']+)'/.exec(response.headers.get('content-security-policy') ?? '')?.[1]
+  return nonce ? text.replaceAll(nonce, '<nonce>') : text
 }
 
 // A problem body without the members that differ on every request.

@@ -145,4 +145,6 @@ export const envSchema = {
   HMAC_KEY_TELEMETRY: optionalKey32,
   // The error tracker; no transport reads it until the Sentry adapter lands (docs/09 §5.6).
   SENTRY_DSN: Env.schema.string.optional({ format: 'url', tld: false }),
+  // The CSP report endpoint of the error tracker's project (docs/07 §7.3, docs/11 §9.6).
+  CSP_REPORT_URI: Env.schema.string.optional({ format: 'url', tld: false }),
 }

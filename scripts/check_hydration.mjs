@@ -7,13 +7,15 @@
 // The page is the 404 page of an unknown URL, the one server-rendered page a
 // production build serves before M1. For each theme (no cookie, `dark`, and
 // `system` under a light and a dark colour scheme) it checks:
-// 1. the HTML answer: status 404, the page object as a JSON data block, and
-//    `#app` already holding the rendered page;
+// 1. the HTML answer: status 404, the page object as a JSON data block,
+//    `#app` already holding the rendered page, and for `system` the inline
+//    theme script's nonce equal to the one in both CSP headers;
 // 2. in headless Chromium: React's root appears on `#app` and no node the
 //    server rendered into `#app` is removed, so React adopted the markup
 //    (hydrateRoot) instead of painting again (createRoot clears the
 //    container, RF-08; so does a hydration error's client-side fallback),
-//    no console error or warning and no page error, the theme class on
+//    no console error or warning, no page error, no violation of either
+//    CSP policy (enforced or report-only, docs/07 §7.3), the theme class on
 //    <html>, and the chrome colour of the theme-color tags.
 // CI runs it against the production image (scripts/check_image.sh) after
 // installing Chromium (`pnpm exec playwright install chromium`).
@@ -33,6 +35,34 @@ const CASES = [
   { label: 'system, dark scheme', cookie: 'system', scheme: 'dark', expected: 'dark' },
 ]
 
+/*
+ * The one violation the page is known to cause (docs/08 §5.7): sonner inserts
+ * its stylesheet as a <style> element without the nonce, which the report-only
+ * target policy refuses. The same CSS is in the CSS bundle, so toasts keep
+ * their styles once M7 enforces the target; before then the injection has to
+ * stop, or every page load sends a report (docs/07 note 36). sonner inserts
+ * it once, when its module loads, appending the element empty and then
+ * writing its text, so it gives two reports in a row: one with no sample,
+ * then one whose sample ('report-sample') is the start of sonner's CSS. Only
+ * that one adjacent pair is excused; any other report fails the check.
+ */
+const SONNER_SAMPLE = '[data-sonner-toaster]'
+const isStyleReport = (violation) =>
+  violation.disposition === 'report' && violation.directive === 'style-src-elem'
+function unexpectedViolations(violations) {
+  const pair = violations.findIndex(
+    (violation, index) =>
+      index > 0 &&
+      isStyleReport(violation) &&
+      violation.sample.startsWith(SONNER_SAMPLE) &&
+      isStyleReport(violations[index - 1]) &&
+      violations[index - 1].sample === ''
+  )
+  return pair === -1
+    ? violations
+    : violations.filter((_, index) => index !== pair && index !== pair - 1)
+}
+
 const problems = []
 
 // 1. The server's answer, as any client without JavaScript gets it.
@@ -47,7 +77,29 @@ if (!/<div(?=[^>]*\bid="app")(?=[^>]*\bdata-server-rendered="true")[^>]*>\s*<[a-
   problems.push('#app is empty: the server did not render the page')
 }
 
-// 2. Hydration in a browser.
+// The nonce (docs/07 §7.3): the `system` page's inline theme script carries
+// the nonce of both CSP headers, which every answer has, this unknown URL's
+// included (docs/07 note 35). Browsers hide a nonce from the DOM, so the raw
+// HTML is read.
+const nonceOf = (policy) => /'nonce-([^']+)'/.exec(policy ?? '')?.[1]
+const system = await fetch(url, { headers: { Accept: 'text/html', Cookie: 'dn_theme=system' } })
+const systemHtml = await system.text()
+const scriptNonce = /<script nonce="([^"]*)">document\.documentElement/.exec(systemHtml)?.[1]
+const enforcedNonce = nonceOf(system.headers.get('content-security-policy'))
+const reportOnlyNonce = nonceOf(system.headers.get('content-security-policy-report-only'))
+if (!enforcedNonce) problems.push('the system page has no Content-Security-Policy nonce')
+if (!reportOnlyNonce) {
+  problems.push('the system page has no Content-Security-Policy-Report-Only nonce')
+}
+if (!scriptNonce || scriptNonce !== enforcedNonce || scriptNonce !== reportOnlyNonce) {
+  problems.push(
+    `the theme script's nonce "${scriptNonce ?? '(none)'}" differs from the CSP headers' "${enforcedNonce}" and "${reportOnlyNonce}"`
+  )
+}
+
+// 2. Hydration in a browser. Both CSP headers apply. A violation of either
+//    fires `securitypolicyviolation`, which the check collects: Chromium logs
+//    a report-only violation at console level `info` only.
 const browser = await chromium.launch()
 try {
   for (const { label, cookie, scheme, expected } of CASES) {
@@ -57,6 +109,15 @@ try {
     // Counts the nodes removed from #app from the first byte of the document:
     // the parser only adds them, and hydration keeps them.
     await page.addInitScript(() => {
+      window.__cspViolations = []
+      document.addEventListener('securitypolicyviolation', (event) => {
+        window.__cspViolations.push({
+          disposition: event.disposition,
+          directive: event.violatedDirective,
+          blocked: event.blockedURI || '(inline)',
+          sample: event.sample,
+        })
+      })
       window.__appRemovals = 0
       new MutationObserver((records) => {
         for (const record of records) {
@@ -88,6 +149,7 @@ try {
     // A hydration mismatch is reported after the first commit.
     await page.waitForTimeout(500)
     const state = await page.evaluate(() => ({
+      violations: window.__cspViolations,
       removals: window.__appRemovals,
       className: document.documentElement.className,
       chrome: [...document.querySelectorAll('meta[name="theme-color"]')]
@@ -101,6 +163,10 @@ try {
       )
     }
     for (const message of messages) problems.push(`${label}: ${message}`)
+    for (const violation of unexpectedViolations(state.violations)) {
+      const { disposition, directive, blocked, sample } = violation
+      problems.push(`${label}: CSP violation (${disposition} ${directive} ${blocked} "${sample}")`)
+    }
     if (state.className !== expected) {
       problems.push(`${label}: <html class="${state.className}">, expected "${expected}"`)
     }
