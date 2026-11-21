@@ -2,6 +2,7 @@ import type { HttpContext } from '@adonisjs/core/http'
 import type { NextFn } from '@adonisjs/core/types/http'
 import BaseInertiaMiddleware from '@adonisjs/inertia/inertia_middleware'
 import { appUrl, support } from '#config/storefront'
+import { encryptsHistory } from '#config/inertia'
 import { parseTheme, THEME_COOKIE } from '#shared/ui/theme'
 
 export default class InertiaMiddleware extends BaseInertiaMiddleware {
@@ -50,6 +51,8 @@ export default class InertiaMiddleware extends BaseInertiaMiddleware {
 
   async handle(ctx: HttpContext, next: NextFn) {
     await this.init(ctx)
+    // The signed-in surfaces encrypt their history (config/inertia.ts, docs/07 §3.11).
+    if (encryptsHistory(ctx.request.url())) ctx.inertia.encryptHistory()
 
     const output = await next()
     this.dispose(ctx)

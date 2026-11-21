@@ -2,6 +2,19 @@ import { defineConfig } from '@adonisjs/inertia'
 
 export const SSR_SURFACES = ['storefront/', 'auth/', 'payments/', 'errors/'] as const
 
+/*
+ * The signed-in surfaces whose pages render with Inertia's `encryptHistory`
+ * (docs/07 §3.11, RF-34), so the back button on a shared phone cannot show
+ * the previous user's pages once their history key is cleared. Storefront
+ * pages are not encrypted. History encryption needs a secure context: HTTPS,
+ * or a loopback origin such as http://localhost.
+ */
+export const ENCRYPTED_HISTORY_SURFACES = ['/account', '/seller', '/admin', '/checkout'] as const
+
+/** Whether a request path belongs to a surface: a whole first segment, so `/accounts` does not. */
+export const encryptsHistory = (path: string) =>
+  ENCRYPTED_HISTORY_SURFACES.some((surface) => path === surface || path.startsWith(`${surface}/`))
+
 const inertiaConfig = defineConfig({
   /**
    * Server-side rendering options.
