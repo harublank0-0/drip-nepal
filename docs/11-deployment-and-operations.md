@@ -215,7 +215,7 @@ Database names never end in `_dev` or `_test` outside development and CI. The de
 
 Rules for development:
 
-- Only synthetic data: reference seeders plus the development seeders (`dev/01_demo_marketplace`, …). The development admin is created with `node ace platform:create-admin`; there is no seeded admin (09 note 41).
+- Only synthetic data: reference seeders plus the development seeders (`dev/01_demo_marketplace`, …). Until a milestone builds the demo seeder (OD-59, decided 2026-11-21: none in M0), the reference seeders are all there is. The development admin is created with `node ace platform:create-admin`; there is no seeded admin (09 note 41).
 - The worker runs locally when a developer works on jobs, emails or media; otherwise jobs queue up harmlessly in `pgboss`.
 - `PAYMENT_PROVIDER=fake`. Real sandbox keys are not needed on a laptop; sandbox work happens in staging.
 - A developer never connects to the staging or production database from a laptop. Operational access goes through §3 (SSH tunnel) and §14.
