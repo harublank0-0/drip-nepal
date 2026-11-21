@@ -140,6 +140,11 @@ export const JOB_QUEUES = {
   // M6 courier queues (docs/03 §9 rows added with them, 2026-11-21).
   'logistics.verify_account': { ...QUEUE_DEFAULTS, retryLimit: 5 },
   'logistics.sync_branches': { ...QUEUE_DEFAULTS, retryLimit: 3 },
+  'orders.book_courier_shipment': { ...QUEUE_DEFAULTS, retryLimit: 3, retryDelay: 30 },
+  'orders.process_courier_event': { ...QUEUE_DEFAULTS, retryLimit: 5, retryDelay: 60 },
+  'orders.poll_courier_statuses': { ...QUEUE_DEFAULTS, retryLimit: 1 },
+  'orders.sweep_courier_bookings': { ...QUEUE_DEFAULTS, retryLimit: 1 },
+  'orders.sweep_courier_events': { ...QUEUE_DEFAULTS, retryLimit: 1 },
 } satisfies Record<ApplicationQueueName, QueueSettings>
 
 export const deadLetterQueue = (queue: string) => `dlq.${queue}`

@@ -144,6 +144,15 @@ export function mapCourierLabel(
   return mapNcmLabel(label, currentStatus) as LabelMapping
 }
 
+// A label that says the parcel is on its way back or back (NCM's return stages, docs/05 §6.3).
+const RETURN_STAGES: Record<string, readonly string[]> = {
+  ncm: ['order marked return', 'sent to vendor', 'send to vendor', 'rtv delivered'],
+}
+
+export function isReturnStage(providerCode: string, label: string) {
+  return (RETURN_STAGES[providerCode] ?? []).includes(normaliseLabel(label))
+}
+
 export function normaliseCourierLabel(label: string) {
   return normaliseLabel(label)
 }
@@ -154,6 +163,15 @@ export function courierCallbackToken(accountId: string) {
 
 export function courierCallbackTokenMatches(accountId: string, token: string | null | undefined) {
   return callbackTokenMatches(accountId, token)
+}
+
+// The services a courier books (docs/05 §6.3; NCM's `delivery_type`, VX-16).
+const SERVICES: Record<string, readonly string[]> = {
+  ncm: ['Door2Door', 'Branch2Door', 'Door2Branch', 'Branch2Branch'],
+}
+
+export function courierServices(providerCode: string): readonly string[] {
+  return SERVICES[providerCode] ?? []
 }
 
 export function courierCapabilitiesOf(providerCode: string) {
