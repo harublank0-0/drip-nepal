@@ -797,7 +797,7 @@ test.group('T-FUL-110 and T-FUL-111 the courier tables keep what they recorded',
       await refused(
         assert,
         (trx) => trx.from('courier_events').where('id', row.id).update(values),
-        { code: 'P0001' },
+        { code: 'P0001', message: /on courier_events only/ },
         label
       )
     }
@@ -866,6 +866,29 @@ test.group('T-FUL-110 and T-FUL-111 the courier tables keep what they recorded',
     courier.script.detail.set(externalId, { externalShipmentId: externalId, ...NO_RETURN })
     await deliverCallback(world, externalId, 'delivery_completed')
     await processLatest(world)
+    assert.equal(await pick(shipment(world.shipmentId), 'status'), 'delivered')
+    const held = await db
+      .from('courier_events')
+      .where({ shipment_id: world.shipmentId, processing_status: 'held' })
+    assert.lengthOf(held, 0)
+  })
+
+  test('T-FUL-108 a repeated Delivered on a delivered shipment needs no detail read', async ({
+    assert,
+  }) => {
+    const { world, externalId } = await bookedWorld(courier)
+    // The courier's history is stable: each reading keeps its time.
+    const pickup = reading(externalId, 'Pickup Complete', 20)
+    const delivered = reading(externalId, 'Delivered', 10)
+    courier.script.history.set(externalId, [pickup, delivered])
+    courier.script.detail.set(externalId, { externalShipmentId: externalId, ...NO_RETURN })
+    await deliverCallback(world, externalId, 'delivery_completed')
+    await processLatest(world)
+    assert.equal(await pick(shipment(world.shipmentId), 'status'), 'delivered')
+    courier.script.history.set(externalId, [pickup, delivered, reading(externalId, 'Delivered', 5)])
+    courier.script.detailFails = 5
+    await deliverCallback(world, externalId, 'delivery_completed_again')
+    await processLatest(world, LAST_TRY)
     assert.equal(await pick(shipment(world.shipmentId), 'status'), 'delivered')
     const held = await db
       .from('courier_events')

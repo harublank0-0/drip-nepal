@@ -6,8 +6,8 @@ import { clientNetwork, rateLimitKey, rateLimiter } from '#modules/platform/rate
 /*
  * The courier callback route's first two steps (docs/06 §12.6, §9.1–§9.2):
  * the `webhook_ip` limiter, then a 64 KB body cap, so a forged flood is
- * refused before the URL token is compared. The server-wide body parser has
- * already read the body by then, within its own 256 KB limit (§9.2).
+ * refused before the URL token is compared. The server-wide body parser (512 KB)
+ * and the route limit of 256 KB (§9.2) have already run by then.
  */
 export const COURIER_CALLBACK_BODY_LIMIT_BYTES = 64 * 1024
 

@@ -93,14 +93,14 @@ export async function processCourierEventJob(
   }
 
   // A held reading stops the replay until staff resolve it, and their resolution sends this
-  // job again: reading the history now would only spend the courier's daily quota.
-  const held = await jobTx(async (trx) => {
-    if (!(await hasHeldReading(trx, loaded.id))) return false
-    await closeTriggers(trx, loaded.id)
-    return true
-  })
-  if (held) return 'held_earlier'
+  // job again: reading the history now would only spend the courier's daily quota. The
+  // shipment's triggers stay open, so after the hold the sweeper keeps sending the job until
+  // a history read succeeds (the sweeper skips a shipment while it is held).
+  if (await jobTx((trx) => hasHeldReading(trx, loaded.id))) return 'held_earlier'
 
+  // Only the triggers that arrived before this read are answered by it.
+  const readFrom = await db.rawQuery('SELECT clock_timestamp() AS at')
+  const cutoff = readFrom.rows[0].at as Date
   const history = await readParcelHistory(loaded.logistics_account_id, loaded.external_shipment_id)
   if (!history.ok) {
     if (lastTry && payload.courier_event_id) {
@@ -139,8 +139,8 @@ export async function processCourierEventJob(
         requestId: job.requestId,
       }))
     )
-    // The history answers every open trigger of the shipment, the sweeper's included.
-    await closeTriggers(trx, loaded.id)
+    // The history answers every open trigger of the shipment that arrived before the read.
+    await closeTriggers(trx, loaded.id, cutoff)
   })
 
   // A delivery is checked against the parcel's detail, which is read outside the transaction.
@@ -260,6 +260,13 @@ async function replay(
       continue
     }
     let statuses = [...mapping.statuses]
+    // A reading that restates the current status (NCM sends `Sent for Delivery` again on a
+    // second day) applies nothing; it is not a transition the machine refuses (2026-11-21).
+    // Checked before the return check, so a repeated `Delivered` needs no detail read.
+    if (statuses.length === 1 && statuses[0] === current.status) {
+      await setEventOutcome(trx, reading.id, { status: 'ignored' })
+      continue
+    }
     if (statuses.includes('delivered')) {
       if (detail === null || detail === 'unavailable') {
         if (lastTry) return hold(reading, 'return_check_failed')
@@ -279,12 +286,6 @@ async function replay(
       }
     }
     if (statuses.length === 0) {
-      await setEventOutcome(trx, reading.id, { status: 'ignored' })
-      continue
-    }
-    // A reading that restates the current status (NCM sends `Sent for Delivery` again on a
-    // second day) applies nothing; it is not a transition the machine refuses (2026-11-21).
-    if (statuses.length === 1 && statuses[0] === current.status) {
       await setEventOutcome(trx, reading.id, { status: 'ignored' })
       continue
     }

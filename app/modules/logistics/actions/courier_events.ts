@@ -81,11 +81,16 @@ export type EventOutcome = {
 }
 
 // Records an event's outcome while it is still open (`pending` or `failed`).
-// After a history read, every open callback or poll trigger of the shipment is answered by it.
-export async function closeTriggers(trx: TransactionClientContract, shipmentId: string) {
+// A history read answers every open callback or poll trigger of the shipment received before it.
+export async function closeTriggers(
+  trx: TransactionClientContract,
+  shipmentId: string,
+  receivedBy: Date
+) {
   await trx
     .from('courier_events')
     .where('shipment_id', shipmentId)
+    .where('received_at', '<=', receivedBy)
     .whereIn('source', ['callback', 'poll'])
     .whereIn('processing_status', ['pending', 'failed'])
     .update({ processing_status: 'looked_up', processed_at: trx.raw('now()'), error: null })

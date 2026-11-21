@@ -16,6 +16,7 @@ import {
   sweepCourierEvents,
 } from '#modules/orders/jobs/courier_schedules'
 import { processCourierEventJob } from '#modules/orders/jobs/process_courier_event'
+import { resolveCourierEvent } from '#modules/orders/actions/courier_bookings'
 import { claimBookingAttempt } from '#modules/logistics/actions/booking_attempts'
 import type { Actor } from '#modules/platform/actor'
 import {
@@ -567,7 +568,7 @@ test.group('T-FUL-113 the courier sweepers and the status poll', (group) => {
     assert.equal(await pick(sweepCourierEvents(null, OLD), 'resent'), 0)
   })
 
-  test('T-FUL-113 a shipment with a held reading is not swept, and its job reads no history', async ({
+  test('T-FUL-113 a shipment with a held reading is not swept and its job reads no history; after the hold it is swept again', async ({
     assert,
   }) => {
     const world = await requested()
@@ -597,6 +598,12 @@ test.group('T-FUL-113 the courier sweepers and the status poll', (group) => {
         hold_reason: 'unmapped_status',
       },
       { ...base, event_key: `history:${externalId}:later`, raw_status: 'Pickup Complete' },
+      {
+        ...base,
+        source: 'poll',
+        event_key: `poll:${externalId}:during-hold`,
+        raw_status: 'Delivered',
+      },
     ])
     assert.equal(await pick(sweepCourierEvents(null, OLD), 'resent'), 0)
     const historyCalls = () => courier.calls.filter((c) => c.method === 'getStatusHistory').length
@@ -607,6 +614,22 @@ test.group('T-FUL-113 the courier sweepers and the status poll', (group) => {
     )
     assert.equal(outcome, 'held_earlier')
     assert.equal(historyCalls(), before, 'no courier call while held')
+    // The trigger that arrived during the hold stays open, so once staff resolve the hold the
+    // sweeper keeps the shipment moving even if the resolution's own job fails.
+    const trigger = await db
+      .from('courier_events')
+      .where({ shipment_id: world.shipmentId, source: 'poll' })
+      .first()
+    assert.equal(trigger.processing_status, 'pending')
+    const held = await db
+      .from('courier_events')
+      .where({ shipment_id: world.shipmentId, processing_status: 'held' })
+      .first()
+    await resolveCourierEvent(
+      { eventId: held.id, status: 'ignored', note: 'NCM internal label' },
+      await admin()
+    )
+    assert.equal(await pick(sweepCourierEvents(null, OLD), 'resent'), 1)
   })
 
   test('T-FUL-113 an open courier event gets its job sent again once it is old', async ({
