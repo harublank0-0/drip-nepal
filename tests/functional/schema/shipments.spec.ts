@@ -78,6 +78,18 @@ function insertInto(shopOrder: ShopOrderRef, values: Row) {
       .insert({ shop_order_id: shopOrder.id, shop_id: shopOrder.shopId, ...values })
 }
 
+let branches = 0
+
+// A courier branch of the seeded `ncm` courier (docs/04a §9.9), named so it never meets a synced one.
+async function insertBranch() {
+  branches += 1
+  const [row] = await db
+    .table('logistics_branches')
+    .insert({ provider_code: 'ncm', name: `TEST BRANCH ${branches}`, code: `TB${branches}` })
+    .returning('id')
+  return row.id as string
+}
+
 test.group('T-FUL-101 shipped statuses', () => {
   test('T-FUL-101 a shipped status without its required fields gives 23514', async ({ assert }) => {
     const courier = await courierShop()
@@ -342,6 +354,71 @@ test.group('T-FUL-102 shipments courier-path CHECKs and keys', () => {
   })
 })
 
+test.group('T-FUL-102 shipments M6 courier columns', () => {
+  test('T-FUL-102 branches on the manual path give 23514', async ({ assert }) => {
+    const courier = await courierShop()
+    const so = await insertShopOrder(courier.shopId)
+    const branchId = await insertBranch()
+    for (const column of ['origin_branch_id', 'destination_branch_id']) {
+      await refused(
+        assert,
+        insertInto(so, { status: 'pending', [column]: branchId }),
+        { code: '23514', constraint: 'shipments_path_check' },
+        column
+      )
+    }
+    // On the courier path both are allowed.
+    await insertShipment(so, {
+      ...booking(courier, so),
+      status: 'booking_requested',
+      origin_branch_id: branchId,
+      destination_branch_id: branchId,
+    })
+  })
+
+  test('T-FUL-102 shipments_cancel_request_check refuses a half request, another requester or an unbooked parcel', async ({
+    assert,
+  }) => {
+    const courier = await courierShop()
+    const so = await insertShopOrder(courier.shopId)
+    const bookedId = await insertShipment(so, booked(courier, so))
+    const cases: [string, string, Row][] = [
+      ['a time without a requester', bookedId, { cancel_requested_at: db.raw('now()') }],
+      ['a requester without a time', bookedId, { cancel_requested_by: 'vendor' }],
+      [
+        'another requester',
+        bookedId,
+        { cancel_requested_at: db.raw('now()'), cancel_requested_by: 'customer' },
+      ],
+    ]
+    const requestedSo = await insertShopOrder(courier.shopId)
+    const requestedId = await insertShipment(requestedSo, {
+      ...booking(courier, requestedSo),
+      status: 'booking_requested',
+    })
+    cases.push([
+      'a parcel not yet booked',
+      requestedId,
+      { cancel_requested_at: db.raw('now()'), cancel_requested_by: 'vendor' },
+    ])
+    for (const [label, shipmentId, values] of cases) {
+      await refused(
+        assert,
+        (trx) => trx.from('shipments').where('id', shipmentId).update(values),
+        { code: '23514', constraint: 'shipments_cancel_request_check' },
+        label
+      )
+    }
+    // A booked parcel takes a whole request from the vendor or the shop order.
+    for (const requester of ['vendor', 'shop_order']) {
+      await db
+        .from('shipments')
+        .where('id', bookedId)
+        .update({ cancel_requested_at: db.raw('now()'), cancel_requested_by: requester })
+    }
+  })
+})
+
 test.group('T-FUL-103 shipments_booking_guard', () => {
   test('T-FUL-103 a booking keeps its account, address, reference, COD amount, service and courier ID', async ({
     assert,
@@ -350,7 +427,14 @@ test.group('T-FUL-103 shipments_booking_guard', () => {
     const secondAccountId = await insertCourierAccount(courier.shopId)
     const secondAddressId = await insertPickupAddress(courier.shopId)
     const so = await insertShopOrder(courier.shopId)
-    const id = await insertShipment(so, { ...booking(courier, so), status: 'booking_requested' })
+    const branchId = await insertBranch()
+    const otherBranchId = await insertBranch()
+    const id = await insertShipment(so, {
+      ...booking(courier, so),
+      status: 'booking_requested',
+      origin_branch_id: branchId,
+      destination_branch_id: branchId,
+    })
     // A cancelled booking on a shop order with no live shipment, so that leaving
     // `cancelled` meets only the guard.
     const cancelledSo = await insertShopOrder(courier.shopId)
@@ -388,6 +472,8 @@ test.group('T-FUL-103 shipments_booking_guard', () => {
       ['the COD amount', id, { cod_amount_minor: 90000 }],
       ['the service', id, { service_code: 'express' }],
       ['the courier ID', id, { external_shipment_id: 'TC-1002' }],
+      ['the origin branch (M6)', id, { origin_branch_id: otherBranchId }],
+      ['the destination branch (M6)', id, { destination_branch_id: otherBranchId }],
       ['clearing the courier ID', id, { external_shipment_id: null }],
       ['leaving cancelled', cancelledId, { status: 'booking_failed', cancelled_at: null }],
     ]

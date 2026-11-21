@@ -43,7 +43,10 @@ const validProduction: EnvPolicyValues = {
   DB_SSL: true,
   DATA_ENCRYPTION_KEY_IDS: ['k1'],
   DATA_ENCRYPTION_ACTIVE_KEY_ID: 'k1',
-  KEYS: keys('prod'),
+  COURIER_CALLBACK_KEY_IDS: ['c1'],
+  COURIER_CALLBACK_ACTIVE_KEY_ID: 'c1',
+  COURIER_URLS: { COURIER_NCM_PRODUCTION_URL: 'https://portal.nepalcanmove.com' },
+  KEYS: { ...keys('prod'), 'COURIER_CALLBACK_KEYS[c1]': 'prod-callback' },
 }
 
 const validStaging: EnvPolicyValues = { ...validProduction, APP_ENV: 'staging', DB_SSL: false }
@@ -153,6 +156,25 @@ const brokenRules: Case[] = [
     base: validStaging,
     values: { KEYS: { ...keys('stage'), APP_KEY: 'dripnepal-test-only-app-key-not-a-secret' } },
     violation: 'APP_KEY is a committed placeholder key, never for staging or production',
+  },
+  {
+    rule: 'production without the courier callback keys (docs/04a §9.14)',
+    base: validProduction,
+    values: { COURIER_CALLBACK_KEY_IDS: [], COURIER_CALLBACK_ACTIVE_KEY_ID: undefined },
+    violation:
+      'COURIER_CALLBACK_KEYS and COURIER_CALLBACK_ACTIVE_KEY_ID are required in production',
+  },
+  {
+    rule: 'a courier callback active key missing from its ring',
+    base: validTest,
+    values: { COURIER_CALLBACK_KEY_IDS: ['c1'], COURIER_CALLBACK_ACTIVE_KEY_ID: 'c2' },
+    violation: 'COURIER_CALLBACK_ACTIVE_KEY_ID is not an ID in COURIER_CALLBACK_KEYS',
+  },
+  {
+    rule: 'a courier host on http',
+    base: validTest,
+    values: { COURIER_URLS: { COURIER_NCM_SANDBOX_URL: 'http://demo.nepalcanmove.com' } },
+    violation: 'COURIER_NCM_SANDBOX_URL must use https://',
   },
   {
     rule: 'production without TLS to the database',

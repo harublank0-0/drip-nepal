@@ -131,11 +131,36 @@ test.group('T-FUL-109 NCM adapter: booking', () => {
       address: RECIPIENT.address,
       fbranch: 'TINKUNE',
       branch: 'POKHARA',
-      vref_id: 'DN-4K7Q2M9-1-S1',
+      vref_id: 'DN4K7Q2M91S1',
       delivery_type: 'Door2Door',
       package: '1 x Example item',
       weight: '1.5',
     })
+  })
+
+  test('vref_id is the merchant reference without its hyphens, at most 15 characters (OD-61)', async ({
+    assert,
+  }) => {
+    const { ncm, sent } = fakeNcm([json(200, { orderid: 1002 })])
+    await ncm.book(account, bookingRequest({ merchantReference: 'DN-4K7Q2M9-12-S10' }))
+    const vref = (sent[0].body as Record<string, string>).vref_id
+    assert.equal(vref, 'DN4K7Q2M912S10')
+    assert.isAtMost(vref.length, 15)
+  })
+
+  test('a reference longer than 15 characters without hyphens is refused before any call', async ({
+    assert,
+  }) => {
+    const { ncm, sent } = fakeNcm([])
+    const outcome = await ncm.book(
+      account,
+      bookingRequest({ merchantReference: 'DN-4K7Q2M9-12-S10-EXTRA' })
+    )
+    assert.deepEqual(outcome, {
+      outcome: 'refused',
+      error: { code: 'invalid_request', httpStatus: null, fields: ['vref_id'], retryable: false },
+    })
+    assert.lengthOf(sent, 0)
   })
 
   test('field errors are a refusal with the field names only', async ({ assert }) => {

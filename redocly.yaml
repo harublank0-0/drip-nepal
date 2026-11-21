@@ -13,8 +13,8 @@ rules:
   no-server-example.com: off
   # GET /payments/{provider}/return is an Inertia page (x-page-route), with no operationId.
   operation-operationId: off
-  # Cursor, Limit and CursorMeta are the shared list contract of 06 §3.4,
-  # specified now for the list operations still in x-pending-operations.
+  # Shared components may be specified before an operation uses them (the list
+  # contract of 06 §6 served only pending operations until the M6 admin lists).
   no-unused-components: off
 # No usage data leaves the machine or the CI runner.
 telemetry: off

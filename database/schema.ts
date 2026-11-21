@@ -259,6 +259,69 @@ export class CategoryAttributeSchema extends BaseModel {
   declare usage: string
 }
 
+export class CourierEventSchema extends BaseModel {
+  static $columns = [
+    'error',
+    'eventKey',
+    'externalShipmentId',
+    'holdReason',
+    'id',
+    'logisticsAccountId',
+    'mappedStatus',
+    'occurredAt',
+    'payload',
+    'processedAt',
+    'processingStatus',
+    'rawBodySha256',
+    'rawEvent',
+    'rawStatus',
+    'receivedAt',
+    'requestId',
+    'shipmentId',
+    'shopId',
+    'source',
+  ] as const
+  $columns = CourierEventSchema.$columns
+  @column()
+  declare error: string | null
+  @column()
+  declare eventKey: string
+  @column()
+  declare externalShipmentId: string
+  @column()
+  declare holdReason: string | null
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare logisticsAccountId: string
+  @column()
+  declare mappedStatus: string | null
+  @column.dateTime()
+  declare occurredAt: DateTime | null
+  @column()
+  declare payload: unknown
+  @column.dateTime()
+  declare processedAt: DateTime | null
+  @column()
+  declare processingStatus: string
+  @column({ columnName: 'raw_body_sha256' })
+  declare rawBodySha256: Buffer | null
+  @column()
+  declare rawEvent: string | null
+  @column()
+  declare rawStatus: string
+  @column.dateTime()
+  declare receivedAt: DateTime
+  @column()
+  declare requestId: string | null
+  @column()
+  declare shipmentId: string | null
+  @column()
+  declare shopId: string | null
+  @column()
+  declare source: string
+}
+
 export class DeliveryZoneDistrictSchema extends BaseModel {
   static $columns = ['createdAt', 'districtCode', 'zoneCode'] as const
   $columns = DeliveryZoneDistrictSchema.$columns
@@ -643,6 +706,51 @@ export class LogisticsAccountSchema extends BaseModel {
   declare verifiedAt: DateTime | null
   @column()
   declare version: number
+}
+
+export class LogisticsBranchSchema extends BaseModel {
+  static $columns = [
+    'code',
+    'courierDistrict',
+    'coveredAreas',
+    'createdAt',
+    'districtCode',
+    'externalBranchId',
+    'id',
+    'isActive',
+    'name',
+    'phone',
+    'providerCode',
+    'syncedAt',
+    'updatedAt',
+  ] as const
+  $columns = LogisticsBranchSchema.$columns
+  @column()
+  declare code: string | null
+  @column()
+  declare courierDistrict: string | null
+  @column()
+  declare coveredAreas: string | null
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare districtCode: string | null
+  @column()
+  declare externalBranchId: string | null
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare isActive: boolean
+  @column()
+  declare name: string
+  @column()
+  declare phone: string | null
+  @column()
+  declare providerCode: string
+  @column.dateTime()
+  declare syncedAt: DateTime
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
 }
 
 export class LogisticsProviderSchema extends BaseModel {
@@ -1779,6 +1887,54 @@ export class ReturnRequestSchema extends BaseModel {
   declare version: number
 }
 
+export class ShipmentBookingAttemptSchema extends BaseModel {
+  static $columns = [
+    'attemptNo',
+    'errorCode',
+    'errorFields',
+    'externalShipmentId',
+    'finishedAt',
+    'httpStatus',
+    'id',
+    'kind',
+    'logisticsAccountId',
+    'outcome',
+    'requestId',
+    'shipmentId',
+    'shopId',
+    'startedAt',
+  ] as const
+  $columns = ShipmentBookingAttemptSchema.$columns
+  @column()
+  declare attemptNo: number
+  @column()
+  declare errorCode: string | null
+  @column()
+  declare errorFields: string | null
+  @column()
+  declare externalShipmentId: string | null
+  @column.dateTime()
+  declare finishedAt: DateTime | null
+  @column()
+  declare httpStatus: number | null
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare kind: string
+  @column()
+  declare logisticsAccountId: string
+  @column()
+  declare outcome: string
+  @column()
+  declare requestId: string | null
+  @column()
+  declare shipmentId: string
+  @column()
+  declare shopId: string
+  @column.dateTime()
+  declare startedAt: DateTime
+}
+
 export class ShipmentEventSchema extends BaseModel {
   static $columns = [
     'actorType',
@@ -1846,16 +2002,20 @@ export class ShipmentSchema extends BaseModel {
   static $columns = [
     'attemptCount',
     'bookedAt',
+    'cancelRequestedAt',
+    'cancelRequestedBy',
     'cancelledAt',
     'codAmountMinor',
     'courierName',
     'createdAt',
     'currency',
     'deliveredAt',
+    'destinationBranchId',
     'externalShipmentId',
     'id',
     'logisticsAccountId',
     'merchantReference',
+    'originBranchId',
     'pickupAddressId',
     'providerCostMinor',
     'returnWindowEndsAt',
@@ -1875,6 +2035,10 @@ export class ShipmentSchema extends BaseModel {
   @column.dateTime()
   declare bookedAt: DateTime | null
   @column.dateTime()
+  declare cancelRequestedAt: DateTime | null
+  @column()
+  declare cancelRequestedBy: string | null
+  @column.dateTime()
   declare cancelledAt: DateTime | null
   @column()
   declare codAmountMinor: number | null
@@ -1887,6 +2051,8 @@ export class ShipmentSchema extends BaseModel {
   @column.dateTime()
   declare deliveredAt: DateTime | null
   @column()
+  declare destinationBranchId: string | null
+  @column()
   declare externalShipmentId: string | null
   @column({ isPrimary: true })
   declare id: string
@@ -1894,6 +2060,8 @@ export class ShipmentSchema extends BaseModel {
   declare logisticsAccountId: string | null
   @column()
   declare merchantReference: string | null
+  @column()
+  declare originBranchId: string | null
   @column()
   declare pickupAddressId: string | null
   @column()

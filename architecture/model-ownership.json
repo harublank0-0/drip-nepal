@@ -33,6 +33,10 @@
       "module": "catalog",
       "model": null
     },
+    "courier_events": {
+      "module": "logistics",
+      "model": "app/models/courier_event.ts"
+    },
     "delivery_zone_districts": {
       "module": "logistics",
       "model": null
@@ -76,6 +80,10 @@
     "logistics_accounts": {
       "module": "logistics",
       "model": "app/models/logistics_account.ts"
+    },
+    "logistics_branches": {
+      "module": "logistics",
+      "model": "app/models/logistics_branch.ts"
     },
     "logistics_providers": {
       "module": "logistics",
@@ -184,6 +192,10 @@
     "sessions": {
       "module": "identity",
       "model": null
+    },
+    "shipment_booking_attempts": {
+      "module": "logistics",
+      "model": "app/models/shipment_booking_attempt.ts"
     },
     "shipment_events": {
       "module": "orders",

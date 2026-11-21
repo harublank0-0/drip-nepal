@@ -14,7 +14,7 @@ Reviewed: 2026-09-25 · consistency review 2026-09-30 to 2026-10-04
 
 Edited 2026-09-30 (consistency review): the refund rule of decision 4 follows [05 §7.4](../05-order-payment-and-inventory-lifecycles.md#74-refund-postings-and-commission-reversal) (vendor impact fixed when the refund is created); the decision is unchanged.
 
-Edited 2026-11-05 (OD-56): the Context's "the vendor or its courier collects COD cash, so the platform holds no customer money" holds for the `manual` mode and shop-owned courier accounts of [ADR-0019](0019-courier-integration-in-r1.md). For a COD shipment on a platform-owned courier account, who receives the cash is [Open OD-58]; until it is decided such an account books no live COD shipment, and no posting rule of decision 4 changes. The decision is unchanged.
+Edited 2026-11-05 (OD-56): the Context's "the vendor or its courier collects COD cash, so the platform holds no customer money" holds for the `manual` mode and shop-owned courier accounts of [ADR-0019](0019-courier-integration-in-r1.md). For a COD shipment on a platform-owned courier account, who receives the cash is [Open OD-58]; until it is decided such an account books no live COD shipment, and no posting rule of decision 4 changes. The decision is unchanged. Edited 2026-11-21: R1 offers no platform-owned courier account (OD-58, decided for R1 as option (c)), so the Context's sentence holds for every R1 COD shipment; OD-58 returns with the release that offers them.
 
 ## Context
 

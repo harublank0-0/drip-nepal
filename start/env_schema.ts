@@ -50,6 +50,8 @@ function keyRing(key: string, value?: string) {
   return new Secret(ring)
 }
 
+const optionalKeyRing = (key: string, value?: string) => (value ? keyRing(key, value) : undefined)
+
 // APP_KEY signs cookies and encrypts tokens: at least 32 characters (docs/09 §6.1).
 function appKey(key: string, value?: string) {
   if (!value || value.length < 32) {
@@ -147,4 +149,12 @@ export const envSchema = {
   SENTRY_DSN: Env.schema.string.optional({ format: 'url', tld: false }),
   // The CSP report endpoint of the error tracker's project (docs/07 §7.3, docs/11 §9.6).
   CSP_REPORT_URI: Env.schema.string.optional({ format: 'url', tld: false }),
+
+  // Courier callbacks (docs/04a §9.14, M6): the key ring that derives each account's URL
+  // token, and the active key; production requires them. Older keys still verify (rotation).
+  COURIER_CALLBACK_KEYS: optionalKeyRing,
+  COURIER_CALLBACK_ACTIVE_KEY_ID: Env.schema.string.optional(),
+  // Nepal Can Move hosts per account environment (docs/03 §11.6, M6); https only.
+  COURIER_NCM_SANDBOX_URL: Env.schema.string.optional({ format: 'url', tld: false }),
+  COURIER_NCM_PRODUCTION_URL: Env.schema.string.optional({ format: 'url', tld: false }),
 }

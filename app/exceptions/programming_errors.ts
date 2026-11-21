@@ -19,3 +19,11 @@ export class InvariantViolation extends Error {
     this.name = 'InvariantViolation'
   }
 }
+
+// A `withTx` call inside an open `withTx` transaction: pass `trx` to a step action instead (docs/09 §3.8).
+export class NestedTransaction extends Error {
+  constructor() {
+    super('withTx called inside a withTx transaction')
+    this.name = 'NestedTransaction'
+  }
+}

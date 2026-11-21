@@ -34,6 +34,12 @@ const violations = environmentPolicyViolations({
   DATA_ENCRYPTION_KEY_IDS: [...env.get('DATA_ENCRYPTION_KEYS').release().keys()],
   DATA_ENCRYPTION_ACTIVE_KEY_ID: env.get('DATA_ENCRYPTION_ACTIVE_KEY_ID'),
   SENTRY_DSN: env.get('SENTRY_DSN'),
+  COURIER_CALLBACK_KEY_IDS: [...(env.get('COURIER_CALLBACK_KEYS')?.release().keys() ?? [])],
+  COURIER_CALLBACK_ACTIVE_KEY_ID: env.get('COURIER_CALLBACK_ACTIVE_KEY_ID'),
+  COURIER_URLS: {
+    COURIER_NCM_SANDBOX_URL: env.get('COURIER_NCM_SANDBOX_URL'),
+    COURIER_NCM_PRODUCTION_URL: env.get('COURIER_NCM_PRODUCTION_URL'),
+  },
   KEYS: {
     // APP_KEY as written: a key's base64 text reused as APP_KEY is caught too.
     APP_KEY: env.get('APP_KEY').release(),
@@ -41,6 +47,12 @@ const violations = environmentPolicyViolations({
     ...Object.fromEntries(
       [...env.get('DATA_ENCRYPTION_KEYS').release()].map(([id, key]) => [
         `DATA_ENCRYPTION_KEYS[${id}]`,
+        key.toString('base64'),
+      ])
+    ),
+    ...Object.fromEntries(
+      [...(env.get('COURIER_CALLBACK_KEYS')?.release() ?? [])].map(([id, key]) => [
+        `COURIER_CALLBACK_KEYS[${id}]`,
         key.toString('base64'),
       ])
     ),
