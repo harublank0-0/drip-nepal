@@ -39,6 +39,7 @@ export default {
     credentials_enc: { tsType: 'string', decorators: secret },
   },
   tables: {
+    courier_events: { columns: { raw_body_sha256: named('raw_body_sha256', 'Buffer') } },
     media_assets: { columns: { sha256: named('sha256', 'Buffer') } },
     provider_events: { columns: { raw_body_sha256: named('raw_body_sha256', 'Buffer') } },
     shop_payout_accounts: {

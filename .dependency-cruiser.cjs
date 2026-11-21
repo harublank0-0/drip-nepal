@@ -147,6 +147,25 @@ module.exports = {
       },
       to: { dependencyTypes: ['core'], path: '^(node:)?net$' },
     },
+    // 9. Field decryption only for the docs/07 §5.5 allowlist (T-SEC-034): the
+    // courier adapter for an account's credentials, the courier booking job for
+    // the delivery-address snapshot it sends, and the seller logistics
+    // transformer for the shop's own pickup addresses.
+    {
+      name: 'field-decrypter-allowlist',
+      comment: 'Only the docs/07 §5.5 allowlist imports the field decrypter (T-SEC-034)',
+      severity: 'error',
+      from: {
+        path: '^(app|start|database)/',
+        pathNot: [
+          '^app/modules/platform/crypto/',
+          '^app/modules/logistics/providers/',
+          '^app/modules/orders/jobs/book_courier_shipment\\.ts$',
+          '^app/transformers/seller/logistics_transformer\\.ts$',
+        ],
+      },
+      to: { path: '^app/modules/platform/crypto/field_decrypter\\.ts$' },
+    },
     // Unresolvable imports would hide every rule above.
     {
       name: 'not-to-unresolvable',

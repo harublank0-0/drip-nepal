@@ -145,6 +145,44 @@ async function bookedShipment(values: Row) {
   }
 }
 
+// A booked courier shipment, inserted, for the rows that reference one (docs/04a §9.13, §9.14).
+async function insertedBooking() {
+  const values = await bookedShipment({})
+  const [row] = await db.table('shipments').insert(values).returning('id')
+  return {
+    shipmentId: row.id as string,
+    shopId: values.shop_id as string,
+    accountId: values.logistics_account_id as string,
+  }
+}
+
+async function bookingAttemptRow(values: Row) {
+  const booking = await insertedBooking()
+  return {
+    shipment_id: booking.shipmentId,
+    shop_id: booking.shopId,
+    logistics_account_id: booking.accountId,
+    kind: 'book',
+    attempt_no: 1,
+    ...values,
+  }
+}
+
+async function courierEventRow(values: Row) {
+  const booking = await insertedBooking()
+  return {
+    logistics_account_id: booking.accountId,
+    source: 'callback',
+    event_key: `callback:${next()}:pickup_completed`,
+    external_shipment_id: String(next()),
+    shipment_id: booking.shipmentId,
+    shop_id: booking.shopId,
+    raw_status: 'pickup_completed',
+    payload: JSON.stringify({ event: 'pickup_completed' }),
+    ...values,
+  }
+}
+
 // A shipment the vendor ships themselves (manual path).
 async function manualShipment(values: Row) {
   const shopOrder = await insertShopOrder(await insertShop())
@@ -779,6 +817,49 @@ const CASES: Case[] = [
     state: 'a cancelled courier booking',
     row: async () => bookedShipment({ status: 'cancelled', cancelled_at: NOW }),
     missing: ['cancelled_at'],
+  },
+  {
+    constraint: 'shipments_cancel_request_check',
+    table: 'shipments',
+    state: 'a booked shipment with a cancellation requested',
+    row: async () => bookedShipment({ cancel_requested_at: NOW, cancel_requested_by: 'vendor' }),
+    missing: ['cancel_requested_at', 'cancel_requested_by'],
+  },
+  // docs/04a §9.13 shipment_booking_attempts
+  {
+    constraint: 'shipment_booking_attempts_outcome_check',
+    table: 'shipment_booking_attempts',
+    state: 'a finished booking attempt',
+    row: async () => bookingAttemptRow({ outcome: 'refused', finished_at: NOW }),
+    missing: ['finished_at'],
+  },
+  {
+    constraint: 'shipment_booking_attempts_booked_check',
+    table: 'shipment_booking_attempts',
+    state: 'a booking the courier confirmed',
+    row: async () =>
+      bookingAttemptRow({ outcome: 'succeeded', finished_at: NOW, external_shipment_id: '6285' }),
+    missing: ['external_shipment_id'],
+  },
+  // docs/04a §9.14 courier_events
+  {
+    constraint: 'courier_events_match_check',
+    table: 'courier_events',
+    state: 'a callback reading',
+    row: async () => courierEventRow({}),
+    missing: ['shipment_id', 'shop_id'],
+  },
+  {
+    constraint: 'courier_events_processing_check',
+    table: 'courier_events',
+    state: 'a held reading',
+    row: async () =>
+      courierEventRow({
+        processing_status: 'held',
+        processed_at: NOW,
+        hold_reason: 'unmapped_status',
+      }),
+    missing: ['processed_at', 'hold_reason'],
   },
   {
     constraint: 'shipments_delivered_check',

@@ -90,6 +90,8 @@ const EXAMPLES: Record<string, string[]> = {
   'shop_orders.number': ['DN-4K7Q2M9-1', 'DN-4K7Q2M9-12'],
   'order_items.image_url_snapshot': ['https://media.example.com/p/7K3M9QXA/800.webp'],
   'order_events.type': ['order.placed', 'shop_order.items_rejected'],
+  'shipment_booking_attempts.error_code': ['invalid_branch', 'auth_failed'],
+  'shipment_booking_attempts.error_fields': ['phone', 'phone,fbranch'],
   'shipments.merchant_reference': ['DN-4K7Q2M9-1-S1', 'DN-4K7Q2M9-12-S10'],
   'shipments.tracking_url': ['https://track.example.com/TC1001NP'],
   'return_requests.number': ['RT-4K7Q2M9'],
