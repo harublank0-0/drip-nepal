@@ -99,6 +99,8 @@ tags:
     description: Everything under `/api/v1/admin`; platform staff with fresh MFA (06 §13.6, §4.3).
   - name: Provider returns
     description: Payment-provider return page and the reserved webhook (06 §12, §13.7; R1.1).
+  - name: Courier callbacks
+    description: The courier status callback receiver (06 §12.6, §13.8; R1·M6).
 security:
   - cookieAuth: []
     xsrfHeader: []
@@ -271,35 +273,13 @@ x-pending-operations:
   - cancelPayout
   - revealPayoutAccount
   - revealUserContact # POST /api/v1/admin/users/{userId}/contact-reveal, R1·M1 (06 §13.8, note 41)
-  # M6 courier operations (06 §13.8, note 42; OD-56, OD-57), all proposed
-  - getLogisticsSettings
-  - replaceLogisticsSettings
-  - createPickupAddress
-  - updatePickupAddress
-  - archivePickupAddress
-  - createShopCourierAccount
-  - rekeyShopCourierAccount
-  - disableShopCourierAccount
-  - getCourierBookingOptions
-  - bookCourierShipment
-  - cancelCourierBooking
-  - adminListLogisticsAccounts
+  # M6 platform-owned courier account operations (06 §13.8; OD-56), proposed. No route in R1,
+  # which offers no platform-owned courier accounts (decided 2026-11-21); the other M6 courier
+  # operations are in `paths` (note 44).
   - adminCreateLogisticsAccount
   - adminRekeyLogisticsAccount
-  - adminSetLogisticsAccountStatus
   - adminAllowShopOnLogisticsAccount
   - adminRemoveShopFromLogisticsAccount
-  - adminSetShopLogisticsEnabled
-  - adminListLogisticsBranches
-  - adminSyncLogisticsBranches
-  - adminUpdateLogisticsBranch
-  - adminListCourierBookings
-  - adminResolveCourierBooking
-  - adminRefreshCourierStatus
-  - adminListCourierEvents
-  - adminResolveCourierEvent
-  - adminRecordOrderVerification
-  - receiveCourierCallback
 
 paths:
   /api/v1/catalog/products:
@@ -1833,6 +1813,1785 @@ paths:
         '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/Internal' }
 
+  /api/v1/seller/shops/{shopSlug}/logistics:
+    parameters:
+      - $ref: '#/components/parameters/ShopSlug'
+    get:
+      operationId: getLogisticsSettings
+      tags: [Seller]
+      summary: Read the shop's courier settings, accounts and pickup addresses (proposed)
+      description: |
+        Proposed (06 §13.8); waits for the product owner's approval.
+        Actor: `shop.shipping.manage` (owner, manager); shop status gate `active` only, as the
+        profile and shipping column of 07 §4.4 (403 `SHOP_NOT_ACTIVE` otherwise). Scope: the
+        shop comes from `{shopSlug}` only; the accounts are those with an active
+        `logistics_account_shops` row for the shop (04a §9.10), so a `disabled` account, whose
+        rows are deactivated, is not listed; every other status is.
+        Returns the settings (a shop with no `shop_logistics_settings` row is `manual`,
+        enabled, `version` 0; 04a §9.11), each account without its credentials or their
+        ciphertext (07 TM-32, T-SEC-040), and the live pickup addresses with the contact phone,
+        area and landmark in full, as the shop's own data (07 §5.5, T-SEC-034).
+        `callback_url` is the URL the owner registers with the courier for its status callbacks
+        (06 §12.6). It carries the account's callback token, so only the owner sees it; it is
+        `null` for every other member and when no callback key is configured, and it is never
+        stored with an idempotency key.
+        `ETag` is the settings `version` (`"0"` before the first save), which
+        `replaceLogisticsSettings` sends back as `If-Match`. Side effects: none. Release R1·M6.
+      x-release: R1·M6
+      x-proposed: true
+      x-permission: shop.shipping.manage
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: The settings, the accounts the shop may use and its live pickup addresses.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+            ETag: { $ref: '#/components/headers/ETag' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ShopLogisticsResponse' }
+              examples:
+                ownerView:
+                  summary: The owner's view after one NCM account was verified (IDs, names and the token are placeholders)
+                  value:
+                    data:
+                      settings:
+                        fulfillment_mode: vendor
+                        default_account_id: 01929c10-0000-7000-8000-0000000000a1
+                        is_enabled: true
+                        version: 2
+                      accounts:
+                        - id: 01929c10-0000-7000-8000-0000000000a1
+                          provider_code: ncm
+                          owner_type: shop
+                          name: Example NCM account
+                          environment: production
+                          external_account_ref: null
+                          status: active
+                          verified_at: '2026-11-12T05:10:00.000Z'
+                          disabled_at: null
+                          version: 2
+                          callback_url: https://dripnepal.com/api/v1/webhooks/couriers/ncm/01929c10-0000-7000-8000-0000000000a1?token=EXAMPLE-NOT-A-REAL-TOKEN
+                      pickup_addresses:
+                        - id: 01929c11-0000-7000-8000-0000000000b1
+                          label: Workshop
+                          contact_name: Example Contact
+                          contact_phone: '9800000000'
+                          province_code: '3'
+                          district_code: '305'
+                          local_level_code: '30501'
+                          ward_no: 4
+                          area_tole: Example Tole
+                          street_landmark: null
+                          postal_code: '3050104'
+                          is_default: true
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/Internal' }
+    put:
+      operationId: replaceLogisticsSettings
+      tags: [Seller]
+      summary: Set the fulfilment mode and default courier account (proposed)
+      description: |
+        Proposed (06 §13.8); waits for the product owner's approval.
+        Actor: `shop.shipping.manage`; shop status gate `active` only (07 §4.4). Scope: the
+        shop comes from `{shopSlug}` only; `shop_id`, `is_enabled` and `version` are not inputs
+        (422 `unknown_field`, 06 §3.5).
+        Rules (04a §9.11): `manual` takes no `default_account_id` (422 `not_allowed`); `vendor`
+        requires one (422 `required`), which must have an active `logistics_account_shops` row
+        for the shop, be `active` and be shop-owned (422 `account_not_usable`). `platform` is
+        422 `not_offered` on `fulfillment_mode`: R1 offers no platform-owned courier accounts
+        (decided 2026-11-21).
+        Concurrency: ⟳ `If-Match` on `shop_logistics_settings.version`; a first save, before
+        the row exists, sends `If-Match: "0"`. Missing, `*` or a list → 428; a stale version, a
+        weak tag or any other value → 412 `VERSION_CONFLICT` with `current`, the settings as
+        this operation returns them (06 §8). Not ⚷ (06 §7.7).
+        Side effects, in one transaction with the shop row locked first (05 §4.4 level 0): the
+        settings row inserted (`version` 1) or updated (`version` + 1); audit
+        `shop_logistics_settings.update`. T-SHOP-115. Release R1·M6.
+      x-release: R1·M6
+      x-proposed: true
+      x-permission: shop.shipping.manage
+      x-if-match: true
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReplaceLogisticsSettingsRequest' }
+            examples:
+              firstSave:
+                summary: First save with `If-Match` `"0"`, booking with the shop's own NCM account
+                value:
+                  fulfillment_mode: vendor
+                  default_account_id: 01929c10-0000-7000-8000-0000000000a1
+              backToManual:
+                summary: Back to recording shipments by hand
+                value: { fulfillment_mode: manual, default_account_id: null }
+      responses:
+        '200':
+          description: The settings after the change, with the new `ETag`.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+            ETag: { $ref: '#/components/headers/ETag' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LogisticsSettingsResponse' }
+              examples:
+                saved:
+                  summary: After the first save
+                  value:
+                    data:
+                      fulfillment_mode: vendor
+                      default_account_id: 01929c10-0000-7000-8000-0000000000a1
+                      is_enabled: true
+                      version: 1
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422': { $ref: '#/components/responses/UnprocessableContent' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /api/v1/seller/shops/{shopSlug}/courier-accounts:
+    parameters:
+      - $ref: '#/components/parameters/ShopSlug'
+    post:
+      operationId: createShopCourierAccount
+      tags: [Seller]
+      summary: Add the shop's own courier account (proposed)
+      description: |
+        Proposed (06 §13.8; OD-56); waits for the product owner's approval.
+        Actor: `shop.courier_accounts.manage` (proposed; the owner only, 07 §4.3) with password
+        re-entry (07 §3.6, §3.10; T-SEC-041); shop status gate `active` only, as the payout
+        account column of 07 §4.4. Scope: the account is created for the shop of `{shopSlug}`
+        with `owner_type = 'shop'`.
+        Rules: `provider_code` names an active courier that has an adapter, else 422
+        `provider_inactive`; a `sandbox` account in production is 422 `sandbox_in_production` on
+        `environment`; an `external_account_ref` already registered for that courier and
+        environment is 422 `already_registered`, checked before the insert. `credentials` are
+        the courier's documented fields: for NCM a `token` [Verify-external VX-16].
+        Password: checked after the `Idempotency-Key` and before the transaction. A wrong one is
+        422 `password_incorrect` on `password` with an `auth.reauth_failed` audit row; the
+        `reauth_user` (5 per 15 minutes) and `reauth_user_day` (10 per 24 hours) limiters are
+        charged before the check (429), and the tenth wrong password in 24 hours rotates the
+        account's `security_stamp`, which ends its sessions.
+        Side effects, in one transaction: the `logistics_accounts` row (`pending`, credentials
+        encrypted in `credentials_enc`) and its owner row in `logistics_account_shops`; audit
+        `logistics_account.create`, never the credentials; job `logistics.verify_account`, which
+        makes the account `active` or `invalid` (T-SHOP-116).
+        Idempotency: ⚷, 24 h; the fingerprint leaves out `password`, and the stored response
+        holds no credentials. Returns 201 without `Location` (no read operation serves one
+        account, 06 §3.7). Release R1·M6.
+      x-release: R1·M6
+      x-proposed: true
+      x-permission: shop.courier_accounts.manage
+      x-idempotency: { required: true, retention_hours: 24 }
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateShopCourierAccountRequest' }
+            examples:
+              ncm:
+                summary: The shop's NCM account (the token and the password are placeholders)
+                value:
+                  provider_code: ncm
+                  name: Example NCM account
+                  environment: production
+                  external_account_ref: null
+                  credentials: { token: EXAMPLE-NOT-A-REAL-TOKEN }
+                  password: example-current-password
+      responses:
+        '201':
+          description: |
+            The account in `pending`, without credentials. A replay of the same key and body
+            returns this 201 again with `Idempotency-Replayed: true` (06 §7.4).
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+            Idempotency-Replayed: { $ref: '#/components/headers/Idempotency-Replayed' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CourierAccountResponse' }
+              examples:
+                pending:
+                  summary: Waiting for `logistics.verify_account`
+                  value:
+                    data:
+                      id: 01929c10-0000-7000-8000-0000000000a1
+                      provider_code: ncm
+                      owner_type: shop
+                      name: Example NCM account
+                      environment: production
+                      external_account_ref: null
+                      status: pending
+                      verified_at: null
+                      disabled_at: null
+                      version: 1
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422': { $ref: '#/components/responses/UnprocessableContent' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /api/v1/seller/shops/{shopSlug}/courier-accounts/{accountId}/credentials:
+    parameters:
+      - $ref: '#/components/parameters/ShopSlug'
+      - $ref: '#/components/parameters/AccountId'
+    post:
+      operationId: rekeyShopCourierAccount
+      tags: [Seller]
+      summary: Replace the shop courier account's credentials (proposed)
+      description: |
+        Proposed (06 §13.8); waits for the product owner's approval.
+        Actor and password re-entry as `createShopCourierAccount` (owner only; `reauth_user`
+        and `reauth_user_day` limiters, 429). Scope: `{accountId}` is one of the shop's own
+        accounts, else 404 (T-SEC-001).
+        Rules: a `disabled` account is 409 `INVALID_STATE_TRANSITION`.
+        Concurrency: ⟳ `If-Match` on `logistics_accounts.version`. A missing header, `*` or a
+        list is 428 before the password is checked; a stale version, a weak tag or any other
+        value is 412 `VERSION_CONFLICT` with `current`, the account. Not ⚷, as other ⟳ edits
+        (06 §7.7).
+        Side effects, in one transaction with the account row locked: new `credentials_enc`,
+        `version` + 1; the account goes back to `pending` and job `logistics.verify_account` is
+        sent, except a `suspended` account, which stays `suspended` with no job, because only
+        staff resume it (decided 2026-11-21); audit `logistics_account.rekey`. Release R1·M6.
+      x-release: R1·M6
+      x-proposed: true
+      x-permission: shop.courier_accounts.manage
+      x-if-match: true
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RekeyShopCourierAccountRequest' }
+            examples:
+              newToken:
+                summary: A new NCM token (placeholders)
+                value:
+                  credentials: { token: EXAMPLE-NEW-TOKEN-NOT-REAL }
+                  password: example-current-password
+      responses:
+        '200':
+          description: The account after the change, with the new `ETag`.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+            ETag: { $ref: '#/components/headers/ETag' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CourierAccountResponse' }
+              examples:
+                rekeyed:
+                  summary: An `active` account back in `pending` until it is verified again
+                  value:
+                    data:
+                      id: 01929c10-0000-7000-8000-0000000000a1
+                      provider_code: ncm
+                      owner_type: shop
+                      name: Example NCM account
+                      environment: production
+                      external_account_ref: null
+                      status: pending
+                      verified_at: '2026-11-12T05:10:00.000Z'
+                      disabled_at: null
+                      version: 3
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422': { $ref: '#/components/responses/UnprocessableContent' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /api/v1/seller/shops/{shopSlug}/courier-accounts/{accountId}/disable:
+    parameters:
+      - $ref: '#/components/parameters/ShopSlug'
+      - $ref: '#/components/parameters/AccountId'
+    post:
+      operationId: disableShopCourierAccount
+      tags: [Seller]
+      summary: Close the shop's courier account for good (proposed)
+      description: |
+        Proposed (06 §13.8); waits for the product owner's approval.
+        Actor and password re-entry as `createShopCourierAccount` (owner only; `reauth_user`
+        and `reauth_user_day` limiters, 429). Scope: `{accountId}` is one of the shop's own
+        accounts, else 404 (T-SEC-001), checked before the password.
+        Rules (04a §9.9): an account already `disabled`, or one with a parcel that is not
+        finished, is 409 `INVALID_STATE_TRANSITION` (for the second, `allowed_events` is
+        `[suspended]`: staff suspend it until the parcel is finished).
+        Side effects, in one transaction with the account row locked `FOR UPDATE`: status
+        `disabled`, `disabled_at`, `credentials_enc` erased, `version` + 1; the account's
+        `logistics_account_shops` rows deactivated; a shop whose default it was returns to
+        `manual` (its settings `version` + 1); audit `logistics_account.disable`. Not ⚷, not ⟳.
+        Release R1·M6.
+      x-release: R1·M6
+      x-proposed: true
+      x-permission: shop.courier_accounts.manage
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DisableShopCourierAccountRequest' }
+            examples:
+              disable:
+                summary: Password placeholder
+                value: { password: example-current-password }
+      responses:
+        '200':
+          description: The account, `disabled`.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CourierAccountResponse' }
+              examples:
+                disabled:
+                  summary: After the disable
+                  value:
+                    data:
+                      id: 01929c10-0000-7000-8000-0000000000a1
+                      provider_code: ncm
+                      owner_type: shop
+                      name: Example NCM account
+                      environment: production
+                      external_account_ref: null
+                      status: disabled
+                      verified_at: '2026-11-12T05:10:00.000Z'
+                      disabled_at: '2026-11-20T09:00:00.000Z'
+                      version: 4
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422': { $ref: '#/components/responses/UnprocessableContent' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /api/v1/seller/shops/{shopSlug}/pickup-addresses:
+    parameters:
+      - $ref: '#/components/parameters/ShopSlug'
+    post:
+      operationId: createPickupAddress
+      tags: [Seller]
+      summary: Add a pickup address (proposed)
+      description: |
+        Proposed (06 §13.8); waits for the product owner's approval.
+        Actor: `shop.shipping.manage`; shop status gate `active` only (07 §4.4). Scope: the
+        address is created for the shop of `{shopSlug}` with `purpose = 'pickup'`; a shop may
+        have several (ADR-0019 decision 4).
+        Rules: the province, district and local level must be one chain (422
+        `location_mismatch` on `local_level_code`) and the ward within the local level's
+        `ward_count` (422 `ward_out_of_range`), checked before the insert (04a §6.6). The shop's
+        first live pickup address is its default whatever `is_default` says; `is_default: true`
+        moves the default flag to the new address.
+        Side effects, in one transaction with the shop row locked first (05 §4.4 level 0): the
+        `shop_addresses` row, its contact phone, area and landmark encrypted (07 §5.5); audit
+        `shop_address.create`. Not ⚷. Returns 201 without `Location` (no read operation serves
+        one address, 06 §3.7). T-SHOP-115. Release R1·M6.
+      x-release: R1·M6
+      x-proposed: true
+      x-permission: shop.shipping.manage
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreatePickupAddressRequest' }
+            examples:
+              workshop:
+                summary: The shop's first pickup address (placeholders)
+                value:
+                  label: Workshop
+                  contact_name: Example Contact
+                  contact_phone: '9800000000'
+                  province_code: '3'
+                  district_code: '305'
+                  local_level_code: '30501'
+                  ward_no: 4
+                  area_tole: Example Tole
+                  street_landmark: null
+      responses:
+        '201':
+          description: The new address.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PickupAddressResponse' }
+              examples:
+                created:
+                  summary: The first address becomes the default
+                  value:
+                    data:
+                      id: 01929c11-0000-7000-8000-0000000000b1
+                      label: Workshop
+                      contact_name: Example Contact
+                      contact_phone: '9800000000'
+                      province_code: '3'
+                      district_code: '305'
+                      local_level_code: '30501'
+                      ward_no: 4
+                      area_tole: Example Tole
+                      street_landmark: null
+                      postal_code: '3050104'
+                      is_default: true
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422': { $ref: '#/components/responses/UnprocessableContent' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /api/v1/seller/shops/{shopSlug}/pickup-addresses/{addressId}:
+    parameters:
+      - $ref: '#/components/parameters/ShopSlug'
+      - $ref: '#/components/parameters/AddressId'
+    patch:
+      operationId: updatePickupAddress
+      tags: [Seller]
+      summary: Edit a pickup address or make it the default (proposed)
+      description: |
+        Proposed (06 §13.8); waits for the product owner's approval.
+        Actor: `shop.shipping.manage`; shop status gate `active` only (07 §4.4). Scope:
+        `{addressId}` is a pickup address of the shop, else 404 (T-SEC-001); an archived one
+        is 409 `INVALID_STATE_TRANSITION`.
+        Rules: an edit sends the whole address, that is all seven of `contact_name`,
+        `contact_phone`, `province_code`, `district_code`, `local_level_code`, `ward_no` and
+        `area_tole`; a partial set is 422 `VALIDATION_FAILED` with a `required` item for each
+        one left out. An edit also replaces `label` and `street_landmark` (left out: `null`).
+        `label` or `street_landmark` sent without the seven fields is 422 the same way. Without
+        any address member only `is_default` applies. The location checks are those of
+        `createPickupAddress`.
+        `is_default: false` on the default is 422 `default_required` (make another address the
+        default instead).
+        Side effects, in one transaction: the shop row locked first, then the address row `FOR
+        UPDATE`, so a booking that references it serialises with the "a shipment references it"
+        test. Once a shipment references the address, an edit archives the row and inserts a
+        new one, which keeps the default flag (ADR-0019 decision 4); otherwise the row is
+        updated in place. Audit `shop_address.update`. `shop_addresses` has no `version`, so
+        this is not ⟳; not ⚷. Release R1·M6.
+      x-release: R1·M6
+      x-proposed: true
+      x-permission: shop.shipping.manage
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdatePickupAddressRequest' }
+            examples:
+              makeDefault:
+                summary: Make this address the default
+                value: { is_default: true }
+              edit:
+                summary: A new contact for the workshop (the whole address is sent; placeholders)
+                value:
+                  label: Workshop
+                  contact_name: Another Example Contact
+                  contact_phone: '9811111111'
+                  province_code: '3'
+                  district_code: '305'
+                  local_level_code: '30501'
+                  ward_no: 4
+                  area_tole: Example Tole
+                  street_landmark: Near the example landmark
+      responses:
+        '200':
+          description: The address, with a new `id` when the edit replaced a referenced row.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PickupAddressResponse' }
+              examples:
+                replaced:
+                  summary: The edit of an address a shipment references, so it has a new `id`
+                  value:
+                    data:
+                      id: 01929c11-0000-7000-8000-0000000000b2
+                      label: Workshop
+                      contact_name: Another Example Contact
+                      contact_phone: '9811111111'
+                      province_code: '3'
+                      district_code: '305'
+                      local_level_code: '30501'
+                      ward_no: 4
+                      area_tole: Example Tole
+                      street_landmark: Near the example landmark
+                      postal_code: '3050104'
+                      is_default: true
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422': { $ref: '#/components/responses/UnprocessableContent' }
+        '500': { $ref: '#/components/responses/Internal' }
+    delete:
+      operationId: archivePickupAddress
+      tags: [Seller]
+      summary: Stop offering a pickup address (proposed)
+      description: |
+        Proposed (06 §13.8); waits for the product owner's approval.
+        Actor: `shop.shipping.manage`; shop status gate `active` only (07 §4.4). Scope as
+        `updatePickupAddress`.
+        Rules: an address already archived, or the default, is 409 `INVALID_STATE_TRANSITION`
+        (`current_status` `archived` or `default`): a shop always keeps one live default pickup
+        address, so another must be made the default first (04a §6.6).
+        Side effects, in one transaction locked as `updatePickupAddress`: `archived_at`;
+        shipments keep their reference; audit `shop_address.archive`. Not ⚷. Release R1·M6.
+      x-release: R1·M6
+      x-proposed: true
+      x-permission: shop.shipping.manage
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '204':
+          description: Archived.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /api/v1/seller/shops/{shopSlug}/orders/{shopOrderNumber}/courier-booking-options:
+    parameters:
+      - $ref: '#/components/parameters/ShopSlug'
+      - $ref: '#/components/parameters/ShopOrderNumber'
+    get:
+      operationId: getCourierBookingOptions
+      tags: [Seller]
+      summary: What the courier booking form offers for a shop order (proposed)
+      description: |
+        Proposed (06 §13.8); waits for the product owner's approval.
+        Actor: `shop.orders.process` (owner, manager, `order_fulfiller`); allowed while the
+        shop is `active` or `suspended` with `suspension_mode = fulfill_existing` (07 §4.4).
+        Scope: `{shopOrderNumber}` inside the shop and released to the vendor (an
+        `awaiting_payment` shop order is not), else 404 (T-SEC-001).
+        Returns the shop order's live shipment (or `null`), the settings, the accounts the form
+        offers (`active`, shop-owned, with an active row for the shop), `account_id`, the
+        chosen account (the one asked for if offered, else the default, else the first; `null`
+        when there is none), the live pickup addresses, the chosen courier's service codes, and
+        for a courier that books by branch its active branches assigned to the account
+        (`origin_branches`) and those mapped to the delivery district (`destination_branches`,
+        05 §6.3). The assigned branches are read through the adapter outside any transaction
+        (03 §11.4) and cached per account for 15 minutes [Assumption A-58];
+        `assigned_branches_available` is `false`, with no `origin_branches`, when the courier did
+        not answer. Side effects: none. Release R1·M6.
+      x-release: R1·M6
+      x-proposed: true
+      x-permission: shop.orders.process
+      parameters:
+        - name: account_id
+          in: query
+          required: false
+          description: The account to show the services and branches of; a value that is not a UUID is ignored.
+          schema: { $ref: '#/components/schemas/Uuid' }
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: The booking form's options.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CourierBookingOptionsResponse' }
+              examples:
+                ncm:
+                  summary: An accepted COD shop order before booking, with NCM's services [Verify-external VX-16] (IDs and branch names are placeholders)
+                  value:
+                    data:
+                      shipment:
+                        id: 01929c12-0000-7000-8000-0000000000c1
+                        shop_order_number: DN-7K3M9QX-1
+                        status: packed
+                        logistics_account_id: null
+                        pickup_address_id: null
+                        merchant_reference: null
+                        courier_reference: null
+                        external_shipment_id: null
+                        service_code: null
+                        origin_branch_id: null
+                        destination_branch_id: null
+                        cancel_requested_at: null
+                        cancel_requested_by: null
+                        cod_amount: null
+                        courier_name: null
+                        tracking_number: null
+                        tracking_url: null
+                        booked_at: null
+                        shipped_at: null
+                        delivered_at: null
+                        cancelled_at: null
+                        return_window_ends_at: null
+                        attempt_count: 0
+                        version: 2
+                      settings:
+                        fulfillment_mode: vendor
+                        default_account_id: 01929c10-0000-7000-8000-0000000000a1
+                        is_enabled: true
+                        version: 2
+                      accounts:
+                        - id: 01929c10-0000-7000-8000-0000000000a1
+                          provider_code: ncm
+                          owner_type: shop
+                          name: Example NCM account
+                          environment: production
+                          external_account_ref: null
+                          status: active
+                          verified_at: '2026-11-12T05:10:00.000Z'
+                          disabled_at: null
+                          version: 2
+                      account_id: 01929c10-0000-7000-8000-0000000000a1
+                      pickup_addresses:
+                        - id: 01929c11-0000-7000-8000-0000000000b1
+                          label: Workshop
+                          contact_name: Example Contact
+                          contact_phone: '9800000000'
+                          province_code: '3'
+                          district_code: '305'
+                          local_level_code: '30501'
+                          ward_no: 4
+                          area_tole: Example Tole
+                          street_landmark: null
+                          postal_code: '3050104'
+                          is_default: true
+                      services: [Door2Door, Branch2Door, Door2Branch, Branch2Branch]
+                      assigned_branches_available: true
+                      origin_branches:
+                        - id: 01929c13-0000-7000-8000-0000000000d1
+                          provider_code: ncm
+                          name: Example Branch A
+                          external_branch_id: null
+                          code: null
+                          courier_district: Example District A
+                          district_code: '305'
+                          covered_areas: null
+                          phone: null
+                          is_active: true
+                          synced_at: '2026-11-21T00:30:00.000Z'
+                      destination_branches:
+                        - id: 01929c13-0000-7000-8000-0000000000d2
+                          provider_code: ncm
+                          name: Example Branch B
+                          external_branch_id: null
+                          code: null
+                          courier_district: Example District B
+                          district_code: '404'
+                          covered_areas: null
+                          phone: null
+                          is_active: true
+                          synced_at: '2026-11-21T00:30:00.000Z'
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /api/v1/seller/shops/{shopSlug}/orders/{shopOrderNumber}/courier-booking:
+    parameters:
+      - $ref: '#/components/parameters/ShopSlug'
+      - $ref: '#/components/parameters/ShopOrderNumber'
+    post:
+      operationId: bookCourierShipment
+      tags: [Seller]
+      summary: Book the parcel with a courier (proposed)
+      description: |
+        Proposed (06 §13.8; OD-56, OD-57); waits for the product owner's approval.
+        Actor: `shop.orders.process`; allowed while the shop is `active` or `suspended` with
+        `suspension_mode = fulfill_existing` (07 §4.4). Scope: `{shopOrderNumber}` inside the
+        shop and released to the vendor, else 404; the account, pickup address and branches are
+        checked below.
+        Rules (05 §6.3), each 409 `INVALID_STATE_TRANSITION` unless marked 422: the parent
+        order's verification allows dispatch (the OD-57 dispatch rule, T-ORD-011); the shop
+        order is `accepted`; its live shipment is `pending` or `packed` (`pending|packed →
+        booking_requested`); the shop's `fulfillment_mode` is `vendor` (`manual` and `platform`
+        refuse it) and courier booking is enabled for the shop (`is_enabled`); the account has
+        an active row for the shop, is shop-owned and `active`, and its courier is active (422
+        `account_not_usable` on `account_id`); a sandbox account in production is 422
+        `sandbox_account`; `service_code` is one of the courier's services (422
+        `unknown_service`); `pickup_address_id` is a live pickup address of the shop (422
+        `address_not_usable`); for a courier that books by branch both branch IDs are required
+        (422 `required`) and each must be an active branch of the account's courier (422
+        `branch_not_usable`, T-SHOP-114), and for any other courier a branch ID is 422
+        `not_allowed`; the COD payment is `awaiting_collection`; at least one unit is left to
+        ship.
+        Side effects, in one transaction with the order, shop order and shipment rows locked
+        (05 §4.4): `shipment_items` for the units kept; the shipment's compare-and-set to
+        `booking_requested` with the account, the pickup address, `merchant_reference`
+        `DN-XXXXXXX-n-Sm`, the service, the branches, `courier_name` (the courier's name) and
+        the COD amount; a `booking_requested` shipment event; audit `shipment.book_request`; job
+        `orders.book_courier_shipment`, which calls the courier. Whether the origin is one of
+        the account's assigned branches is the courier's check: a refusal is `booking_failed`
+        (`invalid_branch`). Idempotency: ⚷, 24 h. Release R1·M6.
+      x-release: R1·M6
+      x-proposed: true
+      x-permission: shop.orders.process
+      x-idempotency: { required: true, retention_hours: 24 }
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BookCourierShipmentRequest' }
+            examples:
+              ncm:
+                summary: Book with NCM from an assigned branch (IDs are placeholders)
+                value:
+                  account_id: 01929c10-0000-7000-8000-0000000000a1
+                  pickup_address_id: 01929c11-0000-7000-8000-0000000000b1
+                  service_code: Door2Door
+                  origin_branch_id: 01929c13-0000-7000-8000-0000000000d1
+                  destination_branch_id: 01929c13-0000-7000-8000-0000000000d2
+      responses:
+        '200':
+          description: |
+            The shipment in `booking_requested`; the job books it. A replay of the same key and
+            body returns this 200 again with `Idempotency-Replayed: true` (06 §7.4).
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+            Idempotency-Replayed: { $ref: '#/components/headers/Idempotency-Replayed' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CourierShipmentResponse' }
+              examples:
+                requested:
+                  summary: Waiting for the booking job (COD amount and IDs illustrative)
+                  value:
+                    data:
+                      id: 01929c12-0000-7000-8000-0000000000c1
+                      shop_order_number: DN-7K3M9QX-1
+                      status: booking_requested
+                      logistics_account_id: 01929c10-0000-7000-8000-0000000000a1
+                      pickup_address_id: 01929c11-0000-7000-8000-0000000000b1
+                      merchant_reference: DN-7K3M9QX-1-S1
+                      courier_reference: DN7K3M9QX1S1
+                      external_shipment_id: null
+                      service_code: Door2Door
+                      origin_branch_id: 01929c13-0000-7000-8000-0000000000d1
+                      destination_branch_id: 01929c13-0000-7000-8000-0000000000d2
+                      cancel_requested_at: null
+                      cancel_requested_by: null
+                      cod_amount: { amount_minor: 139900, currency: NPR }
+                      courier_name: Nepal Can Move
+                      tracking_number: null
+                      tracking_url: null
+                      booked_at: null
+                      shipped_at: null
+                      delivered_at: null
+                      cancelled_at: null
+                      return_window_ends_at: null
+                      attempt_count: 0
+                      version: 3
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422': { $ref: '#/components/responses/UnprocessableContent' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /api/v1/seller/shops/{shopSlug}/orders/{shopOrderNumber}/courier-booking/cancel:
+    parameters:
+      - $ref: '#/components/parameters/ShopSlug'
+      - $ref: '#/components/parameters/ShopOrderNumber'
+    post:
+      operationId: cancelCourierBooking
+      tags: [Seller]
+      summary: Cancel a courier booking before pickup (proposed)
+      description: |
+        Proposed (06 §13.8); waits for the product owner's approval.
+        Actor: `shop.orders.process`; gate as `bookCourierShipment`. Scope: `{shopOrderNumber}`
+        inside the shop and released to the vendor, else 404.
+        Rules (05 §6.3), each refusal 409 `INVALID_STATE_TRANSITION`: the live shipment must
+        have a courier booking (`current_status` is the shipment's status, or `none`).
+        `booking_failed` → `cancelled`, and a new `pending` shipment is created so the vendor
+        can book again; the response is that new shipment. `booked` with a courier without the
+        `cancellation` capability (every R1 courier): `cancel_requested_at` and
+        `cancel_requested_by = 'vendor'` are set and the `courier.cancellation_requested` alert
+        is raised, so staff cancel with the courier and record it with
+        `adminResolveCourierBooking`; a second request is 409, and a courier with
+        `cancellation` is 409 until its cancellation job exists. `booking_requested` and
+        `needs_reconciliation` (the outcome is not known yet) and every later state are 409.
+        Side effects, in one transaction with the order, shop order and shipment rows locked:
+        the changes above, a shipment event for each status change, and audit `shipment.cancel`
+        or `shipment.cancel_request` with `reason`. Idempotency: ⚷, 24 h. Release R1·M6.
+      x-release: R1·M6
+      x-proposed: true
+      x-permission: shop.orders.process
+      x-idempotency: { required: true, retention_hours: 24 }
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CancelCourierBookingRequest' }
+            examples:
+              customerAsked:
+                summary: The customer asked to change the order
+                value: { reason: Customer asked to change the order }
+      responses:
+        '200':
+          description: |
+            The shipment: the new `pending` one after a `booking_failed` cancellation, or the
+            `booked` one with the cancellation requested. A replay of the same key and body
+            returns this 200 again with `Idempotency-Replayed: true` (06 §7.4).
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+            Idempotency-Replayed: { $ref: '#/components/headers/Idempotency-Replayed' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CourierShipmentResponse' }
+              examples:
+                cancelRequested:
+                  summary: A `booked` NCM parcel; staff cancel it with NCM (IDs illustrative)
+                  value:
+                    data:
+                      id: 01929c12-0000-7000-8000-0000000000c1
+                      shop_order_number: DN-7K3M9QX-1
+                      status: booked
+                      logistics_account_id: 01929c10-0000-7000-8000-0000000000a1
+                      pickup_address_id: 01929c11-0000-7000-8000-0000000000b1
+                      merchant_reference: DN-7K3M9QX-1-S1
+                      courier_reference: DN7K3M9QX1S1
+                      external_shipment_id: EXAMPLE-PARCEL-1
+                      service_code: Door2Door
+                      origin_branch_id: 01929c13-0000-7000-8000-0000000000d1
+                      destination_branch_id: 01929c13-0000-7000-8000-0000000000d2
+                      cancel_requested_at: '2026-11-21T06:00:00.000Z'
+                      cancel_requested_by: vendor
+                      cod_amount: { amount_minor: 139900, currency: NPR }
+                      courier_name: Nepal Can Move
+                      tracking_number: EXAMPLE-PARCEL-1
+                      tracking_url: null
+                      booked_at: '2026-11-21T05:02:00.000Z'
+                      shipped_at: null
+                      delivered_at: null
+                      cancelled_at: null
+                      return_window_ends_at: null
+                      attempt_count: 0
+                      version: 5
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422': { $ref: '#/components/responses/UnprocessableContent' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /api/v1/admin/logistics/accounts:
+    get:
+      operationId: adminListLogisticsAccounts
+      tags: [Admin]
+      summary: List every courier account with its allowed shops (proposed)
+      description: |
+        Proposed (06 §13.8); waits for the product owner's approval.
+        Actor: platform staff with `platform.logistics.manage` (proposed) and MFA verified
+        within 12 h (06 §4.3). Scope: staff see every account, platform- and shop-owned.
+        Filters: `owner_type` and `status`. Sort `created_at` ascending, then `id`.
+        Pagination: cursor (06 §6.2), with `limit` 1–100 (default 25) and `meta` `CursorMeta`.
+        The parameter list is closed (06 §6.3): an unknown parameter, a parameter sent twice, a
+        value outside a filter's enum, a `limit` out of range, or a cursor that does not decode,
+        names another sort or was made for other filters is 400 `INVALID_QUERY_PARAMETER`.
+        Each account carries `shop_id` (the owning shop; `null` for a platform-owned account)
+        and `shops`, its `logistics_account_shops` rows (04a §9.10), and never its credentials
+        or their ciphertext (07 TM-32, T-SEC-040). Side effects: none. Release R1·M6.
+      x-release: R1·M6
+      x-proposed: true
+      x-permission: platform.logistics.manage
+      parameters:
+        - name: owner_type
+          in: query
+          required: false
+          schema: { $ref: '#/components/schemas/CourierAccountOwnerType' }
+        - name: status
+          in: query
+          required: false
+          schema: { $ref: '#/components/schemas/CourierAccountStatus' }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: One page of accounts.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdminCourierAccountList' }
+              examples:
+                onePage:
+                  summary: One shop-owned NCM account (IDs illustrative)
+                  value:
+                    data:
+                      - id: 01929c10-0000-7000-8000-0000000000a1
+                        provider_code: ncm
+                        owner_type: shop
+                        name: Example NCM account
+                        environment: production
+                        external_account_ref: null
+                        status: active
+                        verified_at: '2026-11-12T05:10:00.000Z'
+                        disabled_at: null
+                        version: 2
+                        shop_id: 01929000-0000-7000-8000-000000005001
+                        shops:
+                          - { shop_id: 01929000-0000-7000-8000-000000005001, is_active: true }
+                    meta: { limit: 25, next_cursor: null }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /api/v1/admin/logistics/accounts/{accountId}/status:
+    parameters:
+      - $ref: '#/components/parameters/AccountId'
+    post:
+      operationId: adminSetLogisticsAccountStatus
+      tags: [Admin]
+      summary: Suspend, resume or disable a courier account (proposed)
+      description: |
+        Proposed (06 §13.8); waits for the product owner's approval.
+        Actor: platform staff with `platform.logistics.manage` (proposed) and fresh MFA.
+        Step-up (07 §3.10): MFA verified within the last 15 minutes, else 401 `MFA_REQUIRED`
+        with `verification_required` (06 §4.3). Scope: any account; an unknown one is 404.
+        Transitions (04a §9.9), in one transaction with the account row locked (suspend and
+        resume also by compare-and-set on `status`): `suspended` from `pending`, `active` or `invalid`; `pending` (resume, re-verified by job
+        `logistics.verify_account`) only from `suspended`; `disabled` from any status but
+        `disabled`, with the effects of `disableShopCourierAccount` (credentials erased, the
+        account's `logistics_account_shops` rows deactivated, a shop whose default it was back
+        to `manual`), refused while a parcel on the account is not finished. Any other request
+        is 409 `INVALID_STATE_TRANSITION` with the `allowed_events` of the current status.
+        Side effects: `version` + 1; audit `logistics_account.status_change` with `reason`.
+        Not ⚷, not ⟳. T-SEC-041, T-SHOP-116. Release R1·M6.
+      x-release: R1·M6
+      x-proposed: true
+      x-permission: platform.logistics.manage
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SetLogisticsAccountStatusRequest' }
+            examples:
+              suspend:
+                summary: Suspend after a courier complaint
+                value: { status: suspended, reason: Courier reported repeated failed pickups. }
+      responses:
+        '200':
+          description: The account after the change.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CourierAccountResponse' }
+              examples:
+                suspended:
+                  summary: A suspended account (IDs illustrative)
+                  value:
+                    data:
+                      id: 01929c10-0000-7000-8000-0000000000a1
+                      provider_code: ncm
+                      owner_type: shop
+                      name: Example NCM account
+                      environment: production
+                      external_account_ref: null
+                      status: suspended
+                      verified_at: '2026-11-12T05:10:00.000Z'
+                      disabled_at: null
+                      version: 3
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422': { $ref: '#/components/responses/UnprocessableContent' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /api/v1/admin/shops/{shopId}/logistics-enabled:
+    parameters:
+      - $ref: '#/components/parameters/ShopId'
+    put:
+      operationId: adminSetShopLogisticsEnabled
+      tags: [Admin]
+      summary: Switch a shop's courier bookings on or off (proposed)
+      description: |
+        Proposed (06 §13.8); waits for the product owner's approval.
+        Actor: platform staff with `platform.logistics.manage` (proposed) and MFA verified
+        within 12 h; no step-up. Scope: any shop; an unknown one is 404.
+        Side effects, in one transaction with the shop row, then the settings row, locked: when
+        `is_enabled` changes, the settings row is updated (`version` + 1) or inserted
+        (`version` 1), so a seller edit loaded before it gets 412 `VERSION_CONFLICT`, and audit
+        `shop_logistics_settings.enable` with `reason`. The same value again writes nothing and
+        answers 200 (idempotent on the value). A disabled shop's `bookCourierShipment` is 409.
+        Not ⚷, not ⟳. Release R1·M6.
+      x-release: R1·M6
+      x-proposed: true
+      x-permission: platform.logistics.manage
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SetShopLogisticsEnabledRequest' }
+            examples:
+              switchOff:
+                summary: Switch bookings off while a case is reviewed
+                value:
+                  { is_enabled: false, reason: Bookings paused while support case is reviewed. }
+      responses:
+        '200':
+          description: The shop's settings after the switch.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LogisticsSettingsResponse' }
+              examples:
+                switchedOff:
+                  summary: Bookings switched off
+                  value:
+                    data:
+                      fulfillment_mode: vendor
+                      default_account_id: 01929c10-0000-7000-8000-0000000000a1
+                      is_enabled: false
+                      version: 3
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422': { $ref: '#/components/responses/UnprocessableContent' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /api/v1/admin/logistics/branches:
+    get:
+      operationId: adminListLogisticsBranches
+      tags: [Admin]
+      summary: A courier's branches with their district mapping (proposed)
+      description: |
+        Proposed (06 §13.8); waits for the product owner's approval.
+        Actor: platform staff with `platform.logistics.manage` (proposed) and MFA verified
+        within 12 h. Scope: the branches of one courier (04a §9.12).
+        Filters: `provider_code` (default `ncm`; only the code of a courier that has an adapter,
+        so `ncm` in R1), `is_active` (`true` or `false`) and `unmapped` (`true`: only branches
+        with no `district_code`; `false`: no such filter). Sort `name` ascending, then `id`.
+        Pagination and the closed parameter list as `adminListLogisticsAccounts`: anything else,
+        a provider code without an adapter included, is 400 `INVALID_QUERY_PARAMETER`. Side
+        effects: none. Release R1·M6.
+      x-release: R1·M6
+      x-proposed: true
+      x-permission: platform.logistics.manage
+      parameters:
+        - name: provider_code
+          in: query
+          required: false
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/CourierProviderCode'
+            default: ncm
+        - name: is_active
+          in: query
+          required: false
+          schema: { type: boolean }
+        - name: unmapped
+          in: query
+          required: false
+          schema: { type: boolean }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: One page of branches.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LogisticsBranchList' }
+              examples:
+                unmapped:
+                  summary: '`unmapped=true`: a branch staff still have to map (placeholders)'
+                  value:
+                    data:
+                      - id: 01929c13-0000-7000-8000-0000000000d3
+                        provider_code: ncm
+                        name: Example Branch C
+                        external_branch_id: null
+                        code: null
+                        courier_district: Example District C
+                        district_code: null
+                        covered_areas: null
+                        phone: null
+                        is_active: true
+                        synced_at: '2026-11-21T00:30:00.000Z'
+                    meta: { limit: 25, next_cursor: null }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /api/v1/admin/logistics/branches/sync:
+    post:
+      operationId: adminSyncLogisticsBranches
+      tags: [Admin]
+      summary: Refresh a courier's branches now (proposed)
+      description: |
+        Proposed (06 §13.8); waits for the product owner's approval.
+        Actor: platform staff with `platform.logistics.manage` (proposed) and MFA verified
+        within 12 h. Rules: the courier must book by branch (its adapter's `branches`
+        capability), else 422 `no_branches` on `provider_code`.
+        Side effects: job `logistics.sync_branches`, sent in a transaction; the job upserts the
+        list (T-SHOP-114). Not ⚷: a second sync changes nothing. Release R1·M6.
+      x-release: R1·M6
+      x-proposed: true
+      x-permission: platform.logistics.manage
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SyncLogisticsBranchesRequest' }
+            examples:
+              ncm:
+                summary: Refresh NCM's branches
+                value: { provider_code: ncm }
+      responses:
+        '202':
+          description: The sync job is queued.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/QueuedResponse' }
+              examples:
+                queued:
+                  summary: Queued
+                  value: { data: { queued: true } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422': { $ref: '#/components/responses/UnprocessableContent' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /api/v1/admin/logistics/branches/{branchId}:
+    parameters:
+      - $ref: '#/components/parameters/BranchId'
+    patch:
+      operationId: adminUpdateLogisticsBranch
+      tags: [Admin]
+      summary: Map a courier branch to a district (proposed)
+      description: |
+        Proposed (06 §13.8); waits for the product owner's approval.
+        Actor: platform staff with `platform.logistics.manage` (proposed) and MFA verified
+        within 12 h. Scope: an unknown branch is 404.
+        Rules: `district_code` names a district (422 `unknown_district`) or is `null`, which
+        clears the mapping. Side effects, in one transaction with the branch row locked: the
+        new `district_code`; audit `logistics_branch.update` with both values. Last write wins;
+        not ⚷, not ⟳. Release R1·M6.
+      x-release: R1·M6
+      x-proposed: true
+      x-permission: platform.logistics.manage
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateLogisticsBranchRequest' }
+            examples:
+              map:
+                summary: Map the branch to a district
+                value: { district_code: '305' }
+      responses:
+        '200':
+          description: The branch after the change.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LogisticsBranchResponse' }
+              examples:
+                mapped:
+                  summary: Mapped (placeholders)
+                  value:
+                    data:
+                      id: 01929c13-0000-7000-8000-0000000000d3
+                      provider_code: ncm
+                      name: Example Branch C
+                      external_branch_id: null
+                      code: null
+                      courier_district: Example District C
+                      district_code: '305'
+                      covered_areas: null
+                      phone: null
+                      is_active: true
+                      synced_at: '2026-11-21T00:30:00.000Z'
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422': { $ref: '#/components/responses/UnprocessableContent' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /api/v1/admin/courier-bookings:
+    get:
+      operationId: adminListCourierBookings
+      tags: [Admin]
+      summary: The queue of courier bookings that wait for staff (proposed)
+      description: |
+        Proposed (06 §13.8); waits for the product owner's approval.
+        Actor: platform staff with `platform.orders.intervene` and MFA verified within 12 h.
+        Scope: every shop's shipments.
+        `queue` picks `needs_reconciliation` (the default; `shipments_booking_unresolved_idx`)
+        or `cancel_requested` (`booked` with `cancel_requested_at` set;
+        `shipments_cancel_requested_idx`, 04a §11.5). Sort `updated_at` ascending (the
+        longest-waiting first), then `id`. Pagination and the closed parameter list as
+        `adminListLogisticsAccounts`: any other `queue` value, like any other parameter error,
+        is 400 `INVALID_QUERY_PARAMETER`.
+        Each item is the shipment with its shop order number, account ID and cancellation
+        request, and `attempts`, its `shipment_booking_attempts` rows oldest first (04a §9.13).
+        Side effects: none. Release R1·M6.
+      x-release: R1·M6
+      x-proposed: true
+      x-permission: platform.orders.intervene
+      parameters:
+        - name: queue
+          in: query
+          required: false
+          schema:
+            {
+              type: string,
+              enum: [needs_reconciliation, cancel_requested],
+              default: needs_reconciliation,
+            }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: One page of the queue.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CourierBookingQueue' }
+              examples:
+                unknownOutcome:
+                  summary: A booking whose courier call timed out (IDs illustrative)
+                  value:
+                    data:
+                      - id: 01929c12-0000-7000-8000-0000000000c1
+                        shop_order_number: DN-7K3M9QX-1
+                        status: needs_reconciliation
+                        logistics_account_id: 01929c10-0000-7000-8000-0000000000a1
+                        pickup_address_id: 01929c11-0000-7000-8000-0000000000b1
+                        merchant_reference: DN-7K3M9QX-1-S1
+                        courier_reference: DN7K3M9QX1S1
+                        external_shipment_id: null
+                        service_code: Door2Door
+                        origin_branch_id: 01929c13-0000-7000-8000-0000000000d1
+                        destination_branch_id: 01929c13-0000-7000-8000-0000000000d2
+                        cancel_requested_at: null
+                        cancel_requested_by: null
+                        cod_amount: { amount_minor: 139900, currency: NPR }
+                        courier_name: Nepal Can Move
+                        tracking_number: null
+                        tracking_url: null
+                        booked_at: null
+                        shipped_at: null
+                        delivered_at: null
+                        cancelled_at: null
+                        return_window_ends_at: null
+                        attempt_count: 0
+                        version: 4
+                        attempts:
+                          - id: 01929c15-0000-7000-8000-0000000000f1
+                            kind: book
+                            attempt_no: 1
+                            outcome: unknown
+                            http_status: null
+                            error_code: timeout
+                            error_fields: []
+                            external_shipment_id: null
+                            started_at: '2026-11-21T05:00:00.000Z'
+                            finished_at: '2026-11-21T05:00:30.000Z'
+                    meta: { limit: 25, next_cursor: null }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /api/v1/admin/shop-orders/{shopOrderNumber}/courier-booking/resolution:
+    parameters:
+      - $ref: '#/components/parameters/ShopOrderNumber'
+    post:
+      operationId: adminResolveCourierBooking
+      tags: [Admin]
+      summary: Record what staff learned from the courier about a booking (proposed)
+      description: |
+        Proposed (06 §13.8); waits for the product owner's approval.
+        Actor: platform staff with `platform.orders.intervene` and MFA verified within 12 h; no
+        step-up. Scope: the shop order's live shipment; an unknown shop order is 404.
+        Rules (05 §6.3), each refusal 409 `INVALID_STATE_TRANSITION` unless marked 422: the live
+        shipment must have a courier booking. `booked` and `booking_failed` only from
+        `needs_reconciliation`; `booked` requires `external_shipment_id` (422 `required`) that
+        is not already on another shipment of the account (422 `already_used`, checked before
+        the update), and sets it, `tracking_number` (its first 64 characters) and `booked_at`.
+        `cancel_declined` and `cancelled` only for a `booked` shipment with a cancellation
+        requested: `cancel_declined` clears the request and the shipment stays `booked`;
+        `cancelled` moves it to `cancelled` and creates a new `pending` shipment, which the
+        response shows, for a vendor's request only (a `shop_order` request, which also cancels
+        the shop order, is 409 until `adminCancelShopOrder` exists).
+        Side effects, in one transaction with the order, shop order and shipment rows locked:
+        the compare-and-set, `version` + 1, a shipment event for each status change, and audit
+        `shipment.booking_resolve`, `shipment.cancel` or `shipment.cancel_decline` with actor
+        `platform_staff` and `note` as the reason. Idempotency: ⚷, 24 h. Release R1·M6.
+      x-release: R1·M6
+      x-proposed: true
+      x-permission: platform.orders.intervene
+      x-idempotency: { required: true, retention_hours: 24 }
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ResolveCourierBookingRequest' }
+            examples:
+              booked:
+                summary: The courier's portal shows the parcel (placeholder parcel ID)
+                value:
+                  outcome: booked
+                  external_shipment_id: EXAMPLE-PARCEL-1
+                  note: Found in the courier portal under reference DN7K3M9QX1S1.
+      responses:
+        '200':
+          description: |
+            The shipment after the resolution (the new `pending` one after `cancelled`). A replay
+            of the same key and body returns this 200 again with `Idempotency-Replayed: true`
+            (06 §7.4).
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+            Idempotency-Replayed: { $ref: '#/components/headers/Idempotency-Replayed' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CourierShipmentResponse' }
+              examples:
+                booked:
+                  summary: Resolved as `booked` (IDs illustrative)
+                  value:
+                    data:
+                      id: 01929c12-0000-7000-8000-0000000000c1
+                      shop_order_number: DN-7K3M9QX-1
+                      status: booked
+                      logistics_account_id: 01929c10-0000-7000-8000-0000000000a1
+                      pickup_address_id: 01929c11-0000-7000-8000-0000000000b1
+                      merchant_reference: DN-7K3M9QX-1-S1
+                      courier_reference: DN7K3M9QX1S1
+                      external_shipment_id: EXAMPLE-PARCEL-1
+                      service_code: Door2Door
+                      origin_branch_id: 01929c13-0000-7000-8000-0000000000d1
+                      destination_branch_id: 01929c13-0000-7000-8000-0000000000d2
+                      cancel_requested_at: null
+                      cancel_requested_by: null
+                      cod_amount: { amount_minor: 139900, currency: NPR }
+                      courier_name: Nepal Can Move
+                      tracking_number: EXAMPLE-PARCEL-1
+                      tracking_url: null
+                      booked_at: '2026-11-21T07:15:00.000Z'
+                      shipped_at: null
+                      delivered_at: null
+                      cancelled_at: null
+                      return_window_ends_at: null
+                      attempt_count: 0
+                      version: 5
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422': { $ref: '#/components/responses/UnprocessableContent' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /api/v1/admin/shop-orders/{shopOrderNumber}/courier-refresh:
+    parameters:
+      - $ref: '#/components/parameters/ShopOrderNumber'
+    post:
+      operationId: adminRefreshCourierStatus
+      tags: [Admin]
+      summary: Read the parcel's status history from the courier now (proposed)
+      description: |
+        Proposed (06 §13.8); waits for the product owner's approval.
+        Actor: platform staff with `platform.orders.intervene` and MFA verified within 12 h.
+        Scope: the shop order's live shipment; an unknown shop order is 404. Rules: a shipment
+        without a courier parcel ID is 409 `INVALID_STATE_TRANSITION`.
+        Side effects: job `orders.process_courier_event` with no trigger row, sent in a
+        transaction with the order, shop order and shipment rows locked; the job reads the
+        parcel's status history and records its readings in `courier_events` (05 §6.3
+        "Replaying a status history", 04a §9.14). No body. Not ⚷. Release R1·M6.
+      x-release: R1·M6
+      x-proposed: true
+      x-permission: platform.orders.intervene
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '202':
+          description: The status job is queued.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/QueuedResponse' }
+              examples:
+                queued:
+                  summary: Queued
+                  value: { data: { queued: true } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /api/v1/admin/courier-events:
+    get:
+      operationId: adminListCourierEvents
+      tags: [Admin]
+      summary: Courier readings by processing status (proposed)
+      description: |
+        Proposed (06 §13.8); waits for the product owner's approval.
+        Actor: platform staff with `platform.orders.intervene` and MFA verified within 12 h.
+        Scope: every account's `courier_events` rows (04a §9.14). Filters: `processing_status`
+        (`held` is the queue staff work) and `shipment_id` (a UUID). Sort `received_at`
+        descending (newest first), then `id`. Pagination and the closed parameter list as
+        `adminListLogisticsAccounts`: a value outside the enum, a `shipment_id` that is not a
+        UUID, or any other parameter error is 400 `INVALID_QUERY_PARAMETER`.
+        `payload` holds only the courier's documented status fields, redacted when stored.
+        Side effects: none. Release R1·M6.
+      x-release: R1·M6
+      x-proposed: true
+      x-permission: platform.orders.intervene
+      parameters:
+        - name: processing_status
+          in: query
+          required: false
+          schema: { $ref: '#/components/schemas/CourierEventProcessingStatus' }
+        - name: shipment_id
+          in: query
+          required: false
+          schema: { $ref: '#/components/schemas/Uuid' }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: One page of readings.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CourierEventList' }
+              examples:
+                held:
+                  summary: '`processing_status=held`: a status the mapping does not know (the payload is illustrative, VX-16)'
+                  value:
+                    data:
+                      - id: 01929c14-0000-7000-8000-0000000000e1
+                        logistics_account_id: 01929c10-0000-7000-8000-0000000000a1
+                        source: callback
+                        external_shipment_id: EXAMPLE-PARCEL-1
+                        shipment_id: 01929c12-0000-7000-8000-0000000000c1
+                        raw_event: null
+                        raw_status: Example unknown status
+                        mapped_status: null
+                        occurred_at: '2026-11-21T08:00:00.000Z'
+                        payload: { status: Example unknown status }
+                        received_at: '2026-11-21T08:00:02.000Z'
+                        processed_at: '2026-11-21T08:00:05.000Z'
+                        processing_status: held
+                        hold_reason: unmapped_status
+                    meta: { limit: 25, next_cursor: null }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /api/v1/admin/courier-events/{courierEventId}/resolution:
+    parameters:
+      - $ref: '#/components/parameters/CourierEventId'
+    post:
+      operationId: adminResolveCourierEvent
+      tags: [Admin]
+      summary: Close a held courier reading after acting on it (proposed)
+      description: |
+        Proposed (06 §13.8); waits for the product owner's approval.
+        Actor: platform staff with `platform.orders.intervene` and MFA verified within 12 h.
+        Scope: an unknown reading is 404. Rules: compare-and-set `held → applied` or `held →
+        ignored` (sets `processed_at`); a reading in any other status is 409
+        `INVALID_STATE_TRANSITION`. The shipment change itself goes through
+        `adminRecordFulfillmentEvent` or `adminResolveCourierBooking`.
+        Side effects, in one transaction: job `orders.process_courier_event` for the reading's
+        shipment, so a replay that stopped on this row continues; audit
+        `courier_event.resolve` with `note` as the reason. Not ⚷. Release R1·M6.
+      x-release: R1·M6
+      x-proposed: true
+      x-permission: platform.orders.intervene
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ResolveCourierEventRequest' }
+            examples:
+              ignored:
+                summary: Checked with the courier; nothing to apply
+                value:
+                  { processing_status: ignored, note: Courier confirmed this was a test status. }
+      responses:
+        '200':
+          description: The reading after the change.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CourierEventResponse' }
+              examples:
+                ignored:
+                  summary: Closed as `ignored` (illustrative)
+                  value:
+                    data:
+                      id: 01929c14-0000-7000-8000-0000000000e1
+                      logistics_account_id: 01929c10-0000-7000-8000-0000000000a1
+                      source: callback
+                      external_shipment_id: EXAMPLE-PARCEL-1
+                      shipment_id: 01929c12-0000-7000-8000-0000000000c1
+                      raw_event: null
+                      raw_status: Example unknown status
+                      mapped_status: null
+                      occurred_at: '2026-11-21T08:00:00.000Z'
+                      payload: { status: Example unknown status }
+                      received_at: '2026-11-21T08:00:02.000Z'
+                      processed_at: '2026-11-21T09:30:00.000Z'
+                      processing_status: ignored
+                      hold_reason: unmapped_status
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422': { $ref: '#/components/responses/UnprocessableContent' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /api/v1/admin/orders/{orderNumber}/verification:
+    parameters:
+      - $ref: '#/components/parameters/OrderNumber'
+    post:
+      operationId: adminRecordOrderVerification
+      tags: [Admin]
+      summary: Record the platform's customer verification of an order (proposed)
+      description: |
+        Proposed (06 §13.8; OD-57, FR-ORD-009); waits for the product owner's approval.
+        Actor: platform staff with `platform.orders.intervene` and MFA verified within 12 h; no
+        step-up. Scope: an unknown order is 404.
+        Rules: sets `verification_status`, `verification_method`, `verification_notes` (left
+        out: `null`) and `verified_at` (now for `verified`, else `null`); `sms_otp` is R2
+        (A-55). `verified` lifts the dispatch rule (T-ORD-011, T-ORD-012).
+        Side effects, in one transaction with the `orders` row locked first (05 §4.4 level 3),
+        as every fulfilment action reads it: the verification columns; audit `order.verify`; for
+        `review_required` or `failed`, the `order.verification_after_booking` alert for each
+        parcel already `booked` (05 §6.3). `orders` has no `version`, so this is not ⟳; not ⚷.
+        Release R1·M6.
+      x-release: R1·M6
+      x-proposed: true
+      x-permission: platform.orders.intervene
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RecordOrderVerificationRequest' }
+            examples:
+              verified:
+                summary: The customer confirmed the order by phone
+                value:
+                  verification_status: verified
+                  verification_method: phone_call
+                  verification_notes: Customer confirmed the order and the delivery area.
+      responses:
+        '200':
+          description: The order's verification after the change.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrderVerificationResponse' }
+              examples:
+                verified:
+                  summary: Verified
+                  value:
+                    data:
+                      number: DN-7K3M9QX
+                      status: placed
+                      verification_status: verified
+                      verification_method: phone_call
+                      verified_at: '2026-11-21T04:20:00.000Z'
+                      verification_notes: Customer confirmed the order and the delivery area.
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422': { $ref: '#/components/responses/UnprocessableContent' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /api/v1/webhooks/couriers/{providerCode}/{accountId}:
+    parameters:
+      - $ref: '#/components/parameters/ProviderCode'
+      - $ref: '#/components/parameters/CallbackAccountId'
+    post:
+      operationId: receiveCourierCallback
+      tags: [Courier callbacks]
+      summary: A courier's status callback (proposed)
+      description: |
+        Proposed (06 §12.6, §13.8; OD-56); waits for the product owner's approval.
+        Contract (06 §12.6): no session, CSRF-exempt by exact route only (T-API-006). The route
+        runs the `webhook_ip` limiter (600 per minute per client network) and caps the body at
+        64 KB (413) before anything else of its own. Then the `token` query parameter is checked
+        against `HMAC-SHA256(courier callback key, account id)` in constant time, accepting
+        every key of the ring during a rotation, before any database read; a missing or wrong
+        token, an `{accountId}` that is not an account's UUID, or a `{providerCode}` that is not
+        the account's courier is 401 `UNAUTHENTICATED` with one `logistics.callback_rejected`
+        log line that never holds the token, the query string or the body (only its SHA-256),
+        and nothing is stored. Then the per-account `courier_callback` limiter (120 per
+        minute; 429).
+        The raw body is hashed and parsed with the courier's adapter. A test event, a comment,
+        a body the adapter cannot read (a non-JSON body included), a parcel that matches no
+        shipment of the account, or a `disabled` account is answered 200 and stores nothing
+        (with a log line for an unmatched or unreadable body), so the courier learns nothing
+        about our data. Otherwise, in one short transaction, one `courier_events` row per
+        parcel is inserted `ON CONFLICT DO NOTHING` (dedupe on `(logistics_account_id,
+        event_key)`) and job `orders.process_courier_event` is sent for each new row; a
+        duplicate sends no job. No courier call happens inline: the job reads the parcel's
+        history where the courier does not sign its callbacks (05 §6.3).
+        The request body is the courier's own payload, so, like `receivePaymentWebhook`, it
+        allows unknown members. T-FUL-110, T-FUL-112. Release R1·M6.
+      x-release: R1·M6
+      x-proposed: true
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/CallbackToken'
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        description: Courier-defined JSON payload, at most 64 KB; for NCM its status webhook [Verify-external VX-16].
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Courier payload; stored only as the documented status fields of each parcel, in `courier_events.payload`.
+              additionalProperties: true
+      responses:
+        '200':
+          description: |
+            Accepted: recorded, already recorded, or deliberately ignored (a test event, a
+            comment, an unreadable body, an unmatched parcel or a `disabled` account).
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WebhookReceivedResponse' }
+              examples:
+                received:
+                  summary: 06 §12.6 step 6
+                  value: { data: { received: true } }
+        '401':
+          description: Missing or wrong token, unknown account, or another courier's path (nothing stored; 06 §12.6 step 2).
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem401' }
+              examples:
+                badToken:
+                  summary: A forged or stale callback URL
+                  value:
+                    type: https://dripnepal.com/problems/unauthenticated
+                    title: Authentication required
+                    status: 401
+                    detail: Authentication required.
+                    code: UNAUTHENTICATED
+                    request_id: 01929c16-0000-7000-8000-000000000401
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422': { $ref: '#/components/responses/UnprocessableContent' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/Internal' }
+
 components:
   securitySchemes:
     cookieAuth:
@@ -1854,7 +3613,8 @@ components:
         A failure is problem+json (07 §3.3): 401 `UNAUTHENTICATED` when the session holds no
         `auth_web` and the route runs the `auth` middleware (an expired or revoked session);
         otherwise 403 `FORBIDDEN` ("reload once"), on a route a guest may call or with a
-        signed-in session. Only `receivePaymentWebhook` is exempt, by exact route (T-API-006).
+        signed-in session. Only `receivePaymentWebhook` and `receiveCourierCallback` are exempt,
+        each by its exact route (T-API-006).
 
   parameters:
     IdempotencyKey:
@@ -1918,7 +3678,8 @@ components:
         Opaque cursor from `meta.next_cursor` (06 §6.2): base64url without padding of
         `{"v":1,"s":"<sort>","k":[<sort value>,"<id>"],"f":"<8 hex>"}`. A cursor that does not
         decode, has another `v` or `s`, or whose filter hash `f` does not match → 400
-        `INVALID_QUERY_PARAMETER`. Used by every non-catalog list (pending operations).
+        `INVALID_QUERY_PARAMETER`. Used by every non-catalog list: the M6 courier lists now,
+        the pending list operations when they are specified.
       schema:
         type: string
         minLength: 1
@@ -1984,6 +3745,62 @@ components:
       required: true
       description: Payment provider; anything else is 404 (06 §12.2).
       schema: { $ref: '#/components/schemas/PaymentProvider' }
+    AccountId:
+      name: accountId
+      in: path
+      required: true
+      description: |
+        Courier account UUID (`logistics_accounts.id`). On a seller route it is looked up among
+        the shop's own accounts, so another shop's account is 404 like a missing one (T-SEC-001).
+      schema: { $ref: '#/components/schemas/Uuid' }
+    AddressId:
+      name: addressId
+      in: path
+      required: true
+      description: Pickup address UUID, looked up among the resolved shop's `purpose = 'pickup'` rows (404 otherwise, T-SEC-001).
+      schema: { $ref: '#/components/schemas/Uuid' }
+    BranchId:
+      name: branchId
+      in: path
+      required: true
+      description: Courier branch UUID (`logistics_branches.id`).
+      schema: { $ref: '#/components/schemas/Uuid' }
+    CourierEventId:
+      name: courierEventId
+      in: path
+      required: true
+      description: Courier reading UUID (`courier_events.id`).
+      schema: { $ref: '#/components/schemas/Uuid' }
+    ShopId:
+      name: shopId
+      in: path
+      required: true
+      description: Shop UUID (`shops.id`) on an admin route; an unknown shop is 404.
+      schema: { $ref: '#/components/schemas/Uuid' }
+    ProviderCode:
+      name: providerCode
+      in: path
+      required: true
+      description: The courier's code in the callback URL; one that is not the account's courier is 401 (06 §12.6).
+      schema: { $ref: '#/components/schemas/CourierProviderCode' }
+    CallbackAccountId:
+      name: accountId
+      in: path
+      required: true
+      description: |
+        The account the callback URL was issued for. The route has no UUID matcher: any value
+        that is not the UUID of an account of `{providerCode}` is 401 `UNAUTHENTICATED`, like a
+        wrong token (06 §12.6).
+      schema: { type: string, maxLength: 64 }
+    CallbackToken:
+      name: token
+      in: query
+      required: true
+      description: |
+        `HMAC-SHA256(courier callback key, account id)`, issued in the account's `callback_url`
+        (`getLogisticsSettings`, owner only). Missing, longer than 128 characters or wrong → 401
+        `UNAUTHENTICATED`. The query string never reaches an access log (09 §7.4).
+      schema: { type: string, minLength: 1, maxLength: 128 }
 
   headers:
     X-Request-Id:
@@ -2279,7 +4096,8 @@ components:
       type: object
       description: |
         Cursor meta for every other list (06 §6.2): `{ "data": [...], "meta": CursorMeta }`.
-        `next_cursor` is `null` on the last page. Used by the pending list operations.
+        `next_cursor` is `null` on the last page. Used by the M6 courier lists now and by the
+        pending list operations when they are specified.
       additionalProperties: false
       required: [limit, next_cursor]
       properties:
@@ -3572,6 +5390,843 @@ components:
       properties:
         data: { $ref: '#/components/schemas/Refund' }
 
+    # ---------- M6 courier operations (06 §12.6, §13.8; OD-56, OD-57) ----------
+    CourierProviderCode:
+      type: string
+      description: A courier's code (`logistics_providers.code`, 04a §9.8), for example `ncm`.
+      pattern: '^[a-z][a-z0-9_]{1,31}$'
+      examples: [ncm]
+    CourierAccountOwnerType:
+      type: string
+      description: '`logistics_accounts_owner_check` (04a §9.9). R1 creates only `shop` accounts (decided 2026-11-21).'
+      enum: [platform, shop]
+    CourierAccountStatus:
+      type: string
+      description: '`logistics_accounts_status_check` (04a §9.9).'
+      enum: [pending, active, invalid, suspended, disabled]
+    CourierEnvironment:
+      type: string
+      description: '`logistics_accounts_environment_check` (04a §9.9).'
+      enum: [sandbox, production]
+    FulfillmentMode:
+      type: string
+      description: '`shop_logistics_settings.fulfillment_mode` (04a §9.11). `replaceLogisticsSettings` accepts `manual` and `vendor` in R1; `platform` waits for platform-owned accounts.'
+      enum: [manual, vendor, platform]
+    CourierEventProcessingStatus:
+      type: string
+      description: '`courier_events_processing_check` (04a §9.14).'
+      enum: [pending, looked_up, applied, ignored, held, failed]
+    CurrentPassword:
+      type: string
+      minLength: 1
+      maxLength: 128
+      writeOnly: true
+      description: |
+        The owner's current password (07 §3.6, §3.10). Left out of the idempotency fingerprint,
+        never stored or logged. Wrong → 422 `password_incorrect`.
+    CourierCredentials:
+      type: object
+      description: |
+        The courier's documented credential fields: for NCM a `token` [Verify-external VX-16],
+        printable ASCII without spaces. Stored only encrypted in `credentials_enc`; no response,
+        log line, job payload or audit row carries them (07 TM-32, T-SEC-040).
+      additionalProperties: false
+      required: [token]
+      properties:
+        token:
+          type: string
+          minLength: 8
+          maxLength: 200
+          pattern: '^[\x21-\x7e]+$'
+          writeOnly: true
+    CourierAccountFields:
+      type: object
+      description: |
+        The members of a courier account (`logistics_accounts`, 04a §9.9), never its credentials
+        or their ciphertext (07 TM-32, T-SEC-040). Not used alone: `CourierAccount`,
+        `ShopCourierAccount` and `AdminCourierAccount` close it.
+      required:
+        [
+          id,
+          provider_code,
+          owner_type,
+          name,
+          environment,
+          external_account_ref,
+          status,
+          verified_at,
+          disabled_at,
+          version,
+        ]
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        provider_code: { $ref: '#/components/schemas/CourierProviderCode' }
+        owner_type: { $ref: '#/components/schemas/CourierAccountOwnerType' }
+        name: { type: string, minLength: 2, maxLength: 80 }
+        environment: { $ref: '#/components/schemas/CourierEnvironment' }
+        external_account_ref: { type: [string, 'null'], minLength: 1, maxLength: 100 }
+        status: { $ref: '#/components/schemas/CourierAccountStatus' }
+        verified_at:
+          description: Set by `logistics.verify_account` after a successful test call; kept while the account is re-verified.
+          oneOf:
+            - $ref: '#/components/schemas/Timestamp'
+            - type: 'null'
+        disabled_at:
+          oneOf:
+            - $ref: '#/components/schemas/Timestamp'
+            - type: 'null'
+        version: { type: integer, minimum: 1 }
+    CourierAccount:
+      description: A courier account, as the account writes return it.
+      allOf:
+        - $ref: '#/components/schemas/CourierAccountFields'
+      unevaluatedProperties: false
+    CourierAccountResponse:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/CourierAccount' }
+    ShopCourierAccount:
+      description: A courier account in `getLogisticsSettings`, with the owner's callback URL.
+      allOf:
+        - $ref: '#/components/schemas/CourierAccountFields'
+        - type: object
+          required: [callback_url]
+          properties:
+            callback_url:
+              type: [string, 'null']
+              format: uri
+              description: |
+                The URL the owner registers with the courier (06 §12.6), with the account's
+                callback token in `token`. `null` for every member but the owner, and when no
+                callback key is configured.
+      unevaluatedProperties: false
+    AdminCourierAccount:
+      description: A courier account in `adminListLogisticsAccounts`, with its owning shop and allowed shops.
+      allOf:
+        - $ref: '#/components/schemas/CourierAccountFields'
+        - type: object
+          required: [shop_id, shops]
+          properties:
+            shop_id:
+              description: The owning shop; `null` for a platform-owned account.
+              oneOf:
+                - $ref: '#/components/schemas/Uuid'
+                - type: 'null'
+            shops:
+              type: array
+              description: The account's `logistics_account_shops` rows (04a §9.10).
+              items:
+                type: object
+                additionalProperties: false
+                required: [shop_id, is_active]
+                properties:
+                  shop_id: { $ref: '#/components/schemas/Uuid' }
+                  is_active: { type: boolean }
+      unevaluatedProperties: false
+    AdminCourierAccountList:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/AdminCourierAccount' }
+        meta: { $ref: '#/components/schemas/CursorMeta' }
+    CreateShopCourierAccountRequest:
+      type: object
+      additionalProperties: false
+      required: [provider_code, name, environment, credentials, password]
+      properties:
+        provider_code: { $ref: '#/components/schemas/CourierProviderCode' }
+        name:
+          type: string
+          minLength: 2
+          maxLength: 80
+          description: The shop's own label for the account, trimmed.
+        environment: { $ref: '#/components/schemas/CourierEnvironment' }
+        external_account_ref:
+          type: [string, 'null']
+          minLength: 1
+          maxLength: 100
+          description: The courier's own ID of the account, if it has one; unique per courier and environment.
+        credentials: { $ref: '#/components/schemas/CourierCredentials' }
+        password: { $ref: '#/components/schemas/CurrentPassword' }
+    RekeyShopCourierAccountRequest:
+      type: object
+      additionalProperties: false
+      required: [credentials, password]
+      properties:
+        credentials: { $ref: '#/components/schemas/CourierCredentials' }
+        password: { $ref: '#/components/schemas/CurrentPassword' }
+    DisableShopCourierAccountRequest:
+      type: object
+      additionalProperties: false
+      required: [password]
+      properties:
+        password: { $ref: '#/components/schemas/CurrentPassword' }
+    SetLogisticsAccountStatusRequest:
+      type: object
+      additionalProperties: false
+      required: [status, reason]
+      properties:
+        status:
+          type: string
+          enum: [suspended, pending, disabled]
+          description: '`pending` resumes a `suspended` account, which is verified again.'
+        reason:
+          { type: string, minLength: 3, maxLength: 500, description: Stored in the audit row. }
+    LogisticsSettings:
+      type: object
+      description: |
+        A shop's courier settings (`shop_logistics_settings`, 04a §9.11). A shop with no row is
+        `manual`, enabled, with `version` 0; the first save sends `If-Match: "0"`.
+      additionalProperties: false
+      required: [fulfillment_mode, default_account_id, is_enabled, version]
+      properties:
+        fulfillment_mode: { $ref: '#/components/schemas/FulfillmentMode' }
+        default_account_id:
+          description: The account bookings default to; `null` in `manual` mode.
+          oneOf:
+            - $ref: '#/components/schemas/Uuid'
+            - type: 'null'
+        is_enabled:
+          type: boolean
+          description: The platform switch for the shop's courier bookings (`adminSetShopLogisticsEnabled`).
+        version: { type: integer, minimum: 0 }
+    LogisticsSettingsResponse:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/LogisticsSettings' }
+    ReplaceLogisticsSettingsRequest:
+      type: object
+      description: |
+        `vendor` requires `default_account_id`, a usable shop-owned account; `manual` takes none
+        (`null` or left out); `platform` is 422 `not_offered` in R1 (decided 2026-11-21).
+      additionalProperties: false
+      required: [fulfillment_mode]
+      properties:
+        fulfillment_mode: { $ref: '#/components/schemas/FulfillmentMode' }
+        default_account_id:
+          oneOf:
+            - $ref: '#/components/schemas/Uuid'
+            - type: 'null'
+    SetShopLogisticsEnabledRequest:
+      type: object
+      additionalProperties: false
+      required: [is_enabled, reason]
+      properties:
+        is_enabled: { type: boolean }
+        reason:
+          { type: string, minLength: 3, maxLength: 500, description: Stored in the audit row. }
+    PickupAddress:
+      type: object
+      description: |
+        A pickup address of the shop (`shop_addresses` with `purpose = 'pickup'`, 04a §6.6) for
+        the shop's own members: `contact_phone`, `area_tole` and `street_landmark` are decrypted
+        in full by the one allowlisted transformer (07 §5.5, T-SEC-034). `postal_code` is the
+        generated local level code followed by the two-digit ward.
+      additionalProperties: false
+      required:
+        [
+          id,
+          label,
+          contact_name,
+          contact_phone,
+          province_code,
+          district_code,
+          local_level_code,
+          ward_no,
+          area_tole,
+          street_landmark,
+          postal_code,
+          is_default,
+        ]
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        label: { type: [string, 'null'], minLength: 1, maxLength: 30 }
+        contact_name: { type: string, minLength: 2, maxLength: 100 }
+        contact_phone: { type: string, maxLength: 20, description: As entered (see the request). }
+        province_code: { type: string, pattern: '^[1-7]$' }
+        district_code: { type: string, pattern: '^[1-7][0-9]{2}$' }
+        local_level_code: { type: string, pattern: '^[1-7][0-9]{4}$' }
+        ward_no: { type: integer, minimum: 1, maximum: 40 }
+        area_tole: { type: string, minLength: 2, maxLength: 200 }
+        street_landmark: { type: [string, 'null'], minLength: 1, maxLength: 200 }
+        postal_code: { type: string, pattern: '^[1-7][0-9]{6}$' }
+        is_default: { type: boolean }
+    PickupAddressResponse:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/PickupAddress' }
+    CreatePickupAddressRequest:
+      type: object
+      description: |
+        Text members are trimmed before their length is checked. The province, district and
+        local level must form one chain, and `ward_no` must be within the local level's
+        `ward_count` (422 `location_mismatch`, `ward_out_of_range`; 04a §6.6).
+      additionalProperties: false
+      required:
+        [
+          contact_name,
+          contact_phone,
+          province_code,
+          district_code,
+          local_level_code,
+          ward_no,
+          area_tole,
+        ]
+      properties:
+        label: { type: [string, 'null'], minLength: 1, maxLength: 30 }
+        contact_name: { type: string, minLength: 2, maxLength: 100 }
+        contact_phone:
+          type: string
+          pattern: '^(9[678][0-9]{8}|0[0-9]{6,9})$'
+          description: A mobile number (10 digits starting 96, 97 or 98) or a landline with its leading 0.
+        province_code: { type: string, pattern: '^[1-7]$' }
+        district_code: { type: string, pattern: '^[1-7][0-9]{2}$' }
+        local_level_code: { type: string, pattern: '^[1-7][0-9]{4}$' }
+        ward_no: { type: integer, minimum: 1, maximum: 40 }
+        area_tole: { type: string, minLength: 2, maxLength: 200 }
+        street_landmark: { type: [string, 'null'], minLength: 1, maxLength: 200 }
+        is_default:
+          type: boolean
+          description: "`true` makes it the default; the shop's first live pickup address is the default anyway."
+    UpdatePickupAddressRequest:
+      type: object
+      description: |
+        Either the whole address (all seven of `contact_name`, `contact_phone`,
+        `province_code`, `district_code`, `local_level_code`, `ward_no` and `area_tole`, with
+        `label` and `street_landmark`, which become `null` when left out) or none of it; a
+        partial set, `label` or `street_landmark` alone included, is 422 with a `required` item
+        for each of the seven left out. `is_default: true`
+        makes the address the default; `false` on the default is 422 `default_required`.
+      additionalProperties: false
+      properties:
+        label: { type: [string, 'null'], minLength: 1, maxLength: 30 }
+        contact_name: { type: string, minLength: 2, maxLength: 100 }
+        contact_phone: { type: string, pattern: '^(9[678][0-9]{8}|0[0-9]{6,9})$' }
+        province_code: { type: string, pattern: '^[1-7]$' }
+        district_code: { type: string, pattern: '^[1-7][0-9]{2}$' }
+        local_level_code: { type: string, pattern: '^[1-7][0-9]{4}$' }
+        ward_no: { type: integer, minimum: 1, maximum: 40 }
+        area_tole: { type: string, minLength: 2, maxLength: 200 }
+        street_landmark: { type: [string, 'null'], minLength: 1, maxLength: 200 }
+        is_default: { type: boolean }
+    ShopLogistics:
+      type: object
+      additionalProperties: false
+      required: [settings, accounts, pickup_addresses]
+      properties:
+        settings: { $ref: '#/components/schemas/LogisticsSettings' }
+        accounts:
+          type: array
+          description: The accounts with an active `logistics_account_shops` row for the shop, oldest first; a `disabled` account has none, so it is not listed.
+          items: { $ref: '#/components/schemas/ShopCourierAccount' }
+        pickup_addresses:
+          type: array
+          description: The shop's live (not archived) pickup addresses.
+          items: { $ref: '#/components/schemas/PickupAddress' }
+    ShopLogisticsResponse:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/ShopLogistics' }
+    LogisticsBranch:
+      type: object
+      description: A courier branch and its district mapping (`logistics_branches`, 04a §9.12).
+      additionalProperties: false
+      required:
+        [
+          id,
+          provider_code,
+          name,
+          external_branch_id,
+          code,
+          courier_district,
+          district_code,
+          covered_areas,
+          phone,
+          is_active,
+          synced_at,
+        ]
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        provider_code: { $ref: '#/components/schemas/CourierProviderCode' }
+        name: { type: string, minLength: 2, maxLength: 80 }
+        external_branch_id: { type: [string, 'null'], minLength: 1, maxLength: 40 }
+        code: { type: [string, 'null'], minLength: 1, maxLength: 20 }
+        courier_district:
+          type: [string, 'null']
+          minLength: 1
+          maxLength: 80
+          description: The district name as the courier writes it.
+        district_code:
+          type: [string, 'null']
+          pattern: '^[1-7][0-9]{2}$'
+          description: Our district (`districts.code`), mapped by staff; `null` until mapped.
+        covered_areas: { type: [string, 'null'], maxLength: 2000 }
+        phone: { type: [string, 'null'], minLength: 3, maxLength: 40 }
+        is_active:
+          type: boolean
+          description: "`false` once the branch is missing from the courier's list (T-SHOP-114)."
+        synced_at: { $ref: '#/components/schemas/Timestamp' }
+    LogisticsBranchResponse:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/LogisticsBranch' }
+    LogisticsBranchList:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/LogisticsBranch' }
+        meta: { $ref: '#/components/schemas/CursorMeta' }
+    SyncLogisticsBranchesRequest:
+      type: object
+      additionalProperties: false
+      required: [provider_code]
+      properties:
+        provider_code: { $ref: '#/components/schemas/CourierProviderCode' }
+    UpdateLogisticsBranchRequest:
+      type: object
+      additionalProperties: false
+      required: [district_code]
+      properties:
+        district_code:
+          type: [string, 'null']
+          pattern: '^[1-7][0-9]{2}$'
+          description: A district code, or `null` to clear the mapping.
+    QueuedResponse:
+      type: object
+      description: The 202 of an operation that only queues a job.
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required: [queued]
+          properties:
+            queued: { const: true }
+    CourierShipmentFields:
+      type: object
+      description: |
+        The members of a shop order's shipment on the courier path (`shipments`, 04a §11.5; 05
+        §6.3). `merchant_reference` is the reference sent to the courier, `DN-XXXXXXX-n-Sm`
+        (`shipments_merchant_reference_check`); `courier_reference` is the same without hyphens,
+        as NCM keeps it (OD-61), so staff can search the courier's portal after an unknown
+        outcome. The booking members are `null` until a booking is requested. Not used alone:
+        `CourierShipment` and `CourierBookingQueueItem` close it.
+      required:
+        [
+          id,
+          shop_order_number,
+          status,
+          logistics_account_id,
+          pickup_address_id,
+          merchant_reference,
+          courier_reference,
+          external_shipment_id,
+          service_code,
+          origin_branch_id,
+          destination_branch_id,
+          cancel_requested_at,
+          cancel_requested_by,
+          cod_amount,
+          courier_name,
+          tracking_number,
+          tracking_url,
+          booked_at,
+          shipped_at,
+          delivered_at,
+          cancelled_at,
+          return_window_ends_at,
+          attempt_count,
+          version,
+        ]
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        shop_order_number: { $ref: '#/components/schemas/ShopOrderNumber' }
+        status: { $ref: '#/components/schemas/ShipmentStatus' }
+        logistics_account_id:
+          oneOf:
+            - $ref: '#/components/schemas/Uuid'
+            - type: 'null'
+        pickup_address_id:
+          oneOf:
+            - $ref: '#/components/schemas/Uuid'
+            - type: 'null'
+        merchant_reference:
+          type: [string, 'null']
+          pattern: '^DN-[0-9A-HJKMNP-TV-Z]{7}-[1-9][0-9]?-S[1-9][0-9]?$'
+        courier_reference:
+          type: [string, 'null']
+          pattern: '^DN[0-9A-HJKMNP-TV-Z]{7}[1-9][0-9]?S[1-9][0-9]?$'
+        external_shipment_id:
+          type: [string, 'null']
+          minLength: 1
+          maxLength: 100
+          description: The courier's parcel ID, once booked.
+        service_code: { type: [string, 'null'], minLength: 1, maxLength: 40 }
+        origin_branch_id:
+          oneOf:
+            - $ref: '#/components/schemas/Uuid'
+            - type: 'null'
+        destination_branch_id:
+          oneOf:
+            - $ref: '#/components/schemas/Uuid'
+            - type: 'null'
+        cancel_requested_at:
+          oneOf:
+            - $ref: '#/components/schemas/Timestamp'
+            - type: 'null'
+        cancel_requested_by:
+          description: Who asked to cancel a `booked` parcel (`shipments_cancel_request_check`).
+          oneOf:
+            - type: string
+              enum: [vendor, shop_order]
+            - type: 'null'
+        cod_amount:
+          description: The cash the courier collects, fixed at booking; `null` before.
+          oneOf:
+            - $ref: '#/components/schemas/Money'
+            - type: 'null'
+        courier_name: { type: [string, 'null'], maxLength: 80 }
+        tracking_number: { type: [string, 'null'], maxLength: 64 }
+        tracking_url: { type: [string, 'null'], format: uri, pattern: '^https://', maxLength: 500 }
+        booked_at:
+          oneOf:
+            - $ref: '#/components/schemas/Timestamp'
+            - type: 'null'
+        shipped_at:
+          oneOf:
+            - $ref: '#/components/schemas/Timestamp'
+            - type: 'null'
+        delivered_at:
+          oneOf:
+            - $ref: '#/components/schemas/Timestamp'
+            - type: 'null'
+        cancelled_at:
+          oneOf:
+            - $ref: '#/components/schemas/Timestamp'
+            - type: 'null'
+        return_window_ends_at:
+          oneOf:
+            - $ref: '#/components/schemas/Timestamp'
+            - type: 'null'
+        attempt_count: { type: integer, minimum: 0, maximum: 3 }
+        version: { type: integer, minimum: 1 }
+    CourierShipment:
+      description: A shipment on the courier path, as the booking operations return it.
+      allOf:
+        - $ref: '#/components/schemas/CourierShipmentFields'
+      unevaluatedProperties: false
+    CourierShipmentResponse:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/CourierShipment' }
+    BookingAttempt:
+      type: object
+      description: |
+        One courier call that creates, cancels or looks up a booking
+        (`shipment_booking_attempts`, 04a §9.13). No request body is stored.
+      additionalProperties: false
+      required:
+        [
+          id,
+          kind,
+          attempt_no,
+          outcome,
+          http_status,
+          error_code,
+          error_fields,
+          external_shipment_id,
+          started_at,
+          finished_at,
+        ]
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        kind: { type: string, enum: [book, cancel, reference_lookup] }
+        attempt_no: { type: integer, minimum: 1 }
+        outcome: { type: string, enum: [pending, succeeded, refused, unknown] }
+        http_status: { type: [integer, 'null'], minimum: 100, maximum: 599 }
+        error_code: { type: [string, 'null'], pattern: '^[a-z][a-z0-9_]{1,39}$' }
+        error_fields:
+          type: array
+          description: The courier's field names of a refusal; `[]` when there are none.
+          maxItems: 10
+          items: { type: string, pattern: '^[A-Za-z0-9_]{1,40}$' }
+        external_shipment_id: { type: [string, 'null'], minLength: 1, maxLength: 100 }
+        started_at: { $ref: '#/components/schemas/Timestamp' }
+        finished_at:
+          oneOf:
+            - $ref: '#/components/schemas/Timestamp'
+            - type: 'null'
+    CourierBookingQueueItem:
+      description: A shipment in the staff queue with its booking attempts, oldest first.
+      allOf:
+        - $ref: '#/components/schemas/CourierShipmentFields'
+        - type: object
+          required: [attempts]
+          properties:
+            attempts:
+              type: array
+              items: { $ref: '#/components/schemas/BookingAttempt' }
+      unevaluatedProperties: false
+    CourierBookingQueue:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/CourierBookingQueueItem' }
+        meta: { $ref: '#/components/schemas/CursorMeta' }
+    CourierBookingOptions:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          shipment,
+          settings,
+          accounts,
+          account_id,
+          pickup_addresses,
+          services,
+          assigned_branches_available,
+          origin_branches,
+          destination_branches,
+        ]
+      properties:
+        shipment:
+          description: The shop order's live (not cancelled) shipment.
+          oneOf:
+            - $ref: '#/components/schemas/CourierShipment'
+            - type: 'null'
+        settings: { $ref: '#/components/schemas/LogisticsSettings' }
+        accounts:
+          type: array
+          description: The `active` shop-owned accounts with an active row for the shop.
+          items: { $ref: '#/components/schemas/CourierAccount' }
+        account_id:
+          description: The account the services and branches belong to; `null` when the shop has no usable account.
+          oneOf:
+            - $ref: '#/components/schemas/Uuid'
+            - type: 'null'
+        pickup_addresses:
+          type: array
+          items: { $ref: '#/components/schemas/PickupAddress' }
+        services:
+          type: array
+          description: The chosen courier's service codes, for NCM its `delivery_type` values [Verify-external VX-16].
+          items: { type: string, minLength: 1, maxLength: 40 }
+        assigned_branches_available:
+          type: boolean
+          description: '`false` when the courier did not answer the assigned-branch read.'
+        origin_branches:
+          type: array
+          description: The courier's active branches assigned to the account; empty for a courier that does not book by branch.
+          items: { $ref: '#/components/schemas/LogisticsBranch' }
+        destination_branches:
+          type: array
+          description: The courier's active branches mapped to the order's delivery district.
+          items: { $ref: '#/components/schemas/LogisticsBranch' }
+    CourierBookingOptionsResponse:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/CourierBookingOptions' }
+    BookCourierShipmentRequest:
+      type: object
+      description: |
+        The shop, the COD amount, `merchant_reference` and `courier_name` are server-owned
+        (06 §3.5, T-SEC-003). The branch IDs are required for a courier that books by branch
+        and refused for any other.
+      additionalProperties: false
+      required: [account_id, pickup_address_id, service_code]
+      properties:
+        account_id: { $ref: '#/components/schemas/Uuid' }
+        pickup_address_id: { $ref: '#/components/schemas/Uuid' }
+        service_code: { type: string, minLength: 1, maxLength: 40 }
+        origin_branch_id:
+          oneOf:
+            - $ref: '#/components/schemas/Uuid'
+            - type: 'null'
+        destination_branch_id:
+          oneOf:
+            - $ref: '#/components/schemas/Uuid'
+            - type: 'null'
+    CancelCourierBookingRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        reason:
+          type: [string, 'null']
+          minLength: 1
+          maxLength: 200
+          description: Stored in the audit row.
+    ResolveCourierBookingRequest:
+      type: object
+      additionalProperties: false
+      required: [outcome, note]
+      properties:
+        outcome: { type: string, enum: [booked, booking_failed, cancelled, cancel_declined] }
+        external_shipment_id:
+          type: [string, 'null']
+          minLength: 1
+          maxLength: 100
+          description: The courier's parcel ID; required with `booked`.
+        note: { type: string, minLength: 3, maxLength: 500, description: Stored in the audit row. }
+    CourierEvent:
+      type: object
+      description: |
+        One status reading from a courier (`courier_events`, 04a §9.14): a callback, a poll
+        answer or a history reading. `payload` holds only the courier's documented status
+        fields.
+      additionalProperties: false
+      required:
+        [
+          id,
+          logistics_account_id,
+          source,
+          external_shipment_id,
+          shipment_id,
+          raw_event,
+          raw_status,
+          mapped_status,
+          occurred_at,
+          payload,
+          received_at,
+          processed_at,
+          processing_status,
+          hold_reason,
+        ]
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        logistics_account_id: { $ref: '#/components/schemas/Uuid' }
+        source: { type: string, enum: [callback, poll, history] }
+        external_shipment_id: { type: string, minLength: 1, maxLength: 100 }
+        shipment_id:
+          oneOf:
+            - $ref: '#/components/schemas/Uuid'
+            - type: 'null'
+        raw_event: { type: [string, 'null'], minLength: 1, maxLength: 100 }
+        raw_status: { type: string, minLength: 1, maxLength: 100 }
+        mapped_status:
+          description: The shipment status the reading maps to (05 §6.3); `null` until mapped, or when the status is unknown.
+          oneOf:
+            - type: string
+              enum:
+                [
+                  booked,
+                  shipped,
+                  out_for_delivery,
+                  delivered,
+                  delivery_failed,
+                  returning,
+                  cancelled,
+                ]
+            - type: 'null'
+        occurred_at:
+          oneOf:
+            - $ref: '#/components/schemas/Timestamp'
+            - type: 'null'
+        payload: { type: object, additionalProperties: true }
+        received_at: { $ref: '#/components/schemas/Timestamp' }
+        processed_at:
+          oneOf:
+            - $ref: '#/components/schemas/Timestamp'
+            - type: 'null'
+        processing_status: { $ref: '#/components/schemas/CourierEventProcessingStatus' }
+        hold_reason:
+          oneOf:
+            - type: string
+              enum:
+                [
+                  not_allowed,
+                  terminal_shop_order,
+                  cod_collected,
+                  unmapped_status,
+                  return_check_failed,
+                ]
+            - type: 'null'
+    CourierEventResponse:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/CourierEvent' }
+    CourierEventList:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/CourierEvent' }
+        meta: { $ref: '#/components/schemas/CursorMeta' }
+    ResolveCourierEventRequest:
+      type: object
+      additionalProperties: false
+      required: [processing_status, note]
+      properties:
+        processing_status: { type: string, enum: [applied, ignored] }
+        note: { type: string, minLength: 3, maxLength: 500, description: Stored in the audit row. }
+    RecordOrderVerificationRequest:
+      type: object
+      additionalProperties: false
+      required: [verification_status, verification_method]
+      properties:
+        verification_status: { type: string, enum: [verified, review_required, failed] }
+        verification_method:
+          type: string
+          enum: [phone_call, manual]
+          description: '`sms_otp` is R2 (A-55).'
+        verification_notes: { type: [string, 'null'], minLength: 1, maxLength: 500 }
+    OrderVerification:
+      type: object
+      description: The verification columns of an order (`orders`, 04a §11.1; OD-57).
+      additionalProperties: false
+      required:
+        [number, status, verification_status, verification_method, verified_at, verification_notes]
+      properties:
+        number: { $ref: '#/components/schemas/OrderNumber' }
+        status: { $ref: '#/components/schemas/OrderStatus' }
+        verification_status:
+          type: string
+          description: '`orders_verification_check` (04a §11.1).'
+          enum: [pending, verified, review_required, failed]
+        verification_method:
+          oneOf:
+            - type: string
+              enum: [phone_call, sms_otp, manual]
+            - type: 'null'
+        verified_at:
+          oneOf:
+            - $ref: '#/components/schemas/Timestamp'
+            - type: 'null'
+        verification_notes: { type: [string, 'null'], maxLength: 500 }
+    OrderVerificationResponse:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/OrderVerification' }
+
 # ---------------------------------------------------------------------------------------------
 # Consistency notes for editor
 # ---------------------------------------------------------------------------------------------
@@ -3955,3 +6610,44 @@ components:
 #     the vendor events, and its description names the courier events that only the adapter
 #     writes. The courier booking, courier-account and verification operations are added to
 #     `paths` or `x-pending-operations` when M6 designs them.
+#
+# Added with the M6 courier routes (2026-11-21):
+# 44. The 24 M6 courier operations that have a route move from `x-pending-operations` to
+#     `paths`, written from the code (validators, transformers, controllers) and checked against
+#     the 06 §13.8 rows and §12.6; each is `x-proposed` and R1·M6. The four platform-owned
+#     account operations (`adminCreateLogisticsAccount`, `adminRekeyLogisticsAccount`,
+#     `adminAllowShopOnLogisticsAccount`, `adminRemoveShopFromLogisticsAccount`) stay pending:
+#     R1 offers no platform-owned courier accounts (decided 2026-11-21). New components: the
+#     parameters `AccountId`, `AddressId`, `BranchId`, `CourierEventId`, `ShopId`,
+#     `ProviderCode`, `CallbackAccountId` and `CallbackToken`; the tag `Courier callbacks`; and
+#     the courier schemas after `RefundResponse`. `CourierAccount`, `ShopCourierAccount`,
+#     `AdminCourierAccount`, `CourierShipment` and `CourierBookingQueueItem` extend a shared
+#     `*Fields` schema with `allOf` and close it with `unevaluatedProperties: false` (JSON
+#     Schema 2020-12), so each still rejects an unknown member. The four admin lists use the
+#     shared `Cursor`, `Limit` and `CursorMeta` and the closed parameter lists of 06 §6.2 and
+#     §6.3 (400 `INVALID_QUERY_PARAMETER`), so the `Cursor` and `CursorMeta` descriptions no
+#     longer say they serve only pending operations. `xsrfHeader` names
+#     `receiveCourierCallback` as the second CSRF-exempt route.
+#     Where the code departed from 06, 06 §13.8 and §12.6 were updated in the same PR to match
+#     the code, which this file follows: `getLogisticsSettings` also returns each account's
+#     `external_account_ref`, `disabled_at` and the owner-only `callback_url`, sends `ETag`,
+#     and lists no `disabled` account; `replaceLogisticsSettings` refuses `platform` (422
+#     `not_offered`), requires `default_account_id` for `vendor` and refuses it for `manual`;
+#     `updatePickupAddress` takes the whole address or none of it, an edit replaces `label`
+#     and `street_landmark`, and either of those sent alone is 422; `rekeyShopCourierAccount`
+#     keeps a `suspended` account `suspended`, with no verification job;
+#     `getCourierBookingOptions` also returns `shipment`, `settings` and `account_id`, and
+#     offers only `active` shop-owned accounts; `bookCourierShipment` books only in `vendor`
+#     mode and also needs the shop order `accepted` and the COD payment
+#     `awaiting_collection`, answering 200; `cancelCourierBooking` and
+#     `adminResolveCourierBooking` (`cancelled`) return the new `pending` shipment, a courier
+#     with `cancellation` is 409 until its job exists, and a `shop_order` cancellation request
+#     is 409 until `adminCancelShopOrder`; `adminListCourierBookings` gives the account as
+#     `logistics_account_id` only; `adminListLogisticsBranches` defaults `provider_code` to
+#     `ncm`; `adminSetShopLogisticsEnabled` and `adminRecordOrderVerification` answer 404 for
+#     an unknown shop or order. `receiveCourierCallback` (§12.6): a body that is not JSON is
+#     answered 200 and ignored as unreadable (a multipart body is 422 from the router's body
+#     check), and the router's body parser and 256 KB check run before the route's
+#     `webhook_ip` limiter and 64 KB cap, which still run before the token check.
+#     Redocly CLI 2.77.0 with `redocly.yaml`: 0 errors, 0 warnings; every new example
+#     validates against its schema.
