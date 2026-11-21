@@ -8,7 +8,9 @@ Status: Draft v1 (2026-11-05)
 - **Date:** 2026-11-05
 - **Deciders:** product owner (OD-56), lead developer
 - **Supersedes / superseded by:** — / —. Reverses the R1 part of Q5 ("no courier API at MVP") and the "Courier API integrations" non-goal of [01 §5.4](../01-product-requirements.md#54-explicit-non-goals).
-- **Related open items:** OD-58 (COD on platform-owned accounts), VX-16 (NCM API), VX-17 (pickups from many vendors on one account), VX-18 (COD remittance), OD-07 and OD-30 (who bears courier costs and lost parcels); OD-55 was decided on 2026-11-07 (no import)
+- **Related open items:** OD-58 (COD on platform-owned accounts; decided for R1 on 2026-11-21: no platform-owned account in R1), VX-16 (NCM API), VX-17 (pickups from many vendors on one account) and VX-18 (COD remittance), both for the release that offers platform-owned accounts, OD-07 and OD-30 (who bears courier costs and lost parcels); OD-55 was decided on 2026-11-07 (no import)
+
+Edited 2026-11-21: OD-58 was decided for R1 as option (c), and R1 goes further: it offers no platform-owned account ([risks §2.3](../risks-and-open-decisions.md#23-decision-log)). Shops book on accounts they own (`vendor` mode) or ship their parcels themselves (`manual`). `replaceLogisticsSettings` refuses `platform`, and the admin operations that create, re-key or share a platform-owned account (`adminCreateLogisticsAccount`, `adminRekeyLogisticsAccount`, `adminAllowShopOnLogisticsAccount`, `adminRemoveShopFromLogisticsAccount`) wait for that release. Decisions 1 to 5, 7 and 8 stand as written: the schema keeps both ownership models, so the release that offers platform-owned accounts adds operations, not tables. Decision 8's safe default is now the R1 rule. OD-61 (the reference sent as NCM's `vref_id`) was decided the same day as an adapter detail, without a change here.
 
 Edited 2026-11-07: OD-55 was decided with no import ([risks §2.3](../risks-and-open-decisions.md#23-decision-log)). The v1 store was never hosted and holds only seed data, so no v1 data moves to the baseline. The decision is otherwise unchanged.
 
