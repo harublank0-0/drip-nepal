@@ -3,7 +3,7 @@ import db from '@adonisjs/lucid/services/db'
 import { DomainError, InvalidStateTransition } from '#exceptions/domain_error'
 import { recordAudit } from '#modules/audit/actions/record_audit'
 import type { Actor } from '#modules/platform/actor'
-import { encryptField } from '#modules/platform/crypto/field_crypto'
+import { encryptField } from '#modules/platform/crypto/field_encrypter'
 import { withTx } from '#modules/platform/tx'
 
 /*

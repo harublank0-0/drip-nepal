@@ -1,7 +1,7 @@
 import { randomBytes, randomUUID } from 'node:crypto'
 import db from '@adonisjs/lucid/services/db'
 import hash from '@adonisjs/core/services/hash'
-import { encryptField } from '#modules/platform/crypto/field_crypto'
+import { encryptField } from '#modules/platform/crypto/field_encrypter'
 import { NCM_CAPABILITIES, NcmCourierProvider } from '#modules/logistics/providers/ncm'
 import { swapCourierProvider } from '#modules/logistics/providers/registry'
 import { clearAssignedBranchCache } from '#modules/logistics/actions/courier_calls'

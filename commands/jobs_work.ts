@@ -1,7 +1,7 @@
 import { BaseCommand } from '@adonisjs/core/ace'
 import type { CommandOptions } from '@adonisjs/core/types/ace'
 import type { PostgreConfig } from '@adonisjs/lucid/types/database'
-import { JOB_HANDLERS, JOB_SCHEDULES, type JobAttempt } from '../app/job_handlers.js'
+import { JOB_HANDLERS, JOB_SCHEDULES, type JobAttempt } from '#start/jobs'
 import { createJobBoss, jobDatabaseOf, setJobBoss, type QueueName } from '#modules/platform/jobs'
 
 /*
