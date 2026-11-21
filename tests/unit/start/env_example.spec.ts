@@ -90,14 +90,15 @@ test.group('T-ARCH-024 env key validators', () => {
   test('every key committed in .env.example and .env.test is on the public list', async ({
     assert,
   }) => {
-    const KEY_NAMES = /^(APP_KEY|DATA_ENCRYPTION_KEYS|BLIND_INDEX_KEY|HMAC_KEY_\w+)=(.+)$/
+    const KEY_NAMES =
+      /^(APP_KEY|DATA_ENCRYPTION_KEYS|COURIER_CALLBACK_KEYS|BLIND_INDEX_KEY|HMAC_KEY_\w+)=(.+)$/
     const values: string[] = []
     for (const file of ['.env.example', '.env.test']) {
       const text = await readFile(join(process.cwd(), file), 'utf8')
       for (const line of text.split('\n')) {
         const match = KEY_NAMES.exec(line.trim())
         if (!match) continue
-        if (match[1] === 'DATA_ENCRYPTION_KEYS') {
+        if (match[1] === 'DATA_ENCRYPTION_KEYS' || match[1] === 'COURIER_CALLBACK_KEYS') {
           values.push(...match[2].split(',').map((entry) => entry.split(':')[1]))
         } else values.push(match[2])
       }

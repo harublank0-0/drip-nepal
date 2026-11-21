@@ -137,6 +137,9 @@ export type ApplicationQueueName = Exclude<QueueName, `t_${string}`>
 // `satisfies`: a queue declared in `JobPayloads` but missing here fails `pnpm typecheck`.
 export const JOB_QUEUES = {
   'notifications.dispatch': { ...QUEUE_DEFAULTS, retryLimit: 5, ...TOKEN_RETENTION },
+  // M6 courier queues (docs/03 §9 rows added with them, 2026-11-21).
+  'logistics.verify_account': { ...QUEUE_DEFAULTS, retryLimit: 5 },
+  'logistics.sync_branches': { ...QUEUE_DEFAULTS, retryLimit: 3 },
 } satisfies Record<ApplicationQueueName, QueueSettings>
 
 export const deadLetterQueue = (queue: string) => `dlq.${queue}`

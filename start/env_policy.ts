@@ -29,6 +29,9 @@ export type EnvPolicyValues = {
   DATA_ENCRYPTION_KEY_IDS: string[]
   DATA_ENCRYPTION_ACTIVE_KEY_ID: string
   SENTRY_DSN?: string
+  COURIER_CALLBACK_KEY_IDS?: string[]
+  COURIER_CALLBACK_ACTIVE_KEY_ID?: string
+  COURIER_URLS?: Record<string, string | undefined>
   // Base64 of every key that must differ from the others in staging and prod.
   KEYS: Record<string, string | undefined>
 }
@@ -52,6 +55,8 @@ export const PUBLIC_KEY_SHA256 = new Set([
   '167f93adb736fe17f5a33222aea419df2cb34529e3273b971f6a168cfcbcdbcd',
   '7ff8c706a076eb4b7ce4cddc18ccad3f3edd1a58e564a44860c5caab9600a3de',
   '9295bcf965636ef565cfafb190eefb3fbfb29907dab3ee5a15ae4424ea75dd0b',
+  'f7695ff1d654c181b94c13a302413705866eb776616d4ce5101e57b520a9f357',
+  '69752d06e87c36093bdbb6abdfd6f70612074fe0f3c3c04093bbeece9af4af3b',
 ])
 
 const sha256 = (value: string) => createHash('sha256').update(value).digest('hex')
@@ -80,6 +85,24 @@ export function environmentPolicyViolations(values: EnvPolicyValues): string[] {
 
   if (!values.DATA_ENCRYPTION_KEY_IDS.includes(values.DATA_ENCRYPTION_ACTIVE_KEY_ID)) {
     violations.push('DATA_ENCRYPTION_ACTIVE_KEY_ID is not an ID in DATA_ENCRYPTION_KEYS')
+  }
+
+  // Courier callbacks (docs/04a §9.14): a ring needs its active key, and production needs both.
+  const callbackIds = values.COURIER_CALLBACK_KEY_IDS ?? []
+  if (callbackIds.length > 0 || values.COURIER_CALLBACK_ACTIVE_KEY_ID) {
+    if (
+      !values.COURIER_CALLBACK_ACTIVE_KEY_ID ||
+      !callbackIds.includes(values.COURIER_CALLBACK_ACTIVE_KEY_ID)
+    ) {
+      violations.push('COURIER_CALLBACK_ACTIVE_KEY_ID is not an ID in COURIER_CALLBACK_KEYS')
+    }
+  } else if (values.APP_ENV === 'production') {
+    violations.push(
+      'COURIER_CALLBACK_KEYS and COURIER_CALLBACK_ACTIVE_KEY_ID are required in production'
+    )
+  }
+  for (const [name, url] of Object.entries(values.COURIER_URLS ?? {})) {
+    if (url && !url.startsWith('https://')) violations.push(`${name} must use https://`)
   }
 
   if (values.SENTRY_DSN && !values.KEYS.HMAC_KEY_TELEMETRY) {
