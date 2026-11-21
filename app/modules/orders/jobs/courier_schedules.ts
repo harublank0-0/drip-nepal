@@ -94,9 +94,12 @@ export async function pollCourierStatuses(requestId: string | null) {
   return { moving: moving.length, triggered }
 }
 
-export async function sweepCourierBookings(requestId: string | null) {
+export async function sweepCourierBookings(
+  requestId: string | null,
+  staleSeconds = STALE_CLAIM_SECONDS
+) {
   return jobTx(async (trx) => {
-    const stale = await markStaleClaimsUnknown(trx, STALE_CLAIM_SECONDS)
+    const stale = await markStaleClaimsUnknown(trx, staleSeconds)
     let unresolved = 0
     for (const claim of stale.filter((row) => row.kind === 'book')) {
       const moved = await trx

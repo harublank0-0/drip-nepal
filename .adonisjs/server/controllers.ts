@@ -3,4 +3,16 @@
  * DO NOT EDIT manually
  */
 
-export const controllers = {}
+export const controllers = {
+  admin: {
+    CourierBookings: () => import('#controllers/admin/courier_bookings_controller'),
+    Logistics: () => import('#controllers/admin/logistics_controller'),
+  },
+  seller: {
+    CourierBookings: () => import('#controllers/seller/courier_bookings_controller'),
+    Logistics: () => import('#controllers/seller/logistics_controller'),
+  },
+  webhooks: {
+    CourierCallbacks: () => import('#controllers/webhooks/courier_callbacks_controller'),
+  },
+}

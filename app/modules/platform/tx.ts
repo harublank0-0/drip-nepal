@@ -41,7 +41,9 @@ export async function withTx<T>(
         ])
         return scope.run({ inTx: true }, () => fn(trx))
       },
-      { isolationLevel }
+      // Only with a level: an options object, even an empty one, breaks a nested
+      // (savepoint) transaction, which Knex reads as its callback.
+      isolationLevel ? { isolationLevel } : undefined
     )
   try {
     return await run()

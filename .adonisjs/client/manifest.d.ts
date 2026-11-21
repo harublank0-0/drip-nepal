@@ -11,5 +11,6 @@
 /// <reference path="../../config/limiter.ts" />
 /// <reference path="../../config/log_redaction.ts" />
 /// <reference path="../../config/logger.ts" />
+/// <reference path="../../config/logistics.ts" />
 /// <reference path="../../config/runtime.ts" />
 /// <reference path="../../config/storefront.ts" />
