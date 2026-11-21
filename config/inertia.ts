@@ -5,11 +5,19 @@ export const SSR_SURFACES = ['storefront/', 'auth/', 'payments/', 'errors/'] as 
 /*
  * The signed-in surfaces whose pages render with Inertia's `encryptHistory`
  * (docs/07 §3.11, RF-34), so the back button on a shared phone cannot show
- * the previous user's pages once their history key is cleared. Storefront
- * pages are not encrypted. History encryption needs a secure context: HTTPS,
- * or a loopback origin such as http://localhost.
+ * the previous user's pages once their history key is cleared: Account
+ * (`/account`, `/sell`, `/invitations`, docs/03 §6.1), Seller, Admin and
+ * Checkout. Storefront pages are not encrypted. History encryption needs a
+ * secure context: HTTPS, or a loopback origin such as http://localhost.
  */
-export const ENCRYPTED_HISTORY_SURFACES = ['/account', '/seller', '/admin', '/checkout'] as const
+export const ENCRYPTED_HISTORY_SURFACES = [
+  '/account',
+  '/sell',
+  '/invitations',
+  '/seller',
+  '/admin',
+  '/checkout',
+] as const
 
 /** Whether a request path belongs to a surface: a whole first segment, so `/accounts` does not. */
 export const encryptsHistory = (path: string) =>
