@@ -189,7 +189,8 @@ export default class LogisticsController {
       'area_tole',
     ] as const
     const given = edits.filter((key) => input[key] !== undefined)
-    if (given.length > 0 && given.length < edits.length) {
+    const extras = (['label', 'street_landmark'] as const).filter((key) => input[key] !== undefined)
+    if ((given.length > 0 || extras.length > 0) && given.length < edits.length) {
       throw new DomainError('VALIDATION_FAILED', {
         detail: 'Send the whole address when you edit it.',
         errors: edits

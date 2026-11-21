@@ -79,21 +79,11 @@ export function setEtag(ctx: HttpContext, version: number) {
 
 export function assertStepUp(ctx: HttpContext) {
   if (!mfaWithin(ctx, STEP_UP_WINDOW_MS)) {
-    throw new DomainError('MFA_REQUIRED', { extensions: { verification_required: true } })
+    throw new DomainError('MFA_REQUIRED', { extensions: { mfa: 'verification_required' } })
   }
 }
 
 export function sendIdempotent<T>(ctx: HttpContext, result: IdempotentResponse<T>) {
-  if (result.replayed) ctx.response.header('Idempotent-Replayed', 'true')
+  if (result.replayed) ctx.response.header('Idempotency-Replayed', 'true')
   return ctx.response.status(result.status).send(result.body)
-}
-
-// Cursor pagination of docs/06 §6: `limit` 1 to 100 (default 25) and an opaque `cursor`.
-export function page(ctx: HttpContext) {
-  const limit = Number(ctx.request.input('limit', 25))
-  const cursor = ctx.request.input('cursor')
-  return {
-    limit: Number.isInteger(limit) && limit >= 1 && limit <= 100 ? limit : 25,
-    after: typeof cursor === 'string' && /^[\da-f-]{36}$/i.test(cursor) ? cursor : undefined,
-  }
 }

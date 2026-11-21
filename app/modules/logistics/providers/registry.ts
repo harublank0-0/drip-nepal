@@ -21,6 +21,12 @@ export function courierProvider(code: string): CourierProvider | null {
   return providers.get(code) ?? null
 }
 
+// The provider codes that have an adapter.
+export function courierProviderCodes(): string[] {
+  providers ??= build()
+  return [...providers.keys()]
+}
+
 // Tests only: replaces one adapter and returns the function that restores it.
 export function swapCourierProvider(code: string, provider: CourierProvider) {
   providers ??= build()

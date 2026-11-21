@@ -151,22 +151,34 @@ export async function courierEvent(eventId: string) {
   return db.from('courier_events').where('id', eventId).first()
 }
 
+// adminListCourierEvents: newest first (`received_at`, `id`; docs/06 §6.2).
 export async function listCourierEvents(filters: {
   processingStatus?: string
   shipmentId?: string
   limit: number
-  after?: string
+  seek: { key: string; id: string } | null
 }) {
   const query = db
     .from('courier_events')
+    .select('*')
+    .select(
+      db.raw(`to_char(received_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as sort_key`)
+    )
+    .orderBy('received_at', 'desc')
     .orderBy('id', 'desc')
     .limit(filters.limit + 1)
   if (filters.processingStatus) query.where('processing_status', filters.processingStatus)
   if (filters.shipmentId) query.where('shipment_id', filters.shipmentId)
-  if (filters.after) query.where('id', '<', filters.after)
+  if (filters.seek) {
+    query.whereRaw('(received_at, id) < (?::timestamptz, ?::uuid)', [
+      filters.seek.key,
+      filters.seek.id,
+    ])
+  }
   const rows = await query
+  const last = rows.length > filters.limit ? rows[filters.limit - 1] : null
   return {
     events: rows.slice(0, filters.limit),
-    next: rows.length > filters.limit ? rows[filters.limit - 1].id : null,
+    last: last ? { key: last.sort_key as string, id: last.id as string } : null,
   }
 }

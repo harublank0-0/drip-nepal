@@ -39,6 +39,9 @@ export default class SecurityHeadersMiddleware {
     response.header('X-Frame-Options', browserHeaders.frameOptions)
     response.header('X-Content-Type-Options', 'nosniff')
     response.header('Strict-Transport-Security', browserHeaders.strictTransportSecurity)
+    // Every API answer is private and never stored (docs/03 §12.5); a handler may not loosen it.
+    if (ctx.request.url().startsWith('/api/v1/'))
+      response.header('Cache-Control', 'private, no-store')
 
     return next()
   }

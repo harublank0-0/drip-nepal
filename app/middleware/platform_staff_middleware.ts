@@ -18,19 +18,26 @@ declare module '@adonisjs/core/http' {
 
 /*
  * `platform_staff` (docs/07 §4.2, §3.9; docs/06 §4): runs after `auth` on
- * every `/api/v1/admin/*` route. The caller needs an active `platform_staff`
- * row with TOTP enrolled and MFA verified within 12 hours (401
- * `MFA_REQUIRED` otherwise), and the route's permission (403 `FORBIDDEN`).
+ * every `/api/v1/admin/*` route. A caller without an active `platform_staff`
+ * row, or whose account is not active, gets 404 `NOT_FOUND`, so the admin API
+ * does not advertise itself (06 §4.3). Staff need TOTP enrolled and MFA
+ * verified within 12 hours (401 `MFA_REQUIRED` with `mfa`
+ * `enrollment_required` or `verification_required`), and the route's
+ * permission (403 `FORBIDDEN`).
  * Step-up operations check the 15-minute window themselves
  * (`assertStepUp`).
  */
 export default class PlatformStaffMiddleware {
   async handle(ctx: HttpContext, next: NextFn, options: { permission: PlatformPermission }) {
     const user = ctx.auth.getUserOrFail()
-    const role = await activeStaffRole(user.id)
-    if (!role) throw new DomainError('FORBIDDEN')
+    // Without an active staff row, or with an account that is not active, the admin API does not exist.
+    const role = user.status === 'active' ? await activeStaffRole(user.id) : null
+    if (!role) throw new DomainError('NOT_FOUND')
+    if (!user.mfaEnabledAt) {
+      throw new DomainError('MFA_REQUIRED', { extensions: { mfa: 'enrollment_required' } })
+    }
     if (!mfaWithin(ctx, MFA_WINDOW_MS)) {
-      throw new DomainError('MFA_REQUIRED', { extensions: { verification_required: true } })
+      throw new DomainError('MFA_REQUIRED', { extensions: { mfa: 'verification_required' } })
     }
     if (!staffMay(role, options.permission)) throw new DomainError('FORBIDDEN')
     ctx.staff = { userId: user.id, role }

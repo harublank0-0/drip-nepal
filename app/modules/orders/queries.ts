@@ -183,25 +183,37 @@ export async function orderByNumber(number: string) {
 }
 
 // The admin queue of docs/06 §13.8 `adminListCourierBookings`.
+// adminListCourierBookings: the longest-waiting first (`updated_at`, `id`; docs/06 §6.2).
 export async function courierBookingQueue(filters: {
   queue: 'needs_reconciliation' | 'cancel_requested'
   limit: number
-  after?: string
+  seek: { key: string; id: string } | null
 }) {
   const query = db
     .from('shipments as s')
     .join('shop_orders as so', 'so.id', 's.shop_order_id')
     .select('s.*', 'so.number as shop_order_number')
+    .select(
+      db.raw(
+        `to_char(s.updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as sort_key`
+      )
+    )
     .orderBy('s.updated_at', 'asc')
     .orderBy('s.id', 'asc')
     .limit(filters.limit + 1)
   if (filters.queue === 'needs_reconciliation') query.where('s.status', 'needs_reconciliation')
   else query.where('s.status', 'booked').whereNotNull('s.cancel_requested_at')
-  if (filters.after) query.where('s.id', '>', filters.after)
+  if (filters.seek) {
+    query.whereRaw('(s.updated_at, s.id) > (?::timestamptz, ?::uuid)', [
+      filters.seek.key,
+      filters.seek.id,
+    ])
+  }
   const rows = await query
+  const last = rows.length > filters.limit ? rows[filters.limit - 1] : null
   return {
     shipments: rows.slice(0, filters.limit).map(toView),
-    next: rows.length > filters.limit ? rows[filters.limit - 1].id : null,
+    last: last ? { key: last.sort_key as string, id: last.id as string } : null,
   }
 }
 

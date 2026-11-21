@@ -1,5 +1,4 @@
 import type { HttpContext } from '@adonisjs/core/http'
-import { DomainError } from '#exceptions/domain_error'
 import { attemptsOf } from '#modules/logistics/actions/booking_attempts'
 import { listCourierEvents } from '#modules/logistics/actions/courier_events'
 import {
@@ -10,7 +9,9 @@ import {
 } from '#modules/orders/actions/courier_bookings'
 import { courierBookingQueue } from '#modules/orders/queries'
 import { attemptJson, courierEventJson, shipmentJson } from '#transformers/courier_transformer'
-import { idempotencyScope, page, sendIdempotent, staffActor } from '#controllers/support/http'
+import { idempotencyScope, sendIdempotent, staffActor } from '#controllers/support/http'
+import { listRequest, oneOf, uuidFilter } from '#controllers/support/cursor'
+import { LIST_FILTER_VALUES } from '#modules/logistics/queries'
 import { assertKnownMembers } from '#validators/support/strict_keys'
 import {
   RESOLVE_BOOKING_MEMBERS,
@@ -29,21 +30,21 @@ import {
 export default class AdminCourierBookingsController {
   // adminListCourierBookings
   async queue(ctx: HttpContext) {
-    const queue = ctx.request.input('queue', 'needs_reconciliation')
-    if (queue !== 'needs_reconciliation' && queue !== 'cancel_requested') {
-      throw new DomainError('VALIDATION_FAILED', {
-        errors: [{ field: 'queue', code: 'invalid', message: 'Unknown queue.' }],
-      })
-    }
-    const { limit, after } = page(ctx)
-    const result = await courierBookingQueue({ queue, limit, after })
+    const queue = oneOf(
+      ctx,
+      'queue',
+      ['needs_reconciliation', 'cancel_requested'] as const,
+      'needs_reconciliation'
+    )!
+    const list = listRequest(ctx, { sort: 'updated_at', parameters: ['queue'], filters: { queue } })
+    const result = await courierBookingQueue({ queue, limit: list.limit, seek: list.seek })
     const attempts = await attemptsOf(result.shipments.map((shipment) => shipment.id))
     return {
       data: result.shipments.map((shipment) => ({
         ...shipmentJson(shipment),
         attempts: attempts.filter((row) => row.shipment_id === shipment.id).map(attemptJson),
       })),
-      meta: { next_cursor: result.next },
+      meta: list.meta(result.last),
     }
   }
 
@@ -75,19 +76,20 @@ export default class AdminCourierBookingsController {
 
   // adminListCourierEvents
   async events(ctx: HttpContext) {
-    const { limit, after } = page(ctx)
-    const status = ctx.request.input('processing_status')
-    const shipmentId = ctx.request.input('shipment_id')
-    const result = await listCourierEvents({
-      processingStatus: typeof status === 'string' ? status : undefined,
-      shipmentId:
-        typeof shipmentId === 'string' && /^[\da-f-]{36}$/i.test(shipmentId)
-          ? shipmentId
-          : undefined,
-      limit,
-      after,
+    const status = oneOf(ctx, 'processing_status', LIST_FILTER_VALUES.processingStatuses)
+    const shipmentId = uuidFilter(ctx, 'shipment_id')
+    const list = listRequest(ctx, {
+      sort: 'received_at',
+      parameters: ['processing_status', 'shipment_id'],
+      filters: { processing_status: status, shipment_id: shipmentId },
     })
-    return { data: result.events.map(courierEventJson), meta: { next_cursor: result.next } }
+    const result = await listCourierEvents({
+      processingStatus: status,
+      shipmentId,
+      limit: list.limit,
+      seek: list.seek,
+    })
+    return { data: result.events.map(courierEventJson), meta: list.meta(result.last) }
   }
 
   // adminResolveCourierEvent

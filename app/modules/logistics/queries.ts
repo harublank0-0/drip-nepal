@@ -2,8 +2,14 @@ import db from '@adonisjs/lucid/services/db'
 import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
 import LogisticsAccount from '#models/logistics_account'
 import LogisticsBranch from '#models/logistics_branch'
-import { courierProvider } from '#modules/logistics/providers/registry'
+import {
+  courierProvider,
+  courierProviderCodes as registryProviderCodes,
+} from '#modules/logistics/providers/registry'
 import type { CourierCapabilities } from '#modules/logistics/domain/courier_capability'
+import { LOGISTICS_ACCOUNT_OWNER_TYPES } from '#modules/logistics/domain/logistics_account_owner_type'
+import { LOGISTICS_ACCOUNT_STATUSES } from '#modules/logistics/domain/logistics_account_status'
+import { COURIER_EVENT_PROCESSING_STATUSES } from '#modules/logistics/domain/courier_event_processing_status'
 
 /*
  * Reads of the `logistics` tables for the modules above it and the HTTP layer
@@ -44,6 +50,11 @@ function view(row: LogisticsAccount): AccountView {
 }
 
 // The capabilities a courier's adapter declares (C-03: the adapter is the runtime source).
+// The provider codes that have an adapter (the admin branch list's `provider_code` filter).
+export function courierProviderCodes() {
+  return registryProviderCodes()
+}
+
 export function courierCapabilities(providerCode: string): CourierCapabilities | null {
   return courierProvider(providerCode)?.capabilities ?? null
 }
@@ -72,18 +83,40 @@ export async function account(accountId: string) {
   return row ? view(row) : null
 }
 
+// The values the admin list filters accept (docs/06 §6.3), for the HTTP layer.
+export const LIST_FILTER_VALUES = {
+  ownerTypes: LOGISTICS_ACCOUNT_OWNER_TYPES,
+  accountStatuses: LOGISTICS_ACCOUNT_STATUSES,
+  processingStatuses: COURIER_EVENT_PROCESSING_STATUSES,
+} as const
+
+// A keyset position of a cursor list (docs/06 §6.2): the last row's sort value and ID.
+export type Seek = { key: string; id: string }
+
+// adminListLogisticsAccounts: oldest first (`created_at`, `id`).
 export async function listAccounts(filters: {
   ownerType?: string
   status?: string
   limit: number
-  after?: string
+  seek: Seek | null
 }) {
   const query = LogisticsAccount.query()
+    .select('*')
+    // RFC 3339 text with microseconds, so a seek never repeats a row.
+    .select(
+      db.raw(`to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as sort_key`)
+    )
+    .orderBy('created_at', 'asc')
     .orderBy('id', 'asc')
     .limit(filters.limit + 1)
   if (filters.ownerType) query.where('owner_type', filters.ownerType)
   if (filters.status) query.where('status', filters.status)
-  if (filters.after) query.where('id', '>', filters.after)
+  if (filters.seek) {
+    query.whereRaw('(created_at, id) > (?::timestamptz, ?::uuid)', [
+      filters.seek.key,
+      filters.seek.id,
+    ])
+  }
   const rows = await query
   const allowed = await db
     .from('logistics_account_shops')
@@ -99,7 +132,13 @@ export async function listAccounts(filters: {
         .filter((link) => link.account_id === row.id)
         .map((link) => ({ shopId: link.shop_id as string, isActive: link.is_active as boolean })),
     })),
-    next: rows.length > filters.limit ? rows[filters.limit - 1].id : null,
+    last:
+      rows.length > filters.limit
+        ? {
+            key: rows[filters.limit - 1].$extras.sort_key as string,
+            id: rows[filters.limit - 1].id,
+          }
+        : null,
   }
 }
 
@@ -207,7 +246,7 @@ export async function listBranches(filters: {
   isActive?: boolean
   unmapped?: boolean
   limit: number
-  after?: string
+  seek: Seek | null
 }) {
   const query = LogisticsBranch.query()
     .where('provider_code', filters.providerCode)
@@ -216,20 +255,16 @@ export async function listBranches(filters: {
     .limit(filters.limit + 1)
   if (filters.isActive !== undefined) query.where('is_active', filters.isActive)
   if (filters.unmapped) query.whereNull('district_code')
-  if (filters.after) {
-    const cursor = await LogisticsBranch.find(filters.after)
-    if (cursor) {
-      query.where((q) =>
-        q
-          .where('name', '>', cursor.name)
-          .orWhere((r) => r.where('name', cursor.name).where('id', '>', cursor.id))
-      )
-    }
+  if (filters.seek) {
+    query.whereRaw('(name, id) > (?, ?::uuid)', [filters.seek.key, filters.seek.id])
   }
   const rows = await query
   return {
     branches: rows.slice(0, filters.limit).map(branchView),
-    next: rows.length > filters.limit ? rows[filters.limit - 1].id : null,
+    last:
+      rows.length > filters.limit
+        ? { key: rows[filters.limit - 1].name, id: rows[filters.limit - 1].id }
+        : null,
   }
 }
 

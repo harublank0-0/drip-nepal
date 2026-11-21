@@ -95,7 +95,12 @@ async function staffUser(role: string) {
     .from('users')
     .where('id', userId)
     // users_mfa_check: MFA on needs a TOTP secret; a placeholder stands in for M1's enrolment.
-    .update({ mfa_enabled_at: db.raw('now()'), mfa_totp_secret_enc: placeholderCiphertext() })
+    .update({
+      status: 'active',
+      email_verified_at: db.raw('now()'),
+      mfa_enabled_at: db.raw('now()'),
+      mfa_totp_secret_enc: placeholderCiphertext(),
+    })
   await db.table('platform_staff').insert({ user_id: userId, role })
   return userId
 }
@@ -201,7 +206,7 @@ test.group('T-SHOP-115 logistics settings and courier accounts', (group) => {
     assert.notProperty(created.body.data, 'credentials_enc')
     const replay = await send(browser, 'POST', path, body, { 'Idempotency-Key': idempotencyKey })
     assert.equal(replay.status, 201)
-    assert.equal(replay.headers.get('idempotent-replayed'), 'true')
+    assert.equal(replay.headers.get('idempotency-replayed'), 'true')
     assert.deepEqual(replay.body, created.body)
     const duplicate = await send(browser, 'POST', path, body, { 'Idempotency-Key': key() })
     assert.equal(duplicate.status, 422)
@@ -629,5 +634,115 @@ test.group('T-FUL-112 the courier callback receiver', (group) => {
       courierConfig.callbackKeys = original
       courierConfig.callbackActiveKeyId = originalActive
     }
+  })
+})
+
+test.group('T-SEC-008 and T-API-003 on the admin courier lists', (group) => {
+  let courier: FakeCourier
+  group.setup(async () => {
+    await useJobBoss()
+  })
+  group.each.setup(() => {
+    courier = fakeCourier()
+    return () => courier.restore()
+  })
+
+  test('T-SEC-008 a signed-in user without a staff row gets 404; stale MFA names verification_required', async ({
+    assert,
+  }) => {
+    const customer = await insertUser()
+    await db
+      .from('users')
+      .where('id', customer)
+      .update({ status: 'active', email_verified_at: db.raw('now()') })
+    const outsider = await signIn(customer, minutesAgo(1))
+    const hidden = await send(outsider, 'GET', '/api/v1/admin/courier-bookings')
+    assert.equal(hidden.status, 404)
+    assert.equal(hidden.body.code, 'NOT_FOUND')
+    const stale = await signIn(await staffUser('support_agent'), minutesAgo(13 * 60))
+    const answer = await send(stale, 'GET', '/api/v1/admin/courier-bookings')
+    assert.equal(answer.status, 401)
+    assert.equal(answer.body.code, 'MFA_REQUIRED')
+    assert.equal(answer.body.mfa, 'verification_required')
+  })
+
+  test('T-API-003 the booking queue pages with its cursor; a tampered cursor, a changed filter or an unknown parameter gives 400', async ({
+    assert,
+  }) => {
+    const shipments: string[] = []
+    for (let n = 0; n < 3; n++) {
+      const world = await courierWorld()
+      await db
+        .from('shipments')
+        .where('id', world.shipmentId)
+        .update({
+          status: 'needs_reconciliation',
+          logistics_account_id: world.accountId,
+          pickup_address_id: world.addressId,
+          merchant_reference: `${world.shopOrder.number}-S1`,
+          cod_amount_minor: 110000,
+        })
+      shipments.push(world.shipmentId)
+    }
+    const admin = await signIn(await staffUser('support_agent'), minutesAgo(1))
+    const seen: string[] = []
+    let cursor: string | null = null
+    for (let pageNo = 0; pageNo < 5; pageNo++) {
+      const query: string = cursor ? `&cursor=${cursor}` : ''
+      const answer = await send(admin, 'GET', `/api/v1/admin/courier-bookings?limit=1${query}`)
+      assert.equal(answer.status, 200, answer.text)
+      assert.equal(answer.body.meta.limit, 1)
+      seen.push(...answer.body.data.map((row: { id: string }) => row.id))
+      cursor = answer.body.meta.next_cursor
+      if (!cursor) break
+    }
+    const ours = seen.filter((id) => shipments.includes(id))
+    assert.sameMembers(ours, shipments)
+    assert.lengthOf(new Set(seen), seen.length, 'no row repeats')
+
+    const first = await send(admin, 'GET', '/api/v1/admin/courier-bookings?limit=1')
+    const next = first.body.meta.next_cursor as string
+    const decoded = JSON.parse(Buffer.from(next, 'base64url').toString('utf8'))
+    const forged = Buffer.from(JSON.stringify({ ...decoded, v: 2 })).toString('base64url')
+    for (const query of [
+      `cursor=${forged}`,
+      'cursor=not-a-cursor',
+      `queue=cancel_requested&cursor=${next}`,
+      'limit=0',
+      'limit=101',
+      'queue=everything',
+      'shop_id=x',
+    ]) {
+      const answer = await send(admin, 'GET', `/api/v1/admin/courier-bookings?${query}`)
+      assert.equal(answer.status, 400, query)
+      assert.equal(answer.body.code, 'INVALID_QUERY_PARAMETER', query)
+    }
+  })
+
+  test('T-API-014 an API success is private and never stored', async ({ assert }) => {
+    const admin = await signIn(await staffUser('support_agent'), minutesAgo(1))
+    const answer = await send(admin, 'GET', '/api/v1/admin/courier-events')
+    assert.equal(answer.status, 200)
+    assert.equal(answer.headers.get('cache-control'), 'private, no-store')
+  })
+
+  test('T-SEC-001 a shop order number matches in any case; a partial pickup-address edit gives 422', async ({
+    assert,
+  }) => {
+    const world = await courierWorld()
+    const browser = await signIn(world.ownerId)
+    const options = await send(
+      browser,
+      'GET',
+      `/api/v1/seller/shops/${world.slug}/orders/${world.shopOrder.number.toLowerCase()}/courier-booking-options`
+    )
+    assert.equal(options.status, 200, options.text)
+    const labelOnly = await send(
+      browser,
+      'PATCH',
+      `/api/v1/seller/shops/${world.slug}/pickup-addresses/${world.addressId}`,
+      { label: 'Warehouse' }
+    )
+    assert.equal(labelOnly.status, 422)
   })
 })
