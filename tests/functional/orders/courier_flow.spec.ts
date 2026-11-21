@@ -3,6 +3,7 @@ import db from '@adonisjs/lucid/services/db'
 import { bookCourierShipment } from '#modules/orders/actions/book_courier_shipment'
 import {
   cancelCourierBooking,
+  recordOrderVerification,
   resolveCourierBooking,
   resolveCourierEvent,
 } from '#modules/orders/actions/courier_bookings'
@@ -25,6 +26,7 @@ import {
   type FakeCourier,
 } from '#tests/support/courier'
 import { FIRST_TRY, LAST_TRY, queued, useJobBoss } from '#tests/support/jobs'
+import { captureLogs } from '#tests/support/logs'
 
 /*
  * The courier path end to end on the job level (docs/05 §6.3, docs/04a
@@ -630,5 +632,91 @@ test.group('T-FUL-108 replay, the return check and holds', (group) => {
       .first()
     assert.equal(held.hold_reason, 'cod_collected')
     assert.equal(await pick(shipment(world.shipmentId), 'status'), 'shipped')
+  })
+})
+
+test.group('T-ORD-012 staff record an order verification', (group) => {
+  let courier: FakeCourier
+  group.setup(async () => {
+    await useJobBoss()
+  })
+  group.each.setup(() => {
+    courier = fakeCourier()
+    return () => courier.restore()
+  })
+
+  const staffActor = async () => {
+    const [row] = await db
+      .table('users')
+      .insert({
+        email: `staff-${Date.now()}-${Math.random()}@example.com`,
+        full_name: 'Staff',
+        password_hash: 'x',
+      })
+      .returning('id')
+    return staff(row.id)
+  }
+
+  test('T-ORD-012 recording verified lifts the dispatch rule and writes one audit row', async ({
+    assert,
+  }) => {
+    const world = await courierWorld({ verification: 'review_required' })
+    const order = await db
+      .from('shop_orders')
+      .where('id', world.shopOrder.id)
+      .select('order_id')
+      .first()
+    const { number } = await db.from('orders').where('id', order.order_id).select('number').first()
+    const recorded = await recordOrderVerification(
+      {
+        orderNumber: number,
+        status: 'verified',
+        method: 'phone_call',
+        notes: 'Customer confirmed',
+      },
+      await staffActor()
+    )
+    assert.equal(recorded.verification_status, 'verified')
+    const result = await book(world)
+    assert.equal(result.body.status, 'booking_requested')
+    const audits = await db
+      .from('audit_logs')
+      .where({ subject_id: order.order_id, action: 'order.verify' })
+    assert.lengthOf(audits, 1)
+  })
+
+  test('T-ORD-012 a doubt recorded after booking raises an alert and leaves the parcel alone', async ({
+    assert,
+  }) => {
+    const { world } = await bookedWorld(courier)
+    const order = await db
+      .from('shop_orders')
+      .where('id', world.shopOrder.id)
+      .select('order_id')
+      .first()
+    const { number } = await db.from('orders').where('id', order.order_id).select('number').first()
+    const actor = await staffActor()
+    const lines = await captureLogs(async () => {
+      await recordOrderVerification(
+        { orderNumber: number, status: 'failed', method: 'manual', notes: null },
+        actor
+      )
+    })
+    const alerts = lines.filter((line) => line.fields.alert === 'order.verification_after_booking')
+    assert.lengthOf(alerts, 1)
+    assert.equal(alerts[0].fields.shipment_id, world.shipmentId)
+    const row = await shipment(world.shipmentId)
+    assert.equal(row.status, 'booked')
+  })
+
+  test('T-ORD-012 an unknown order number answers 404', async ({ assert }) => {
+    const error = await recordOrderVerification(
+      { orderNumber: 'DN-ZZZZZZZ', status: 'verified', method: 'manual', notes: null },
+      await staffActor()
+    ).then(
+      () => null,
+      (e) => e
+    )
+    assert.equal(error?.problemCode, 'NOT_FOUND')
   })
 })

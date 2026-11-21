@@ -94,9 +94,11 @@ export async function pollCourierStatuses(requestId: string | null) {
   return { moving: moving.length, triggered }
 }
 
+// The ages are parameters for tests, whose transaction holds now() still; the jobs use the defaults.
 export async function sweepCourierBookings(
   requestId: string | null,
-  staleSeconds = STALE_CLAIM_SECONDS
+  staleSeconds = STALE_CLAIM_SECONDS,
+  lostSeconds = LOST_BOOKING_JOB_SECONDS
 ) {
   return jobTx(async (trx) => {
     const stale = await markStaleClaimsUnknown(trx, staleSeconds)
@@ -125,11 +127,7 @@ export async function sweepCourierBookings(
     const lost = await trx
       .from('shipments as s')
       .where('s.status', 'booking_requested')
-      .where(
-        's.updated_at',
-        '<',
-        trx.raw(`now() - make_interval(secs => ?)`, [LOST_BOOKING_JOB_SECONDS])
-      )
+      .where('s.updated_at', '<', trx.raw(`now() - make_interval(secs => ?)`, [lostSeconds]))
       .whereNotExists((q) =>
         q.from('shipment_booking_attempts as a').whereRaw('a.shipment_id = s.id')
       )
@@ -146,8 +144,11 @@ export async function sweepCourierBookings(
   })
 }
 
-export async function sweepCourierEvents(requestId: string | null) {
-  const open = await staleOpenEvents(STALE_EVENT_SECONDS, 500)
+export async function sweepCourierEvents(
+  requestId: string | null,
+  staleSeconds = STALE_EVENT_SECONDS
+) {
+  const open = await staleOpenEvents(staleSeconds, 500)
   const shipments = new Map<string, string>()
   for (const row of open) shipments.set(row.shipment_id, row.shop_id)
   await jobTx(async (trx) => {

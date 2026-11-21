@@ -18,8 +18,8 @@ import { FIRST_TRY, useJobBoss } from '#tests/support/jobs'
 /*
  * The courier races, committed for real on separate connections (docs/10
  * §3.3): T-FUL-111 (one courier call per booking, whatever the jobs do),
- * T-FUL-110 (a repeated tracking update is applied once) and T-ORD-011's
- * double submit. Each round builds its own shop and order.
+ * T-FUL-110 (a repeated tracking update is applied once) and T-FUL-107 (two
+ * writers of one shop order's `shipment_items`). Each round builds its own shop and order.
  */
 
 const ROUNDS = 4
@@ -159,7 +159,7 @@ test.group('T-FUL-111 one courier call per booking', (group) => {
     }
   })
 
-  test('T-ORD-011 two booking requests at once: one books, the other gives 409', async ({
+  test('T-FUL-107 two booking requests at once: one books and lists the kept units once, the other gives 409', async ({
     assert,
   }) => {
     for (let round = 1; round <= ROUNDS; round++) {
