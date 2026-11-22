@@ -17,12 +17,15 @@ import {
  */
 let shared: PgBoss | null = null
 
-export async function useJobBoss() {
-  if (hasJobBoss() && shared) return
+// Starts the shared instance once and returns it, for a test that fetches or sends itself.
+export async function useJobBoss(): Promise<PgBoss> {
+  if (hasJobBoss() && shared) return shared
   const config = db.manager.get(db.primaryConnectionName)?.config as PostgreConfig
-  shared = createJobBoss(jobDatabaseOf(config)!, 'web')
-  await shared.start()
-  setJobBoss(shared)
+  const boss = createJobBoss(jobDatabaseOf(config)!, 'web')
+  await boss.start()
+  shared = boss
+  setJobBoss(boss)
+  return boss
 }
 
 export async function stopJobBoss() {

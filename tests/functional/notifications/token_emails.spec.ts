@@ -37,8 +37,8 @@ import { insertUser } from '#tests/support/schema_rows'
  *   meanwhile, an address changed since dispatch, and a `token_enc` that no
  *   longer decrypts (07 §3.8 rule 4) make it `failed` with no send, keeping
  *   an earlier transport error in `last_error`; nothing sends a `failed`
- *   row again. The dead-letter and redrive part comes with `jobs:redrive`
- *   (M1 part 1c).
+ *   row again. The dead-letter and redrive part, with `jobs:redrive`, is
+ *   in tests/concurrency/notifications/email_outage.spec.ts.
  */
 
 type DispatchPayload = JobPayloads['notifications.dispatch'] & JobEnvelope

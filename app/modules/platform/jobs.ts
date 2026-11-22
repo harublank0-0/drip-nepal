@@ -158,6 +158,31 @@ export const JOB_QUEUES = {
 export const deadLetterQueue = (queue: string) => `dlq.${queue}`
 
 /*
+ * What `node ace jobs:redrive` may do with each queue's dead letters
+ * (proposed, docs/09 §9.7; the groups of docs/11 §8.2):
+ * - `redrive`: after the fix, back to the queue; the handler re-reads
+ *   current rows and is idempotent, so it does the remaining work once;
+ * - `discard`: a sweeper or the next scheduled run re-sends the work, so a
+ *   redrive could only repeat it (a courier booking, a poll).
+ * A queue joins with its rule; `satisfies` makes a queue of `JOB_QUEUES`
+ * without one a type error. `refunds.execute`, whose dead letters are
+ * handled job by job (docs/11 §8.3 step 4), adds that mode when it joins.
+ */
+export type DeadLetterRule = 'redrive' | 'discard'
+
+export const DEAD_LETTER_RULES = {
+  'notifications.dispatch': 'redrive',
+  'notifications.send_email': 'redrive',
+  'logistics.verify_account': 'redrive',
+  'logistics.sync_branches': 'redrive',
+  'orders.book_courier_shipment': 'discard',
+  'orders.process_courier_event': 'redrive',
+  'orders.poll_courier_statuses': 'discard',
+  'orders.sweep_courier_bookings': 'discard',
+  'orders.sweep_courier_events': 'discard',
+} as const satisfies Record<ApplicationQueueName, DeadLetterRule>
+
+/*
  * Creates each queue of `queues` and its dead-letter queue, or updates
  * their settings. pg-boss refuses an option key whose value is undefined
  * (`retentionSeconds` must then be >= 1), so the dead-letter queue gets
