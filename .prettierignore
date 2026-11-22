@@ -5,3 +5,6 @@ build
 .agents/skills/shadcn
 .agents/skills/vercel-react-best-practices
 .agents/skills/ncm-integration
+# Plain-text email templates: whitespace is content, and Prettier's Edge
+# formatting would change the text people read (docs/09 §11.2)
+resources/views/emails/**/*.text.edge

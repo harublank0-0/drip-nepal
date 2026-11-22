@@ -1,5 +1,7 @@
 import { verifyAccount } from '#modules/logistics/jobs/verify_account'
 import { syncBranches } from '#modules/logistics/jobs/sync_branches'
+import { dispatchNotification } from '#modules/notifications/jobs/dispatch'
+import { sendEmail } from '#modules/notifications/jobs/send_email'
 import { bookCourierShipmentJob } from '#modules/orders/jobs/book_courier_shipment'
 import { processCourierEventJob } from '#modules/orders/jobs/process_courier_event'
 import {
@@ -11,9 +13,10 @@ import type { JobEnvelope, JobPayloads, QueueName } from '#modules/platform/jobs
 
 /*
  * The handlers `node ace jobs:work` registers, and the schedules it starts
- * (docs/03 §9; times in Asia/Kathmandu). A queue without a handler here waits
- * for its milestone (`notifications.dispatch`: M1). Each handler gets the
- * payload and the attempt it holds, so a job can tell its last retry.
+ * (docs/03 §9; times in Asia/Kathmandu). A queue of `JOB_QUEUES` without a
+ * handler here would wait for its milestone; today every one has one. Each
+ * handler gets the payload and the attempt it holds, so a job can tell its
+ * last retry.
  */
 
 export type JobAttempt = { retryCount: number; retryLimit: number; requestId: string | null }
@@ -24,6 +27,9 @@ type Handler<Q extends QueueName> = (
 ) => Promise<unknown>
 
 export const JOB_HANDLERS: { [Q in QueueName]?: Handler<Q> } = {
+  // M1 part 1b: the token emails (docs/03 §9, docs/04a §14.3).
+  'notifications.dispatch': (payload) => dispatchNotification(payload),
+  'notifications.send_email': (payload) => sendEmail(payload),
   'logistics.verify_account': (payload) => verifyAccount(payload),
   'logistics.sync_branches': (payload) => syncBranches(payload),
   'orders.book_courier_shipment': (payload, attempt) => bookCourierShipmentJob(payload, attempt),

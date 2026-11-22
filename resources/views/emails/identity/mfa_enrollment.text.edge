@@ -1,0 +1,16 @@
+{{--
+  identity.mfa_enrollment, the plain-text part (AC-FR-NOT-001-3). A
+  text-only template: it prints the raw values, because text/plain has no
+  markup context (docs/07 TM-11, docs/09 §11.2). Values: `t`, `link`,
+  `hours`.
+--}}
+{{{ t('emails.identity.mfa_enrollment.intro') }}}
+
+{{{ t('emails.identity.mfa_enrollment.action') }}}:
+{{{ link }}}
+
+{{{ t('emails.identity.mfa_enrollment.expiry', { hours: hours }) }}}
+
+{{{ t('emails.identity.mfa_enrollment.ignore') }}}
+
+{{{ t('emails.layout.footer') }}}

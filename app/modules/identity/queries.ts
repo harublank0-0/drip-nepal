@@ -1,6 +1,8 @@
 import db from '@adonisjs/lucid/services/db'
+import type { QueryClientContract } from '@adonisjs/lucid/types/database'
 import User from '#models/user'
 import { maySignIn } from '#modules/identity/domain/user_status'
+import type { UserTokenPurpose } from '#modules/identity/domain/user_token_purpose'
 import { activeStaffRole } from '#modules/identity/staff'
 import {
   ABSOLUTE_SESSION_LIMIT_MS,
@@ -14,6 +16,8 @@ import {
  */
 
 export type AccountStanding = 'valid' | 'suspended' | 'signed_out'
+
+export type { UserTokenPurpose }
 
 /*
  * The per-request account check of docs/07 §3.3 over the user `silent_auth`
@@ -58,6 +62,51 @@ export function sellerSessionIdle(
 export async function accountExistsWithEmail(email: string) {
   const row = await db.from('users').where('email', email).select('id').first()
   return row !== null
+}
+
+/*
+ * A `user_tokens` row as its email needs it, for the notification jobs
+ * (docs/07 §3.8, docs/09 §2.3 item 7): the purpose, the token's lifetime,
+ * the recipient and the address, and whether the link can still be
+ * redeemed. It cannot once the row is consumed or expired, or once its user
+ * is no longer `active` or `pending_verification`: a suspension or an
+ * anonymisation invalidates every token (07 §3.8). Never the token hash.
+ * Null for a missing row. `client` reads inside the caller's transaction
+ * (docs/09 §3.9).
+ */
+export type TokenEmail = {
+  id: string
+  userId: string
+  purpose: UserTokenPurpose
+  email: string
+  lifetimeSeconds: number
+  usable: boolean
+}
+
+export async function tokenEmail(
+  tokenId: string,
+  options: { client?: QueryClientContract } = {}
+): Promise<TokenEmail | null> {
+  const client: QueryClientContract = options.client ?? db.connection()
+  const result = await client.rawQuery(
+    `SELECT t.id, t.user_id, t.purpose, u.email, u.status,
+            extract(epoch FROM t.expires_at - t.created_at)::int AS lifetime_seconds,
+            (t.consumed_at IS NULL AND t.expires_at > now()) AS unexpired
+       FROM user_tokens t
+       JOIN users u ON u.id = t.user_id
+      WHERE t.id = ?`,
+    [tokenId]
+  )
+  const row = result.rows[0]
+  if (!row) return null
+  return {
+    id: row.id,
+    userId: row.user_id,
+    purpose: row.purpose,
+    email: row.email,
+    lifetimeSeconds: row.lifetime_seconds,
+    usable: row.unexpired === true && maySignIn(row.status),
+  }
 }
 
 /*

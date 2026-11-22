@@ -139,6 +139,11 @@ export default defineConfig({
       pattern: 'public/**',
       reloadServer: false,
     },
+    // The message catalogs the email jobs read on the server (docs/08 §11.8, docs/09 §11.2).
+    {
+      pattern: 'resources/lang/**/*.json',
+      reloadServer: false,
+    },
     // The locations dataset the release step seeds (docs/04 §21.4, docs/09 §8.8).
     {
       pattern: 'database/seeders/reference/data/locations.csv',

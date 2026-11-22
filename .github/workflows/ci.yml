@@ -119,6 +119,9 @@ jobs:
         run: node scripts/check_test_ids.mjs
       - name: T-UI-024 notices file matches ui/ and kit/
         run: node scripts/check_notices.mjs
+      # docs/09 §11.2: no raw output in an HTML email template.
+      - name: T-SEC-014 email templates print every value escaped
+        run: node scripts/check_email_templates.mjs
 
   # docs/10 §5.1 Supply chain (docs/07 §7.1, §7.2).
   supply-chain:
