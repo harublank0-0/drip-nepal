@@ -1,5 +1,6 @@
 import { test } from '@japa/runner'
-import { EMAIL_TEMPLATES } from '#modules/notifications/domain/email_templates'
+import { InvariantViolation } from '#exceptions/programming_errors'
+import { EMAIL_TEMPLATES, type EmailTemplate } from '#modules/notifications/domain/email_templates'
 import { renderEmail } from '#modules/notifications/internal/render_email'
 
 /*
@@ -9,6 +10,11 @@ import { renderEmail } from '#modules/notifications/internal/render_email'
  * text-only template and not stripped HTML (AC-FR-NOT-001-3). Every word
  * comes from the `emails` catalog, so no key is left unrendered. The grep
  * half is tests/unit/scripts/check_email_templates.spec.ts.
+ *
+ * T-UI-034, the email case of the message catalogs (docs/08 §11.8): where
+ * the UI renders a missing key, an email whose subject is missing from the
+ * catalog throws, so no email goes out with `emails.<name>.subject` as its
+ * subject.
  */
 
 const MARKUP = `https://example.test/?a="><script>alert(1)</script>&b='1'`
@@ -34,4 +40,22 @@ test.group('T-SEC-014 email templates escape HTML and keep plain text raw', () =
         assert.notMatch(part, /\bemails\.[a-z_]+\.[a-z_.]+/, 'a catalog key left unrendered')
       }
     })
+})
+
+test.group('T-UI-034 email subjects come from the catalog', () => {
+  test('T-UI-034 a template whose subject is missing from the catalog throws instead of sending its key', async ({
+    assert,
+  }) => {
+    // A name the type would refuse, as a typo in a new template would be.
+    const missing = 'identity.no_such_email' as string as EmailTemplate
+    await assert.rejects(
+      () =>
+        renderEmail(missing, {
+          link: 'https://example.test/',
+          minutes: 60,
+          hours: 24,
+        }),
+      InvariantViolation
+    )
+  })
 })

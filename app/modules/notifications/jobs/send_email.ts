@@ -2,8 +2,10 @@ import app from '@adonisjs/core/services/app'
 import encryption from '@adonisjs/core/services/encryption'
 import logger from '@adonisjs/core/services/logger'
 import { appUrl } from '#config/app'
+import { hmacKeys } from '#config/crypto'
 import { InvariantViolation } from '#exceptions/programming_errors'
 import { tokenEmail, type TokenEmail, type UserTokenPurpose } from '#modules/identity/queries'
+import { keyedHash } from '#modules/platform/crypto/keyed_hash'
 import type { JobEnvelope, JobPayloads } from '#modules/platform/jobs'
 import { EmailNotSent, EmailSender, type EmailSent } from '#modules/platform/ports/email_sender'
 import { jobTx } from '#modules/platform/tx'
@@ -16,8 +18,9 @@ import { renderEmail } from '#modules/notifications/internal/render_email'
  *
  * 1. A short `jobTx` claims the row: `attempts + 1` while it is `queued`
  *    (compare-and-set). A row already `sent` or `failed` matches nothing,
- *    and the job completes without sending, so a replayed or redriven job
- *    never sends twice (T-NOT-101).
+ *    and the job completes quietly without sending, so a replayed or
+ *    redriven job never sends twice (T-NOT-101). A row that does not exist
+ *    completes the job with a warning (03 §10.4).
  * 2. Outside any transaction, the message is rendered again from the event
  *    and the template, since the body is never stored, and handed to the
  *    `EmailSender` port.
@@ -36,9 +39,13 @@ import { renderEmail } from '#modules/notifications/internal/render_email'
  *   `token_enc` no longer decrypts (past its expiry, or after an exposure
  *   rotation dropped its key): `failed` without a send, and the job
  *   completes with a warning; the user asks for a new link (docs/07 §3.8
- *   rule 4).
- * `last_error` holds a short reason, never an address (04a §14.3), and log
- * lines hold IDs only (docs/09 §7.2).
+ *   rule 4);
+ * - an address that is no longer the one dispatch hashed into
+ *   `to_address_hash`: `failed` with `address_changed` and no send, so the
+ *   row never claims a send to an address it does not record (04a §14.3).
+ * `last_error` holds short reasons, never an address (04a §14.3): a final
+ * reason is appended to the transport error before it, within 1,000
+ * characters. Log lines hold IDs only (docs/09 §7.2).
  */
 
 // Below the queue's `expireInSeconds` (120 s, docs/03 §9) [Assumption].
@@ -54,12 +61,20 @@ const TOKEN_PAGES: Record<UserTokenPurpose, string> = {
 export type SendOutcome =
   | { kind: 'sent'; providerMessageId: string }
   | { kind: 'not_queued' }
+  | { kind: 'missing' }
   | { kind: 'failed'; reason: string }
 
 type SendPayload = JobPayloads['notifications.send_email'] & JobEnvelope
-type ClaimedRow = { id: string; template: string; recipient_user_id: string | null }
+type ClaimedRow = {
+  id: string
+  template: string
+  recipient_user_id: string | null
+  to_address_hash: Buffer | null
+}
 
 const LAST_ERROR_MAX = 1000
+// A final reason is a short code; the earlier `last_error` keeps the rest of the 1,000.
+const FINAL_REASON_MAX = 200
 
 // A short reason for `last_error`: the port's own, else the error's name, never its message.
 function errorReason(error: unknown) {
@@ -104,12 +119,23 @@ function markSent(id: string, providerMessageId: string) {
   )
 }
 
+/*
+ * `failed` with its final reason after any earlier one ("timeout;
+ * token_not_usable"), so a transport error recorded during an outage is
+ * kept; the earlier part is cut to stay within 1,000 characters.
+ */
 function markFailed(id: string, reason: string) {
+  const final = reason.slice(0, FINAL_REASON_MAX)
   return jobTx((trx) =>
     trx.rawQuery(
-      `UPDATE notification_deliveries SET status = 'failed', last_error = ?
+      `UPDATE notification_deliveries
+          SET status = 'failed',
+              last_error = CASE
+                WHEN last_error IS NULL OR last_error = '' THEN ?::text
+                ELSE left(last_error, ?::int) || '; ' || ?::text
+              END
         WHERE id = ? AND status = 'queued'`,
-      [reason.slice(0, LAST_ERROR_MAX), id]
+      [final, LAST_ERROR_MAX - 2 - final.length, final, id]
     )
   )
 }
@@ -137,6 +163,23 @@ function notSent(deliveryId: string, reason: string, requestId: string | null) {
   )
 }
 
+// Whether `email` is the address dispatch hashed into the row (docs/04a §14.3).
+function sameAddress(email: string, hash: Buffer | null) {
+  return hash !== null && keyedHash(hmacKeys.notifyAddress.release(), email).equals(hash)
+}
+
+// The token and its raw value to send, or why this email can no longer be sent.
+function sendable(
+  row: ClaimedRow,
+  token: TokenEmail | null,
+  tokenEnc: string
+): { token: TokenEmail; raw: string } | { reason: string } {
+  if (!token?.usable) return { reason: 'token_not_usable' }
+  if (!sameAddress(token.email, row.to_address_hash)) return { reason: 'address_changed' }
+  const raw = decryptToken(tokenEnc, token.purpose)
+  return raw === null ? { reason: 'token_undecryptable' } : { token, raw }
+}
+
 // Renders and sends, outside any transaction: the port's guard throws inside one (docs/03 §8.3).
 async function send(
   template: EmailTemplate,
@@ -158,14 +201,24 @@ export async function sendEmail(payload: SendPayload): Promise<SendOutcome> {
     const claimed = await trx.rawQuery(
       `UPDATE notification_deliveries SET attempts = attempts + 1
         WHERE id = ? AND status = 'queued'
-        RETURNING id, template, recipient_user_id`,
+        RETURNING id, template, recipient_user_id, to_address_hash`,
       [payload.delivery_id]
     )
     const row: ClaimedRow | undefined = claimed.rows[0]
-    if (!row) return null
-    return { row, token: await tokenEmail(payload.user_token_id, { client: trx }) }
+    if (row) return { row, token: await tokenEmail(payload.user_token_id, { client: trx }) }
+    const found = await trx
+      .from('notification_deliveries')
+      .where('id', payload.delivery_id)
+      .select('id')
+      .first()
+    return found ? ('not_queued' as const) : ('missing' as const)
   })
-  if (!claim) return { kind: 'not_queued' }
+  // Already sent or failed by another run: nothing to do.
+  if (claim === 'not_queued') return { kind: 'not_queued' }
+  if (claim === 'missing') {
+    notSent(payload.delivery_id, 'delivery_missing', payload.request_id)
+    return { kind: 'missing' }
+  }
   const { row, token } = claim
   const template = row.template
   if (!isEmailTemplate(template)) {
@@ -175,17 +228,16 @@ export async function sendEmail(payload: SendPayload): Promise<SendOutcome> {
     throw new InvariantViolation(`notification_deliveries ${row.id} and its token name other users`)
   }
 
-  const raw = token?.usable ? decryptToken(payload.token_enc, token.purpose) : null
-  if (!token?.usable || raw === null) {
-    const reason = token?.usable ? 'token_undecryptable' : 'token_not_usable'
-    await markFailed(row.id, reason)
-    notSent(row.id, reason, payload.request_id)
-    return { kind: 'failed', reason }
+  const ready = sendable(row, token, payload.token_enc)
+  if ('reason' in ready) {
+    await markFailed(row.id, ready.reason)
+    notSent(row.id, ready.reason, payload.request_id)
+    return { kind: 'failed', reason: ready.reason }
   }
 
   let sent: EmailSent
   try {
-    sent = await send(template, row.id, token, raw, payload.request_id)
+    sent = await send(template, row.id, ready.token, ready.raw, payload.request_id)
   } catch (error) {
     if (error instanceof EmailNotSent && error.permanent) {
       await markFailed(row.id, error.reason)

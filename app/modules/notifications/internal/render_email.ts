@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import app from '@adonisjs/core/services/app'
 import edge from 'edge.js'
+import { InvariantViolation } from '#exceptions/programming_errors'
 import { createTranslator, type Catalog, type Translate } from '#shared/i18n/translator'
 import type { EmailTemplate } from '#modules/notifications/domain/email_templates'
 
@@ -20,6 +21,9 @@ import type { EmailTemplate } from '#modules/notifications/domain/email_template
  *   allows the triple braces only there and in the layouts (T-SEC-014).
  *
  * Values are strings and numbers: links built from `APP_URL` and counts.
+ * A subject missing from the catalog throws before anything renders: the
+ * translator would return its key, and no email may go out with the
+ * subject `emails.<name>.subject`.
  */
 
 export type EmailValues = Record<string, string | number>
@@ -52,10 +56,15 @@ export async function renderEmail(
   values: EmailValues
 ): Promise<RenderedEmail> {
   const t = emailText()
+  const subjectKey = `emails.${template}.subject` as const
+  const subject = t(subjectKey)
+  if (subject === subjectKey) {
+    throw new InvariantViolation(`${subjectKey} is missing from resources/lang/en/emails.json`)
+  }
   const state = { ...values, t }
   const [html, text] = await Promise.all([
     edge.render(view(template, 'html'), state),
     edge.render(view(template, 'text'), state),
   ])
-  return { subject: t(`emails.${template}.subject`), html, text: tidy(text) }
+  return { subject, html, text: tidy(text) }
 }

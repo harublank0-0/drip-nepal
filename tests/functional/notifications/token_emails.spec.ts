@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { test } from '@japa/runner'
 import encryption from '@adonisjs/core/services/encryption'
 import db from '@adonisjs/lucid/services/db'
@@ -27,13 +27,18 @@ import { insertUser } from '#tests/support/schema_rows'
  * - T-NOT-101: an event dispatched three times gives one delivery row, one
  *   `notifications.send_email` job and one email; the job run twice sends
  *   once (compare-and-set on `queued`). Both token purposes, each with its
- *   template, subject and page.
+ *   template, subject and page. A replay after the token was used is a
+ *   quiet duplicate; a send job whose row is done is quiet, and one whose
+ *   row is missing warns (03 §10.4).
  * - T-NOT-001, the handler part (05 §8.14): a retryable failure keeps the
  *   row `queued` with `attempts` and `last_error`, so the retry or a
- *   redrive still sends it; a permanent one, a replaced token and a
- *   `token_enc` that no longer decrypts (07 §3.8 rule 4) make it `failed`
- *   with no send, and nothing sends a `failed` row again. The dead-letter
- *   and redrive part comes with `jobs:redrive` (M1 part 1c).
+ *   redrive still sends it, and any other error is recorded by its name
+ *   only; a permanent one, a replaced or expired token, a user suspended
+ *   meanwhile, an address changed since dispatch, and a `token_enc` that no
+ *   longer decrypts (07 §3.8 rule 4) make it `failed` with no send, keeping
+ *   an earlier transport error in `last_error`; nothing sends a `failed`
+ *   row again. The dead-letter and redrive part comes with `jobs:redrive`
+ *   (M1 part 1c).
  */
 
 type DispatchPayload = JobPayloads['notifications.dispatch'] & JobEnvelope
@@ -159,6 +164,48 @@ test.group('T-NOT-101 a replayed event gives one delivery row and one send', (gr
         token.token_hash
       )
     })
+
+  test('T-NOT-101 a replay after the token was used is a quiet duplicate', async ({ assert }) => {
+    const { userId, tokenId, event } = await issueToken('password_reset')
+    const payload = await dispatched(event)
+    await sendEmail(payload)
+    // The user follows the link: `resetPassword` consumes the token.
+    await db
+      .from('user_tokens')
+      .where('id', tokenId)
+      .update({ consumed_at: db.raw('now()') })
+
+    const outcomes: string[] = []
+    const lines = await captureLogs(async () => {
+      const outcome = await dispatchNotification(event)
+      outcomes.push(outcome.kind)
+    })
+    assert.deepEqual(outcomes, ['duplicate'])
+    assert.isUndefined(lines.find((line) => line.fields.event === 'notifications.email_not_sent'))
+    assert.lengthOf(await deliveriesOf(userId), 1)
+    assert.lengthOf(emails.fake.sent, 1)
+  })
+
+  test('T-NOT-101 a send job whose row is done is quiet; one whose row is missing warns', async ({
+    assert,
+  }) => {
+    const { event } = await issueToken('mfa_enrollment')
+    const payload = await dispatched(event)
+    await sendEmail(payload)
+    const missingId = randomUUID()
+
+    const outcomes: string[] = []
+    const lines = await captureLogs(async () => {
+      const done = await sendEmail(payload)
+      const missing = await sendEmail({ ...payload, delivery_id: missingId })
+      outcomes.push(done.kind, missing.kind)
+    })
+    assert.deepEqual(outcomes, ['not_queued', 'missing'])
+    const warnings = lines.filter((line) => line.fields.event === 'notifications.email_not_sent')
+    assert.lengthOf(warnings, 1)
+    assert.include(warnings[0].fields, { delivery_id: missingId, reason: 'delivery_missing' })
+    assert.lengthOf(emails.fake.sent, 1)
+  })
 })
 
 test.group('T-NOT-001 notifications.send_email failures', (group) => {
@@ -279,6 +326,79 @@ test.group('T-NOT-001 notifications.send_email failures', (group) => {
     assert.deepEqual(outcome, { kind: 'failed', reason: 'token_undecryptable' })
     const failed = await delivery(payload.delivery_id)
     assert.include(failed, { status: 'failed', last_error: 'token_undecryptable' })
+    assert.lengthOf(emails.fake.sent, 0)
+  })
+
+  test('T-NOT-001 a user suspended during an outage fails the row and keeps the transport error', async ({
+    assert,
+  }) => {
+    const { userId, event } = await issueToken('password_reset')
+    const payload = await dispatched(event)
+    emails.fake.failNext('retryable', { reason: 'ECONNECTION' })
+    await assert.rejects(() => sendEmail(payload), EmailNotSent)
+    // The token stays live and unexpired; only the account's status changes (07 §3.8).
+    await db.from('users').where('id', userId).update({ status: 'suspended' })
+
+    const outcome = await sendEmail(payload)
+    assert.deepEqual(outcome, { kind: 'failed', reason: 'token_not_usable' })
+    const failed = await delivery(payload.delivery_id)
+    assert.include(failed, {
+      status: 'failed',
+      attempts: 2,
+      last_error: 'ECONNECTION; token_not_usable',
+    })
+    assert.lengthOf(emails.fake.sent, 0)
+  })
+
+  test('T-NOT-001 a token that expired before the send fails the row without sending', async ({
+    assert,
+  }) => {
+    const { tokenId, event } = await issueToken('password_reset')
+    const payload = await dispatched(event)
+    await db
+      .from('user_tokens')
+      .where('id', tokenId)
+      .update({
+        created_at: db.raw("now() - interval '2 hours'"),
+        expires_at: db.raw("now() - interval '1 hour'"),
+      })
+
+    const outcome = await sendEmail(payload)
+    assert.deepEqual(outcome, { kind: 'failed', reason: 'token_not_usable' })
+    const failed = await delivery(payload.delivery_id)
+    assert.include(failed, { status: 'failed', last_error: 'token_not_usable' })
+    assert.lengthOf(emails.fake.sent, 0)
+  })
+
+  test('T-NOT-001 an address changed since dispatch fails the row without sending', async ({
+    assert,
+  }) => {
+    const { userId, event } = await issueToken('mfa_enrollment')
+    const payload = await dispatched(event)
+    // The row's hash is of the old address; the email must not go to another one.
+    await db
+      .from('users')
+      .where('id', userId)
+      .update({ email: `moved-${randomUUID()}@example.com` })
+
+    const outcome = await sendEmail(payload)
+    assert.deepEqual(outcome, { kind: 'failed', reason: 'address_changed' })
+    const failed = await delivery(payload.delivery_id)
+    assert.include(failed, { status: 'failed', last_error: 'address_changed' })
+    assert.lengthOf(emails.fake.sent, 0)
+  })
+
+  test('T-NOT-001 an unexpected error is recorded by its name only, keeps the row queued and is rethrown', async ({
+    assert,
+  }) => {
+    const { userId, event } = await issueToken('password_reset')
+    const payload = await dispatched(event)
+    const user = await db.from('users').where('id', userId).firstOrFail()
+    emails.fake.throwNext(new TypeError(`cannot send to ${user.email}`))
+
+    await assert.rejects(() => sendEmail(payload), TypeError)
+    const waiting = await delivery(payload.delivery_id)
+    assert.include(waiting, { status: 'queued', attempts: 1, last_error: 'TypeError' })
     assert.lengthOf(emails.fake.sent, 0)
   })
 })

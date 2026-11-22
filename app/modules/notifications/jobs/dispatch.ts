@@ -19,12 +19,13 @@ import type { UserTokenIssued } from '#modules/notifications/events'
  *
  * `user_token.issued`: the event ID is the token's row ID, the recipient
  * the token's user, and the template follows the token's purpose. The row
- * keeps only the keyed hash of the address (`HMAC_KEY_NOTIFY_ADDRESS`). A
- * token that can no longer be redeemed (replaced by a newer one, consumed,
- * expired, or its user suspended) gets no row: there is nothing to send,
- * so the job completes with a warning, as a permanent outcome does
- * (docs/03 §10.4). Log lines carry IDs only, never the address or its hash
- * (docs/09 §7.2).
+ * keeps only the keyed hash of the address (`HMAC_KEY_NOTIFY_ADDRESS`). An
+ * event whose row exists is a replay and completes quietly, even after its
+ * token was used. Otherwise a token that can no longer be redeemed
+ * (replaced by a newer one, consumed, expired, or its user suspended) gets
+ * no row: there is nothing to send, so the job completes with a warning,
+ * as a permanent outcome does (docs/03 §10.4). Log lines carry IDs only,
+ * never the address or its hash (docs/09 §7.2).
  */
 
 // The template of each token purpose; email verification comes with sign-up (M1 part 2).
@@ -47,26 +48,43 @@ export async function dispatchNotification(payload: DispatchPayload): Promise<Di
   throw new InvariantViolation('notifications.dispatch got an event it has no template for')
 }
 
+// The warning of an event that gives no email; IDs only (docs/09 §7.2).
+function notDispatched(payload: UserTokenIssued & JobEnvelope, reason: string) {
+  logger.warn(
+    {
+      event: 'notifications.email_not_sent',
+      queue: 'notifications.dispatch',
+      user_token_id: payload.user_token_id,
+      reason,
+      request_id: payload.request_id,
+    },
+    'token email not dispatched'
+  )
+}
+
 function dispatchTokenEmail(payload: UserTokenIssued & JobEnvelope): Promise<DispatchOutcome> {
   return jobTx(async (trx) => {
     const token = await tokenEmail(payload.user_token_id, { client: trx })
-    if (!token?.usable) {
-      const reason = token ? 'token_not_usable' : 'token_missing'
-      logger.warn(
-        {
-          event: 'notifications.email_not_sent',
-          queue: 'notifications.dispatch',
-          user_token_id: payload.user_token_id,
-          reason,
-          request_id: payload.request_id,
-        },
-        'token email not dispatched'
-      )
-      return { kind: 'dropped', reason } as const
+    if (!token) {
+      notDispatched(payload, 'token_missing')
+      return { kind: 'dropped', reason: 'token_missing' } as const
     }
     const template = TOKEN_EMAIL_TEMPLATES[token.purpose]
     if (!template) {
       throw new InvariantViolation(`no email template for ${token.purpose} tokens yet`)
+    }
+    const dedupeKey = `${token.id}:${template}:${token.userId}`
+
+    // A replay of an event already dispatched is quiet, even once its token is spent.
+    const existing = await trx
+      .from('notification_deliveries')
+      .where('dedupe_key', dedupeKey)
+      .select('id')
+      .first()
+    if (existing) return { kind: 'duplicate' } as const
+    if (!token.usable) {
+      notDispatched(payload, 'token_not_usable')
+      return { kind: 'dropped', reason: 'token_not_usable' } as const
     }
 
     const inserted = await trx.rawQuery(
@@ -75,14 +93,10 @@ function dispatchTokenEmail(payload: UserTokenIssued & JobEnvelope): Promise<Dis
        VALUES (?, 'email', ?, ?, ?)
        ON CONFLICT (dedupe_key) DO NOTHING
        RETURNING id`,
-      [
-        `${token.id}:${template}:${token.userId}`,
-        template,
-        token.userId,
-        keyedHash(hmacKeys.notifyAddress.release(), token.email),
-      ]
+      [dedupeKey, template, token.userId, keyedHash(hmacKeys.notifyAddress.release(), token.email)]
     )
     const row: { id: string } | undefined = inserted.rows[0]
+    // A concurrent replay inserted it first.
     if (!row) return { kind: 'duplicate' } as const
 
     const jobId = await sendJob(trx, 'notifications.send_email', {

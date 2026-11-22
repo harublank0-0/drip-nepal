@@ -14,7 +14,8 @@ import { PortAdapter } from '#modules/platform/ports/port_adapter'
  * template and the values in the plain-text part, never the HTML. Like the
  * real adapter it extends `PortAdapter`, so a send inside a `withTx`
  * transaction throws (T-ARCH-003). `failNext` makes the next sends fail
- * with `EmailNotSent`, retryably or permanently, as the mail adapter does.
+ * with `EmailNotSent`, retryably or permanently, as the mail adapter does;
+ * `throwNext` makes the next one throw any other error, as a bug would.
  *
  *   const emails = captureEmails()   // in group.each.setup, returning emails.restore
  *   emails.fake.failNext('retryable')
@@ -23,13 +24,18 @@ export class CapturingEmailSender extends PortAdapter implements EmailSender {
   protected readonly adapterName = 'CapturingEmailSender'
   readonly sent: EmailMessage[] = []
   readonly contexts: CallContext[] = []
-  #failures: EmailNotSent[] = []
+  #failures: Error[] = []
 
   failNext(kind: 'retryable' | 'permanent', options: { times?: number; reason?: string } = {}) {
     const reason = options.reason ?? (kind === 'permanent' ? 'recipient_refused' : 'timeout')
     for (let n = 0; n < (options.times ?? 1); n++) {
       this.#failures.push(new EmailNotSent(kind === 'permanent', reason))
     }
+    return this
+  }
+
+  throwNext(error: Error) {
+    this.#failures.push(error)
     return this
   }
 
