@@ -96,6 +96,24 @@ const brokenRules: Case[] = [
     violation: 'HMAC_KEY_TELEMETRY is required when SENTRY_DSN is set (docs/09 §5.6)',
   },
   {
+    rule: 'development with SMTP_HOST and no sender address',
+    base: validTest,
+    values: { SMTP_HOST: '127.0.0.1' },
+    violation: 'MAIL_FROM_ADDRESS is required when SMTP_HOST is set (docs/09 §6.1)',
+  },
+  {
+    rule: 'production with an SMTP username and no password',
+    base: validProduction,
+    values: {
+      SMTP_HOST: 'smtp.example.net',
+      SMTP_USERNAME: 'dripnepal',
+      SMTP_PASSWORD: false,
+      MAIL_FROM_ADDRESS: 'no-reply@example.net',
+    },
+    violation:
+      'SMTP_PASSWORD is required when SMTP_USERNAME is set in staging and production (docs/09 §6.1)',
+  },
+  {
     rule: 'production with the memory session store',
     base: validProduction,
     values: { SESSION_DRIVER: 'memory' },

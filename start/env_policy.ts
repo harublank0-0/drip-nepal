@@ -32,6 +32,10 @@ export type EnvPolicyValues = {
   COURIER_CALLBACK_KEY_IDS?: string[]
   COURIER_CALLBACK_ACTIVE_KEY_ID?: string
   COURIER_URLS?: Record<string, string | undefined>
+  SMTP_HOST?: string
+  SMTP_USERNAME?: string
+  SMTP_PASSWORD?: boolean
+  MAIL_FROM_ADDRESS?: string
   // Base64 of every key that must differ from the others in staging and prod.
   KEYS: Record<string, string | undefined>
 }
@@ -109,7 +113,17 @@ export function environmentPolicyViolations(values: EnvPolicyValues): string[] {
     violations.push('HMAC_KEY_TELEMETRY is required when SENTRY_DSN is set (docs/09 §5.6)')
   }
 
+  // A process that sends email needs a sender address (docs/09 §6.1).
+  if (values.SMTP_HOST && !values.MAIL_FROM_ADDRESS) {
+    violations.push('MAIL_FROM_ADDRESS is required when SMTP_HOST is set (docs/09 §6.1)')
+  }
+
   if (deployed) {
+    if (values.SMTP_USERNAME && !values.SMTP_PASSWORD) {
+      violations.push(
+        'SMTP_PASSWORD is required when SMTP_USERNAME is set in staging and production (docs/09 §6.1)'
+      )
+    }
     if (values.SESSION_DRIVER !== 'database') {
       violations.push('SESSION_DRIVER must be database in staging and production')
     }
