@@ -243,8 +243,9 @@ Ruling: Correct only the clear typos in the Nepal Post text, to MoFAGA's spellin
         conventions elsewhere, and keep the names where MoFAGA has other words or disagrees with
         Nepal Post, the CBS list and the Survey Department; they stay open under VX-10.
 Evidence: Internet Archive copies of MoFAGA's directory (102 page snapshots, 2026-01-12 to
-          2026-10-05, 87 of them listing local levels) name 734 of 753 local levels: 572 match, 118 differ in spelling convention,
-          44 otherwise (research/locations-mofaga-cross-check.md). No type differs.
+          2026-10-05, 87 of them listing local levels) name 734 of 753 local levels:
+          572 match, 118 differ in spelling convention, 44 otherwise
+          (research/locations-mofaga-cross-check.md). No type differs.
 ADR: none.
 Docs updated: 04 (§21.4, note 30), 00 (§8, §9.6, note 26), research (new file and README),
               VX-10, §3.2, note 44  |  Status: Decided
