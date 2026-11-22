@@ -27,6 +27,20 @@ async function htmlStatus(browser: Browser, path: string) {
   return { status: response.status, location: response.headers.get('location') }
 }
 
+// The Inertia page object of an HTML answer, whatever its status.
+async function htmlPage(browser: Browser, path: string) {
+  const response = await browser.request(path, { headers: { Accept: 'text/html' } })
+  const html = await response.text()
+  const json = /<script data-page="app" type="application\/json">([^<]*)<\/script>/.exec(html)?.[1]
+  return {
+    status: response.status,
+    page: JSON.parse(json ?? 'null') as {
+      component: string
+      props: Record<string, unknown>
+    } | null,
+  }
+}
+
 async function adminBrowser() {
   return signIn(await staffUser('platform_admin'), minutesAgo(1))
 }
@@ -96,9 +110,18 @@ test.group('T-SEC-030 /admin/logistics access', () => {
     assert.match(answer.location ?? '', /^\/mfa/)
   })
 
-  test('T-SEC-030 staff without the permission get 403', async ({ assert }) => {
+  test('T-SEC-030 staff without the permission get 403, PermissionDenied in the admin layout', async ({
+    assert,
+  }) => {
     const browser = await signIn(await staffUser('support_agent'), minutesAgo(1))
-    assert.equal(await statusOf(htmlStatus(browser, PAGE)), 403)
+    const { status, page } = await htmlPage(browser, PAGE)
+    assert.equal(status, 403)
+    assert.equal(page?.component, 'admin/forbidden')
+    // The navigation shows what the role can use.
+    assert.deepEqual(page?.props.current_staff, {
+      role: 'support_agent',
+      permissions: ['platform.orders.intervene'],
+    })
   })
 
   test('T-SEC-030 a platform admin opens it', async ({ assert }) => {
@@ -213,4 +236,14 @@ test.group('T-UI-035 /admin/logistics lists the courier accounts', () => {
     const two = page2.accounts as { items: Account[] }
     assert.sameMembers([one.items[0].id, two.items[0].id], [first, second])
   })
+})
+
+test.group('T-UI-035 /admin/logistics query parameters', () => {
+  test('T-UI-035 an unknown or malformed parameter redirects to the page without it: {query}')
+    .with([{ query: 'utm_source=newsletter' }, { query: 'cursor=stale' }, { query: 'limit=1000' }])
+    .run(async ({ assert }, { query }) => {
+      const answer = await htmlStatus(await adminBrowser(), `${PAGE}?${query}`)
+      assert.equal(answer.status, 302)
+      assert.equal(answer.location, PAGE)
+    })
 })

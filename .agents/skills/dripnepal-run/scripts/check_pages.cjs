@@ -142,14 +142,14 @@ function slugFor(pagePath) {
 }
 
 // The development-only sign-in (docs/07 §3.13): one click on the account's button.
-async function devSignIn(context, base, email) {
+async function devSignIn(context, base, email, out) {
   const page = await context.newPage()
   await page.goto(`${base}/dev/sign-in`)
   await page.getByRole('button', { name: `Sign in as ${email}` }).click()
   try {
     await page.getByText(`Signed in as ${email}`).waitFor({ timeout: 15000 })
   } catch (error) {
-    await page.screenshot({ path: 'tmp/page-checks/dev-sign-in-failed.png' })
+    await page.screenshot({ path: path.join(out, 'dev-sign-in-failed.png') })
     throw error
   }
   await page.close()
@@ -207,7 +207,7 @@ async function main() {
       // light when unset), so the cookie picks it before the first request.
       await context.addCookies([{ name: 'dn_theme', value: theme, url: options.base }])
       if (options.login) await logIn(context, options.base, options.login)
-      if (options.devSignIn) await devSignIn(context, options.base, options.devSignIn)
+      if (options.devSignIn) await devSignIn(context, options.base, options.devSignIn, options.out)
 
       for (const pagePath of options.paths) {
         const page = await context.newPage()

@@ -42,6 +42,9 @@ function signedOutOnProtectedRoute(ctx: HttpContext) {
   return false
 }
 
+// Whether a path is on the admin surface: a whole first segment, so `/administer` is not.
+const isAdminPath = (path: string) => path === '/admin' || path.startsWith('/admin/')
+
 // A page error's answer when no Inertia page can render it.
 const titlePage = (problem: Problem) => `<p>${escapeHtml(problem.title)}</p>`
 
@@ -87,10 +90,16 @@ export default class HttpExceptionHandler extends ExceptionHandler {
   protected debug = app.inDev
   protected renderStatusPages = !app.inDev
 
-  // 403 renders `errors/forbidden`, the `PermissionDenied` page of docs/08 §8.5.
+  /*
+   * 403 `FORBIDDEN` renders `PermissionDenied` (docs/08 §8.5) in the layout of
+   * the visited surface: `admin/forbidden` under /admin, `errors/forbidden`
+   * elsewhere. Other 403s (a CSRF failure) keep the title page.
+   */
   protected statusPages: Record<StatusPageRange, StatusPageRenderer> = {
     '403': (error, ctx) =>
-      renderPage(ctx, error, (inertia) => inertia.render('errors/forbidden', {})),
+      renderPage(ctx, error, (inertia) =>
+        inertia.render(isAdminPath(ctx.request.url()) ? 'admin/forbidden' : 'errors/forbidden', {})
+      ),
     '404': (error, ctx) =>
       renderPage(ctx, error, (inertia) => inertia.render('errors/not_found', {})),
     '500..599': (error, ctx) =>
@@ -158,7 +167,10 @@ export default class HttpExceptionHandler extends ExceptionHandler {
   async renderErrorAsHTML(error: HttpError, ctx: HttpContext) {
     if (this.debug) return super.renderErrorAsHTML(error, ctx)
     const problem = problemFor(error, ctx)
-    const hasStatusPage = problem.status === 404 || (problem.status >= 500 && problem.status < 600)
+    const hasStatusPage =
+      problem.status === 404 ||
+      problem.code === 'FORBIDDEN' ||
+      (problem.status >= 500 && problem.status < 600)
     if (this.renderStatusPages && hasStatusPage) {
       // The base renderer picks the page by `status`; it gets the problem's, and only the title.
       const shim = Object.assign(new Error(problem.title), { status: problem.status })

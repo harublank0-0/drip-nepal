@@ -1,4 +1,4 @@
-import { Head } from '@inertiajs/react'
+import { Head, usePage } from '@inertiajs/react'
 import { Link } from '@adonisjs/inertia/react'
 import type { InertiaProps } from '~/types'
 import { t } from '~/lib/i18n'
@@ -19,6 +19,8 @@ type Props = InertiaProps<{
 
 export default function AdminLogistics({ accounts }: Props) {
   const next = accounts.meta.next_cursor
+  // A later page carries a cursor in its URL; 08 §7.2 offers the way back.
+  const onLaterPage = usePage().url.includes('cursor=')
   return (
     <>
       <Head title={t('admin.logistics.title')} />
@@ -35,14 +37,26 @@ export default function AdminLogistics({ accounts }: Props) {
         ) : (
           <CourierAccountsTable accounts={accounts.items} />
         )}
-        {next && (
-          <Link
-            route="admin.logistics"
-            qs={{ cursor: next }}
-            className="text-link underline-offset-4 hover:underline"
-          >
-            {t('admin.logistics.next_page')}
-          </Link>
+        {(next || onLaterPage) && (
+          <nav className="flex gap-4" aria-label={t('admin.logistics.table_label')}>
+            {onLaterPage && (
+              <Link
+                route="admin.logistics"
+                className="text-link underline-offset-4 hover:underline"
+              >
+                {t('admin.logistics.first_page')}
+              </Link>
+            )}
+            {next && (
+              <Link
+                route="admin.logistics"
+                qs={{ cursor: next }}
+                className="text-link underline-offset-4 hover:underline"
+              >
+                {t('admin.logistics.next_page')}
+              </Link>
+            )}
+          </nav>
         )}
       </div>
     </>

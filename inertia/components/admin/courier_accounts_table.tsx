@@ -1,20 +1,14 @@
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '~/components/ui/table'
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '~/components/ui/table'
 import { StatusBadge } from '~/components/common/status_badge'
 import { t } from '~/lib/i18n'
-import { formatDateTime } from '@shared/format/date_time'
+import { formatDateTime } from '@shared/format/date'
 
 /*
  * The courier accounts list of `/admin/logistics` (docs/08 §3.1 "Courier
- * operations", §6.3): a table from `md`, whose region is labelled and
- * keyboard-focusable for horizontal scroll, and one card per account below
- * `md`, with the same fields. Never credentials (T-SEC-040).
+ * operations", §6.3, §7.2): a table from `md`, with a caption and column
+ * headers, inside a labelled region that is its own scroll container and is
+ * keyboard-focusable, and one card per account below `md`, with the same
+ * fields. Never credentials (T-SEC-040).
  */
 export type CourierShop = { shop_id: string; slug: string | null; name: string | null }
 
@@ -72,17 +66,19 @@ export function CourierAccountsTable({ accounts }: { accounts: CourierAccount[] 
         aria-label={t('admin.logistics.table_label')}
         // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- a scrolling table region is keyboard-focusable (docs/08 §6.3)
         tabIndex={0}
-        className="hidden rounded-md border md:block"
+        className="hidden overflow-x-auto rounded-md border md:block"
       >
-        <Table>
-          <TableHeader className="bg-muted/50 sticky top-0">
+        {/* ui/table's Table adds its own scroll container, so the table element is written here. */}
+        <table className="w-full caption-bottom text-sm">
+          <caption className="sr-only">{t('admin.logistics.table_label')}</caption>
+          <TableHeader className="bg-muted/50">
             <TableRow>
-              <TableHead>{t('admin.logistics.column.name')}</TableHead>
-              <TableHead>{t('admin.logistics.column.owner')}</TableHead>
-              <TableHead>{t('admin.logistics.column.status')}</TableHead>
-              <TableHead>{t('admin.logistics.column.environment')}</TableHead>
-              <TableHead>{t('admin.logistics.column.shops')}</TableHead>
-              <TableHead>{t('admin.logistics.column.verified')}</TableHead>
+              <TableHead scope="col">{t('admin.logistics.column.name')}</TableHead>
+              <TableHead scope="col">{t('admin.logistics.column.owner')}</TableHead>
+              <TableHead scope="col">{t('admin.logistics.column.status')}</TableHead>
+              <TableHead scope="col">{t('admin.logistics.column.environment')}</TableHead>
+              <TableHead scope="col">{t('admin.logistics.column.shops')}</TableHead>
+              <TableHead scope="col">{t('admin.logistics.column.verified')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -101,7 +97,7 @@ export function CourierAccountsTable({ accounts }: { accounts: CourierAccount[] 
               </TableRow>
             ))}
           </TableBody>
-        </Table>
+        </table>
       </div>
 
       <ul className="space-y-3 md:hidden" aria-label={t('admin.logistics.table_label')}>

@@ -37,6 +37,9 @@ const GROUPS: NavGroup[] = [
   },
 ]
 
+// The skip link's target (docs/08 §9.1).
+export const ADMIN_NAV_ID = 'admin-navigation'
+
 export function AdminSidebar({ permissions }: { permissions: string[] }) {
   const { url } = usePage()
   const path = url.split('?')[0]
@@ -46,31 +49,33 @@ export function AdminSidebar({ permissions }: { permissions: string[] }) {
   })).filter((group) => group.items.length > 0)
 
   return (
-    <Sidebar aria-label={t('admin.layout.navigation')}>
+    <Sidebar>
       <SidebarHeader className="px-4 py-3 font-semibold">{t('admin.layout.brand')}</SidebarHeader>
       <SidebarContent>
-        {groups.map((group) => (
-          <SidebarGroup key={group.label}>
-            <SidebarGroupLabel>{t(group.label)}</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {group.items.map((item) => {
-                  const href = urlFor(item.route)
-                  const current = path === href
-                  return (
-                    <SidebarMenuItem key={item.route}>
-                      <SidebarMenuButton asChild isActive={current}>
-                        <Link route={item.route} aria-current={current ? 'page' : undefined}>
-                          {t(item.label)}
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  )
-                })}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        ))}
+        <nav id={ADMIN_NAV_ID} aria-label={t('admin.layout.navigation')} tabIndex={-1}>
+          {groups.map((group) => (
+            <SidebarGroup key={group.label}>
+              <SidebarGroupLabel>{t(group.label)}</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {group.items.map((item) => {
+                    const href = urlFor(item.route)
+                    const current = path === href
+                    return (
+                      <SidebarMenuItem key={item.route}>
+                        <SidebarMenuButton asChild isActive={current}>
+                          <Link route={item.route} aria-current={current ? 'page' : undefined}>
+                            {t(item.label)}
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    )
+                  })}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          ))}
+        </nav>
       </SidebarContent>
     </Sidebar>
   )

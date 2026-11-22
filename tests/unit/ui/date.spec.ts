@@ -1,5 +1,5 @@
 import { test } from '@japa/runner'
-import { formatDateTime } from '#shared/format/date_time'
+import { formatDateTime } from '#shared/format/date'
 
 /*
  * T-UI-020, the date part (docs/08 §11.8): UTC in, Kathmandu time out
