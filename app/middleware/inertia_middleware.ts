@@ -4,6 +4,7 @@ import BaseInertiaMiddleware from '@adonisjs/inertia/inertia_middleware'
 import { appUrl, support } from '#config/storefront'
 import { encryptsHistory } from '#config/inertia'
 import { parseTheme, THEME_COOKIE } from '#shared/ui/theme'
+import { staffPermissions } from '#modules/identity/staff'
 
 export default class InertiaMiddleware extends BaseInertiaMiddleware {
   async share(ctx: HttpContext) {
@@ -15,7 +16,7 @@ export default class InertiaMiddleware extends BaseInertiaMiddleware {
      * In that case, we must always assume that HttpContext is not fully hydrated
      * with all the properties
      */
-    const { session } = ctx as Partial<HttpContext>
+    const { session, auth, staff } = ctx as Partial<HttpContext>
 
     /**
      * Fetching the first error from the flash messages
@@ -46,6 +47,23 @@ export default class InertiaMiddleware extends BaseInertiaMiddleware {
        * from it, so the server markup and the first client render agree.
        */
       theme: parseTheme(ctx.request.plainCookie(THEME_COOKIE, { encoded: false })),
+      /*
+       * The signed-in user, or null (docs/09 §4.2): enough for the account
+       * menu, nothing more.
+       */
+      user: auth?.user
+        ? { id: auth.user.id, email: auth.user.email, full_name: auth.user.fullName }
+        : null,
+      /*
+       * On admin pages, the staff member's role and the permissions it
+       * grants (docs/09 §13.7, proposed `current_staff`), so the sidebar
+       * hides what the role cannot use; null elsewhere. The UI hides, the
+       * server decides (docs/08 §11.6). `platformStaff` sets `ctx.staff`
+       * before the page renders.
+       */
+      current_staff: staff ? { role: staff.role, permissions: staffPermissions(staff.role) } : null,
+      // The reference support asks for (docs/08 §8.3).
+      request_id: ctx.request.id() ?? null,
     }
   }
 

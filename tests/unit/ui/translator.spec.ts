@@ -33,7 +33,10 @@ function frontendKeys(): string[] {
   for (const entry of readdirSync(FRONTEND_DIR, { recursive: true, encoding: 'utf8' })) {
     if (!/\.tsx?$/.test(entry) || entry.startsWith(join('components', 'ui'))) continue
     const source = readFileSync(join(FRONTEND_DIR, entry), 'utf8')
-    for (const match of source.matchAll(/\bt\(\s*(['"`])([^'"`]+)\1/g)) keys.add(match[2])
+    for (const match of source.matchAll(/\bt\(\s*(['"`])([^'"`]+)\1/g)) {
+      // A key built at run time (StatusBadge's `status.<entity>.<state>`) is T-UI-008's to check.
+      if (!match[2].includes('${')) keys.add(match[2])
+    }
   }
   return [...keys]
 }
@@ -100,10 +103,16 @@ test.group('T-UI-034 message catalogs', () => {
   })
 
   test('T-UI-034 every key the frontend passes to t() exists', ({ assert }) => {
-    const translate = createTranslator(catalogs()) as Translate
+    // Membership, not translation: a message with a placeholder renders its
+    // key when called without values, which says nothing about the key.
+    const known = new Set(
+      Object.entries(catalogs()).flatMap(([file, catalog]) =>
+        Object.keys(catalog).map((key) => `${file}.${key}`)
+      )
+    )
     const keys = frontendKeys()
     // The error pages and the error screen use 13 keys today.
     assert.isAtLeast(keys.length, 13)
-    for (const key of keys) assert.notEqual(translate(key), key, key)
+    for (const key of keys) assert.isTrue(known.has(key), key)
   })
 })

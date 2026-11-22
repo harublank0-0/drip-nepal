@@ -87,8 +87,10 @@ export default class HttpExceptionHandler extends ExceptionHandler {
   protected debug = app.inDev
   protected renderStatusPages = !app.inDev
 
-  // 403 gets `errors/forbidden` with the permission work of M1 (docs/08 §8.3).
+  // 403 renders `errors/forbidden`, the `PermissionDenied` page of docs/08 §8.5.
   protected statusPages: Record<StatusPageRange, StatusPageRenderer> = {
+    '403': (error, ctx) =>
+      renderPage(ctx, error, (inertia) => inertia.render('errors/forbidden', {})),
     '404': (error, ctx) =>
       renderPage(ctx, error, (inertia) => inertia.render('errors/not_found', {})),
     '500..599': (error, ctx) =>

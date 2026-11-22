@@ -15,6 +15,8 @@
  *   --out <dir>         Screenshot folder (default tmp/page-checks, gitignored)
  *   --login email:pass  Log in through the form at /auth/login before visiting the
  *                       pages (no login page exists until M1; check its path then)
+ *   --dev-sign-in email Sign in through the development-only page /dev/sign-in
+ *                       (docs/07 §3.13) as that demo or staff account
  *   --full              Whole-page screenshots (clipped to the screen width) instead of the first screen
  *   --scale 2           Device scale factor (default 1; use 2 for screenshots a person will see)
  *
@@ -52,6 +54,7 @@ function parseArgs(argv) {
     themes: ['light', 'dark'],
     out: 'tmp/page-checks',
     login: null,
+    devSignIn: null,
     full: false,
     scale: 1,
     paths: [],
@@ -64,6 +67,7 @@ function parseArgs(argv) {
     else if (arg === '--themes') options.themes = next().split(',')
     else if (arg === '--out') options.out = next()
     else if (arg === '--login') options.login = next()
+    else if (arg === '--dev-sign-in') options.devSignIn = next()
     else if (arg === '--full') options.full = true
     else if (arg === '--scale') options.scale = Number(next())
     else if (arg.startsWith('--')) throw new Error(`Unknown option ${arg}`)
@@ -137,6 +141,20 @@ function slugFor(pagePath) {
   return pagePath.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'home'
 }
 
+// The development-only sign-in (docs/07 §3.13): one click on the account's button.
+async function devSignIn(context, base, email) {
+  const page = await context.newPage()
+  await page.goto(`${base}/dev/sign-in`)
+  await page.getByRole('button', { name: `Sign in as ${email}` }).click()
+  try {
+    await page.getByText(`Signed in as ${email}`).waitFor({ timeout: 15000 })
+  } catch (error) {
+    await page.screenshot({ path: 'tmp/page-checks/dev-sign-in-failed.png' })
+    throw error
+  }
+  await page.close()
+}
+
 async function logIn(context, base, credentials) {
   const separator = credentials.indexOf(':')
   const email = credentials.slice(0, separator)
@@ -189,6 +207,7 @@ async function main() {
       // light when unset), so the cookie picks it before the first request.
       await context.addCookies([{ name: 'dn_theme', value: theme, url: options.base }])
       if (options.login) await logIn(context, options.base, options.login)
+      if (options.devSignIn) await devSignIn(context, options.base, options.devSignIn)
 
       for (const pagePath of options.paths) {
         const page = await context.newPage()

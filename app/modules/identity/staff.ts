@@ -32,6 +32,13 @@ export async function activeStaffRole(userId: string): Promise<string | null> {
   return row?.role ?? null
 }
 
+/** Every permission `role` holds, for the admin pages' navigation (docs/09 §13.7). */
+export function staffPermissions(role: string): PlatformPermission[] {
+  return (Object.keys(PLATFORM_PERMISSIONS) as PlatformPermission[]).filter((permission) =>
+    staffMay(role, permission)
+  )
+}
+
 export function staffMay(role: string, permission: PlatformPermission) {
   return (PLATFORM_PERMISSIONS[permission] as readonly string[]).includes(role)
 }

@@ -1,24 +1,25 @@
 import { type Data } from '@generated/data'
 import { toast } from 'sonner'
 import { Head, usePage } from '@inertiajs/react'
-import { type ReactElement, useEffect } from 'react'
+import { type ReactNode, useEffect } from 'react'
 import { ThemeProvider, useTheme } from '~/components/providers/theme_provider'
 import { Toaster } from '~/components/ui/sonner'
 import { TooltipProvider } from '~/components/ui/tooltip'
 import { SocialMeta } from '~/components/seo/social_meta'
 
-export default function RootLayout({ children }: { children: ReactElement<Data.SharedProps> }) {
+// Every page's outer layout; a surface layout, if any, sits inside it (layout_for.ts).
+export default function RootLayout({ children }: { children: ReactNode }) {
   const { url, props } = usePage<Data.SharedProps>()
   useEffect(() => {
     toast.dismiss()
   }, [url])
 
   useEffect(() => {
-    if (children.props.flash.error) {
-      toast.error(children.props.flash.error)
+    if (props.flash.error) {
+      toast.error(props.flash.error)
     }
-    if (children.props.flash.success) {
-      toast.success(children.props.flash.success)
+    if (props.flash.success) {
+      toast.success(props.flash.success)
     }
   })
 

@@ -355,6 +355,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/webhooks/courier_callbacks_controller').default['receive']>>>
     }
   }
+  'admin.logistics': {
+    methods: ["GET","HEAD"]
+    pattern: '/admin/logistics'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/admin/logistics/accounts_controller').default['index']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/admin/logistics/accounts_controller').default['index']>>>
+    }
+  }
   'dev.design_system': {
     methods: ["GET","HEAD"]
     pattern: '/dev/design-system'

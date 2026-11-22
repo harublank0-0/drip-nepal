@@ -9,5 +9,9 @@
   "server_error.heading": "Sorry, something went wrong",
   "server_error.body": "This is a problem on our side. Please try again in a moment.",
   "server_error.retry": "Try again",
-  "server_error.reference": "Reference:"
+  "server_error.reference": "Reference:",
+  "forbidden.title": "Not allowed",
+  "forbidden.heading": "You can't open this page",
+  "forbidden.body": "Your role doesn't include this page. Ask a platform admin if you need it.",
+  "forbidden.back": "Go to the home page"
 }

@@ -1,8 +1,7 @@
 import './css/app.css'
-import { StrictMode, type ComponentType, type ReactElement } from 'react'
+import { StrictMode, type ComponentType } from 'react'
 import { client } from './client'
-import RootLayout from '~/layouts/root_layout'
-import { type Data } from '@generated/data'
+import { layoutFor } from '~/layouts/layout_for'
 import { createRoot, hydrateRoot } from 'react-dom/client'
 import { createInertiaApp } from '@inertiajs/react'
 import { TuyauProvider } from '@adonisjs/inertia/react'
@@ -22,11 +21,7 @@ createInertiaApp({
   // Inertia 3.11's resolver type takes the component; the adapter's helper
   // returns its module.
   resolve: async (name) => {
-    const page = await resolvePageComponent(
-      `./pages/${name}.tsx`,
-      pages,
-      (child: ReactElement<Data.SharedProps>) => <RootLayout children={child} />
-    )
+    const page = await resolvePageComponent(`./pages/${name}.tsx`, pages, layoutFor(name))
     return page.default
   },
   setup({ el, App, props }) {

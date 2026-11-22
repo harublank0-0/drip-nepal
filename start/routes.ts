@@ -33,6 +33,9 @@ await import('#start/routes/api_v1/seller')
 await import('#start/routes/api_v1/admin')
 await import('#start/routes/webhooks')
 
+// Pages (docs/08 §2), GET only.
+await import('#start/routes/admin')
+
 // Development-only routes (RF-40): never in the production route list.
 // Test runs load them too, so the route types CI generates under
 // NODE_ENV=test match what `pnpm dev` generates (T-ARCH-016).
