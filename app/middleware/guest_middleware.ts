@@ -1,18 +1,23 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import type { NextFn } from '@adonisjs/core/types/http'
 import type { Authenticators } from '@adonisjs/auth/types'
+import { DomainError } from '#exceptions/domain_error'
 
-/**
- * Guest middleware is used to deny access to routes that should
- * be accessed by unauthenticated users.
+/*
+ * `guest` (docs/09 §3.4 row 3): only on the sign-in, sign-up and reset
+ * pages and on `logIn` (T-UI-025), so a signed-in session must log out
+ * before it signs in as another account (docs/07 §3.2).
  *
- * For example, the login page should not be accessible if the user
- * is already logged-in
+ * - A page visit by a signed-in user is redirected to `/` (the interim
+ *   home page until M4's, storefront/identity/home_controller.ts), without
+ *   the visited query; 02 J-04 asks for `/account`, which comes with M1
+ *   part 6.
+ * - An API call (`logIn`) by a signed-in user gets 409 `CONFLICT`
+ *   problem+json, "You are already signed in", instead of a redirect a
+ *   JSON client cannot use (docs/06 §13.3 [Assumption]); the client
+ *   reloads the page.
  */
 export default class GuestMiddleware {
-  /**
-   * The URL to redirect to when user is logged-in
-   */
   redirectTo = '/'
 
   async handle(
@@ -20,10 +25,14 @@ export default class GuestMiddleware {
     next: NextFn,
     options: { guards?: (keyof Authenticators)[] } = {}
   ) {
-    for (let guard of options.guards || [ctx.auth.defaultGuard]) {
+    for (const guard of options.guards || [ctx.auth.defaultGuard]) {
       if (await ctx.auth.use(guard).check()) {
+        if (ctx.request.url().startsWith('/api/')) {
+          throw new DomainError('CONFLICT', { detail: 'You are already signed in.' })
+        }
         ctx.session.reflash()
-        return ctx.response.redirect(this.redirectTo, true)
+        // Never the visited query (docs/07 TM-14): `/login?return_to=…` must not carry it on.
+        return ctx.response.redirect().withQs(false).toPath(this.redirectTo)
       }
     }
 

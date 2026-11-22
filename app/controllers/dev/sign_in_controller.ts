@@ -7,10 +7,11 @@ import { devSignInAccountJson } from '#transformers/dev_sign_in_transformer'
 
 /*
  * The development-only sign-in (docs/07 §3.13), registered only outside
- * production (guard 1, start/routes.ts and T-UI-026). It stands in for M1's
- * `logIn` and MFA challenge so the pages built ahead of M1 can be opened.
- * It writes nothing but the session: no audit row, no login event, no
- * throttle row (T-SEC-044).
+ * production (guard 1, start/routes.ts and T-UI-026). `/login` signs in
+ * with a password since M1 part 3; this page stays for development: it
+ * skips the password and stands in for the MFA challenge, which M1 part 5
+ * builds, so the admin pages can be opened. It writes nothing but the
+ * session: no audit row, no login event, no throttle row (T-SEC-044).
  */
 export default class DevSignInController {
   async show(ctx: HttpContext) {

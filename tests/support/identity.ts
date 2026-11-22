@@ -141,3 +141,61 @@ export async function countingHashes<T>(run: () => Promise<T>) {
     else Reflect.deleteProperty(hash, 'make')
   }
 }
+
+/*
+ * Helpers of the sign-in tests (docs/06 §13.3; M1 part 3). Each test signs
+ * in from its own client network and deletes the `login_ip` and
+ * `login_acct_ip` keys it made, which the limiter store commits on its own
+ * connection (docs/10 §3.3).
+ */
+export const LOG_IN_PATH = '/api/v1/auth/session'
+export const ME_PATH = '/api/v1/me'
+
+// A `DELETE` (`logOut`) from `client`, with its client network as the forwarded address.
+export function deleteJson(client: Guest, path: string, headers: Record<string, string> = {}) {
+  return send(client.browser, 'DELETE', path, undefined, {
+    'X-Forwarded-For': client.ip,
+    ...headers,
+  })
+}
+
+// A `GET` from `client`, with its client network as the forwarded address.
+export function getJson(client: Guest, path: string) {
+  return send(client.browser, 'GET', path, undefined, { 'X-Forwarded-For': client.ip })
+}
+
+// The login limiter keys of one email (as the form sends it, normalised) and client network.
+export async function forgetLogin(email: string, ip: string) {
+  const network = clientNetwork(ip)
+  await forgetKeys('login_acct_ip', email.trim().toLowerCase(), network)
+  await forgetKeys('login_ip', network)
+}
+
+/*
+ * Counts the scrypt hashes `run` spends: `make` and `verify` on the
+ * `scrypt` hasher, which `User.verifyCredentials` uses directly (the
+ * manager's own `make` is not on its path). The hasher instance is cached
+ * by the manager, so patching it covers the test server in this process
+ * (docs/07 §3.6, TM-09: one hash on each `logIn` branch).
+ */
+export async function countingScrypt<T>(run: () => Promise<T>) {
+  const scrypt = hash.use('scrypt')
+  const make = scrypt.make
+  const verify = scrypt.verify
+  const counts = { make: 0, verify: 0 }
+  scrypt.make = async function (this: typeof scrypt, value: string) {
+    counts.make += 1
+    return make.call(this, value)
+  }
+  scrypt.verify = async function (this: typeof scrypt, hashed: string, plain: string) {
+    counts.verify += 1
+    return verify.call(this, hashed, plain)
+  }
+  try {
+    const result = await run()
+    return { result, ...counts }
+  } finally {
+    Reflect.deleteProperty(scrypt, 'make')
+    Reflect.deleteProperty(scrypt, 'verify')
+  }
+}

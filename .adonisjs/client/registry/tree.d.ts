@@ -8,8 +8,11 @@ export interface ApiDefinition {
     }
   }
   signUp: typeof routes['signUp']
+  logIn: typeof routes['logIn']
+  logOut: typeof routes['logOut']
   resendEmailVerification: typeof routes['resendEmailVerification']
   confirmEmail: typeof routes['confirmEmail']
+  getMe: typeof routes['getMe']
   getLogisticsSettings: typeof routes['getLogisticsSettings']
   replaceLogisticsSettings: typeof routes['replaceLogisticsSettings']
   createShopCourierAccount: typeof routes['createShopCourierAccount']
@@ -38,9 +41,11 @@ export interface ApiDefinition {
   adminResolveCourierEvent: typeof routes['adminResolveCourierEvent']
   adminRecordOrderVerification: typeof routes['adminRecordOrderVerification']
   receiveCourierCallback: typeof routes['receiveCourierCallback']
+  home: typeof routes['home']
   legal: {
     document: typeof routes['legal.document']
   }
+  login: typeof routes['login']
   signup: typeof routes['signup']
   verifyEmail: typeof routes['verify_email']
   admin: {

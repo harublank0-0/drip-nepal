@@ -10,8 +10,9 @@ import { DomainError } from '#exceptions/domain_error'
  * /api/ and redirects a page visit to /login with the visited URL as the
  * `return_to` query (docs/09 §5.4). Nothing goes into the session: no
  * intended URL is ever stored, so a token in a path never reaches
- * `sessions.data` (docs/07 §3.2, TM-14). `/login` validates `return_to`
- * with the single helper of docs/07 TM-14 (app/modules/auth/return_path.ts).
+ * `sessions.data` (docs/07 §3.2, TM-14). `logIn` validates `return_to`
+ * with the single helper of docs/07 TM-14
+ * (app/modules/identity/domain/return_path.ts).
  */
 export default class AuthMiddleware {
   async handle(

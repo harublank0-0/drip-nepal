@@ -18,6 +18,18 @@ const routes = {
     tokens: [{"old":"/api/v1/auth/signup","type":0,"val":"api","end":""},{"old":"/api/v1/auth/signup","type":0,"val":"v1","end":""},{"old":"/api/v1/auth/signup","type":0,"val":"auth","end":""},{"old":"/api/v1/auth/signup","type":0,"val":"signup","end":""}],
     types: placeholder as Registry['signUp']['types'],
   },
+  'logIn': {
+    methods: ["POST"],
+    pattern: '/api/v1/auth/session',
+    tokens: [{"old":"/api/v1/auth/session","type":0,"val":"api","end":""},{"old":"/api/v1/auth/session","type":0,"val":"v1","end":""},{"old":"/api/v1/auth/session","type":0,"val":"auth","end":""},{"old":"/api/v1/auth/session","type":0,"val":"session","end":""}],
+    types: placeholder as Registry['logIn']['types'],
+  },
+  'logOut': {
+    methods: ["DELETE"],
+    pattern: '/api/v1/auth/session',
+    tokens: [{"old":"/api/v1/auth/session","type":0,"val":"api","end":""},{"old":"/api/v1/auth/session","type":0,"val":"v1","end":""},{"old":"/api/v1/auth/session","type":0,"val":"auth","end":""},{"old":"/api/v1/auth/session","type":0,"val":"session","end":""}],
+    types: placeholder as Registry['logOut']['types'],
+  },
   'resendEmailVerification': {
     methods: ["POST"],
     pattern: '/api/v1/auth/email-verification',
@@ -29,6 +41,12 @@ const routes = {
     pattern: '/api/v1/auth/email-verification/confirm',
     tokens: [{"old":"/api/v1/auth/email-verification/confirm","type":0,"val":"api","end":""},{"old":"/api/v1/auth/email-verification/confirm","type":0,"val":"v1","end":""},{"old":"/api/v1/auth/email-verification/confirm","type":0,"val":"auth","end":""},{"old":"/api/v1/auth/email-verification/confirm","type":0,"val":"email-verification","end":""},{"old":"/api/v1/auth/email-verification/confirm","type":0,"val":"confirm","end":""}],
     types: placeholder as Registry['confirmEmail']['types'],
+  },
+  'getMe': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/v1/me',
+    tokens: [{"old":"/api/v1/me","type":0,"val":"api","end":""},{"old":"/api/v1/me","type":0,"val":"v1","end":""},{"old":"/api/v1/me","type":0,"val":"me","end":""}],
+    types: placeholder as Registry['getMe']['types'],
   },
   'getLogisticsSettings': {
     methods: ["GET","HEAD"],
@@ -198,11 +216,23 @@ const routes = {
     tokens: [{"old":"/api/v1/webhooks/couriers/:providerCode/:accountId","type":0,"val":"api","end":""},{"old":"/api/v1/webhooks/couriers/:providerCode/:accountId","type":0,"val":"v1","end":""},{"old":"/api/v1/webhooks/couriers/:providerCode/:accountId","type":0,"val":"webhooks","end":""},{"old":"/api/v1/webhooks/couriers/:providerCode/:accountId","type":0,"val":"couriers","end":""},{"old":"/api/v1/webhooks/couriers/:providerCode/:accountId","type":1,"val":"providerCode","end":""},{"old":"/api/v1/webhooks/couriers/:providerCode/:accountId","type":1,"val":"accountId","end":""}],
     types: placeholder as Registry['receiveCourierCallback']['types'],
   },
+  'home': {
+    methods: ["GET","HEAD"],
+    pattern: '/',
+    tokens: [{"old":"/","type":0,"val":"/","end":""}],
+    types: placeholder as Registry['home']['types'],
+  },
   'legal.document': {
     methods: ["GET","HEAD"],
     pattern: '/legal/:documentSlug',
     tokens: [{"old":"/legal/:documentSlug","type":0,"val":"legal","end":""},{"old":"/legal/:documentSlug","type":1,"val":"documentSlug","end":""}],
     types: placeholder as Registry['legal.document']['types'],
+  },
+  'login': {
+    methods: ["GET","HEAD"],
+    pattern: '/login',
+    tokens: [{"old":"/login","type":0,"val":"login","end":""}],
+    types: placeholder as Registry['login']['types'],
   },
   'signup': {
     methods: ["GET","HEAD"],

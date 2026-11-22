@@ -114,7 +114,7 @@ export function VerifyEmailPanel({
   const signedIn = accountStatus !== null
   const continueLink = (
     <Button asChild className="h-11 w-full text-base">
-      {/* `/` is the storefront home of M4; until then the link opens the 404 page. */}
+      {/* `/`: the interim home page until M4's (pages/storefront/home.tsx). */}
       <a href="/">{t('auth.verify.continue')}</a>
     </Button>
   )
@@ -141,8 +141,8 @@ export function VerifyEmailPanel({
           continueLink
         ) : (
           <Button asChild className="h-11 w-full text-base">
-            {/* `/login` is a route of M1 part 3; until then the link opens the 404 page. */}
-            <a href="/login">{t('auth.verify.sign_in')}</a>
+            {/* No `return_to` and no prefilled email: the link carries neither (docs/08 §2.3). */}
+            <a href={urlFor('login')}>{t('auth.verify.sign_in')}</a>
           </Button>
         )}
       </Panel>
@@ -243,8 +243,7 @@ function Panel({
 
 // A new link needs a session (docs/08 §2.3, decided 2026-11-23): sign in, then come back here.
 function SignInForLink() {
-  // `/login` is a route of M1 part 3; until then the link opens the 404 page.
-  const href = `/login?return_to=${encodeURIComponent(urlFor('verify_email'))}`
+  const href = `${urlFor('login')}?return_to=${encodeURIComponent(urlFor('verify_email'))}`
   return (
     <div className="space-y-2">
       <p className="text-muted-foreground text-sm">{t('auth.verify.no_link')}</p>

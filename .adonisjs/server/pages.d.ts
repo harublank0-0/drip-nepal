@@ -14,6 +14,7 @@ declare module '@adonisjs/inertia/types' {
   export interface InertiaPages {
     'admin/forbidden': ExtractProps<(typeof import('../../inertia/pages/admin/forbidden.tsx'))['default']>
     'admin/logistics': ExtractProps<(typeof import('../../inertia/pages/admin/logistics.tsx'))['default']>
+    'auth/login': ExtractProps<(typeof import('../../inertia/pages/auth/login.tsx'))['default']>
     'auth/signup': ExtractProps<(typeof import('../../inertia/pages/auth/signup.tsx'))['default']>
     'auth/verify_email': ExtractProps<(typeof import('../../inertia/pages/auth/verify_email.tsx'))['default']>
     'dev/design_system/color_card': ExtractProps<(typeof import('../../inertia/pages/dev/design_system/color_card.tsx'))['default']>
@@ -27,6 +28,7 @@ declare module '@adonisjs/inertia/types' {
     'errors/forbidden': ExtractProps<(typeof import('../../inertia/pages/errors/forbidden.tsx'))['default']>
     'errors/not_found': ExtractProps<(typeof import('../../inertia/pages/errors/not_found.tsx'))['default']>
     'errors/server_error': ExtractProps<(typeof import('../../inertia/pages/errors/server_error.tsx'))['default']>
+    'storefront/home': ExtractProps<(typeof import('../../inertia/pages/storefront/home.tsx'))['default']>
     'storefront/legal_document': ExtractProps<(typeof import('../../inertia/pages/storefront/legal_document.tsx'))['default']>
   }
 }

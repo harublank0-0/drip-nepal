@@ -328,6 +328,5 @@ function useReturnTo() {
   return new URL(url, 'http://localhost').searchParams.get('return_to')
 }
 
-// `/login` is a route of M1 part 3; until then the link opens the 404 page.
 const signInHref = (returnTo: string | null) =>
-  returnTo ? `/login?return_to=${encodeURIComponent(returnTo)}` : '/login'
+  returnTo ? `${urlFor('login')}?return_to=${encodeURIComponent(returnTo)}` : urlFor('login')

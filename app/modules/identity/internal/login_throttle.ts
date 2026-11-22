@@ -2,7 +2,7 @@ import { clientNetwork, rateLimitKey, rateLimiter } from '#modules/platform/rate
 
 /*
  * The login limiters of docs/07 §3.6 around a credential check, for the
- * `logIn` action of M1:
+ * `logIn` action (actions/log_in.ts, M1 part 3):
  *
  * 1. `login_ip` counts every attempt from the client network and is checked
  *    before any credential work, so a blocked network costs no hash.

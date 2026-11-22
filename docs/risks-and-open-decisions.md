@@ -238,6 +238,24 @@ OD-28 to OD-54 register the owner decisions that the three deep audits left open
 Newest first. The entry format is in §1.5. A ruling that is not an OD but changes an owning document or an ADR is logged in the same format, headed "Not an OD".
 
 ```text
+Not an OD — Decided 2026-11-23 by tech lead: interim home page until M4
+Ruling: GET / (route name home) renders the storefront/home component as an interim page
+        until M4 builds the storefront home in the same component: it says the store is
+        being built, with no date; a guest gets links to sign up and sign in; a signed-in
+        user gets a greeting by first name and the sign-out button, and staff whose role
+        may open /admin/logistics, in a session with MFA from the last 12 hours, a link to
+        it. Its one prop is admin_link (T-SEC-036).
+Evidence: The browser walk-through of M1 part 3: every redirect after sign-in (the logIn
+          default redirect_to), after a verified link ("Continue to DripNepal"), away
+          from the guest pages and the brand link land on /, which had no route, so a
+          user who had just signed in saw the 404 page (in development, the "Cannot GET"
+          overlay) and seemed stuck on /login.
+ADR: none (a page).
+Docs updated: 08 (§2.2's / row, §2.3's /login row, note 80), 09 (§1.2 tree, note 119),
+              10 (T-UI-036 widened, note 76), 12 (§5.1, note 63), risks (note 52)  |  Status: Decided
+```
+
+```text
 Not an OD — Decided 2026-11-23 by tech lead (safe default; the product owner may revisit):
         a new verification link for signed-in users only
 Ruling: resendEmailVerification stays an operation for a signed-in pending_verification user
@@ -1126,3 +1144,4 @@ This matrix is authoritative for decision gates. [12 §3](12-roadmap-and-backlog
 49. **Review-pending copies on early pages (2026-11-22).** §2.3 logs the product owner's ruling that pages built before M1 may use `ui/` copies whose second review is pending, with the review a release blocker for each page that uses them.
 50. **OD-24, OD-50 and OD-60 decided (2026-11-22).** §2.2 marks the three Decided with the recommended options, §2.3 logs them, and §5's M1 row and its reading paragraph show no open decision blocking M1 code. OD-24 is decided for the build: counsel's VX-03 answer, already an M1 exit item, can reopen it. The restating documents drop their `[Open]` and "proposed" labels for these rules.
 51. **OD-62 and the signed-in resend (2026-11-23, M1 part 2a review).** §2.2 registers OD-62, found in the Fable review of M1 part 2a: verifying an email does not prove that whoever set the password holds the mailbox, so a stranger's sign-up with someone else's address can become an `active` account when the holder clicks the link. It blocks the M1 exit, not code, with the sign-up as built as its safe default; §5's M1 row, [12 §3 and §5.1](12-roadmap-and-backlog.md#51-m1-identity--accounts-r1), [00 §7.2 and §7.3](00-context-assumptions-and-questions.md#72-remaining-open-decisions) and [07 TM-09](07-security-threat-model-and-permissions.md#tm-09-account-recovery-abuse-and-enumeration) list it. §2.3 logs the tech lead's ruling, not an OD, that a new verification link is for signed-in users only, which closes [02 note 27](02-user-journeys-and-acceptance-criteria.md#8-consistency-notes-for-editor).
+52. **Interim home page (2026-11-23, M1 part 3).** §2.3 logs, as a "Not an OD" entry, the tech lead's ruling that `/` gets an interim home page in the `storefront/home` component until M4, because every redirect after sign-in and after a verified link lands there and found no route in the browser walk-through ([08 note 80](08-ui-ux-and-design-system.md#consistency-notes-for-editor)).

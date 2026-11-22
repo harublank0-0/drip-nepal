@@ -3,17 +3,26 @@ import { middleware } from '#start/kernel'
 
 const RegistrationController = () =>
   import('#controllers/api/v1/auth/identity/registration_controller')
+const SessionController = () => import('#controllers/api/v1/auth/identity/session_controller')
+const MeController = () => import('#controllers/api/v1/auth/identity/me_controller')
 
 /*
  * Auth and self JSON operations (docs/06 §13.3), built from M1 part 2a.
  * Route names are the operationIds (docs/09 §3.3). `signUp` and
  * `confirmEmail` are open to anyone, signed in or not: the `guest`
  * middleware is kept for the sign-in, sign-up and reset pages and `logIn`
- * (docs/09 §3.4 row 3, T-UI-025). CSRF applies to every route here.
+ * (docs/09 §3.4 row 3, T-UI-025), where it answers 409 `CONFLICT`.
+ * `logOut`, `getMe` and `resendEmailVerification` need a session (`auth`).
+ * CSRF applies to every unsafe route here.
  */
 router
   .group(() => {
     router.post('/auth/signup', [RegistrationController, 'signUp']).as('signUp')
+    router.post('/auth/session', [SessionController, 'logIn']).as('logIn').use(middleware.guest())
+    router
+      .delete('/auth/session', [SessionController, 'logOut'])
+      .as('logOut')
+      .use(middleware.auth())
     router
       .post('/auth/email-verification', [RegistrationController, 'resendEmailVerification'])
       .as('resendEmailVerification')
@@ -21,5 +30,6 @@ router
     router
       .post('/auth/email-verification/confirm', [RegistrationController, 'confirmEmail'])
       .as('confirmEmail')
+    router.get('/me', [MeController, 'getMe']).as('getMe').use(middleware.auth())
   })
   .prefix('/api/v1')

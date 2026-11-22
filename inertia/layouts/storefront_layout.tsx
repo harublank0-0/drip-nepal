@@ -7,8 +7,9 @@ import { t } from '~/lib/i18n'
 
 /*
  * The storefront surface (docs/08 §2.2, §6.2), server-rendered (ADR-0003).
- * In M1 it holds only the draft legal pages, so it is the brand, the page
- * and the footer with help and the legal links (08 §2.7); M4 replaces the
+ * In M1 it holds only the interim home page and the draft legal pages, so
+ * it is the brand, the page and the footer with help and the legal links
+ * (08 §2.7); M4 replaces the
  * header with the storefront header (navigation, search, account, cart) and
  * widens the footer. The skip link targets `<main id="main">`, and after a
  * client-side visit focus moves to the new page's `<h1>` (`useHeadingFocus`,

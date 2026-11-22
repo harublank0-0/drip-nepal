@@ -19,6 +19,9 @@ export type AccountStanding = 'valid' | 'suspended' | 'signed_out'
 
 export type { UserTokenPurpose }
 
+// The return-path helper of docs/07 TM-14, a pure function the controllers need (docs/09 §2.1).
+export { safeReturnPath } from '#modules/identity/domain/return_path'
+
 /*
  * The per-request account check of docs/07 §3.3 over the user `silent_auth`
  * has already loaded, so it needs no query of its own. In the 07 §3.3 row
@@ -51,6 +54,56 @@ export function sellerSessionIdle(
 ): boolean {
   const seenAt = session.sellerSeenAt ?? session.authenticatedAt
   return olderThan(seenAt, SELLER_IDLE_LIMIT_MS, now)
+}
+
+/*
+ * The signed-in user's own account as `getMe` shows it (docs/06 §13.3):
+ * the profile, the status, the two marketing consents as booleans (as
+ * `updateMe` takes them), the phone's last four digits, and the staff role
+ * of an unrevoked `platform_staff` row, enrolled or not. Never the password
+ * hash, the security stamp, the TOTP secret, the encrypted phone or its
+ * blind index (docs/07 §5.5). Null for a missing row.
+ */
+export type OwnAccount = {
+  id: string
+  email: string
+  fullName: string | null
+  status: string
+  phoneLast4: string | null
+  marketingEmailConsent: boolean
+  marketingSmsConsent: boolean
+  staffRole: string | null
+}
+
+export async function ownAccount(userId: string): Promise<OwnAccount | null> {
+  const row = await db
+    .from('users')
+    .leftJoin('platform_staff', (join) => {
+      join.on('platform_staff.user_id', 'users.id').andOnNull('platform_staff.revoked_at')
+    })
+    .where('users.id', userId)
+    .select(
+      'users.id',
+      'users.email',
+      'users.full_name',
+      'users.status',
+      'users.phone_last4',
+      'users.marketing_email_consent_at',
+      'users.marketing_sms_consent_at',
+      'platform_staff.role'
+    )
+    .first()
+  if (!row) return null
+  return {
+    id: row.id,
+    email: row.email,
+    fullName: row.full_name,
+    status: row.status,
+    phoneLast4: row.phone_last4,
+    marketingEmailConsent: row.marketing_email_consent_at !== null,
+    marketingSmsConsent: row.marketing_sms_consent_at !== null,
+    staffRole: row.role,
+  }
 }
 
 /*

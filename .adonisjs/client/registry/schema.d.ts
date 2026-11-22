@@ -31,6 +31,30 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/auth/identity/registration_controller').default['signUp']>>> | { status: 422; response: { errors: SimpleError[] } }
     }
   }
+  'logIn': {
+    methods: ["POST"]
+    pattern: '/api/v1/auth/session'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/identity/log_in').logInValidator)>>
+      paramsTuple: []
+      params: {}
+      query: ExtractQuery<InferInput<(typeof import('#validators/identity/log_in').logInValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/api/v1/auth/identity/session_controller').default['logIn']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/auth/identity/session_controller').default['logIn']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
+  'logOut': {
+    methods: ["DELETE"]
+    pattern: '/api/v1/auth/session'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/api/v1/auth/identity/session_controller').default['logOut']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/auth/identity/session_controller').default['logOut']>>>
+    }
+  }
   'resendEmailVerification': {
     methods: ["POST"]
     pattern: '/api/v1/auth/email-verification'
@@ -53,6 +77,18 @@ export interface Registry {
       query: ExtractQuery<InferInput<(typeof import('#validators/identity/confirm_email').confirmEmailValidator)>>
       response: ExtractResponse<Awaited<ReturnType<import('#controllers/api/v1/auth/identity/registration_controller').default['confirmEmail']>>>
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/auth/identity/registration_controller').default['confirmEmail']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
+  'getMe': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/me'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/api/v1/auth/identity/me_controller').default['getMe']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/auth/identity/me_controller').default['getMe']>>>
     }
   }
   'getLogisticsSettings': {
@@ -391,6 +427,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/webhooks/courier_callbacks_controller').default['receive']>>>
     }
   }
+  'home': {
+    methods: ["GET","HEAD"]
+    pattern: '/'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/storefront/identity/home_controller').default['show']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/storefront/identity/home_controller').default['show']>>>
+    }
+  }
   'legal.document': {
     methods: ["GET","HEAD"]
     pattern: '/legal/:documentSlug'
@@ -401,6 +449,18 @@ export interface Registry {
       query: {}
       response: ExtractResponse<Awaited<ReturnType<import('#controllers/storefront/platform/legal_documents_controller').default['show']>>>
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/storefront/platform/legal_documents_controller').default['show']>>>
+    }
+  }
+  'login': {
+    methods: ["GET","HEAD"]
+    pattern: '/login'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/auth/identity/session_controller').default['logIn']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/auth/identity/session_controller').default['logIn']>>>
     }
   }
   'signup': {

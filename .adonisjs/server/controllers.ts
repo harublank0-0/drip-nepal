@@ -15,7 +15,9 @@ export const controllers = {
     v1: {
       auth: {
         identity: {
+          Me: () => import('#controllers/api/v1/auth/identity/me_controller'),
           Registration: () => import('#controllers/api/v1/auth/identity/registration_controller'),
+          Session: () => import('#controllers/api/v1/auth/identity/session_controller'),
         },
       },
     },
@@ -23,6 +25,7 @@ export const controllers = {
   auth: {
     identity: {
       Registration: () => import('#controllers/auth/identity/registration_controller'),
+      Session: () => import('#controllers/auth/identity/session_controller'),
     },
   },
   dev: {
@@ -33,6 +36,9 @@ export const controllers = {
     Logistics: () => import('#controllers/seller/logistics_controller'),
   },
   storefront: {
+    identity: {
+      Home: () => import('#controllers/storefront/identity/home_controller'),
+    },
     platform: {
       LegalDocuments: () => import('#controllers/storefront/platform/legal_documents_controller'),
     },

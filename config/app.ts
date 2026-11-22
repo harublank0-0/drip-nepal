@@ -52,12 +52,13 @@ export const http = defineConfig({
    * response.redirect().back() and query string forwarding.
    */
   redirect: {
-    /**
-     * When enabled, all redirects automatically carry over the current
-     * request's query string parameters to the redirect destination.
-     * Use withQs(false) to opt out for a specific redirect.
+    /*
+     * Off (RF-37, docs/07 TM-14): a redirect never carries the visited
+     * query on, so a token or `return_to` in it cannot reach the next URL,
+     * the logs or `Referer`. A redirect that needs a query builds it
+     * (`withQs({ … })`), as the sign-in redirect does with `return_to`.
      */
-    forwardQueryString: true,
+    forwardQueryString: false,
   },
 
   /**
