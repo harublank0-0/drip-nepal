@@ -192,6 +192,24 @@ const routes = {
     tokens: [{"old":"/dev/overlays","type":0,"val":"dev","end":""},{"old":"/dev/overlays","type":0,"val":"overlays","end":""}],
     types: placeholder as Registry['dev.overlays']['types'],
   },
+  'dev.sign_in': {
+    methods: ["GET","HEAD"],
+    pattern: '/dev/sign-in',
+    tokens: [{"old":"/dev/sign-in","type":0,"val":"dev","end":""},{"old":"/dev/sign-in","type":0,"val":"sign-in","end":""}],
+    types: placeholder as Registry['dev.sign_in']['types'],
+  },
+  'dev.sign_in.store': {
+    methods: ["POST"],
+    pattern: '/dev/sign-in/:id',
+    tokens: [{"old":"/dev/sign-in/:id","type":0,"val":"dev","end":""},{"old":"/dev/sign-in/:id","type":0,"val":"sign-in","end":""},{"old":"/dev/sign-in/:id","type":1,"val":"id","end":""}],
+    types: placeholder as Registry['dev.sign_in.store']['types'],
+  },
+  'dev.sign_out': {
+    methods: ["POST"],
+    pattern: '/dev/sign-out',
+    tokens: [{"old":"/dev/sign-out","type":0,"val":"dev","end":""},{"old":"/dev/sign-out","type":0,"val":"sign-out","end":""}],
+    types: placeholder as Registry['dev.sign_out']['types'],
+  },
 } as const satisfies Record<string, AdonisEndpoint>
 
 export { routes }

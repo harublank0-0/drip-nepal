@@ -1,0 +1,212 @@
+import { randomUUID } from 'node:crypto'
+import { test } from '@japa/runner'
+import db from '@adonisjs/lucid/services/db'
+import { UserFactory } from '#database/factories/user_factory'
+import { ShopFactory } from '#database/factories/shop_factory'
+import { DEMO_EMAIL_DOMAIN } from '#modules/identity/queries'
+import { developmentOnlyRefusal } from '#modules/platform/development_only'
+import { runtime } from '#config/runtime'
+import { testBrowser, type Browser } from '#tests/support/browser'
+import { staffUser } from '#tests/support/courier_http'
+
+/*
+ * T-SEC-044, the development-only sign-in (docs/07 §3.13). Guard 1, the
+ * production route list, is T-UI-026. Guard 2's `APP_ENV` half is tested
+ * over HTTP by switching `runtime.appEnv`, which the test server in this
+ * process reads; its database half is tested on the function the
+ * controller calls, because the test database cannot be renamed. Guard 3,
+ * what the sign-in writes and the staff MFA time are tested over HTTP.
+ */
+
+let sequence = 0
+const demoEmail = () => `t-sec-044-${(sequence += 1)}@${DEMO_EMAIL_DOMAIN}`
+
+async function otherUser() {
+  const user = await UserFactory.create()
+  return user.id
+}
+
+async function demoUser(status?: 'suspended') {
+  const builder = UserFactory.merge({ email: demoEmail() })
+  const user = await (status ? builder.apply(status) : builder).create()
+  return user.id
+}
+
+async function staffWithoutTotp() {
+  const user = await UserFactory.create()
+  await db.table('platform_staff').insert({ user_id: user.id, role: 'platform_admin' })
+  return user.id
+}
+
+async function revokedStaff() {
+  const userId = await staffUser('platform_admin')
+  const revoker = await UserFactory.create()
+  await db
+    .from('platform_staff')
+    .where('user_id', userId)
+    .update({ revoked_at: db.raw('now()'), revoked_by: revoker.id })
+  return userId
+}
+
+async function openSignIn() {
+  const browser = testBrowser()
+  await browser.open('/dev/sign-in')
+  return browser
+}
+
+async function signInPage(browser: Browser) {
+  return (await browser.props('/dev/sign-in')) as {
+    accounts: { id: string; staff_role: string | null }[]
+    staff_without_totp: number
+    signed_in_as: string | null
+    mfa_verified_at: string | null
+  }
+}
+
+async function signedInAs(browser: Browser) {
+  const page = await signInPage(browser)
+  return page.signed_in_as
+}
+
+async function answer(browser: Browser, method: string, path: string) {
+  const response = await browser.request(path, {
+    method,
+    headers: { Accept: 'application/json' },
+  })
+  await response.arrayBuffer()
+  return response.status
+}
+
+test.group('T-SEC-044 development-only sign-in', () => {
+  test('T-SEC-044 guard 2 refuses production, APP_ENV {appEnv} and other databases')
+    .with([{ appEnv: 'staging' }, { appEnv: 'production' }])
+    .run(({ assert }, { appEnv }) => {
+      const here = { inProduction: false, appEnv: 'development', databaseName: 'dripnepal_dev' }
+      const subject = 'the development sign-in'
+      assert.isNull(developmentOnlyRefusal(here, subject))
+      assert.isNull(developmentOnlyRefusal({ ...here, databaseName: 'dripnepal_test' }, subject))
+      assert.equal(
+        developmentOnlyRefusal({ ...here, appEnv }, subject),
+        `the development sign-in refuse APP_ENV=${appEnv}`
+      )
+      assert.isString(developmentOnlyRefusal({ ...here, inProduction: true }, subject))
+      for (const databaseName of ['dripnepal', 'dripnepal_staging', 'dripnepal_dev_old']) {
+        assert.isString(developmentOnlyRefusal({ ...here, databaseName }, subject))
+      }
+    })
+
+  test('T-SEC-044 guard 2 answers 404 on every route under APP_ENV {appEnv}')
+    .with([{ appEnv: 'staging' }, { appEnv: 'production' }])
+    .run(async ({ assert }, { appEnv }) => {
+      const demo = await demoUser()
+      const browser = await openSignIn()
+      const before = runtime.appEnv
+      runtime.appEnv = appEnv as typeof runtime.appEnv
+      try {
+        assert.equal(await answer(browser, 'GET', '/dev/sign-in'), 404)
+        assert.equal(await answer(browser, 'POST', `/dev/sign-in/${demo}`), 404)
+        assert.equal(await answer(browser, 'POST', '/dev/sign-out'), 404)
+      } finally {
+        runtime.appEnv = before
+      }
+      assert.isNull(await signedInAs(browser))
+    })
+
+  test('T-SEC-044 offers active demo accounts and staff with TOTP, nobody else', async ({
+    assert,
+  }) => {
+    const demo = await demoUser()
+    const staff = await staffUser('support_agent')
+    // A demo account that is staff without TOTP signs in as a demo account only.
+    const demoStaff = await demoUser()
+    await db.table('platform_staff').insert({ user_id: demoStaff, role: 'support_agent' })
+    const hidden = [
+      await demoUser('suspended'),
+      await otherUser(),
+      await staffWithoutTotp(),
+      await revokedStaff(),
+    ]
+
+    const page = await signInPage(await openSignIn())
+    const ids = page.accounts.map((account) => account.id)
+    assert.includeMembers(ids, [demo, staff])
+    for (const id of hidden) assert.notInclude(ids, id)
+    const role = (id: string) => page.accounts.find((account) => account.id === id)?.staff_role
+    assert.equal(role(staff), 'support_agent')
+    assert.isNull(role(demoStaff))
+    assert.equal(page.staff_without_totp, 2)
+    assert.isNull(page.signed_in_as)
+  })
+
+  test('T-SEC-044 answers 404 for {name}')
+    .with([
+      { name: 'an unknown ID', make: async () => randomUUID() },
+      { name: 'a suspended demo account', make: () => demoUser('suspended') },
+      {
+        name: 'an account outside the demo domain',
+        make: otherUser,
+      },
+      { name: 'staff without TOTP', make: staffWithoutTotp },
+      { name: 'revoked staff', make: revokedStaff },
+    ])
+    .run(async ({ assert }, { make }) => {
+      const id = await make()
+      const browser = await openSignIn()
+      assert.equal(await answer(browser, 'POST', `/dev/sign-in/${id}`), 404)
+      assert.isNull(await signedInAs(browser))
+    })
+
+  test('T-SEC-044 signs a demo account in as logIn will, with no MFA time', async ({ assert }) => {
+    const owner = await demoUser()
+    const shop = await ShopFactory.merge({ ownerUserId: owner }).apply('active').create()
+    const before = await db.from('users').where('id', owner).first()
+    const audits = await db.from('audit_logs').count('* as total').first()
+    const tokens = await db.from('user_tokens').count('* as total').first()
+
+    const browser = await openSignIn()
+    const response = await browser.request(`/dev/sign-in/${owner}`, { method: 'POST' })
+    assert.equal(response.status, 302)
+    assert.equal(response.headers.get('location'), '/dev/sign-in')
+
+    const page = await signInPage(browser)
+    assert.equal(page.signed_in_as, before.email)
+    assert.isNull(page.mfa_verified_at)
+    // The seller context accepts the session; the admin API does not exist for it.
+    assert.equal(await answer(browser, 'GET', `/api/v1/seller/shops/${shop.slug}/logistics`), 200)
+    assert.equal(await answer(browser, 'GET', '/api/v1/admin/logistics/accounts'), 404)
+
+    // Nothing but the session is written.
+    const after = await db.from('users').where('id', owner).first()
+    assert.deepEqual(after, before)
+    assert.deepEqual(await db.from('audit_logs').count('* as total').first(), audits)
+    assert.deepEqual(await db.from('user_tokens').count('* as total').first(), tokens)
+  })
+
+  test('T-SEC-044 records the MFA time for staff, so the admin API opens', async ({ assert }) => {
+    const staff = await staffUser('platform_admin')
+    const browser = await openSignIn()
+    assert.equal(await answer(browser, 'GET', '/api/v1/admin/logistics/accounts'), 401)
+
+    await browser.request(`/dev/sign-in/${staff}`, { method: 'POST' })
+    assert.equal(await answer(browser, 'GET', '/api/v1/admin/logistics/accounts'), 200)
+    const staffPage = await signInPage(browser)
+    assert.isString(staffPage.mfa_verified_at)
+
+    // Switching to a demo account starts a new session without the MFA time.
+    await browser.request(`/dev/sign-in/${await demoUser()}`, { method: 'POST' })
+    const demoPage = await signInPage(browser)
+    assert.isNull(demoPage.mfa_verified_at)
+  })
+
+  test('T-SEC-044 sign-out ends the session', async ({ assert }) => {
+    const staff = await staffUser('platform_admin')
+    const browser = await openSignIn()
+    await browser.request(`/dev/sign-in/${staff}`, { method: 'POST' })
+    assert.equal(await answer(browser, 'GET', '/api/v1/admin/logistics/accounts'), 200)
+
+    const response = await browser.request('/dev/sign-out', { method: 'POST' })
+    assert.equal(response.status, 302)
+    assert.equal(await answer(browser, 'GET', '/api/v1/admin/logistics/accounts'), 401)
+    assert.isNull(await signedInAs(browser))
+  })
+})

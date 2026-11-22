@@ -44,7 +44,7 @@ Edited 2026-09-30 (consistency review): decision 6 names the `start/routes/api_v
 
 4. **Idempotency mechanism.** Rows live in `idempotency_keys`, UNIQUE (`actor_scope`, `operation`, `key`) ([04a §15.2](../04a-data-dictionary-tables.md#152-idempotency_keys)). The row is inserted as the **first statement of the business transaction**, so a concurrent duplicate waits on the unique index and then replays the committed response; if the first request rolls back (for example `OUT_OF_STOCK`), nothing is stored and a retry runs again. Keys are client-generated, 16–64 characters `[A-Za-z0-9_-]`; retention 24 h, 72 h for `placeOrder` [A-32]. The walk-through is [05 §4.6](../05-order-payment-and-inventory-lifecycles.md#46-idempotency-handling).
 5. **Authentication** is the same session cookie and CSRF header as pages (ADR-0005). Token auth for non-browser clients waits for R3.
-6. **Route files.** Unsafe methods are registered only under `start/routes/api_v1/` (one file per surface, [09 §3.3](../09-code-structure-and-engineering-standards.md#33-routes)) and in `start/routes/webhooks.ts`; page route files register GET routes only.
+6. **Route files.** Unsafe methods are registered only under `start/routes/api_v1/` (one file per surface, [09 §3.3](../09-code-structure-and-engineering-standards.md#33-routes)) and in `start/routes/webhooks.ts`; page route files register GET routes only. Edited 2026-11-22 (product owner decision, [risks §2.3](../risks-and-open-decisions.md#23-decision-log)): one exception, `start/routes/dev.ts`, which production never registers (`T-UI-026`), holds the two `POST` routes of the development-only sign-in ([07 §3.13](../07-security-threat-model-and-permissions.md#313-development-only-sign-in)).
 
 ## Alternatives considered
 
@@ -87,7 +87,7 @@ Edited 2026-09-30 (consistency review): decision 6 names the `start/routes/api_v
 - **T-CHK-004**: repeated `placeOrder` with the same key returns the same order; concurrent duplicates create one order.
 - **T-SEC-003**: client-supplied price, total, `shop_id` and commission fields are rejected with 422 `VALIDATION_FAILED` (`unknown_field`).
 - **Concurrency check** (T-API-004, proposed; [10 §6.3](../10-testing-and-quality-gates.md#63-api-contract-t-api)): every ⟳ operation answers 428 without `If-Match`, with `*` or with a list, and 412 `VERSION_CONFLICT` with `current` for a stale version or a weak tag; reads carry the strong `ETag`.
-- **Route rule check** (T-API-006, proposed; [10 §6.3](../10-testing-and-quality-gates.md#63-api-contract-t-api)): lists registered routes and fails if a POST/PUT/PATCH/DELETE route is outside `/api/v1/`.
+- **Route rule check** (T-API-006, proposed; [10 §6.3](../10-testing-and-quality-gates.md#63-api-contract-t-api)): lists registered routes and fails if a POST/PUT/PATCH/DELETE route is outside `/api/v1/`, except the development-only sign-in of decision 6 (edited 2026-11-22).
 - **T-ARCH-001**: controllers call module actions only.
 
 ## Related

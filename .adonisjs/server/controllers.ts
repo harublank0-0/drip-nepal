@@ -8,6 +8,9 @@ export const controllers = {
     CourierBookings: () => import('#controllers/admin/courier_bookings_controller'),
     Logistics: () => import('#controllers/admin/logistics_controller'),
   },
+  dev: {
+    SignIn: () => import('#controllers/dev/sign_in_controller'),
+  },
   seller: {
     CourierBookings: () => import('#controllers/seller/courier_bookings_controller'),
     Logistics: () => import('#controllers/seller/logistics_controller'),

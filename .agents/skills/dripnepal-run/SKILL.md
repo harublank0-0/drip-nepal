@@ -11,15 +11,17 @@ How to start the app and look at it the way a person would. Tests (the `dripnepa
 
 The v1 store (storefront, seller dashboard, admin pages, demo logins) was removed with the E4 schema baseline. Until the flows of M1 to M7 are rebuilt ([docs/12](../../../docs/12-roadmap-and-backlog.md)), the app serves:
 
-| Path                 | Where            | What                                                                                                                                |
-| -------------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `/dev/design-system` | development only | The theme tokens, buttons and cards: the one Inertia page                                                                           |
-| `/health/live`       | every mode       | `{"status":"ok","release":…}`: the process serves HTTP ([docs/11 §7.1](../../../docs/11-deployment-and-operations.md#71-endpoints)) |
-| `/health/ready`      | every mode       | `{"status":"ok"}`, or 503 when the database does not answer                                                                         |
-| `/uploads/*`         | every mode       | Files in `./storage`, served by the `fs` disk of `config/drive.ts`; nothing uploads yet                                             |
-| anything else        | every mode       | 404: the server-rendered error page (`errors/not_found`), or a problem+json body under `/api/`                                      |
+| Path                 | Where            | What                                                                                                                                                                          |
+| -------------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/dev/design-system` | development only | The theme tokens, buttons and cards: the one Inertia page                                                                                                                     |
+| `/dev/sign-in`       | development only | The development-only sign-in ([docs/07 §3.13](../../../docs/07-security-threat-model-and-permissions.md#313-development-only-sign-in)): sign in as a demo account or as staff |
+| `/dev/overlays`      | development only | A dialog and a toast, for the overlay checks of docs/08 §5.7 and §5.9                                                                                                         |
+| `/health/live`       | every mode       | `{"status":"ok","release":…}`: the process serves HTTP ([docs/11 §7.1](../../../docs/11-deployment-and-operations.md#71-endpoints))                                           |
+| `/health/ready`      | every mode       | `{"status":"ok"}`, or 503 when the database does not answer                                                                                                                   |
+| `/uploads/*`         | every mode       | Files in `./storage`, served by the `fs` disk of `config/drive.ts`; nothing uploads yet                                                                                       |
+| anything else        | every mode       | 404: the server-rendered error page (`errors/not_found`), or a problem+json body under `/api/`                                                                                |
 
-There is no demo data and no login: OD-59 (decided 2026-11-21) puts no demo seeder in M0, and the one a later milestone builds needs the actions of M1 to M6, and the first platform admin comes from `node ace platform:create-admin`, which E8 builds. `node ace list:routes` lists the routes that exist (one JSON line per route in a non-interactive shell, a table in a terminal).
+There is no login page until M1. To see signed-in pages, `node ace db:seed` creates the demo accounts (`owner@`, `manager@`, `fulfiller@` and `approver@dev.dripnepal.invalid`, with the active shop `demo-pasal`) and writes their password to `tmp/dev_credentials.json`; `node ace platform:create-admin --interactive` creates a staff account, and running `db:seed` again gives it a placeholder TOTP enrolment. Then open `/dev/sign-in` and pick an account ([docs/07 §3.13](../../../docs/07-security-threat-model-and-permissions.md#313-development-only-sign-in)). The page checker cannot sign in yet: its `--login` fills M1's login form, so until then it checks pages that need no session. `node ace list:routes` lists the routes that exist (one JSON line per route in a non-interactive shell, a table in a terminal).
 
 ## 1. Database and environment
 
@@ -46,7 +48,7 @@ node ace db:seed
 ```
 
 - `--no-schema-generate` stops `migration:run` from rewriting `database/schema.ts`, a generated file whose output depends on the database it ran against. Leave it off only when you changed a migration and mean to commit the regenerated file.
-- `db:seed` runs the reference seeders `01_` to `09_` of `database/seeders/reference/` (locations, delivery zones, shop categories, categories, attributes, brands, settings, the `ncm` courier). `database/seeders/dev/` does not exist yet. Running it again is safe.
+- `db:seed` runs the reference seeders `01_` to `09_` of `database/seeders/reference/` (locations, delivery zones, shop categories, categories, attributes, brands, settings, the `ncm` courier). Then it runs `database/seeders/dev/01_demo_marketplace_seeder.ts`, which refuses unless the database name ends in `_dev` or `_test`. Running it again is safe: it adds no row and gives the demo accounts a new password.
 - Development logs every SQL query, so the output is long. Each seeder ends with a `❯ completed …` line; `node ace db:seed 2>&1 | grep ❯` shows just those.
 
 ## 3. Start the app

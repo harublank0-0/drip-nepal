@@ -1,6 +1,10 @@
 import { BaseSeeder } from '@adonisjs/lucid/seeders'
 import app from '@adonisjs/core/services/app'
 import { runtime } from '#config/runtime'
+import {
+  developmentOnlyRefusal,
+  type DevelopmentSituation,
+} from '#modules/platform/development_only'
 
 /*
  * The base class of every development seeder in database/seeders/dev/
@@ -17,24 +21,17 @@ import { runtime } from '#config/runtime'
  *
  * A refusal throws, Lucid marks the seeder `failed` and db:seed exits 1.
  * Subclasses implement seed() and never override run() (T-ARCH-020).
+ * Guards 2 and 3 are the check the development-only sign-in runs too
+ * (app/modules/platform/development_only.ts, docs/07 §3.13).
  */
 
 export class RefusedInThisEnvironment extends Error {}
 
-export type DevSeederSituation = { inProduction: boolean; appEnv: string; databaseName: string }
-
-const DEPLOYED = ['staging', 'production']
+export type DevSeederSituation = DevelopmentSituation
 
 /** Why a development seeder must not run here (guards 2 and 3), or null. */
 export function devSeederRefusal(situation: DevSeederSituation): string | null {
-  if (situation.inProduction) return 'development seeders refuse NODE_ENV=production'
-  if (DEPLOYED.includes(situation.appEnv)) {
-    return `development seeders refuse APP_ENV=${situation.appEnv}`
-  }
-  if (!/_(dev|test)$/.test(situation.databaseName)) {
-    return `development seeders refuse database ${situation.databaseName}`
-  }
-  return null
+  return developmentOnlyRefusal(situation, 'development seeders')
 }
 
 export abstract class DevSeeder extends BaseSeeder {

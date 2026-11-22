@@ -19,6 +19,7 @@ declare module '@adonisjs/inertia/types' {
     'dev/design_system/index': ExtractProps<(typeof import('../../inertia/pages/dev/design_system/index.tsx'))['default']>
     'dev/design_system/theme_section': ExtractProps<(typeof import('../../inertia/pages/dev/design_system/theme_section.tsx'))['default']>
     'dev/overlays': ExtractProps<(typeof import('../../inertia/pages/dev/overlays.tsx'))['default']>
+    'dev/sign_in': ExtractProps<(typeof import('../../inertia/pages/dev/sign_in.tsx'))['default']>
     'errors/not_found': ExtractProps<(typeof import('../../inertia/pages/errors/not_found.tsx'))['default']>
     'errors/server_error': ExtractProps<(typeof import('../../inertia/pages/errors/server_error.tsx'))['default']>
   }
