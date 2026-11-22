@@ -87,7 +87,7 @@ Edited 2026-09-30 (consistency review): decision 6 names the `start/routes/api_v
 - **T-CHK-004**: repeated `placeOrder` with the same key returns the same order; concurrent duplicates create one order.
 - **T-SEC-003**: client-supplied price, total, `shop_id` and commission fields are rejected with 422 `VALIDATION_FAILED` (`unknown_field`).
 - **Concurrency check** (T-API-004, proposed; [10 §6.3](../10-testing-and-quality-gates.md#63-api-contract-t-api)): every ⟳ operation answers 428 without `If-Match`, with `*` or with a list, and 412 `VERSION_CONFLICT` with `current` for a stale version or a weak tag; reads carry the strong `ETag`.
-- **Route rule check** (T-API-006, proposed; [10 §6.3](../10-testing-and-quality-gates.md#63-api-contract-t-api)): lists registered routes and fails if a POST/PUT/PATCH/DELETE route is outside `/api/v1/`.
+- **Route rule check** (T-API-006, proposed; [10 §6.3](../10-testing-and-quality-gates.md#63-api-contract-t-api)): lists registered routes and fails if a POST/PUT/PATCH/DELETE route is outside `/api/v1/`, except the development-only sign-in of decision 6 (edited 2026-11-22).
 - **T-ARCH-001**: controllers call module actions only.
 
 ## Related
