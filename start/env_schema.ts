@@ -105,6 +105,19 @@ export const envSchema = {
   // Proxies allowed to set X-Forwarded-For: comma-separated CIDRs (docs/11 §3.4)
   TRUSTED_PROXY_CIDRS: Env.schema.string.optional(),
 
+  /*
+   * Email (docs/09 §6.1; the provider waits for OD-08): Mailpit in development.
+   * Unset in tests and in the web process, which sends no email (docs/11 §4.5).
+   * Without SMTP_HOST, tests send through the JSON transport, which sends
+   * nothing, and any other process fails each send retryably (config/mail.ts).
+   */
+  SMTP_HOST: Env.schema.string.optional({ format: 'host' }),
+  SMTP_PORT: Env.schema.number.optional(),
+  SMTP_USERNAME: Env.schema.string.optional(),
+  SMTP_PASSWORD: Env.schema.secret.optional(),
+  MAIL_FROM_ADDRESS: Env.schema.string.optional({ format: 'email' }),
+  MAIL_FROM_NAME: Env.schema.string.optional(),
+
   // Session: the cookie store is gone (RF-04); staging and prod require database.
   SESSION_DRIVER: Env.schema.enum(['database', 'memory'] as const),
 
