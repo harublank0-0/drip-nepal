@@ -1,4 +1,5 @@
 import type { AccountView, BranchView, SettingsView } from '#modules/logistics/queries'
+import type { AccountShopView } from '#modules/logistics/actions/courier_accounts'
 import type { ShipmentView } from '#modules/orders/queries'
 
 /*
@@ -23,6 +24,17 @@ export function accountJson(account: AccountView) {
     verified_at: iso(account.verifiedAt),
     disabled_at: iso(account.disabledAt),
     version: account.version,
+  }
+}
+
+// A shop's row on a platform-owned courier account (docs/04a §9.10; adminAllowShopOnLogisticsAccount).
+export function accountShopJson(link: AccountShopView) {
+  return {
+    account_id: link.accountId,
+    shop_id: link.shopId,
+    is_active: link.isActive,
+    created_at: iso(link.createdAt),
+    disabled_at: iso(link.disabledAt),
   }
 }
 

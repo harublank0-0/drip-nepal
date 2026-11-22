@@ -339,10 +339,11 @@ Still to come with M6's other work:
 - `adminRecordFulfillmentEvent` and `adminCancelShopOrder` (M7);
 - the ledger effects of a delivery (M7);
 - the support case on a second failed delivery;
-- `orders.cod_outcome_reminder`;
-- platform mode (OD-58, re-decided 2026-11-22): the four platform-owned account operations, `replaceLogisticsSettings` accepting `platform` for a shop without an active account of its own, the `own_account_active` refusals, and the `platform_account_cod_enabled` setting with its migration.
+- `orders.cod_outcome_reminder`.
 
 VX-16 stays open: NCM has no cancellation API and cancels on a comment (product owner, 2026-11-22), but it has not confirmed callback authentication or rate limits, and no callback from NCM has reached DripNepal, which needs a public URL.
+
+**Platform mode (2026-11-22).** Built after OD-58 was re-decided: the four platform-owned account operations with step-up, the `platform` mode of `replaceLogisticsSettings`, `getCourierBookingOptions` and `bookCourierShipment`, the `own_account_active` refusals, and `platform_account_cod_enabled` with its migration and seeded `false`, under `T-SHOP-115`, `T-FUL-006` and `T-SEC-041`. Because every R1 order is COD, nothing is booked on a platform-owned account until that setting is turned on (OD-58's conditions). Still to come for it: a callback URL staff can register with NCM for a platform-owned account (until then its parcels are tracked by the status poll).
 
 **Effort.** XL.
 
@@ -533,3 +534,4 @@ The full version adds, in this order:
 47. **OD-59 decided (2026-11-21).** §3's M0 row, the §4.1 E8 row and §4.4's "Blocks exit" record the ruling of [risks §2.3](risks-and-open-decisions.md#23-decision-log): M0 ships no development seeder, and the demo seeder moves out of M0 to the milestone that first needs demo data. No open decision blocks the M0 exit; the remaining exit items are work, such as the locations seeder (§4.3 item 6).
 48. **Locations seeder (2026-11-22).** The §4.1 E8 row, the E4 staging and reference-seeder paragraphs and §4.3 item 6 record what is built: `reference/01_locations_seeder.ts` with the generated `data/locations.csv`, the zone-to-district mapping of `02_delivery_zones_seeder.ts`, `T-SHOP-108` and the new `T-SHOP-117` ([04 §21.4](04-domain-model-and-data-dictionary.md#214-locations-dataset-vx-10)). The sources are the product owner's choice of 2026-11-22 ([risks §2.3](risks-and-open-decisions.md#23-decision-log)). §5.6 drops the locations seeder from M6's list of what is still to come. The M0 exit items of §4.3 are now all built; VX-10's cross-check still gates the M1 and M2 exits (§3).
 49. **OD-58 re-decided (2026-11-22).** §5.6's scope paragraph, its decisions line and the list of what is still to come add platform mode to M6 ([risks §2.3](risks-and-open-decisions.md#23-decision-log)), and §6 drops the "Platform-owned courier accounts" backlog row, which moves into M6. §5.6 also records that NCM has no cancellation API.
+50. **Platform mode built (2026-11-22).** §5.6 records the build and drops it from what is still to come; it notes that staff have no callback URL to register for a platform-owned account yet, so its parcels rely on the status poll.

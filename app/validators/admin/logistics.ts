@@ -1,6 +1,28 @@
 import vine from '@vinejs/vine'
+import { courierCredentials } from '#validators/support/courier_credentials'
 
 // Staff inputs of the M6 courier operations (docs/06 §13.8).
+
+// adminCreateLogisticsAccount: a platform-owned account (OD-58).
+export const CREATE_ACCOUNT_MEMBERS = [
+  'provider_code',
+  'name',
+  'environment',
+  'external_account_ref',
+  'credentials',
+] as const
+export const createLogisticsAccountValidator = vine.create({
+  provider_code: vine.string().regex(/^[a-z][a-z0-9_]{1,31}$/),
+  name: vine.string().trim().minLength(2).maxLength(80),
+  environment: vine.enum(['sandbox', 'production'] as const),
+  external_account_ref: vine.string().trim().minLength(1).maxLength(100).nullable().optional(),
+  credentials: courierCredentials(),
+})
+
+export const REKEY_ACCOUNT_MEMBERS = ['credentials'] as const
+export const rekeyLogisticsAccountValidator = vine.create({
+  credentials: courierCredentials(),
+})
 
 export const ACCOUNT_STATUS_MEMBERS = ['status', 'reason'] as const
 export const setLogisticsAccountStatusValidator = vine.create({

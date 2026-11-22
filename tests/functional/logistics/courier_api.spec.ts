@@ -1,14 +1,9 @@
 import { test } from '@japa/runner'
 import db from '@adonisjs/lucid/services/db'
-import router from '@adonisjs/core/services/router'
 import { Secret } from '@adonisjs/core/helpers'
-import User from '#models/user'
-import { startSession, SESSION_KEYS } from '#controllers/support/session'
 import { courierConfig } from '#config/logistics'
 import { courierCallbackToken } from '#modules/logistics/actions/courier_calls'
 import { clientNetwork, rateLimitKey, rateLimiter } from '#modules/platform/rate_limits'
-import env from '#start/env'
-import { testBrowser, type Browser } from '#tests/support/browser'
 import {
   activeShop,
   courierWorld,
@@ -20,9 +15,18 @@ import {
 } from '#tests/support/courier'
 import { queued, useJobBoss } from '#tests/support/jobs'
 import { insertUser } from '#tests/support/schema_rows'
+import {
+  key,
+  member,
+  minutesAgo,
+  send,
+  serverUrl,
+  signIn,
+  staffUser,
+  statusOf,
+} from '#tests/support/courier_http'
 import { captureLogs } from '#tests/support/logs'
 import { verifyAccount } from '#modules/logistics/jobs/verify_account'
-import { placeholderCiphertext } from '#database/factories/placeholder_ciphertext'
 
 /*
  * The M6 courier operations over HTTP (docs/06 §13.8, §12.6):
@@ -33,79 +37,6 @@ import { placeholderCiphertext } from '#database/factories/placeholder_ciphertex
  * (the callback receiver). Signing in uses `startSession`, as M1's `logIn`
  * will; a staff session's MFA time stands in for M1's challenge.
  */
-
-router.get('/__test__/courier/sign-in/:id', async (ctx) => {
-  const user = await User.findOrFail(ctx.params.id)
-  await user.refresh()
-  await startSession(ctx, user, user.securityStamp)
-  const at = ctx.request.qs().mfa_verified_at
-  if (typeof at === 'string') ctx.session.put(SESSION_KEYS.mfaVerifiedAt, at)
-  return { ok: true }
-})
-
-async function signIn(userId: string, mfaVerifiedAt?: string) {
-  const browser = testBrowser()
-  const query = mfaVerifiedAt ? `?mfa_verified_at=${encodeURIComponent(mfaVerifiedAt)}` : ''
-  const response = await browser.request(`/__test__/courier/sign-in/${userId}${query}`)
-  if (response.status !== 200) throw new Error(`sign-in answered ${response.status}`)
-  return browser
-}
-
-const serverUrl = () => `http://${env.get('HOST')}:${env.get('PORT')}`
-const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString()
-
-async function send(
-  browser: Browser,
-  method: string,
-  path: string,
-  body?: unknown,
-  headers: Record<string, string> = {}
-) {
-  const response = await browser.request(path, {
-    method,
-    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', ...headers },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  })
-  const text = await response.text()
-  return {
-    status: response.status,
-    headers: response.headers,
-    body: text ? JSON.parse(text) : null,
-    text,
-  }
-}
-
-// The status of a response read asynchronously (lint: no member access on an await expression).
-async function statusOf(response: Promise<{ status: number }>) {
-  const { status } = await response
-  return status
-}
-
-const key = () => `test-key-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
-
-async function member(shopId: string, role: string) {
-  const userId = await insertUser()
-  await db
-    .table('shop_memberships')
-    .insert({ shop_id: shopId, user_id: userId, role, status: 'active' })
-  return userId
-}
-
-async function staffUser(role: string) {
-  const userId = await insertUser()
-  await db
-    .from('users')
-    .where('id', userId)
-    // users_mfa_check: MFA on needs a TOTP secret; a placeholder stands in for M1's enrolment.
-    .update({
-      status: 'active',
-      email_verified_at: db.raw('now()'),
-      mfa_enabled_at: db.raw('now()'),
-      mfa_totp_secret_enc: placeholderCiphertext(),
-    })
-  await db.table('platform_staff').insert({ user_id: userId, role })
-  return userId
-}
 
 test.group('T-SHOP-115 logistics settings and courier accounts', (group) => {
   let courier: FakeCourier
@@ -139,7 +70,7 @@ test.group('T-SHOP-115 logistics settings and courier accounts', (group) => {
     assert.equal(stale.body.current.version, 1)
   })
 
-  test('T-SHOP-115 an account the shop may not use, the platform mode, or an unknown member gives 422', async ({
+  test('T-SHOP-115 an account the shop may not use, in either mode, or an unknown member gives 422', async ({
     assert,
   }) => {
     const { ownerId, slug } = await activeShop()
@@ -164,7 +95,11 @@ test.group('T-SHOP-115 logistics settings and courier accounts', (group) => {
       { 'If-Match': '"0"' }
     )
     assert.equal(platform.status, 422)
-    assert.equal(platform.body.errors[0].field, 'fulfillment_mode')
+    // Another shop's account is no platform-owned account allowed for this shop (OD-58).
+    assert.deepInclude(platform.body.errors[0], {
+      field: 'default_account_id',
+      code: 'account_not_usable',
+    })
     const unknown = await send(
       browser,
       'PUT',

@@ -3,14 +3,20 @@ import { DomainError, VersionConflict } from '#exceptions/domain_error'
 import { recordAudit } from '#modules/audit/actions/record_audit'
 import type { Actor } from '#modules/platform/actor'
 import { withTx } from '#modules/platform/tx'
-import { logisticsSettings, type SettingsView } from '#modules/logistics/queries'
+import {
+  logisticsSettings,
+  shopHasActiveOwnAccount,
+  type SettingsView,
+} from '#modules/logistics/queries'
 
 /*
  * `shop_logistics_settings` (docs/04a §9.11, docs/06 §13.8; M6). A shop with
  * no row is `manual` and enabled at version 0; the first save creates the row
- * with `If-Match: "0"`. R1 offers `manual` and `vendor` only (decided
- * 2026-11-21: no platform-owned accounts in R1), so `platform` is refused
- * before the database would. The `is_enabled` switch is platform staff's, a
+ * with `If-Match: "0"`. The mode names the owner type of its account:
+ * `vendor` the shop's own, `platform` a platform-owned one that staff allowed
+ * the shop on (OD-58, re-decided 2026-11-22). A shop with an active account of
+ * its own books on it, so `platform` is refused to it (`own_account_active`).
+ * The `is_enabled` switch is platform staff's, a
  * locked upsert that bumps `version` without `If-Match`, so a seller edit
  * loaded before it gets 412.
  */
@@ -49,19 +55,14 @@ export async function replaceLogisticsSettings<T>(
   },
   context: { actor: Actor; present: (settings: SettingsView) => T }
 ) {
-  if (command.fulfillmentMode === 'platform') {
-    throw invalid(
-      'fulfillment_mode',
-      'not_offered',
-      'Platform courier accounts are not offered yet. Use your own courier account.'
-    )
-  }
   if (command.fulfillmentMode === 'manual' && command.defaultAccountId !== null) {
     throw invalid('default_account_id', 'not_allowed', 'The manual mode has no courier account.')
   }
-  if (command.fulfillmentMode === 'vendor' && command.defaultAccountId === null) {
+  if (command.fulfillmentMode !== 'manual' && command.defaultAccountId === null) {
     throw invalid('default_account_id', 'required', 'Choose the courier account to book with.')
   }
+  // The owner type of the account the mode books on (docs/04a §9.11); `manual` has no account.
+  const ownerType = command.fulfillmentMode === 'platform' ? 'platform' : 'shop'
   return withTx(async (trx) => {
     await trx.rawQuery('SELECT id FROM shops WHERE id = ? FOR NO KEY UPDATE', [command.shopId])
     // Lock order of the courier tables: the account, its shop rows, then the settings (as
@@ -72,6 +73,16 @@ export async function replaceLogisticsSettings<T>(
         .where('id', command.defaultAccountId)
         .forShare()
         .select('id')
+    }
+    if (
+      command.fulfillmentMode === 'platform' &&
+      (await shopHasActiveOwnAccount(trx, command.shopId))
+    ) {
+      throw invalid(
+        'fulfillment_mode',
+        'own_account_active',
+        'This shop has its own active courier account. Book with it in the vendor mode.'
+      )
     }
     const current = await trx
       .from('shop_logistics_settings')
@@ -94,7 +105,7 @@ export async function replaceLogisticsSettings<T>(
           'las.is_active': true,
         })
         .where('la.status', 'active')
-        .where('la.owner_type', 'shop')
+        .where('la.owner_type', ownerType)
         .first()
       if (!usable) {
         throw invalid(
@@ -107,7 +118,7 @@ export async function replaceLogisticsSettings<T>(
     const values = {
       fulfillment_mode: command.fulfillmentMode,
       default_account_id: command.defaultAccountId,
-      default_account_owner_type: command.defaultAccountId ? 'shop' : null,
+      default_account_owner_type: command.defaultAccountId ? ownerType : null,
     }
     if (current) {
       await trx

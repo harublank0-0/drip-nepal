@@ -68,7 +68,11 @@ export default class LogisticsController {
         settings: settingsJson(settings),
         accounts: accounts.map((account) => ({
           ...accountJson(account),
-          callback_url: owner ? callbackUrl(account.providerCode, account.id) : null,
+          // Only the shop's own accounts: staff register a platform-owned account's callback.
+          callback_url:
+            owner && account.ownerType === 'shop'
+              ? callbackUrl(account.providerCode, account.id)
+              : null,
         })),
         pickup_addresses: addresses.map(pickupAddressJson),
       },

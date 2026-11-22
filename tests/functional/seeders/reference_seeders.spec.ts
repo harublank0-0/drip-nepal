@@ -30,7 +30,7 @@ const SEEDED: Record<string, number> = {
   attribute_values: 85, // §21.2
   category_attributes: 36, // §21.3, one row per category named
   brands: 0, // §20.3: the launch vendors' list, not supplied yet
-  platform_settings: 14, // docs/04a §15.1
+  platform_settings: 15, // docs/04a §15.1, with `platform_account_cod_enabled` (OD-58)
   logistics_providers: 1, // §21.6
 }
 
