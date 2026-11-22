@@ -37,6 +37,8 @@ const BASE = {
   'node_modules/axios/package.json': JSON.stringify({ name: 'axios', main: 'index.js' }),
   'node_modules/axios/index.js': 'export default {}\n',
   'node_modules/@adonisjs/lucid/package.json': JSON.stringify({ name: '@adonisjs/lucid' }),
+  'node_modules/@adonisjs/mail/package.json': JSON.stringify({ name: '@adonisjs/mail' }),
+  'node_modules/@adonisjs/mail/services/main.js': 'export default {}\n',
   'node_modules/@adonisjs/lucid/services/db.js': 'export default {}\n',
   'app/modules/platform/money.ts': 'export const zero = 0\n',
   'app/modules/identity/actions/sign_up.ts':
@@ -89,6 +91,9 @@ const BROKEN = {
   'app/modules/catalog/actions/import_image.ts':
     "import axios from 'axios'\nimport { get } from 'node:https'\nimport { connect } from 'node:net'\nexport const x = [axios, get, connect]\n",
   'start/heartbeat.ts': "import http from 'http'\nexport const h = http\n",
+  // T-SEC-016: the mail service outside providers/, which would skip the EmailSender port
+  'app/modules/identity/actions/notify.ts':
+    "import mail from '@adonisjs/mail/services/main'\nexport const m = mail\n",
   // an import nothing resolves
   'app/modules/cart/actions/add.ts':
     "import { gone } from '../../catalog/queries.js'\nexport const add = gone\n",
@@ -133,6 +138,7 @@ test.group('T-ARCH-001 module dependency rules (dependency-cruiser)', (group) =>
         'rank-orders: app/modules/orders/queries.ts → app/modules/notifications/jobs/dispatch.ts',
         'rank-platform: app/modules/platform/jobs.ts → app/modules/identity/actions/sign_up.ts',
         'sdk-in-adapters-only: app/modules/catalog/actions/import_image.ts → node_modules/axios/index.js',
+        'sdk-in-adapters-only: app/modules/identity/actions/notify.ts → node_modules/@adonisjs/mail/services/main.js',
       ])
     } finally {
       await tree.cleanup()

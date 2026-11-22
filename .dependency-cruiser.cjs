@@ -124,7 +124,8 @@ module.exports = {
       severity: 'error',
       from: { path: '^(app|start)/', pathNot: '^app/modules/[^/]+/providers/' },
       to: {
-        path: 'node_modules/(@aws-sdk|nodemailer|ky|undici|axios|got|node-fetch)/',
+        // @adonisjs/mail too: its service sends without the port's guard (docs/03 §11.5).
+        path: 'node_modules/(@aws-sdk|nodemailer|@adonisjs/mail|ky|undici|axios|got|node-fetch)/',
       },
     },
     {
