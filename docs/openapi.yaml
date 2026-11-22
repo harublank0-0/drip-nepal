@@ -2549,7 +2549,8 @@ paths:
         `active`, is of the owner type the mode names, and its courier is active (422
         `account_not_usable` on `account_id`); a platform-owned account for a shop with an active
         account of its own is 422 `own_account_active`; a COD shipment on a platform-owned account
-        while `platform_account_cod_enabled` (proposed) is false is 409 (OD-58, 2026-11-22); a sandbox account in production is 422
+        while `platform_account_cod_enabled` (proposed) is false is 409 (OD-58, 2026-11-22); a
+        sandbox account in production is 422
         `sandbox_account`; `service_code` is one of the courier's services (422
         `unknown_service`); `pickup_address_id` is a live pickup address of the shop (422
         `address_not_usable`); for a courier that books by branch both branch IDs are required
