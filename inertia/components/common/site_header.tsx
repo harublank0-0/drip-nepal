@@ -3,8 +3,9 @@ import { t } from '~/lib/i18n'
 /*
  * The header of the public pages until M4 builds the storefront header of
  * docs/08 §2.7 (brand, navigation, search, account, cart): the brand mark
- * alone, linking home. A plain link, because the home page is a route of
- * M4; the crimson accent marks the brand only (08 §1.1).
+ * alone, linking home. A plain link, because the home page `/` is a route
+ * of M4; until then it opens the 404 page. The crimson accent marks the
+ * brand only (08 §1.1).
  */
 export function SiteHeader() {
   return (

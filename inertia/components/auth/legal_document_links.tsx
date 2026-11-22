@@ -31,7 +31,7 @@ export function LegalDocumentLinks({ documents }: { documents: LegalDocumentLink
             >
               {TITLES[entry.slug]()}
               <ExternalLinkIcon aria-hidden="true" className="size-3.5" />
-              <span className="sr-only">{t('auth.legal.new_tab')}</span>
+              <span className="sr-only">{t('common.new_tab')}</span>
             </a>
             <span>
               {t('auth.legal.version', { version: entry.version })}

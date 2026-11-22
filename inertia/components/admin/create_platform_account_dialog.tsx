@@ -25,6 +25,7 @@ import { TextField } from '~/components/forms/text_field'
 import { ChoiceField } from '~/components/forms/choice_field'
 import { ErrorSummary } from '~/components/forms/error_summary'
 import { ProblemAlert } from '~/components/forms/problem_alert'
+import { RateLimitNotice } from '~/components/forms/rate_limit_notice'
 
 /*
  * Create DripNepal's own Nepal Can Move account (`adminCreateLogisticsAccount`
@@ -63,6 +64,7 @@ const FIELDS = [
 const KNOWN = new Set(FIELDS.map((field) => field.name))
 
 const { accountName, token } = COURIER_LIMITS
+const RATE_LIMIT_ID = 'account-rate-limit'
 
 export function CreatePlatformAccountDialog() {
   const [open, setOpen] = useState(false)
@@ -112,6 +114,8 @@ export function CreatePlatformAccountDialog() {
         setOffline(true)
         return
       }
+      // useApiMutation shows the wait next to the submit button.
+      if (outcome.problem.code === 'RATE_LIMITED') return
       if (outcome.problem.errors?.length) {
         report.failed(formApi, applyServerErrors(formApi, outcome.problem, KNOWN))
       } else {
@@ -236,7 +240,8 @@ export function CreatePlatformAccountDialog() {
             {/* Not disabled while pending, so it keeps focus; a second press is ignored (08 §7.1). */}
             <Button
               type="submit"
-              aria-disabled={mutation.pending || undefined}
+              aria-disabled={mutation.pending || mutation.retryIn > 0 || undefined}
+              aria-describedby={mutation.retryIn > 0 ? RATE_LIMIT_ID : undefined}
               className={PENDING_BUTTON}
             >
               {mutation.pending
@@ -244,6 +249,7 @@ export function CreatePlatformAccountDialog() {
                 : t('admin.logistics.create.submit')}
             </Button>
           </DialogFooter>
+          <RateLimitNotice id={RATE_LIMIT_ID} seconds={mutation.retryIn} />
         </form>
       </DialogContent>
     </Dialog>

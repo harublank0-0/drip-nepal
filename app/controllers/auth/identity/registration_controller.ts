@@ -27,14 +27,17 @@ export default class RegistrationController {
    * `/verify-email?token=…`; the page posts the token to `confirmEmail`, so
    * this GET never reads or redeems it, and a mail scanner that fetches the
    * link verifies nothing. A token page sends no referrer (docs/07 TM-14,
-   * §7.3). `account_status` is the signed-in user's status, which decides
-   * what the page offers: null without a session ("Sign in to get a new
-   * link"), `pending_verification` (the resend button), or `active`. The
-   * account-status middleware lets no other status keep a session
-   * (docs/07 §3.3 row 1).
+   * §7.3), and is never stored by a browser or a cache: its answer holds the
+   * token URL in the page object and, for a signed-in user, their email
+   * (docs/07 §7.3, docs/03 §12.5). `account_status` is the signed-in
+   * user's status, which decides what the page offers: null without a
+   * session ("Sign in to get a new link"), `pending_verification` (the
+   * resend button), or `active`. The account-status middleware lets no
+   * other status keep a session (docs/07 §3.3 row 1).
    */
   async verifyEmail(ctx: HttpContext) {
     ctx.response.header('Referrer-Policy', 'no-referrer')
+    ctx.response.header('Cache-Control', 'no-store')
     const user = ctx.auth.user
     let accountStatus: 'pending_verification' | 'active' | null = null
     if (user) {

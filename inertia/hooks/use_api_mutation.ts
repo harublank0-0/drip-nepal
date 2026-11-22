@@ -18,8 +18,11 @@ import { t } from '~/lib/i18n'
  * null, as for a second press), `retryIn` counts the seconds left for the
  * caller's `RateLimitNotice` next to the action, and the wait is announced
  * once, assertively, and its end once, politely: never the countdown itself
- * (08 §7.4, §11.7 rule 2). The caller still receives the outcome; it shows
- * no other message for it.
+ * (08 §7.4, §11.7 rule 2). Every caller renders `RateLimitNotice` with
+ * `retryIn` next to its action and keeps the action `aria-disabled` while
+ * `retryIn > 0` (ConfirmDialog takes `retryIn` for its callers); otherwise a
+ * press after the 429 would do nothing with no visible reason. The caller
+ * still receives the outcome and shows no other message for it.
  */
 export function useApiMutation() {
   const [pending, setPending] = useState(false)

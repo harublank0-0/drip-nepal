@@ -8,6 +8,7 @@ import { t } from '~/lib/i18n'
 import { Button } from '~/components/ui/button'
 import { Spinner } from '~/components/ui/spinner'
 import { ProblemAlert } from '~/components/forms/problem_alert'
+import { RateLimitNotice } from '~/components/forms/rate_limit_notice'
 import { ResendVerification } from '~/components/auth/resend_verification'
 
 /*
@@ -23,10 +24,14 @@ import { ResendVerification } from '~/components/auth/resend_verification'
  * failure without an answer.
  * - 200: verified. `confirmEmail` answers the same for a link that has just
  *   verified the account and for any link of an account already verified
- *   (docs/06 note 56), so one message covers both (AC-J04-06).
+ *   (docs/06 note 56), so a repeated link shows the same "Your email is
+ *   verified" (02 AC-J04-06); "already verified" is for a verified user who
+ *   opens the page without a link.
  * - 422: the link is unknown, expired or replaced; a new one needs a
  *   session, so a visitor is asked to sign in for one.
- * - anything else: the problem with its reference, and "Try again".
+ * - anything else: the problem with its reference, and "Try again"; a
+ *   `RATE_LIMITED` wait (no limiter covers `confirmEmail` today) shows next
+ *   to the button, which stays disabled until it ends.
  *
  * Without a token, the session decides (`accountStatus`): a signed-in
  * `pending_verification` user can ask for a new link; a verified one is
@@ -36,6 +41,8 @@ import { ResendVerification } from '~/components/auth/resend_verification'
  */
 type AccountStatus = 'pending_verification' | 'active' | null
 type Phase = 'checking' | 'verified' | 'invalid' | 'failed'
+
+const RATE_LIMIT_ID = 'confirm-rate-limit'
 
 export function VerifyEmailPanel({
   token,
@@ -59,7 +66,11 @@ export function VerifyEmailPanel({
     const outcome = await mutation.run(() =>
       client.request('confirmEmail', { body: { token: value }, timeout: 30_000 })
     )
-    if (!outcome) return
+    // Refused before sending (useApiMutation): back to "Try again", never stuck on "Checking".
+    if (!outcome) {
+      setPhase('failed')
+      return
+    }
     if (outcome.ok) {
       setPhase('verified')
       return
@@ -74,7 +85,8 @@ export function VerifyEmailPanel({
       setPhase('invalid')
       return
     }
-    setProblem(outcome.problem)
+    // useApiMutation shows a RATE_LIMITED wait next to the button.
+    if (outcome.problem.code !== 'RATE_LIMITED') setProblem(outcome.problem)
     setPhase('failed')
   }
 
@@ -92,7 +104,7 @@ export function VerifyEmailPanel({
 
   function retry() {
     const value = kept.current
-    if (!value || mutation.pending) return
+    if (!value || mutation.pending || mutation.retryIn > 0) return
     setProblem(null)
     setOffline(false)
     setPhase('checking')
@@ -102,6 +114,7 @@ export function VerifyEmailPanel({
   const signedIn = accountStatus !== null
   const continueLink = (
     <Button asChild className="h-11 w-full text-base">
+      {/* `/` is the storefront home of M4; until then the link opens the 404 page. */}
       <a href="/">{t('auth.verify.continue')}</a>
     </Button>
   )
@@ -149,14 +162,19 @@ export function VerifyEmailPanel({
     return (
       <Panel phase={phase} heading={t('auth.verify.failed.heading')}>
         <ProblemAlert problem={problem} offline={offline} />
-        <Button
-          type="button"
-          className={`h-11 w-full text-base ${PENDING_BUTTON}`}
-          aria-disabled={mutation.pending || undefined}
-          onClick={retry}
-        >
-          {t('auth.verify.retry')}
-        </Button>
+        <div className="space-y-2">
+          {/* Not disabled while pending or rate limited, so it keeps focus; presses are ignored (08 §7.1). */}
+          <Button
+            type="button"
+            className={`h-11 w-full text-base ${PENDING_BUTTON}`}
+            aria-disabled={mutation.pending || mutation.retryIn > 0 || undefined}
+            aria-describedby={mutation.retryIn > 0 ? RATE_LIMIT_ID : undefined}
+            onClick={retry}
+          >
+            {t('auth.verify.retry')}
+          </Button>
+          <RateLimitNotice id={RATE_LIMIT_ID} seconds={mutation.retryIn} />
+        </div>
       </Panel>
     )
   }

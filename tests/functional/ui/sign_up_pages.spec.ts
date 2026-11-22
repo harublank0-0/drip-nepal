@@ -86,9 +86,21 @@ test.group('T-UI-036 /signup', () => {
       Object.fromEntries(links.map((link) => [link.slug, link.version])),
       currentLegalVersions()
     )
-    assert.include(html, 'href="/legal/terms"')
-    assert.include(html, 'href="/legal/privacy"')
-    assert.include(html, LEGAL_DOCUMENTS.terms.version)
+    // The form's own links, rendered: a new tab, said in the link, then the version as text.
+    // The footer's links carry no version, and the page JSON writes it as `"version":"…"`.
+    for (const [slug, title] of [
+      ['terms', 'Terms of use'],
+      ['privacy', 'Privacy notice'],
+    ] as const) {
+      const version = LEGAL_DOCUMENTS[slug].version
+      assert.match(
+        html,
+        new RegExp(
+          `href="/legal/${slug}" target="_blank"[^>]*>${title}[\\s\\S]*?\\(opens in a new tab\\)</span></a><span>version ${version}`
+        ),
+        slug
+      )
+    }
   })
 
   test('T-UI-036 a signed-in user is sent away from the sign-up page', async ({ assert }) => {
@@ -127,6 +139,8 @@ test.group('T-UI-036 /verify-email', (group) => {
     assert.isNull(page?.props.account_status)
     // A token page (docs/07 TM-14, §7.3): the header and, for the page's own requests, the meta tag.
     assert.equal(headers.get('referrer-policy'), 'no-referrer')
+    // Its answer holds the token URL, and for a signed-in user their email: never stored.
+    assert.equal(headers.get('cache-control'), 'no-store')
     assert.match(html, /<meta[^>]*name="referrer"[^>]*content="no-referrer"/)
     assert.include(html, 'Sign in to get a new link')
     assert.include(html, `href="/login?return_to=${encodeURIComponent('/verify-email')}"`)

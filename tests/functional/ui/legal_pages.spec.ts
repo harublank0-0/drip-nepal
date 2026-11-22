@@ -61,10 +61,12 @@ test.group('T-UI-036 /legal/{documentSlug}', () => {
       for (const block of document.blocks) {
         assert.include(['heading', 'paragraph', 'list'], block.type)
       }
-      // Server-rendered (ADR-0003), with the draft notice (docs/12 §5.1).
-      assert.include(html, `<h1`)
-      assert.include(html, title)
-      assert.include(html, 'This is a draft')
+      // Server-rendered (ADR-0003): markup the page JSON does not hold. The title as the
+      // heading, the version line, a block as its element, and the draft notice's catalog text.
+      assert.match(html, new RegExp(`<h1[^>]*>${title}</h1>`))
+      assert.include(html, `Version ${LEGAL_DOCUMENTS[slug].version}`)
+      assert.match(html, /<h2[^>]*>This is a draft<\/h2>/)
+      assert.include(html, 'The final text will replace it before DripNepal opens to the public.')
     })
 
   test('T-UI-036 an unknown slug answers the 404 page: {slug}')
