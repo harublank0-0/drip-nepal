@@ -21,11 +21,11 @@ import { withTx } from '#modules/platform/tx'
  * 2. The password is hashed before the email is looked up, so both branches
  *    spend one scrypt hash (TM-09). The phone, if any, is encrypted with its
  *    blind index and last four digits (docs/04 §2.9).
- * 3. In one transaction, the user is inserted with `ON CONFLICT ON
- *    CONSTRAINT users_email_key DO NOTHING`. A concurrent signup for the
- *    same email waits for the other transaction and then inserts nothing,
- *    so `users_email_key` never raises and never becomes an oracle
- *    (docs/04a §5.1).
+ * 3. In one transaction, the user is inserted with `ON CONFLICT (email) DO
+ *    NOTHING`, whose arbiter is `users_email_key`, the only unique index on
+ *    `email`. A concurrent signup for the same email waits for the other
+ *    transaction and then inserts nothing, so `users_email_key` never
+ *    raises and never becomes an oracle (docs/04a §5.1).
  *    - A new row is `pending_verification` with the column defaults for
  *      `status`, `email_verified_at` and `security_stamp`, `age_confirmed_at`
  *      now and each consent now or null. The step action `issueUserToken`

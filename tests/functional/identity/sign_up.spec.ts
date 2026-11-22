@@ -209,8 +209,20 @@ test.group('T-IAM-001 sign-up', (group) => {
       },
       { name: 'an empty name', field: 'full_name', change: { full_name: '   ' } },
       { name: 'a 101-character name', field: 'full_name', change: { full_name: 'a'.repeat(101) } },
+      {
+        // U+0958 is a composition exclusion: NFC makes it two code points, so 100 become 101.
+        name: 'a 100-character name that NFC lengthens',
+        field: 'full_name',
+        change: { full_name: `\u0958${'a'.repeat(99)}` },
+      },
       { name: 'an unticked 18+ box', field: 'age_confirmed', change: { age_confirmed: false } },
       { name: 'no 18+ box', field: 'age_confirmed', change: { age_confirmed: undefined } },
+      {
+        name: 'an 18+ box sent as "yes"',
+        field: 'age_confirmed',
+        change: { age_confirmed: 'yes' },
+      },
+      { name: 'an 18+ box sent as 1', field: 'age_confirmed', change: { age_confirmed: 1 } },
       {
         name: 'a consent that is not a boolean',
         field: 'marketing_email_consent',
@@ -235,6 +247,17 @@ test.group('T-IAM-001 sign-up', (group) => {
       assert.lengthOf(await queued('notifications.dispatch'), 0)
       assert.lengthOf(await db.from('audit_logs').where('action', 'user.signup'), 0)
     })
+
+  test('T-IAM-001 a name is counted in code points after NFC, as users_full_name_check counts it', async ({
+    assert,
+  }) => {
+    // 100 letters with a combining accent: 200 code points as sent, 100 once composed.
+    const body = signUpBody('t-iam-001-nfc', { full_name: 'e\u0301'.repeat(100) })
+    const response = await postJson(client, SIGN_UP_PATH, body)
+    assert.equal(response.status, 202, response.text)
+    const user = await userByEmail(body.email)
+    assert.equal(user.full_name, '\u00e9'.repeat(100))
+  })
 
   test('T-IAM-001 a 128-character password is accepted [AC-J04-03]', async ({ assert }) => {
     const body = signUpBody('t-iam-001-long', { password: 'p'.repeat(128) })

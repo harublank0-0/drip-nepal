@@ -28,9 +28,11 @@ import {
  * dispatch job its issuer queued.
  * - T-IAM-002: a valid link activates the account and consumes the token,
  *   and the same link again answers 200; an expired, replaced, unknown or
- *   malformed link answers 422 on `token` and changes nothing; a resend
- *   replaces the live token; a verified user's resend is refused, and a
- *   guest's needs a session.
+ *   malformed link answers 422 on `token` and changes nothing; any link of
+ *   an account already `active`, replaced or expired, answers 200 with no
+ *   write, and a suspended or deactivated account's link answers 422 and
+ *   stays unconsumed; a resend replaces the live token; a verified user's
+ *   resend is refused, and a guest's needs a session.
  * - T-SEC-012: a token of another purpose sent to `confirmEmail` fails and
  *   stays unconsumed.
  * - T-API-002: an extra member on each of the three operations answers 422
@@ -219,6 +221,60 @@ test.group('T-IAM-002 email verification', (group) => {
     assert.equal(response.status, 401)
     assert.equal(response.body.code, 'UNAUTHENTICATED')
   })
+
+  test('T-IAM-002 a replaced or expired link of an account already active answers 200 with no write [AC-J04-06]', async ({
+    assert,
+  }) => {
+    const account = await signedUp(client, 't-iam-002-active')
+    // A newer link replaces the first (the step action a resend runs), and verifies the account.
+    const newer = await withTx((trx) => issueUserToken(trx, account.userId, 'email_verification'))
+    const newerToken = await rawTokenOf(newer.id, 'email_verification')
+    assert.equal(await statusOf(postJson(client, CONFIRM_PATH, { token: newerToken })), 200)
+    const verified = await userRow(account.userId)
+    // The used link, then past its expiry.
+    await db
+      .from('user_tokens')
+      .where('id', newer.id)
+      .update({
+        created_at: db.raw("now() - interval '2 days'"),
+        expires_at: db.raw("now() - interval '1 day'"),
+      })
+
+    for (const token of [account.token, newerToken]) {
+      const response = await postJson(client, CONFIRM_PATH, { token })
+      assert.equal(response.status, 200, response.text)
+      assert.deepEqual(response.body, { data: { status: 'active' } })
+    }
+    const after = await userRow(account.userId)
+    assert.equal(after.status, 'active')
+    assert.equal(after.email_verified_at.getTime(), verified.email_verified_at.getTime())
+    assert.equal(after.updated_at.getTime(), verified.updated_at.getTime())
+    assert.lengthOf(await verifyAudits(account.userId), 1)
+  })
+
+  test('T-IAM-002 a link of a {status} account answers 422 and stays unconsumed [AC-FR-IAM-002-4]')
+    .with([
+      { status: 'suspended', change: { status: 'suspended' } },
+      {
+        status: 'deactivated',
+        change: { status: 'deactivated', deletion_requested_at: new Date() },
+      },
+    ])
+    .run(async ({ assert }, { status, change }) => {
+      const account = await signedUp(client, `t-iam-002-${status}`)
+      // The status changes of docs/07 §3.12, written directly until their actions exist; the
+      // live token is left in place to test this action's own guard.
+      await db.from('users').where('id', account.userId).update(change)
+
+      const response = await postJson(client, CONFIRM_PATH, { token: account.token })
+      assert.equal(response.status, 422, response.text)
+      assert.equal(response.body.errors[0].code, 'token_invalid')
+      assert.isNull(await consumedAt(account.tokenId))
+      const user = await userRow(account.userId)
+      assert.equal(user.status, status)
+      assert.isNull(user.email_verified_at)
+      assert.lengthOf(await verifyAudits(account.userId), 0)
+    })
 })
 
 test.group('T-SEC-012 token purposes on confirmEmail', (group) => {

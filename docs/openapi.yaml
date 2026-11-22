@@ -453,7 +453,9 @@ paths:
         `email_verified_at`, `security_stamp` or a role, is 422 `unknown_field` and nothing is
         written (AC-FR-IAM-001-4, T-SEC-003). The email is trimmed and lower-cased (RF-22) and
         refused in the reserved `.invalid` top-level domain (T-IAM-112); the password is 10 to
-        128 characters (07 §3.7); the name 1 to 100 characters in NFC; `phone`, when given, a
+        128 characters (07 §3.7); the name is normalised to NFC, then 1 to 100 code points
+        (`users_full_name_check` counts them after NFC, 04 §2.8); `age_confirmed` must be the
+        JSON value `true`; `phone`, when given, a
         Nepali mobile number accepted with or without `+977`, stored in E.164, encrypted, with
         its blind index and last four digits (AC-FR-IAM-001-5, T-IAM-103).
         Answer: the same 202 status and body whether or not the email has an account
@@ -461,8 +463,8 @@ paths:
         network, 06 §9.1) is charged on every valid request before the password is hashed; the
         password is hashed before the email is looked up, so both branches spend one hash.
         Side effects, in one transaction: for a new email, the user (`pending_verification`,
-        inserted `ON CONFLICT ON CONSTRAINT users_email_key DO NOTHING`, so a concurrent signup
-        raises no violation), its `email_verification` token (24 h, 07 §3.8) and the
+        inserted `ON CONFLICT (email) DO NOTHING`, whose arbiter is `users_email_key`, so a
+        concurrent signup raises no violation), its `email_verification` token (24 h, 07 §3.8) and the
         verification email through `notifications.dispatch`, and one `user.signup` audit row
         with the consents by name and the legal-document versions the page links
         (AC-FR-IAM-001-6, AC-FR-IAM-013-4); for a known email, only the `notifications.dispatch`
@@ -560,10 +562,13 @@ paths:
         same link again, a double click or a second tab, is not an error (AC-J04-06). For a
         `pending_verification` user, a live token is consumed and the user becomes `active`
         with `email_verified_at` (compare-and-set, 07 §3.12), with one `user.email_verify`
-        audit row. An unknown, malformed, expired or replaced token, or one of another purpose,
-        which stays unconsumed (T-SEC-012), is 422 on `token` with the item code
-        `token_invalid` and no account data (AC-FR-IAM-002-4); nothing changes. Not ⚷ (06
-        §7.7). T-IAM-002, T-IAM-105. Release R1·M1.
+        audit row. A suspended or deactivated user's link answers 422 and stays unconsumed.
+        An unknown, malformed, expired or replaced token, or one of another purpose, which
+        stays unconsumed (T-SEC-012), is 422 on `token` with the item code `token_invalid`
+        and no account data (AC-FR-IAM-002-4); nothing changes. A `token` that is missing or
+        empty, not a string, or longer than 256 characters is refused by the validator first,
+        with Vine's `required`, `string` or `max_length` on `token`. Not ⚷ (06 §7.7).
+        T-IAM-002, T-IAM-105. Release R1·M1.
       x-release: R1·M1
       security:
         - xsrfHeader: []
@@ -595,8 +600,11 @@ paths:
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '422':
           description: |
-            `VALIDATION_FAILED`: the token is unknown, malformed, expired, replaced or of another
-            purpose (one `token_invalid` item, no account data), or a member is unknown.
+            `VALIDATION_FAILED`: the token is unknown, malformed, expired, replaced, of another
+            purpose or its account is suspended or deactivated (one `token_invalid` item, no
+            account data); a missing, empty, non-string or over-256-character `token` (one
+            `required`, `string` or `max_length` item); or a member is unknown
+            (`unknown_field`).
           headers:
             X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
             Cache-Control: { $ref: '#/components/headers/Cache-Control' }
@@ -4954,7 +4962,10 @@ components:
           type: string
           minLength: 1
           maxLength: 100
-          description: Trimmed and normalised to NFC.
+          description: |
+            Trimmed and normalised to NFC, then counted in code points (`char_length`), so a
+            name that NFC lengthens, such as one with the Devanagari letter U+0958, is measured
+            after it grows (04 §2.8).
         phone:
           type: [string, 'null']
           maxLength: 32
@@ -4965,7 +4976,10 @@ components:
             account may use the same number. Anything else is 422 `nepal_mobile`.
         age_confirmed:
           const: true
-          description: The unticked "I am 18 or older" box, which must be ticked (A-26; OD-24).
+          description: |
+            The unticked "I am 18 or older" box, which must be ticked (A-26; OD-24): the JSON
+            value `true` only; `false` is 422 `accepted`, and `"yes"`, `"on"` or `1` are 422
+            `boolean`.
         marketing_email_consent:
           type: boolean
           description: The unticked marketing email box; `true` stores the time of consent (FR-IAM-013).
@@ -7205,4 +7219,8 @@ components:
 #     and the session cookie that holds its secret. `confirmEmail` answers 200 for any link of an
 #     account already `active`, and 422 `token_invalid` for every other refused token;
 #     `resendEmailVerification` answers 403 `FORBIDDEN` to a user who is no longer
-#     `pending_verification`.
+#     `pending_verification`. After the Fable review: the `signUp` insert is described as the
+#     statement that runs, `ON CONFLICT (email) DO NOTHING` with `users_email_key` as its
+#     arbiter; `full_name` is counted in code points after NFC; `age_confirmed` accepts the
+#     JSON `true` only; and `confirmEmail`'s 422 names the validator's own items for a missing,
+#     non-string or over-long token, and the suspended or deactivated account's link.
