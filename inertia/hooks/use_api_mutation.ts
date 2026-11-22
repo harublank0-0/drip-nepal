@@ -23,8 +23,13 @@ import { t } from '~/lib/i18n'
  * `retryIn > 0` (ConfirmDialog takes `retryIn` for its callers); otherwise a
  * press after the 429 would do nothing with no visible reason. The caller
  * still receives the outcome and shows no other message for it.
+ *
+ * `signInOnUnauthenticated: false` hands `UNAUTHENTICATED` back to the
+ * caller instead of visiting the sign-in page, for the two operations
+ * whose 401 means something else: `logIn` (a wrong email or password) and
+ * `logOut` (the session is already gone, which is the outcome asked for).
  */
-export function useApiMutation() {
+export function useApiMutation({ signInOnUnauthenticated = true } = {}) {
   const [pending, setPending] = useState(false)
   const inFlight = useRef(false)
   // Epoch milliseconds until which RATE_LIMITED blocks the action; 0 when it does not.
@@ -66,7 +71,7 @@ export function useApiMutation() {
         // Back to this page afterwards, query included, as the server's page redirects do.
         const here = encodeURIComponent(`${window.location.pathname}${window.location.search}`)
         if (problem.code === 'UNAUTHENTICATED') {
-          router.visit(`/login?return_to=${here}`)
+          if (signInOnUnauthenticated) router.visit(`/login?return_to=${here}`)
         } else if (problem.code === 'MFA_REQUIRED' && problem.mfa === 'enrollment_required') {
           router.visit(`/mfa?return_to=${here}`)
         } else if (problem.code === 'RATE_LIMITED') {

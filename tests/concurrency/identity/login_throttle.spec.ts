@@ -35,7 +35,8 @@ import {
  *
  * The limiter store commits on its own connection, so these tests are here,
  * each on a fresh random email and network, and delete their keys and the
- * session rows their HTTP requests create (docs/10 §3.3). The `logIn` operation itself is M1; the credential check is a stub.
+ * session rows their HTTP requests create (docs/10 §3.3). The credential
+ * check here is a stub; `logIn` itself is tested in log_in.spec.ts.
  */
 
 router
@@ -45,7 +46,7 @@ router
         throw new authErrors.E_INVALID_CREDENTIALS('Invalid user credentials')
       })
     } catch (error) {
-      // What the M1 logIn controller does with a wrong password (AC-FR-IAM-003-2).
+      // What the logIn action does with a wrong password (AC-FR-IAM-003-2).
       if (error instanceof authErrors.E_INVALID_CREDENTIALS) {
         throw new DomainError('UNAUTHENTICATED', { detail: 'Invalid email or password.' })
       }

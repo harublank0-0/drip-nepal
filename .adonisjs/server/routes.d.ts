@@ -6,8 +6,11 @@ export type ScannedRoutes = {
   ALL: {
     'drive.fs.serve': { paramsTuple: [...ParamValue[]]; params: {'*': ParamValue[]} }
     'signUp': { paramsTuple?: []; params?: {} }
+    'logIn': { paramsTuple?: []; params?: {} }
+    'logOut': { paramsTuple?: []; params?: {} }
     'resendEmailVerification': { paramsTuple?: []; params?: {} }
     'confirmEmail': { paramsTuple?: []; params?: {} }
+    'getMe': { paramsTuple?: []; params?: {} }
     'getLogisticsSettings': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'replaceLogisticsSettings': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'createShopCourierAccount': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
@@ -36,7 +39,9 @@ export type ScannedRoutes = {
     'adminResolveCourierEvent': { paramsTuple: [ParamValue]; params: {'courierEventId': ParamValue} }
     'adminRecordOrderVerification': { paramsTuple: [ParamValue]; params: {'orderNumber': ParamValue} }
     'receiveCourierCallback': { paramsTuple: [ParamValue,ParamValue]; params: {'providerCode': ParamValue,'accountId': ParamValue} }
+    'home': { paramsTuple?: []; params?: {} }
     'legal.document': { paramsTuple: [ParamValue]; params: {'documentSlug': ParamValue} }
+    'login': { paramsTuple?: []; params?: {} }
     'signup': { paramsTuple?: []; params?: {} }
     'verify_email': { paramsTuple?: []; params?: {} }
     'admin.logistics': { paramsTuple?: []; params?: {} }
@@ -48,13 +53,16 @@ export type ScannedRoutes = {
   }
   GET: {
     'drive.fs.serve': { paramsTuple: [...ParamValue[]]; params: {'*': ParamValue[]} }
+    'getMe': { paramsTuple?: []; params?: {} }
     'getLogisticsSettings': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'getCourierBookingOptions': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'shopOrderNumber': ParamValue} }
     'adminListLogisticsAccounts': { paramsTuple?: []; params?: {} }
     'adminListLogisticsBranches': { paramsTuple?: []; params?: {} }
     'adminListCourierBookings': { paramsTuple?: []; params?: {} }
     'adminListCourierEvents': { paramsTuple?: []; params?: {} }
+    'home': { paramsTuple?: []; params?: {} }
     'legal.document': { paramsTuple: [ParamValue]; params: {'documentSlug': ParamValue} }
+    'login': { paramsTuple?: []; params?: {} }
     'signup': { paramsTuple?: []; params?: {} }
     'verify_email': { paramsTuple?: []; params?: {} }
     'admin.logistics': { paramsTuple?: []; params?: {} }
@@ -64,13 +72,16 @@ export type ScannedRoutes = {
   }
   HEAD: {
     'drive.fs.serve': { paramsTuple: [...ParamValue[]]; params: {'*': ParamValue[]} }
+    'getMe': { paramsTuple?: []; params?: {} }
     'getLogisticsSettings': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'getCourierBookingOptions': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'shopOrderNumber': ParamValue} }
     'adminListLogisticsAccounts': { paramsTuple?: []; params?: {} }
     'adminListLogisticsBranches': { paramsTuple?: []; params?: {} }
     'adminListCourierBookings': { paramsTuple?: []; params?: {} }
     'adminListCourierEvents': { paramsTuple?: []; params?: {} }
+    'home': { paramsTuple?: []; params?: {} }
     'legal.document': { paramsTuple: [ParamValue]; params: {'documentSlug': ParamValue} }
+    'login': { paramsTuple?: []; params?: {} }
     'signup': { paramsTuple?: []; params?: {} }
     'verify_email': { paramsTuple?: []; params?: {} }
     'admin.logistics': { paramsTuple?: []; params?: {} }
@@ -80,6 +91,7 @@ export type ScannedRoutes = {
   }
   POST: {
     'signUp': { paramsTuple?: []; params?: {} }
+    'logIn': { paramsTuple?: []; params?: {} }
     'resendEmailVerification': { paramsTuple?: []; params?: {} }
     'confirmEmail': { paramsTuple?: []; params?: {} }
     'createShopCourierAccount': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
@@ -100,6 +112,11 @@ export type ScannedRoutes = {
     'dev.sign_in.store': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'dev.sign_out': { paramsTuple?: []; params?: {} }
   }
+  DELETE: {
+    'logOut': { paramsTuple?: []; params?: {} }
+    'archivePickupAddress': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'addressId': ParamValue} }
+    'adminRemoveShopFromLogisticsAccount': { paramsTuple: [ParamValue,ParamValue]; params: {'accountId': ParamValue,'shopId': ParamValue} }
+  }
   PUT: {
     'replaceLogisticsSettings': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'adminAllowShopOnLogisticsAccount': { paramsTuple: [ParamValue,ParamValue]; params: {'accountId': ParamValue,'shopId': ParamValue} }
@@ -108,10 +125,6 @@ export type ScannedRoutes = {
   PATCH: {
     'updatePickupAddress': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'addressId': ParamValue} }
     'adminUpdateLogisticsBranch': { paramsTuple: [ParamValue]; params: {'branchId': ParamValue} }
-  }
-  DELETE: {
-    'archivePickupAddress': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'addressId': ParamValue} }
-    'adminRemoveShopFromLogisticsAccount': { paramsTuple: [ParamValue,ParamValue]; params: {'accountId': ParamValue,'shopId': ParamValue} }
   }
 }
 declare module '@adonisjs/core/types/http' {

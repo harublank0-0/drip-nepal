@@ -24,5 +24,8 @@
   "form.nepal_country_code": "+977",
   "rate_limited.wait": "Too many attempts. Try again in {unit, select, minutes {{count, plural, one {# minute} other {# minutes}}} other {{count, plural, one {# second} other {# seconds}}}}.",
   "rate_limited.ready": "You can try again now.",
-  "new_tab": "(opens in a new tab)"
+  "new_tab": "(opens in a new tab)",
+  "account.sign_out": "Sign out",
+  "account.signing_out": "Signing out…",
+  "account.sign_out_failed": "We couldn't sign you out. Try again."
 }

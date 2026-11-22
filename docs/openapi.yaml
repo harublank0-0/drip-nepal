@@ -132,12 +132,9 @@ x-pending-operations:
   - listLocalLevels
   - getCurrentSellerAgreement
   # Auth and self (06 §13.3)
-  - logIn
-  - logOut
   - verifyMfaChallenge
   - requestPasswordReset
   - resetPassword
-  - getMe
   - updateMe
   - changePassword
   - revokeAllSessions
@@ -625,6 +622,194 @@ paths:
                       - field: token
                         code: token_invalid
                         message: This link has expired or has already been used.
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /api/v1/auth/session:
+    post:
+      operationId: logIn
+      tags: [Auth]
+      summary: Sign in with email and password
+      description: |
+        Actor: a guest; the route runs the `guest` middleware, so a signed-in caller gets 409
+        `CONFLICT` with detail "You are already signed in" and must log out first (07 §3.2;
+        09 §3.4 row 3). The request carries the guest session's cookie, so a missing or stale
+        `X-XSRF-TOKEN` is 403 `FORBIDDEN` (06 §4.1, T-SEC-013).
+        Input: the members of `LogInRequest` only; any other member, such as `remember_me`, is
+        422 `unknown_field` (T-API-002). The email is trimmed and lower-cased (RF-22).
+        Order (07 §3.6): the `login_ip` limiter is charged before any credential work, then a
+        `login_acct_ip` point before the check (06 §9.1); past either, 429 `RATE_LIMITED`, with
+        no check and no audit row. The password is hashed once on both branches: verified
+        against the stored hash, or, for an email with no account (an anonymised account
+        counts as none), hashed and discarded, so a wrong password and an unknown email answer
+        the same 401 with the same `detail` (AC-FR-IAM-003-2, T-SEC-012). The status is checked
+        before anyone is signed in: `suspended` or `deactivated` with the right password is 403
+        `ACCOUNT_SUSPENDED` and no session (AC-FR-IAM-003-4). Every refusal after the check
+        keeps the limiter point and writes one `auth.login_failed` row (04a §15.3).
+        On success, in one transaction: `last_login_at` (a compare-and-set on a signed-in
+        status, which returns the current `security_stamp`), a rehash if the scrypt parameters
+        changed (07 §3.7), and one `auth.login` row; the account key is deleted. Then the
+        session: the keys of an earlier sign-in are forgotten, the guard's `login()` issues a
+        new session ID, the stamp and the login times are stored and the new row is tagged
+        with the user ID (07 §3.1, §3.2, T-SEC-009). A staff member signs in the same way; the
+        admin surface then answers 401 `MFA_REQUIRED` until `verifyMfaChallenge` (06 §4.3).
+        `redirect_to` is `return_to` when the helper of 07 TM-14 keeps it (a path on this site,
+        not under `/api/`, without its fragment), else `/` (T-SEC-017). Not ⚷ (06 §7.7).
+        T-IAM-003. Release R1·M1.
+      x-release: R1·M1
+      security:
+        - xsrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LogInRequest' }
+            examples:
+              withReturn:
+                summary: A sign-in from `/login?return_to=/checkout`
+                value:
+                  email: ram@example.com
+                  password: example-password
+                  return_to: /checkout
+      responses:
+        '200':
+          description: Signed in; the session cookie names a new, tagged session.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LogInResponse' }
+              examples:
+                signedIn:
+                  summary: A customer back to the checkout
+                  value:
+                    data:
+                      user:
+                        id: 01929d02-0000-7000-8000-000000000001
+                        email: ram@example.com
+                        full_name: Ram Thapa
+                        status: active
+                      redirect_to: /checkout
+        '401':
+          description: |
+            `UNAUTHENTICATED`: a wrong password or an unknown email, with the same `detail`
+            (AC-FR-IAM-003-2).
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem401' }
+              examples:
+                invalid:
+                  summary: The one answer of a wrong password and an unknown email
+                  value:
+                    type: https://dripnepal.com/problems/unauthenticated
+                    title: Authentication required
+                    status: 401
+                    detail: Invalid email or password.
+                    code: UNAUTHENTICATED
+                    request_id: 01929d02-0000-7000-8000-000000000401
+        '403':
+          description: |
+            `ACCOUNT_SUSPENDED` (a suspended or deactivated account with the right password; no
+            session) or `FORBIDDEN` (a missing or stale `X-XSRF-TOKEN`).
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem403' }
+        '409':
+          description: '`CONFLICT`: the caller is already signed in ("You are already signed in").'
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem409' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422': { $ref: '#/components/responses/UnprocessableContent' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/Internal' }
+    delete:
+      operationId: logOut
+      tags: [Auth]
+      summary: Sign out
+      description: |
+        Actor: a signed-in user (`auth`); a guest gets 401. Input: none; a body member is 422
+        `unknown_field`. The session is logged out, untagged, cleared and regenerated (06 §4.1,
+        07 §3.11): its row is deleted, the cookie names a new, empty session, and the old
+        cookie finds nothing afterwards (AC-FR-IAM-003-6, T-SEC-009). Clearing also drops
+        Shield's CSRF secret, so the client visits a page (`/login`) before its next write.
+        The 204 cannot clear the browser's history: the client calls `router.clearHistory()`
+        before that visit, and every page rendered without a signed-in user renders with
+        `clearHistory` (T-SEC-043). Side effects: none beyond the session. Not ⚷ (06 §7.7).
+        Release R1·M1.
+      x-release: R1·M1
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '204':
+          description: Signed out.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422': { $ref: '#/components/responses/UnprocessableContent' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /api/v1/me:
+    get:
+      operationId: getMe
+      tags: [Me]
+      summary: The signed-in user's own account
+      description: |
+        Actor: a signed-in user (`auth`); a guest gets 401. Scope: the caller's own row only;
+        there is no ID to change. The answer lists every member: the profile, the status, the
+        two marketing consents as booleans (as `updateMe` takes them), the phone's last four
+        digits, the staff role of an unrevoked `platform_staff` row (enrolled or not), and the
+        shops the user owns or is an `active` member of, with their place in each. Never the
+        password hash, the security stamp, the TOTP secret, the encrypted phone or its blind
+        index (07 §5.5, TM-06). Side effects: none. T-IAM-004. Release R1·M1.
+      x-release: R1·M1
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: The caller's account.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MeResponse' }
+              examples:
+                owner:
+                  summary: A customer who owns one shop
+                  value:
+                    data:
+                      id: 01929d02-0000-7000-8000-000000000001
+                      email: ram@example.com
+                      full_name: Ram Thapa
+                      status: active
+                      phone_last4: '4567'
+                      marketing_email_consent: true
+                      marketing_sms_consent: false
+                      staff_role: null
+                      shops:
+                        - slug: thulo-pasal
+                          name: Thulo Pasal
+                          status: pending_review
+                          role: owner
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '500': { $ref: '#/components/responses/Internal' }
 
   /api/v1/seller/shops/{shopSlug}/products:
@@ -5022,6 +5207,105 @@ components:
           properties:
             status: { const: active }
 
+    # ---------- logIn, logOut, getMe (06 §13.3; M1 part 3) ----------
+    LogInRequest:
+      type: object
+      description: |
+        The whole input of `logIn`; any other member is 422 `unknown_field` (06 §3.5,
+        T-API-002). No `remember_me`: remember-me is off in R1 (07 §3.5).
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          description: Trimmed and lower-cased before the lookup (RF-22).
+        password:
+          type: string
+          minLength: 1
+          maxLength: 128
+          writeOnly: true
+          description: No minimum beyond one character at sign-in (07 §3.7). Never stored or logged.
+        return_to:
+          type: [string, 'null']
+          description: |
+            The `return_to` query of `/login`, passed on unchanged; checked by the helper of 07
+            TM-14, which turns a rejected value into `/` rather than an error.
+    SessionUser:
+      type: object
+      description: Who is signed in, as `logIn` answers it.
+      additionalProperties: false
+      required: [id, email, full_name, status]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        full_name: { type: [string, 'null'] }
+        status: { type: string, enum: [pending_verification, active] }
+    LogInResponse:
+      type: object
+      description: The 200 of `logIn`.
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required: [user, redirect_to]
+          properties:
+            user: { $ref: '#/components/schemas/SessionUser' }
+            redirect_to:
+              type: string
+              pattern: '^/'
+              description: The checked `return_to`, or `/` (07 TM-14); the client navigates only here.
+    MeResponse:
+      type: object
+      description: The 200 of `getMe`; a closed schema, so a new member is a contract change (07 TM-06).
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required:
+            [
+              id,
+              email,
+              full_name,
+              status,
+              phone_last4,
+              marketing_email_consent,
+              marketing_sms_consent,
+              staff_role,
+              shops,
+            ]
+          properties:
+            id: { type: string, format: uuid }
+            email: { type: string, format: email }
+            full_name: { type: [string, 'null'] }
+            status: { type: string, enum: [pending_verification, active] }
+            phone_last4: { type: [string, 'null'], pattern: '^[0-9]{4}$' }
+            marketing_email_consent: { type: boolean }
+            marketing_sms_consent: { type: boolean }
+            staff_role:
+              type: [string, 'null']
+              enum: [platform_admin, support_agent, catalog_moderator, finance_officer, null]
+            shops:
+              type: array
+              items:
+                type: object
+                additionalProperties: false
+                required: [slug, name, status, role]
+                properties:
+                  slug: { type: string }
+                  name: { type: string }
+                  status:
+                    type: string
+                    enum: [pending_review, active, rejected, suspended, closed]
+                  role:
+                    type: string
+                    enum: [owner, manager, catalog_editor, order_fulfiller, viewer]
+
     # ---------- listProducts ----------
     ListingCard:
       type: object
@@ -7224,3 +7508,13 @@ components:
 #     arbiter; `full_name` is counted in code points after NFC; `age_confirmed` accepts the
 #     JSON `true` only; and `confirmEmail`'s 422 names the validator's own items for a missing,
 #     non-string or over-long token, and the suspended or deactivated account's link.
+#
+# Added with sign-in and sign-out (2026-11-23, M1 part 3):
+# 48. `logIn`, `logOut` and `getMe` move from `x-pending-operations` to `paths`, written from the
+#     code, with the new schemas `LogInRequest`, `SessionUser`, `LogInResponse` and `MeResponse`
+#     (06 note 57). `logIn` declares `security: [xsrfHeader]`, as the other operations a guest
+#     calls do; its 200 follows 06 §3.4's envelope, `{data: {user, redirect_to}}`; its refusals
+#     are the one 401 of a wrong password and an unknown email, 403 `ACCOUNT_SUSPENDED`, 409
+#     `CONFLICT` for a signed-in caller and 429. `logOut` answers 204, as the header's envelope
+#     rule says. `getMe` is a closed schema listing every member, as 07 TM-06 asks of responses that hold
+#     personal data.

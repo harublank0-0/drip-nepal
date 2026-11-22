@@ -18,6 +18,22 @@ export default class InertiaMiddleware extends BaseInertiaMiddleware {
      */
     const { session, auth, staff } = ctx as Partial<HttpContext>
 
+    /*
+     * The history backstop of docs/07 §3.11 (T-SEC-043): every page
+     * rendered without a signed-in user, `/login` included, clears the
+     * browser's Inertia history, so a logout the client did not start (a
+     * forced logout, a session revoked elsewhere) leaves no encrypted page
+     * readable through Back. Harmless for guests, whose pages are not
+     * encrypted. share() runs while the page object is built, before the
+     * adapter reads the flag. Adapter 5 also puts `inertia.clear_history`
+     * in the session, which the same render pulls again: a guest's render
+     * then writes its session row instead of touching it, one statement
+     * either way (docs/07 §3.1). A status page rendered before `silent_auth`
+     * knew the user (a request refused earlier in the stack) counts too; for
+     * a signed-in user that costs only a reload of encrypted history entries.
+     */
+    if (!auth?.user) ctx.inertia.clearHistory()
+
     /**
      * Fetching the first error from the flash messages
      */

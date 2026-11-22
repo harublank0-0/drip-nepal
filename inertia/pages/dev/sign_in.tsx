@@ -5,8 +5,9 @@ import type { InertiaProps } from '~/types'
 
 /*
  * The development-only sign-in (docs/07 §3.13), never routed in production.
- * Until M1 builds the sign-in pages, it opens a session as a demo account
- * or as a staff member with TOTP enrolled. The demo accounts' password, for
+ * It opens a session as a demo account or as a staff member with TOTP
+ * enrolled, without the password, and records the MFA time in place of the
+ * challenge of M1 part 5; `/login` is the real sign-in. The demo accounts' password, for
  * password re-entry, is in tmp/dev_credentials.json (docs/09 §8.8).
  */
 

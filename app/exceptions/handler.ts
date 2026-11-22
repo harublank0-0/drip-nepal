@@ -70,7 +70,8 @@ function renderPage(
 /*
  * The redirect of a page visit that needs a sign-in: the visited URL, query
  * included, travels only as `return_to`, never forwarded as the target's own
- * query string (config/app.ts forwards it by default; docs/09 §5.4).
+ * query string (config/app.ts no longer forwards it, and `withQs(false)`
+ * keeps this redirect so whatever the setting; docs/09 §5.4).
  */
 function signInRedirect(ctx: HttpContext, path: '/login' | '/mfa') {
   return ctx.response

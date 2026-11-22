@@ -4,6 +4,7 @@ import type { Data } from '@generated/data'
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '~/components/ui/sidebar'
 import { AdminSidebar, ADMIN_NAV_ID } from '~/components/admin/admin_sidebar'
 import { SkipLink } from '~/components/common/skip_link'
+import { SignOutButton } from '~/components/common/sign_out_button'
 import { t } from '~/lib/i18n'
 
 /*
@@ -32,9 +33,13 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             {t('admin.layout.brand')}
           </span>
           {props.user && (
-            <span className="text-muted-foreground ms-auto truncate text-sm">
-              {t('admin.layout.signed_in_as', { email: props.user.email })}
-            </span>
+            <>
+              <span className="text-muted-foreground ms-auto truncate text-sm">
+                {t('admin.layout.signed_in_as', { email: props.user.email })}
+              </span>
+              {/* `logOut`, then history cleared and `/login` (docs/07 §3.11). */}
+              <SignOutButton className="shrink-0" />
+            </>
           )}
         </div>
         {/* eslint-disable-next-line react/no-unknown-property -- Inertia 3 restores scroll by the `scroll-region` attribute (docs/08 §6.3) */}

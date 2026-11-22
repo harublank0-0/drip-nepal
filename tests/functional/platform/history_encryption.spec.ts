@@ -1,6 +1,9 @@
 import { test } from '@japa/runner'
 import router from '@adonisjs/core/services/router'
 import env from '#start/env'
+import { UserFactory } from '#database/factories/user_factory'
+import { signIn } from '#tests/support/courier_http'
+import type { Browser } from '#tests/support/browser'
 
 /*
  * T-SEC-043, the encryption part (docs/07 §3.11, RF-34): pages of the
@@ -10,8 +13,13 @@ import env from '#start/env'
  * history key is cleared. Other pages are not encrypted. A surface counts
  * only as a whole first path segment (`/accounts` is not `/account`; the
  * exact-path cases are unit-tested). The flag is set in the server stack, so
- * the 404 page of an unknown URL under a surface is encrypted too. The
- * clearing part of T-SEC-043 comes with logOut in M1.
+ * the 404 page of an unknown URL under a surface is encrypted too.
+ *
+ * T-SEC-043, the clearing part (M1 part 3): every page rendered without a
+ * signed-in user, `/login` included, carries `clearHistory`, the backstop
+ * for a logout the client did not start; a signed-in user's page does not.
+ * The client's own `router.clearHistory()` after `logOut`
+ * (inertia/hooks/use_sign_out.ts) is checked in a browser.
  */
 
 const base = () => `http://${env.get('HOST')}:${env.get('PORT')}`
@@ -74,5 +82,41 @@ test.group('T-SEC-043 history encryption on the signed-in surfaces', () => {
     assert.equal(visit.status, 200)
     const page = (await visit.json()) as Record<string, unknown>
     assert.isTrue(page.encryptHistory)
+  })
+})
+
+// The page object of an HTML answer to `browser`, which sends its cookies.
+async function pageOf(browser: Browser, path: string) {
+  const response = await browser.request(path, { headers: { Accept: 'text/html' } })
+  const html = await response.text()
+  const json = /<script data-page="app" type="application\/json">([^<]*)<\/script>/.exec(html)?.[1]
+  return { status: response.status, page: JSON.parse(json ?? 'null') as Record<string, unknown> }
+}
+
+test.group('T-SEC-043 history clearing without a signed-in user', () => {
+  test('T-SEC-043 {$self} rendered for a guest clears the history [AC-FR-IAM-003-6]')
+    .with([
+      '/login',
+      '/signup',
+      '/verify-email',
+      '/__test__/t-sec-043',
+      '/admin/__test__/t-sec-043',
+    ])
+    .run(async ({ assert }, path) => {
+      const { status, page } = await pageObject(path)
+      assert.equal(status, 200)
+      assert.isTrue(page.clearHistory)
+    })
+
+  test('T-SEC-043 a page rendered for a signed-in user does not clear the history', async ({
+    assert,
+  }) => {
+    const user = await UserFactory.create()
+    const browser = await signIn(user.id)
+    for (const path of ['/verify-email', '/__test__/t-sec-043']) {
+      const { status, page } = await pageOf(browser, path)
+      assert.equal(status, 200, path)
+      assert.notEqual(page.clearHistory, true, path)
+    }
   })
 })

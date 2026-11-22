@@ -22,7 +22,7 @@ type RateLimit = {
  * other rows of that table join with their operations (M1 and later).
  */
 export const RATE_LIMITS = {
-  // logIn, per account and client network; penalized on a wrong password only.
+  // logIn, per account and client network; charged before the check, kept on failure only.
   login_acct_ip: { prefix: 'login:acct_ip', requests: 5, duration: '1 minute' },
   // logIn, per client network; checked before any credential work.
   login_ip: { prefix: 'login:ip', requests: 20, duration: '1 minute' },

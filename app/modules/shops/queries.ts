@@ -89,3 +89,32 @@ export async function shopLabels(ids: readonly string[]): Promise<Map<string, Sh
     .select('id', 'slug', 'name')
   return new Map(rows.map((row) => [row.id, { id: row.id, slug: row.slug, name: row.name }]))
 }
+
+export type UserShop = { slug: string; name: string; status: string; role: SellerActor }
+
+/*
+ * The shops a user owns and those they are an `active` member of, for the
+ * user's own `getMe` (docs/06 §13.3, "owned and member shops"): each
+ * shop's slug, name and status, and the user's place in it, by name.
+ * Shop IDs and other members are never part of it.
+ */
+export async function shopsOfUser(userId: string): Promise<UserShop[]> {
+  const result = await db.rawQuery(
+    `SELECT s.slug, s.name, s.status, 'owner' AS role
+       FROM shops s
+      WHERE s.owner_user_id = :user
+     UNION ALL
+     SELECT s.slug, s.name, s.status, m.role
+       FROM shop_memberships m
+       JOIN shops s ON s.id = m.shop_id
+      WHERE m.user_id = :user AND m.status = 'active'
+     ORDER BY name, slug`,
+    { user: userId }
+  )
+  return (result.rows as UserShop[]).map((row) => ({
+    slug: row.slug,
+    name: row.name,
+    status: row.status,
+    role: row.role,
+  }))
+}
