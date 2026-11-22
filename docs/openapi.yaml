@@ -1826,8 +1826,9 @@ paths:
         area and landmark in full, as the shop's own data (07 §5.5, T-SEC-034).
         `callback_url` is the URL the owner registers with the courier for its status callbacks
         (06 §12.6). It carries the account's callback token, so only the owner sees it; it is
-        `null` for every other member and when no callback key is configured, and it is never
-        stored with an idempotency key.
+        `null` for every other member, for a platform-owned account (staff register its callback;
+        OD-58) and when no callback key is configured, and it is never stored with an idempotency
+        key.
         `ETag` is the settings `version` (`"0"` before the first save), which
         `replaceLogisticsSettings` sends back as `If-Match`. Side effects: none. Release R1·M6.
       x-release: R1·M6
@@ -5721,8 +5722,8 @@ components:
               format: uri
               description: |
                 The URL the owner registers with the courier (06 §12.6), with the account's
-                callback token in `token`. `null` for every member but the owner, and when no
-                callback key is configured.
+                callback token in `token`. `null` for every member but the owner, for a
+                platform-owned account, and when no callback key is configured.
       unevaluatedProperties: false
     AdminCourierAccount:
       description: A courier account in `adminListLogisticsAccounts`, with its owning shop and allowed shops.

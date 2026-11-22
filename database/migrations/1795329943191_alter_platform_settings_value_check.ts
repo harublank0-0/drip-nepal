@@ -4,17 +4,16 @@ import { BaseSchema } from '@adonisjs/lucid/schema'
  * M6, OD-58 (re-decided 2026-11-22): `platform_settings` gains the key
  * `platform_account_cod_enabled` (docs/04a §15.1), a boolean that keeps live
  * COD off platform-owned courier accounts until OD-58's conditions are met.
- * A key needs the CHECK replaced; the table holds a handful of rows, so the
- * new CHECK is added validated in this one file. The seeder inserts the key
- * with `false`.
+ * Adding a value to a CHECK list (docs/09 §8.5): the new constraint is added
+ * NOT VALID and swapped in here; the next file validates it alone. The seeder
+ * inserts the key with `false`.
  */
 export default class extends BaseSchema {
   async up() {
     this.schema.raw(String.raw`SET LOCAL lock_timeout = '5s'`)
     this.schema.raw(String.raw`
       ALTER TABLE platform_settings
-        DROP CONSTRAINT platform_settings_value_check,
-        ADD CONSTRAINT platform_settings_value_check CHECK (CASE key
+        ADD CONSTRAINT platform_settings_value_check_next CHECK (CASE key
           WHEN 'checkout_enabled'                 THEN jsonb_typeof(value) = 'boolean'
           WHEN 'single_operator_mode'             THEN jsonb_typeof(value) = 'boolean'
           WHEN 'maintenance_banner'               THEN jsonb_typeof(value) = 'string'
@@ -31,7 +30,14 @@ export default class extends BaseSchema {
           WHEN 'reservation_ttl_minutes'          THEN jsonb_int_between(value, 10, 60)
           WHEN 'max_shops_per_owner'              THEN jsonb_int_between(value, 1, 10)
           WHEN 'platform_account_cod_enabled'     THEN jsonb_typeof(value) = 'boolean'
-          ELSE false END)
+          ELSE false END) NOT VALID
+    `)
+    this.schema.raw(
+      String.raw`ALTER TABLE platform_settings DROP CONSTRAINT platform_settings_value_check`
+    )
+    this.schema.raw(String.raw`
+      ALTER TABLE platform_settings
+        RENAME CONSTRAINT platform_settings_value_check_next TO platform_settings_value_check
     `)
   }
 

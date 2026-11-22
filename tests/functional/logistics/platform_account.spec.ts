@@ -171,6 +171,14 @@ test.group('T-SHOP-115 the platform mode of the logistics settings (OD-58)', (gr
     assert.equal(wrongMode.body.errors[0].code, 'account_not_usable')
 
     await insertNcmAccount(shopId)
+    const stale = await send(
+      browser,
+      'PUT',
+      base,
+      { fulfillment_mode: 'platform', default_account_id: platformAccountId },
+      { 'If-Match': '"9"' }
+    )
+    assert.equal(stale.status, 412, 'a stale version is answered before the own-account rule')
     const ownWins = await put({
       fulfillment_mode: 'platform',
       default_account_id: platformAccountId,
@@ -308,6 +316,7 @@ test.group('T-SEC-041 the platform-owned account operations (OD-58)', (group) =>
       'Idempotency-Key': idempotencyKey,
     })
     assert.equal(replay.status, 201)
+    assert.equal(replay.headers.get('idempotency-replayed'), 'true')
     assert.equal(replay.body.data.id, created.body.data.id)
     assert.lengthOf(await db.from('logistics_accounts').where('owner_type', 'platform'), 1)
   })
@@ -359,10 +368,17 @@ test.group('T-SEC-041 the platform-owned account operations (OD-58)', (group) =>
   }) => {
     const accountId = await insertPlatformAccount()
     const { shopId } = await activeShop()
+    // A second shop on the same account must keep its settings when the first is removed.
+    const neighbour = await activeShop()
+    await allowShop(accountId, neighbour.shopId)
+    await db.table('shop_logistics_settings').insert({
+      shop_id: neighbour.shopId,
+      fulfillment_mode: 'platform',
+      default_account_id: accountId,
+      default_account_owner_type: 'platform',
+    })
     const admin = await signIn(await staffUser('platform_admin'), minutesAgo(1))
     const path = `/api/v1/admin/logistics/accounts/${accountId}/shops/${shopId}`
-    const agent = await signIn(await staffUser('support_agent'), minutesAgo(1))
-    assert.equal(await statusOf(send(agent, 'PUT', path)), 403)
 
     const allowed = await send(admin, 'PUT', path)
     assert.equal(allowed.status, 200, allowed.text)
@@ -388,6 +404,8 @@ test.group('T-SEC-041 the platform-owned account operations (OD-58)', (group) =>
     const settings = await db.from('shop_logistics_settings').where('shop_id', shopId).first()
     assert.equal(settings.fulfillment_mode, 'manual')
     assert.isNull(settings.default_account_id)
+    const kept = await db.from('shop_logistics_settings').where('shop_id', neighbour.shopId).first()
+    assert.equal(kept.fulfillment_mode, 'platform', 'removing one shop leaves the others')
     assert.equal(await statusOf(send(admin, 'DELETE', path)), 204, 'removing twice changes nothing')
     assert.lengthOf(
       await db
@@ -395,9 +413,48 @@ test.group('T-SEC-041 the platform-owned account operations (OD-58)', (group) =>
         .where({ action: 'logistics_account_shop.remove', subject_id: accountId }),
       1
     )
-    // Allowing again reactivates the row.
+    // Allowing again reactivates the row, and the audit row says it was not allowed before.
     const again = await send(admin, 'PUT', path)
     assert.isTrue(again.body.data.is_active)
+    const reactivated = await db
+      .from('audit_logs')
+      .where({ action: 'logistics_account_shop.allow', subject_id: accountId, shop_id: shopId })
+      .orderBy('id', 'desc')
+      .first()
+    assert.deepEqual(reactivated.changes.is_active, { from: false, to: true })
+  })
+
+  test('T-SEC-041 re-key, allow and remove need platform.logistics.manage and step-up', async ({
+    assert,
+  }) => {
+    const accountId = await insertPlatformAccount()
+    const { shopId } = await activeShop()
+    const rekey = `/api/v1/admin/logistics/accounts/${accountId}/credentials`
+    const shop = `/api/v1/admin/logistics/accounts/${accountId}/shops/${shopId}`
+    const body = { credentials: { token: `${NCM_TOKEN}-new` } }
+    const agent = await signIn(await staffUser('support_agent'), minutesAgo(1))
+    assert.equal(await statusOf(send(agent, 'POST', rekey, body, { 'If-Match': '"1"' })), 403)
+    assert.equal(await statusOf(send(agent, 'PUT', shop)), 403)
+    assert.equal(await statusOf(send(agent, 'DELETE', shop)), 403)
+    const stale = await signIn(await staffUser('platform_admin'), minutesAgo(60))
+    const attempts: [string, string, unknown, Record<string, string>][] = [
+      ['POST', rekey, body, { 'If-Match': '"1"' }],
+      ['PUT', shop, undefined, {}],
+      ['DELETE', shop, undefined, {}],
+    ]
+    for (const [method, path, payload, headers] of attempts) {
+      const refused = await send(stale, method, path, payload, headers)
+      assert.equal(refused.status, 401, `${method} ${path}`)
+      assert.equal(refused.body.code, 'MFA_REQUIRED')
+    }
+    const account = await db.from('logistics_accounts').where('id', accountId).first()
+    assert.equal(account.version, 1, 'nothing was changed')
+    assert.isNull(
+      await db
+        .from('logistics_account_shops')
+        .where({ account_id: accountId, shop_id: shopId })
+        .first()
+    )
   })
 
   test('T-SEC-041 a disabled account, a shop-owned account or an unknown shop is refused', async ({
@@ -417,6 +474,12 @@ test.group('T-SEC-041 the platform-owned account operations (OD-58)', (group) =>
       409
     )
     const shopOwned = await insertNcmAccount(shopId)
+    assert.equal(
+      await statusOf(
+        send(admin, 'DELETE', `/api/v1/admin/logistics/accounts/${shopOwned}/shops/${shopId}`)
+      ),
+      404
+    )
     assert.equal(
       await statusOf(
         send(admin, 'PUT', `/api/v1/admin/logistics/accounts/${shopOwned}/shops/${shopId}`)

@@ -74,16 +74,9 @@ export async function replaceLogisticsSettings<T>(
         .forShare()
         .select('id')
     }
-    if (
-      command.fulfillmentMode === 'platform' &&
-      (await shopHasActiveOwnAccount(trx, command.shopId))
-    ) {
-      throw invalid(
-        'fulfillment_mode',
-        'own_account_active',
-        'This shop has its own active courier account. Book with it in the vendor mode.'
-      )
-    }
+    // Read before the settings row is locked (the lock order above), refused after the version check.
+    const ownAccountActive =
+      command.fulfillmentMode === 'platform' && (await shopHasActiveOwnAccount(trx, command.shopId))
     const current = await trx
       .from('shop_logistics_settings')
       .where('shop_id', command.shopId)
@@ -93,6 +86,13 @@ export async function replaceLogisticsSettings<T>(
     if (version !== command.expectedVersion) {
       throw new VersionConflict(
         context.present(await settingsIn(trx, command.shopId)) as Record<string, unknown>
+      )
+    }
+    if (ownAccountActive) {
+      throw invalid(
+        'fulfillment_mode',
+        'own_account_active',
+        'This shop has its own active courier account. Book with it in the vendor mode.'
       )
     }
     if (command.defaultAccountId) {

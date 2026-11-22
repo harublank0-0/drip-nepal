@@ -167,7 +167,7 @@ async function createAccount<T>(
       .table('logistics_accounts')
       .insert({
         provider_code: command.providerCode,
-        owner_type: shopId ? 'shop' : 'platform',
+        owner_type: shopId === null ? 'platform' : 'shop',
         shop_id: shopId,
         name: command.name,
         environment: command.environment,
@@ -176,7 +176,7 @@ async function createAccount<T>(
         status: 'pending',
       })
       .returning(['id', 'version'])
-    if (shopId) {
+    if (shopId !== null) {
       await trx.table('logistics_account_shops').insert({
         account_id: row.id,
         shop_id: shopId,
@@ -226,7 +226,7 @@ async function rekeyAccount<T>(
 ) {
   return withTx(async (trx) => {
     const row = await lockedAccount(trx, command.accountId, shopId ?? undefined)
-    if (!row || row.owner_type !== (shopId ? 'shop' : 'platform')) {
+    if (!row || row.owner_type !== (shopId === null ? 'platform' : 'shop')) {
       throw new DomainError('NOT_FOUND')
     }
     if (row.status === 'disabled') throw new InvalidStateTransition('disabled', [])
@@ -411,7 +411,8 @@ export async function allowShopOnLogisticsAccount<T>(
         subjectType: 'logistics_account',
         subjectId: account.id,
         shopId: command.shopId,
-        changes: { shop_id: command.shopId, is_active: { from: Boolean(current), to: true } },
+        // This branch runs only for a shop that is not allowed now: no row, or an inactive one.
+        changes: { shop_id: command.shopId, is_active: { from: false, to: true } },
       })
     }
     return context.present(await accountShopIn(trx, account.id, command.shopId))
