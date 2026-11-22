@@ -67,7 +67,8 @@ export const TYPE_LABELS: Record<LocalLevelType, string> = {
   municipality: 'Municipality',
   rural_municipality: 'Rural Municipality',
 }
-// Longer labels first: each of these ends with the one after it.
+// The longer label of each pair first: "Sub-Metropolitan City" ends with
+// "Metropolitan City", and "Rural Municipality" with "Municipality".
 const LABEL_ORDER: LocalLevelType[] = [
   'sub_metropolitan',
   'metropolitan',
