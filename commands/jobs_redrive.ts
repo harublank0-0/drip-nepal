@@ -4,6 +4,7 @@ import type { PostgreConfig } from '@adonisjs/lucid/types/database'
 import type { PgBoss } from 'pg-boss'
 import {
   DEAD_LETTER_RULES,
+  JOB_SCHEMA,
   createJobBoss,
   jobDatabaseOf,
   type DeadLetterRule,
@@ -18,9 +19,13 @@ import {
  * - `redrive`: pg-boss's `redrive` re-creates each dead letter as a new job
  *   on its queue, with the queue's settings as they are now, and deletes
  *   the dead letter in the same statement, so a job is never moved twice.
- *   A dead letter past its retention (`keep_until`, docs/11 §8.1) is left
- *   for pg-boss's retention purge and never given a new one, so a redrive
- *   never extends the life of an encrypted token (docs/07 §3.8 rule 2).
+ *   A dead letter outside its window (`keep_until` before the database's
+ *   time, docs/11 §8.1) is never redriven: it is left for pg-boss's
+ *   retention purge, and its delivery row stays `queued`. A redriven job
+ *   starts its queue's retention again (7 days on the `notifications.*`
+ *   queues), which docs/07 §3.8 rule 2 accepts: `token_enc` no longer
+ *   decrypts after the token's expiry, a completed job is deleted after a
+ *   day, and the handler fails an expired token without sending.
  * - `discard`: the dead letters are deleted, and only with `--discard`,
  *   which a `redrive` queue refuses: the operator states the action, and
  *   the command checks it against the rule.
@@ -37,7 +42,9 @@ import {
  * The command starts its own pg-boss instance as its database role, with a
  * pool of one and neither supervision nor schedules (docs/11 §8.3). Exit 1,
  * with nothing changed, on a name that is not the dead-letter queue of an
- * application queue, a rule mismatch or a limit out of range.
+ * application queue, a rule mismatch, a limit out of range or a missing
+ * dead-letter queue; exit 1 too when a redrive moved fewer jobs than it
+ * chose, so a script can tell a partial run from a full one.
  */
 
 // docs/11 §8.3 step 4: batches of at most 500 [Assumption there].
@@ -46,7 +53,10 @@ export const REDRIVE_LIMIT_MAX = 500
 // Dead letters read per page while choosing a batch.
 const PAGE = 1000
 
-type Batch = {
+// Fresh scans after a page's last row was deleted meanwhile, before giving up.
+const RESCANS = 3
+
+export type Batch = {
   ids: string[]
   oldest: Date | null
   newest: Date | null
@@ -56,23 +66,32 @@ type Batch = {
   more: boolean
 }
 
+export type BatchOptions = {
+  limit: number
+  // Skip dead letters whose `keep_until` is not after `now` (a redrive).
+  skipExpired: boolean
+  // The database's time, the clock pg-boss's retention purge compares with.
+  now: Date
+  pageSize?: number
+}
+
 /*
- * The oldest dead letters of `dlq`, at most `limit`. For a redrive, one
- * whose `keep_until` has passed is skipped and counted. The payloads are
- * read with the rows but never leave this function.
+ * One scan of `dlq`, oldest first, page by page. The payloads are read
+ * with the rows but never leave this function.
  */
-async function chooseBatch(boss: PgBoss, dlq: string, limit: number, skipExpired: boolean) {
-  const now = Date.now()
+async function scan(boss: Pick<PgBoss, 'findJobs'>, dlq: string, options: BatchOptions) {
+  const pageSize = options.pageSize ?? PAGE
+  const now = options.now.getTime()
   const batch: Batch = { ids: [], oldest: null, newest: null, expired: 0, more: false }
   let after: string | undefined
   for (;;) {
-    const page = await boss.findJobs(dlq, { queued: true, limit: PAGE, after })
+    const page = await boss.findJobs(dlq, { queued: true, limit: pageSize, after })
     for (const job of page) {
-      if (skipExpired && new Date(job.keepUntil).getTime() <= now) {
+      if (options.skipExpired && new Date(job.keepUntil).getTime() <= now) {
         batch.expired += 1
         continue
       }
-      if (batch.ids.length === limit) {
+      if (batch.ids.length === options.limit) {
         batch.more = true
         return batch
       }
@@ -80,9 +99,38 @@ async function chooseBatch(boss: PgBoss, dlq: string, limit: number, skipExpired
       batch.oldest ??= job.createdOn
       batch.newest = job.createdOn
     }
-    if (page.length < PAGE) return batch
+    if (page.length < pageSize) return batch
     after = page[page.length - 1].id
   }
+}
+
+// pg-boss refuses to page after a row deleted since the previous page (its retention purge, another run).
+const anchorGone = (error: unknown) =>
+  error instanceof Error && error.message.includes('after names a row that no longer exists')
+
+/*
+ * The oldest dead letters of `dlq`, at most `limit`; for a redrive, one
+ * outside its window is skipped and counted. A scan whose next page lost
+ * its anchor starts again from the oldest, at most `RESCANS` times.
+ */
+export async function chooseBatch(
+  boss: Pick<PgBoss, 'findJobs'>,
+  dlq: string,
+  options: BatchOptions
+): Promise<Batch> {
+  for (let rescan = 0; ; rescan++) {
+    try {
+      return await scan(boss, dlq, options)
+    } catch (error) {
+      if (rescan >= RESCANS || !anchorGone(error)) throw error
+    }
+  }
+}
+
+// The database's time, as pg-boss's purge reads it (`job_now()`), on the instance's own connection.
+async function databaseNow(boss: PgBoss) {
+  const result = await boss.getDb().executeSql(`SELECT ${JOB_SCHEMA}.job_now() AS now`)
+  return new Date(result.rows[0].now)
 }
 
 const iso = (date: Date | null) => (date ? new Date(date).toISOString() : '-')
@@ -166,7 +214,8 @@ export default class JobsRedrive extends BaseCommand {
   }
 
   async #apply(boss: PgBoss, dlq: string, source: string, rule: DeadLetterRule, limit: number) {
-    const batch = await chooseBatch(boss, dlq, limit, rule === 'redrive')
+    const now = await databaseNow(boss)
+    const batch = await chooseBatch(boss, dlq, { limit, skipExpired: rule === 'redrive', now })
     const verb = rule === 'redrive' ? `redrive to ${source}` : 'discard'
     const count = batch.ids.length
     const span = `dead-lettered ${iso(batch.oldest)} to ${iso(batch.newest)}`
@@ -180,7 +229,7 @@ export default class JobsRedrive extends BaseCommand {
       const moved = await boss.redrive(dlq, { ids: batch.ids, limit: count, destination: source })
       this.logger.success(`${dlq}: ${moved} redriven to ${source} (${span})`)
       if (moved < count) {
-        this.logger.warning(
+        this.#fail(
           `${dlq}: ${count - moved} not moved; another run took them first, or ${source} refused them`
         )
       }

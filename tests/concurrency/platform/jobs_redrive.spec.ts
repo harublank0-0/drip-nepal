@@ -2,21 +2,34 @@ import { randomUUID } from 'node:crypto'
 import { test } from '@japa/runner'
 import app from '@adonisjs/core/services/app'
 import db from '@adonisjs/lucid/services/db'
-import type { PgBoss } from 'pg-boss'
-import JobsRedrive, { REDRIVE_LIMIT_MAX } from '../../../commands/jobs_redrive.js'
-import { JOB_SCHEMA } from '#modules/platform/jobs'
+import type { PostgreConfig } from '@adonisjs/lucid/types/database'
+import type { FindJobsOptions, PgBoss } from 'pg-boss'
+import JobsRedrive, { REDRIVE_LIMIT_MAX, chooseBatch } from '../../../commands/jobs_redrive.js'
+import {
+  DEAD_LETTER_RULES,
+  JOB_QUEUES,
+  JOB_SCHEMA,
+  createJobBoss,
+  deadLetterQueue,
+  ensureQueues,
+  jobDatabaseOf,
+} from '#modules/platform/jobs'
+import { MIGRATOR_CONNECTION } from '#tests/support/database'
 import { useJobBoss } from '#tests/support/jobs'
 
 /*
  * T-OPS-025: `node ace jobs:redrive` (docs/09 §9.7) applies each queue's
  * dead-letter rule of docs/11 §8.2 and nothing else:
+ * - every queue of `JOB_QUEUES` has a rule in `DEAD_LETTER_RULES`;
  * - a name that is not the dead-letter queue of an application queue
  *   (`dlq.refunds.execute` included, until that queue joins with its
- *   job-by-job mode), a limit out of range, `--discard` on a queue that is
- *   redriven and a plain run on a queue that is discarded each exit 1 and
- *   change nothing;
+ *   job-by-job mode), a limit out of range or not a number, `--discard` on
+ *   a queue that is redriven (with `--dry-run` too), a plain run on a queue
+ *   that is discarded, and a dead-letter queue `jobs:install` has not
+ *   created each exit 1 and change nothing;
  * - `--discard` deletes at most `--limit` dead letters, oldest first, and
  *   `--dry-run` deletes none;
+ * - a scan whose next page lost its anchor row starts again from the oldest;
  * - the output never holds a payload value.
  * The redrive after a real outage is T-NOT-001
  * (tests/concurrency/notifications/email_outage.spec.ts). The probe dead
@@ -36,6 +49,15 @@ async function probes(queue: string) {
     [queue, PROBE]
   )
   return result.rows.map((row: { n: number }) => row.n)
+}
+
+// Their job IDs, oldest first.
+async function probeIds(queue: string) {
+  const result = await db.rawQuery(
+    `SELECT id FROM ${JOB_SCHEMA}.job WHERE name = ? AND data->>'probe' = ? ORDER BY created_on, id`,
+    [queue, PROBE]
+  )
+  return result.rows.map((row: { id: string }) => row.id)
 }
 
 async function park(boss: PgBoss, queue: string, n: number, secret: string) {
@@ -71,6 +93,10 @@ test.group('T-OPS-025 jobs:redrive applies the dead-letter rule of each queue', 
     return cleanUp
   })
 
+  test('T-OPS-025 every queue of JOB_QUEUES has a dead-letter rule', ({ assert }) => {
+    assert.sameMembers(Object.keys(DEAD_LETTER_RULES), Object.keys(JOB_QUEUES))
+  })
+
   test('T-OPS-025 {label} exits 1 and changes nothing')
     .with([
       {
@@ -91,6 +117,11 @@ test.group('T-OPS-025 jobs:redrive applies the dead-letter rule of each queue', 
       {
         label: '--discard on a queue that is redriven',
         argv: [REDRIVEN, '--discard'],
+        message: 'is redriven after the fix, never discarded',
+      },
+      {
+        label: 'a dry run of --discard on a queue that is redriven',
+        argv: [REDRIVEN, '--discard', '--dry-run'],
         message: 'is redriven after the fix, never discarded',
       },
       {
@@ -120,6 +151,71 @@ test.group('T-OPS-025 jobs:redrive applies the dead-letter rule of each queue', 
       assert.deepEqual(await probes(REDRIVEN), [1])
       assert.deepEqual(await probes(DISCARDED), [1])
     })
+
+  test('T-OPS-025 a --limit that is not a number is refused before the command runs', async ({
+    assert,
+  }) => {
+    await park(boss, DISCARDED, 1, 'kept')
+    const ace = await app.container.make('ace')
+    await assert.rejects(
+      () => ace.create(JobsRedrive, [DISCARDED, '--discard', '--limit=many']),
+      /numeric/
+    )
+    assert.deepEqual(await probes(DISCARDED), [1])
+  })
+
+  test('T-OPS-025 a dead-letter queue that jobs:install has not created exits 1', async ({
+    assert,
+  }) => {
+    // A schedule queue: no test sends to it, so no job names its dead-letter queue.
+    const source = 'orders.poll_courier_statuses'
+    const dlq = deadLetterQueue(source)
+    // As the migrator, which owns the queues; a killed run is repaired by the next jobs:install.
+    const config = db.manager.get(MIGRATOR_CONNECTION)!.config as PostgreConfig
+    const migrator = createJobBoss(jobDatabaseOf(config)!, 'web')
+    await migrator.start()
+    try {
+      await migrator.updateQueue(source, { deadLetter: null })
+      await migrator.deleteQueue(dlq)
+
+      const command = await redrive([dlq, '--discard'])
+
+      command.assertFailed()
+      assert.include(output(command), `${dlq} does not exist; run node ace jobs:install`)
+    } finally {
+      // The step jobs:install runs puts the dead-letter queue back.
+      await ensureQueues(migrator, { [source]: JOB_QUEUES[source] })
+      await migrator.stop({ graceful: false, close: true })
+    }
+    assert.isNotNull(await boss.getQueue(dlq))
+  }).timeout(30_000)
+
+  test('T-OPS-025 a page whose last dead letter is deleted meanwhile is scanned again from the oldest', async ({
+    assert,
+  }) => {
+    for (const n of [1, 2, 3]) await park(boss, DISCARDED, n, 'kept')
+    const [, second, third] = await probeIds(DISCARDED)
+    // After the first page, a purge or another run deletes its last row before the next read.
+    let purged = false
+    async function findJobs<T>(name: string, options?: FindJobsOptions) {
+      const page = await boss.findJobs<T>(name, options)
+      if (!purged && page.length > 0) {
+        purged = true
+        await boss.deleteJob(name, page[page.length - 1].id)
+      }
+      return page
+    }
+
+    const batch = await chooseBatch({ findJobs }, DISCARDED, {
+      limit: 10,
+      skipExpired: false,
+      now: new Date(),
+      pageSize: 1,
+    })
+
+    assert.deepEqual(batch.ids, [second, third])
+    assert.isFalse(batch.more)
+  })
 
   test('T-OPS-025 --discard deletes at most --limit dead letters, oldest first; --dry-run deletes none', async ({
     assert,

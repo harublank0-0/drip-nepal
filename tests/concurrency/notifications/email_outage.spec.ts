@@ -37,8 +37,10 @@ import { queued, useJobBoss } from '#tests/support/jobs'
  * rows and jobs it made (docs/10 §3.3). As 05 §8.14 asks, the queue's retry
  * limit and delay are set low for the group (one retry, due at once), so
  * the jobs really reach `dlq.notifications.send_email`; the group puts the
- * 03 §9 settings back afterwards. The `EmailSender` port is the capturing
- * fake, failing retryably while the outage lasts.
+ * 03 §9 settings back afterwards. A run killed inside the group leaves the
+ * queue at `retryLimit: 1` until the next `node ace jobs:install`, which
+ * the next test run's setup performs. The `EmailSender` port is the
+ * capturing fake, failing retryably while the outage lasts.
  *
  * - With the outage, every job dead-letters and its row stays `queued`
  *   with its attempts and transport error. Once it is over, a preview
@@ -151,11 +153,19 @@ const output = (command: JobsRedrive) =>
     .map((log) => log.message)
     .join('\n')
 
-// Deletes what the tests committed, as the migrator, which owns both schemas.
+/*
+ * Deletes what the tests committed, as the migrator, which owns both
+ * schemas, and any probe T-OPS-025 (tests/concurrency/platform/
+ * jobs_redrive.spec.ts) left in these queues after a killed run.
+ */
 async function cleanUp() {
   const trx = await db.connection(MIGRATOR_CONNECTION).transaction()
   try {
     const pattern = `${EMAIL_PREFIX}%`
+    await trx.rawQuery(
+      `DELETE FROM ${JOB_SCHEMA}.job WHERE name = ANY(?::text[]) AND data->>'probe' = ?`,
+      [QUEUES, 't_ops_025']
+    )
     await trx.rawQuery(
       `DELETE FROM ${JOB_SCHEMA}.job WHERE name = ANY(?::text[])
           AND data->>'user_token_id' IN (
