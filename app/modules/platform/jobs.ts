@@ -116,11 +116,12 @@ export function hasJobBoss() {
  * missing queue and no runtime instance creates one (proposed, docs/09
  * §2.3). A queue is added here with its first sender. Names and settings
  * are docs/03 §9's: the defaults [Assumption there], each row's retry
- * count, a dead-letter queue per queue, and on the queues that carry
- * `token_enc` completed jobs deleted after one day and queued ones after 7
- * days, the longest token lifetime (docs/07 §3.8 rule 2). Dead-letter
- * queues have no worker. Every setting is one `updateQueue` accepts, so the
- * next `jobs:install` applies a changed value to an existing queue.
+ * count and first delay, a dead-letter queue per queue, and on the queues
+ * that carry `token_enc` (both `notifications.*` queues) completed jobs
+ * deleted after one day and queued ones after 7 days, the longest token
+ * lifetime (docs/07 §3.8 rule 2). Dead-letter queues have no worker. Every
+ * setting is one `updateQueue` accepts, so the next `jobs:install` applies
+ * a changed value to an existing queue.
  */
 const QUEUE_DEFAULTS = { retryBackoff: true, retryDelayMax: 3600, expireInSeconds: 120 }
 const TOKEN_RETENTION = { deleteAfterSeconds: 86_400, retentionSeconds: 604_800 }
@@ -137,6 +138,13 @@ export type ApplicationQueueName = Exclude<QueueName, `t_${string}`>
 // `satisfies`: a queue declared in `JobPayloads` but missing here fails `pnpm typecheck`.
 export const JOB_QUEUES = {
   'notifications.dispatch': { ...QUEUE_DEFAULTS, retryLimit: 5, ...TOKEN_RETENTION },
+  // 8 retries, backoff from 60 s up to `retryDelayMax` (1 h); M1 part 1b.
+  'notifications.send_email': {
+    ...QUEUE_DEFAULTS,
+    retryLimit: 8,
+    retryDelay: 60,
+    ...TOKEN_RETENTION,
+  },
   // M6 courier queues (docs/03 §9 rows added with them, 2026-11-21).
   'logistics.verify_account': { ...QUEUE_DEFAULTS, retryLimit: 5 },
   'logistics.sync_branches': { ...QUEUE_DEFAULTS, retryLimit: 3 },

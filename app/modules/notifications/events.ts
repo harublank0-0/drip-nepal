@@ -1,9 +1,9 @@
 /*
  * The payloads of the queues the `notifications` module hosts (docs/03 §9,
  * docs/09 §2.3 rule 4). Senders reach them by name through `sendJob`;
- * nothing imports this module. The `notifications.dispatch` handler, the
- * templates and the email port come in M1 (docs/12 §5.1); until then a
- * dispatch job waits in its queue.
+ * nothing imports this module. `sendJob` adds the envelope every payload
+ * carries, `request_id` and `causation_id` (`JobEnvelope`, docs/09 §7.4
+ * item 5), so the types here list only the queue's own keys.
  */
 
 /*
@@ -12,7 +12,7 @@
  * encrypted with the application `encryption` service for the purpose
  * `email_token:<purpose>` and the token's own lifetime, never the raw
  * token or the address (docs/07 §3.8 rules 1 and 2). The handler reads the
- * purpose and the recipient from the row.
+ * purpose and the recipient from the row. Its event ID is the row ID.
  */
 export type UserTokenIssued = {
   event: 'user_token.issued'
@@ -20,8 +20,21 @@ export type UserTokenIssued = {
   token_enc: string
 }
 
+// The events `notifications.dispatch` turns into emails.
+export type NotificationEvent = UserTokenIssued
+
+/*
+ * One `notification_deliveries` row to send (docs/04a §14.3): the row's ID
+ * and the event it was dispatched for. The body is never stored, so
+ * `notifications.send_email` renders it again from the event; for a token
+ * email that means `token_enc`, which is why this queue keeps the token
+ * retention of docs/07 §3.8 rule 2 too.
+ */
+export type SendEmail = NotificationEvent & { delivery_id: string }
+
 declare module '#modules/platform/jobs' {
   interface JobPayloads {
-    'notifications.dispatch': UserTokenIssued
+    'notifications.dispatch': NotificationEvent
+    'notifications.send_email': SendEmail
   }
 }

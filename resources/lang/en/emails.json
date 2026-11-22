@@ -1,0 +1,16 @@
+{
+  "layout.brand": "DripNepal",
+  "layout.footer": "This email was sent by DripNepal about your account.",
+  "identity.password_reset.subject": "Set your DripNepal password",
+  "identity.password_reset.intro": "Use the link below to set a new password for your DripNepal account.",
+  "identity.password_reset.action": "Set your password",
+  "identity.password_reset.link_hint": "If the button doesn't work, copy this link into your browser:",
+  "identity.password_reset.expiry": "The link works once and expires in {minutes, plural, one {# minute} other {# minutes}}.",
+  "identity.password_reset.ignore": "If you didn't expect this email, you can ignore it. Nothing changes until the link is used.",
+  "identity.mfa_enrollment.subject": "Set up two-step sign-in for DripNepal",
+  "identity.mfa_enrollment.intro": "Your DripNepal staff account needs an authenticator app before you can open the admin area. Follow the link below and sign in to set one up.",
+  "identity.mfa_enrollment.action": "Set up your authenticator",
+  "identity.mfa_enrollment.link_hint": "If the button doesn't work, copy this link into your browser:",
+  "identity.mfa_enrollment.expiry": "The link expires in {hours, plural, one {# hour} other {# hours}}. After that, ask the platform team for a new one.",
+  "identity.mfa_enrollment.ignore": "If you didn't expect this email, tell the DripNepal platform team."
+}

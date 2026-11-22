@@ -14,7 +14,8 @@ import { MIGRATOR_CONNECTION } from '#tests/support/database'
 /*
  * T-ARCH-004, the queue part of the schema step (docs/09 §2.3, docs/03 §9):
  * `jobs:install` creates the queues of `JOB_QUEUES` with the 03 §9
- * settings, and `ensureQueues` can run again over existing queues, also for
+ * settings (the two `notifications.*` queues, which carry `token_enc`, are
+ * checked here), and `ensureQueues` can run again over existing queues, also for
  * a queue that sets nothing but the defaults. The queues are written to
  * `pgboss.queue` for real, so the probe queues are deleted afterwards.
  */
@@ -57,6 +58,28 @@ test.group('T-ARCH-004 the schema step creates the application queues', (group) 
       dead_letter: 'dlq.notifications.dispatch',
     })
     const dlq = await queueRow('dlq.notifications.dispatch')
+    assert.equal(dlq.retention_seconds, 604_800)
+  })
+
+  test('T-ARCH-004 notifications.send_email has the 03 §9 retries and the token retention', async ({
+    assert,
+  }) => {
+    const result = await db.rawQuery(
+      `SELECT retry_limit, retry_delay, retry_backoff, retry_delay_max, retention_seconds,
+              deletion_seconds, dead_letter
+         FROM ${JOB_SCHEMA}.queue WHERE name = ?`,
+      ['notifications.send_email']
+    )
+    assert.deepEqual(result.rows[0], {
+      retry_limit: 8,
+      retry_delay: 60,
+      retry_backoff: true,
+      retry_delay_max: 3600,
+      retention_seconds: 604_800,
+      deletion_seconds: 86_400,
+      dead_letter: 'dlq.notifications.send_email',
+    })
+    const dlq = await queueRow('dlq.notifications.send_email')
     assert.equal(dlq.retention_seconds, 604_800)
   })
 
