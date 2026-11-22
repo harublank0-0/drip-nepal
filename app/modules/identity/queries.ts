@@ -89,7 +89,11 @@ export async function devSignInAccounts(): Promise<DevSignInAccount[]> {
   const rows = await db
     .from('users')
     .leftJoin('platform_staff', (join) => {
-      join.on('platform_staff.user_id', 'users.id').andOnNull('platform_staff.revoked_at')
+      // A staff role counts only with TOTP, as the sign-in's staff check does.
+      join
+        .on('platform_staff.user_id', 'users.id')
+        .andOnNull('platform_staff.revoked_at')
+        .andOnNotNull('users.mfa_enabled_at')
     })
     .whereRaw(MAY_DEV_SIGN_IN, [demoPattern()])
     .orderByRaw('platform_staff.role NULLS LAST, users.email')

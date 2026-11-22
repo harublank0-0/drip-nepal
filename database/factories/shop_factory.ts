@@ -15,8 +15,9 @@ import { placeholderCiphertext } from '#database/factories/placeholder_ciphertex
  * State `active` creates the aggregate whole: the shop is inserted
  * `pending_review`, then its `shop_agreements` row (docs/04a §6.4), then it
  * is approved and activated, because the `shops_require_agreement` trigger
- * (INV-18) refuses an active shop without an agreement. The approver is a
- * new user; no staff factory exists yet.
+ * (INV-18) refuses an active shop without an agreement. The approver is the
+ * user the caller merged as `approvedBy`, or else a new user; no staff
+ * factory exists yet.
  */
 
 /** A version in the `shop_agreements_version_check` format; agreement texts live in code (04a §6.4). */
@@ -67,12 +68,12 @@ export const ShopFactory = factory
         ip_hash: randomBytes(32),
         request_id: randomUUID(),
       })
-    const approver = await UserFactory.useCtx(ctx).create()
-    shop.merge({
-      status: status('active'),
-      approvedAt: DateTime.now(),
-      approvedBy: approver.id,
-    })
+    let approvedBy = shop.approvedBy
+    if (!approvedBy) {
+      const approver = await UserFactory.useCtx(ctx).create()
+      approvedBy = approver.id
+    }
+    shop.merge({ status: status('active'), approvedAt: DateTime.now(), approvedBy })
     await shop.save()
   })
   .build()

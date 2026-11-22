@@ -16,9 +16,15 @@ type Props = InertiaProps<{
   accounts: Account[]
   staff_without_totp: number
   signed_in_as: string | null
+  mfa_verified_at: string | null
 }>
 
-export default function DevSignIn({ accounts, staff_without_totp, signed_in_as }: Props) {
+export default function DevSignIn({
+  accounts,
+  staff_without_totp,
+  signed_in_as,
+  mfa_verified_at,
+}: Props) {
   return (
     <main className="mx-auto max-w-2xl space-y-6 px-4 py-8">
       <header className="space-y-2">
@@ -38,6 +44,13 @@ export default function DevSignIn({ accounts, staff_without_totp, signed_in_as }
           </Button>
         )}
       </section>
+
+      {mfa_verified_at && (
+        <p className="text-muted-foreground text-sm">
+          MFA recorded at {mfa_verified_at}: admin pages for 12 hours, step-up for 15 minutes. Sign
+          in again to renew.
+        </p>
+      )}
 
       <section aria-labelledby="accounts" className="space-y-3">
         <h2 id="accounts" className="text-lg font-semibold">

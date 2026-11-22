@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto'
-import { readFile, rm, stat } from 'node:fs/promises'
+import { readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from '@japa/runner'
@@ -11,6 +11,7 @@ import DemoMarketplaceSeeder, {
   DEMO_SHOPS,
 } from '#database/seeders/dev/01_demo_marketplace_seeder'
 import { UserFactory } from '#database/factories/user_factory'
+import { DEMO_EMAIL_DOMAIN } from '#modules/identity/queries'
 import { staffUser } from '#tests/support/courier_http'
 
 /*
@@ -37,8 +38,7 @@ function credentialsPath() {
   return path
 }
 
-async function seed() {
-  const path = credentialsPath()
+async function seed(path = credentialsPath()) {
   const seeder = new SeederUnderTest(db.connection(), path)
   await seeder.run()
   return { seeder, path }
@@ -71,11 +71,18 @@ test.group('T-ARCH-036 demo marketplace seeder', (group) => {
     await Promise.all(files.map((path) => rm(path, { force: true })))
   })
 
-  test('T-ARCH-036 creates the demo accounts, shops and members', async ({ assert }) => {
+  test('T-ARCH-036 creates the demo accounts, shops and members, and no other user', async ({
+    assert,
+  }) => {
+    const before = await counts()
     await seed()
 
+    // Every user the run adds is a demo account, the approver included.
+    const after = await counts()
+    assert.equal(after.users - before.users, DEMO_ACCOUNTS.length)
     const users = await db.from('users').whereIn('email', emails).orderBy('email')
     assert.lengthOf(users, DEMO_ACCOUNTS.length)
+    for (const user of users) assert.isTrue(user.email.endsWith(`@${DEMO_EMAIL_DOMAIN}`))
     for (const user of users) {
       assert.equal(user.status, 'active')
       assert.isNotNull(user.email_verified_at)
@@ -87,7 +94,12 @@ test.group('T-ARCH-036 demo marketplace seeder', (group) => {
     const shop = (slug: string) => shops.find((row) => row.slug === slug)
     assert.equal(shop('demo-pasal').status, 'active')
     assert.equal(shop('demo-pasal-2').status, 'pending_review')
-    for (const row of shops) assert.equal(row.owner_user_id, owner)
+    for (const row of shops) {
+      assert.equal(row.owner_user_id, owner)
+      assert.isTrue(row.contact_email.endsWith(`@${DEMO_EMAIL_DOMAIN}`))
+    }
+    const approver = DEMO_ACCOUNTS.find((account) => account.key === 'approver')!
+    assert.equal(shop('demo-pasal').approved_by, byEmail.get(approver.email))
     assert.lengthOf(await db.from('shop_agreements').where('shop_id', shop('demo-pasal').id), 1)
 
     const members = await db
@@ -135,9 +147,22 @@ test.group('T-ARCH-036 demo marketplace seeder', (group) => {
     assert.notInclude(printed.join(''), file.password)
   })
 
+  test('T-ARCH-036 narrows an older, wider credentials file to 0600', async ({ assert }) => {
+    const path = credentialsPath()
+    await writeFile(path, '{}\n', { mode: 0o644 })
+    await seed(path)
+    const { mode } = await stat(path)
+    assert.equal(mode & 0o777, 0o600)
+  })
+
   test('T-ARCH-036 a second run adds no row and keeps the file true', async ({ assert }) => {
     const first = await seed()
     const before = await counts()
+    const stamp = async () => {
+      const row = await db.from('users').where('email', DEMO_ACCOUNTS[0].email).first()
+      return row.security_stamp as string
+    }
+    const firstStamp = await stamp()
     const second = await seed()
 
     assert.deepEqual(await counts(), before)
@@ -147,6 +172,8 @@ test.group('T-ARCH-036 demo marketplace seeder', (group) => {
     const owner = await db.from('users').where('email', DEMO_ACCOUNTS[0].email).first()
     assert.isTrue(await hash.verify(owner.password_hash, second.seeder.runPassword))
     assert.isFalse(await hash.verify(owner.password_hash, first.seeder.runPassword))
+    // A new password comes with a new security stamp, as a password change does.
+    assert.notEqual(await stamp(), firstStamp)
   })
 
   test('T-ARCH-036 gives active staff without TOTP a placeholder enrolment', async ({ assert }) => {

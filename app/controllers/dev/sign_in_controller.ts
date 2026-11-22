@@ -20,6 +20,8 @@ export default class DevSignInController {
       accounts: accounts.map(devSignInAccountJson),
       staff_without_totp: await staffWithoutTotpCount(),
       signed_in_as: ctx.auth.user?.email ?? null,
+      // Staff only (docs/07 §3.13): when the admin pages' MFA window started.
+      mfa_verified_at: ctx.session.get(SESSION_KEYS.mfaVerifiedAt) ?? null,
     })
   }
 

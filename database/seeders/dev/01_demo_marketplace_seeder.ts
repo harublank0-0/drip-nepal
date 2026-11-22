@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto'
+import { randomBytes, randomUUID } from 'node:crypto'
 import { chmod, mkdir, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import app from '@adonisjs/core/services/app'
@@ -17,9 +17,12 @@ import { placeholderCiphertext } from '#database/factories/placeholder_ciphertex
  * (OD-59 amended 2026-11-22, docs/risks §2.3); it moves to the real actions
  * when they arrive. It creates:
  *
- * - the demo owner, manager and order fulfiller under `dev.dripnepal.invalid`;
- * - the owner's active shop `demo-pasal`, with the other two as members, and
- *   a second shop `demo-pasal-2` still in `pending_review`;
+ * - the demo owner, manager and order fulfiller under `dev.dripnepal.invalid`,
+ *   and the demo approver, recorded as the user who approved `demo-pasal`
+ *   (it is not staff); no other user;
+ * - the owner's active shop `demo-pasal`, with the manager and fulfiller as
+ *   members, and a second shop `demo-pasal-2` still in `pending_review`, both
+ *   with a contact address under the same domain;
  * - for each active staff account without TOTP, a placeholder enrolment that
  *   decrypts under no key, in place of M1's enrolment, so the
  *   development-only sign-in can open the admin pages (docs/07 §3.13). It
@@ -28,7 +31,8 @@ import { placeholderCiphertext } from '#database/factories/placeholder_ciphertex
  * One random password per run, for every demo account, goes to the
  * git-ignored tmp/dev_credentials.json with mode 0600 and is never printed.
  * A second run creates no row: it finds the users by address and the shops by
- * slug, and gives the demo accounts the new password, so the file stays true
+ * slug, and gives the demo accounts the new password with a new security
+ * stamp, as a password change does (docs/07 §3.3), so the file stays true
  * (T-ARCH-036). Later pull requests add what their pages show.
  */
 
@@ -38,6 +42,7 @@ export const DEMO_ACCOUNTS = [
   { key: 'owner', email: demoEmail('owner'), fullName: 'Demo Owner' },
   { key: 'manager', email: demoEmail('manager'), fullName: 'Demo Manager' },
   { key: 'fulfiller', email: demoEmail('fulfiller'), fullName: 'Demo Fulfiller' },
+  { key: 'approver', email: demoEmail('approver'), fullName: 'Demo Approver' },
 ] as const
 
 type AccountKey = (typeof DEMO_ACCOUNTS)[number]['key']
@@ -60,6 +65,7 @@ const ROLES: Record<AccountKey, string> = {
   owner: 'owner of demo-pasal (active) and demo-pasal-2 (pending_review)',
   manager: 'manager of demo-pasal',
   fulfiller: 'order fulfiller of demo-pasal',
+  approver: 'recorded as the approver of demo-pasal; not staff',
 }
 
 export default class DemoMarketplaceSeeder extends DevSeeder {
@@ -83,6 +89,7 @@ export default class DemoMarketplaceSeeder extends DevSeeder {
       if (existing) {
         // The model's auth hook hashes the new run's password on save.
         existing.passwordHash = this.password
+        existing.securityStamp = randomUUID()
         await existing.useTransaction(trx).save()
         users[account.key] = existing
       } else {
@@ -101,7 +108,10 @@ export default class DemoMarketplaceSeeder extends DevSeeder {
       const builder = ShopFactory.client(trx).merge({
         slug: demo.slug,
         name: demo.name,
+        contactEmail: demoEmail(demo.slug),
         ownerUserId: users.owner.id,
+        // The factory's `active` state records this user as the approver.
+        approvedBy: demo.active ? users.approver.id : null,
       })
       const shop = await (demo.active ? builder.apply('active') : builder).create()
       for (const member of demo.members) {
@@ -147,8 +157,10 @@ export default class DemoMarketplaceSeeder extends DevSeeder {
       })),
     }
     await mkdir(dirname(this.credentialsPath), { recursive: true })
-    await writeFile(this.credentialsPath, `${JSON.stringify(file, null, 2)}\n`, { mode: 0o600 })
-    // writeFile sets the mode only when it creates the file.
+    // Narrowed before the password is written: writeFile sets the mode only
+    // when it creates the file, and an older file may be wider.
+    await writeFile(this.credentialsPath, '', { mode: 0o600 })
     await chmod(this.credentialsPath, 0o600)
+    await writeFile(this.credentialsPath, `${JSON.stringify(file, null, 2)}\n`)
   }
 }

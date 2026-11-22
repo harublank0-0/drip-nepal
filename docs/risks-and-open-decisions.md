@@ -250,7 +250,9 @@ Evidence: The product owner's answers of 2026-11-22 ("Pages now, dev sign-in"; "
 ADR: none.
 Docs updated: §2.2 (OD-59), 04 (§20.3, note 34), 09 (§1.4, §6.1, §8.8, notes 108, 109), 08 (§2.5, §2.6, §3.1,
               §4.3, §7.3, §7.5, note 74), 07 (§4.5, §5.5, notes 40, 41), 06 (§2.1, §2.3, note 53), 10 (§6.9,
-              notes 66, 67), 12 (§5.6, notes 51, 52), note 47  |  Status: Decided
+              notes 66, 67), 12 (§5.6, notes 51, 52), note 47; with the sign-in built: ADR-0004 (decision 6), 07 (§3.13, note 42),
+              09 (§3.2, §3.3, §8.8, note 110), 06 (note 54), 10 (note 68), 11 (§4.4, note 119),
+              12 (note 53), 04 (note 35), note 48  |  Status: Decided
 ```
 
 ```text
@@ -1049,3 +1051,4 @@ This matrix is authoritative for decision gates. [12 §3](12-roadmap-and-backlog
 45. **OD-58 re-decided (2026-11-22).** The product owner replaced the R1 ruling of 2026-11-21: platform-owned NCM accounts are offered to shops without their own, with COD remitted to DripNepal (option (b)), built in M6 and kept off for live COD behind `platform_account_cod_enabled` (proposed) until counsel, the accountant, NCM (VX-17, VX-18) and the M7 ledger allow it. §2.2, §2.3, §2.1's dependency text, the VX-17 and VX-18 rows, R-33 and §5's M6 row follow; VX-16 records that NCM has no cancellation API and cancels on a comment. The documents that restate OD-58 follow in the same pull request.
 46. **VX-10 second archive search (2026-11-22).** VX-10's owner action notes that the 19 uncovered local levels are absent from all 301 archived MoFAGA copies (278 of them listing local levels), so they need a check from Nepal ([research](research/locations-mofaga-cross-check.md)).
 47. **Courier pages and OD-59 amended (2026-11-22).** §2.3 logs the product owner's ruling: the courier pages are built before M1 with a development-only sign-in, and OD-59 allows a factory-built development seeder until the real actions exist; §2.2's OD-59 row records the amendment.
+48. **Development-only sign-in built (2026-11-22).** The §2.3 entry of 2026-11-22 lists the documents the built sign-in and demo seeder changed: ADR-0004 decision 6 gains its one exception, the sign-in's two `POST` routes, and 07 §3.13 specifies the sign-in.
