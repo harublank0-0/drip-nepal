@@ -1,11 +1,15 @@
 # Hand-checked corrections applied by scripts/extract_locations.mjs to build locations.csv (docs/04 §21.4).
 # name_en is the place name without its type; the script appends the English label of the type.
-# name_ne, when filled, replaces the Nepali name from the Nepal Post list.
+# name_ne, when filled, replaces the Nepali name from the Nepal Post list. Each is MoFAGA's spelling, read from
+#   Internet Archive copies (January to October 2026) of https://mofaga.gov.np/local-contact (VX-10 cross-check,
+#   docs/research/locations-mofaga-cross-check.md), where the Nepal Post text has a clear typo.
+# source names where name_en comes from; a row with no name_en keeps the CBS English name (source cbs).
 # source survey_department: the adm3 name in the Survey Department of Nepal's boundaries on HDX,
 #   https://data.humdata.org/dataset/cod-ab-npl (CC BY-IGO), downloaded 2026-11-22.
 # source transliterated: written from the Nepal Post Nepali name, because the HDX name differs from it.
+# source cbs: the English name stays as the CBS list has it; only name_ne is corrected.
 code,name_en,name_ne,source,note
-10107,Pathivara Yangwarak,,survey_department,renamed since the CBS list (Yangwarak)
+10107,Pathivara Yangwarak,पाथिभरा याङ्वरक गाउँपालिका,survey_department,renamed since the CBS list (Yangwarak); Nepal Post writes याङ्वराक
 10304,Mapya Dudhkoshi,,survey_department,renamed since the CBS list (Dhudhakoshi)
 10305,Thulung Dudhkoshi,,survey_department,renamed since the CBS list (Dhudha Koushika)
 10503,Rawa Besi,,survey_department,renamed since the CBS list (Lamidanda)
@@ -17,14 +21,19 @@ code,name_en,name_ne,source,note
 11304,Bhokraha Narsingh,,survey_department,renamed since the CBS list (Bhokraha)
 11310,Harinagar,,survey_department,spelling follows the Nepal Post name (CBS: Harinagara)
 11405,Limchungbung,,transliterated,renamed since the CBS list (Sunkoshi); HDX spells it Limchunbung
+20103,,अग्नीसाइर कृष्णासवरन गाउँपालिका,cbs,Nepal Post writes अग्मीसयर कृष्ण सवरन
 20111,Rajgadh,,survey_department,renamed since the CBS list (Belhi Chapena)
+20204,,मिर्चैया नगरपालिका,cbs,Nepal Post writes मिर्चेया
 20315,Janakpurdham,,survey_department,renamed since the CBS list (Janakpur)
 30104,Baiteshwor,,survey_department,CBS has Baitedhar
 30205,Melamchi,,survey_department,CBS has Melanchi
 30302,Aamachhodingmo,,survey_department,renamed since the CBS list (Parbatikunda)
+30403,,गङ्गाजमुना गाउँपालिका,cbs,Nepal Post doubles the nasal (गंङ्गा जमुना)
 30405,Netrawati Dabjong,,survey_department,renamed since the CBS list (Netrawati)
-30506,Myagang,,survey_department,renamed since the CBS list (Meghang)
+30506,Myagang,म्यागङ गाउँपालिका,survey_department,renamed since the CBS list (Meghang); Nepal Post drops the ा (म्यगङ)
+30601,,शंखरापुर नगरपालिका,cbs,Nepal Post doubles the nasal (शंङ्खरापुर)
 31003,Likhu Tamakoshi,,survey_department,renamed since the CBS list (Likhu)
+31107,,घ्याङलेख गाउँपालिका,cbs,Nepal Post writes ध for घ (ध्याङलेख)
 40103,Barpak Sulikot,,survey_department,renamed since the CBS list (Sulikot)
 40106,Bhimsenthapa,,survey_department,renamed since the CBS list (Bhimsen)
 40201,Narpa Bhumi,,survey_department,renamed since the CBS list (Naraphu)
@@ -33,20 +42,24 @@ code,name_en,name_ne,source,note
 40301,Lo Ghekar Damodarkunda,,survey_department,renamed since the CBS list (Dalome)
 40303,Varagung Muktichhetra,,survey_department,renamed since the CBS list (Bahragaun Muktikshetra)
 40504,Pokhara,,survey_department,renamed since the CBS list (Pokhara Lekhnath)
+40602,,मर्स्याङदी गाउँपालिका,cbs,Nepal Post has a broken conjunct (मस्र्याङ्गदी)
 40803,Baudikali,,survey_department,spelling follows the Nepal Post name (CBS: Bungdikali)
 41110,Jaimini,,transliterated,spelling follows the Nepal Post name जैमिनी; CBS and HDX have Jaimuni
 50203,Pariwartan,,survey_department,renamed since the CBS list (Duikholi)
 50204,Gangadev,गङ्गादेव गाउँपालिका,survey_department,renamed since the CBS list (Sukidaha); the Nepal Post text has a broken conjunct
 50209,Sunil Smriti,,survey_department,renamed since the CBS list (Subarnabati)
+50305,,स्वर्गद्वारी नगरपालिका,cbs,Nepal Post writes द्ध for द्व (स्वर्गद्धारी)
 50412,Ruruchhetra,,survey_department,renamed since the CBS list (Ruru)
 60509,Shuva Kalika,,survey_department,renamed since the CBS list (Kalika)
 60707,Nalgad,,survey_department,renamed since the CBS list (Tribeni Nalagad)
 60902,Kumakh,,survey_department,renamed since the CBS list (Kumakh Malika)
 60904,Siddha Kumakh,,survey_department,renamed since the CBS list (Dhorchaur)
+61002,,चिङ्गाड गाउँपालिका,cbs,Nepal Post doubles the ग (चिङ्गगाड)
 70104,Swamikartik Khapar,,survey_department,renamed since the CBS list (Swami Kartik)
 70105,Jagannath,,survey_department,renamed since the CBS list (Pandab Gufa)
 70107,Khaptad Chhededaha,,survey_department,renamed since the CBS list (Chhededaha)
 70201,Saipal,,survey_department,renamed since the CBS list (Kanda)
 70409,Patan,,survey_department,CBS has Patam
+70606,,के.आई.सिंह गाउँपालिका,cbs,Nepal Post truncates the name (के.आई.सिं.)
 70607,Bogatan Phudsil,,survey_department,renamed since the CBS list (Bogatan)
-70905,Dodhara Chandani,,survey_department,renamed since the CBS list (Mahakali); the Nepal Post Nepali name puts the words the other way round
+70905,Dodhara Chandani,दोधारा चाँदनी नगरपालिका,survey_department,renamed since the CBS list (Mahakali); Nepal Post writes चाँदनी-दोधारा
