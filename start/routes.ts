@@ -35,6 +35,8 @@ await import('#start/routes/api_v1/admin')
 await import('#start/routes/webhooks')
 
 // Pages (docs/08 §2), GET only.
+await import('#start/routes/storefront')
+await import('#start/routes/auth')
 await import('#start/routes/admin')
 
 // Development-only routes (RF-40): never in the production route list.

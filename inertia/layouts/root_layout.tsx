@@ -6,6 +6,7 @@ import { ThemeProvider, useTheme } from '~/components/providers/theme_provider'
 import { Toaster } from '~/components/ui/sonner'
 import { TooltipProvider } from '~/components/ui/tooltip'
 import { SocialMeta } from '~/components/seo/social_meta'
+import { LiveRegions } from '~/components/common/live_regions'
 
 // Every page's outer layout; a surface layout, if any, sits inside it (layout_for.ts).
 export default function RootLayout({ children }: { children: ReactNode }) {
@@ -31,6 +32,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <ThemeProvider initialTheme={props.theme}>
         <TooltipProvider>
           {children}
+          <LiveRegions />
           <ThemedToaster />
         </TooltipProvider>
       </ThemeProvider>

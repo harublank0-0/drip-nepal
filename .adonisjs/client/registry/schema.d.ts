@@ -391,6 +391,42 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/webhooks/courier_callbacks_controller').default['receive']>>>
     }
   }
+  'legal.document': {
+    methods: ["GET","HEAD"]
+    pattern: '/legal/:documentSlug'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { documentSlug: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/storefront/platform/legal_documents_controller').default['show']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/storefront/platform/legal_documents_controller').default['show']>>>
+    }
+  }
+  'signup': {
+    methods: ["GET","HEAD"]
+    pattern: '/signup'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/auth/identity/registration_controller').default['signUp']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/auth/identity/registration_controller').default['signUp']>>>
+    }
+  }
+  'verify_email': {
+    methods: ["GET","HEAD"]
+    pattern: '/verify-email'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/auth/identity/registration_controller').default['verifyEmail']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/auth/identity/registration_controller').default['verifyEmail']>>>
+    }
+  }
   'admin.logistics': {
     methods: ["GET","HEAD"]
     pattern: '/admin/logistics'
