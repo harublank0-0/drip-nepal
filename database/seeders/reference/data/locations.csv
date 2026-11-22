@@ -9,7 +9,7 @@ province_code,province_name_en,province_name_ne,district_code,district_name_en,d
 1,Koshi,कोशी,101,Taplejung,ताप्लेजुङ,10104,Maiwakhola Rural Municipality,मैवाखोला गाउँपालिका,rural_municipality,6
 1,Koshi,कोशी,101,Taplejung,ताप्लेजुङ,10105,Aatharai Tribeni Rural Municipality,आठराई त्रिवेणी गाउँपालिका,rural_municipality,5
 1,Koshi,कोशी,101,Taplejung,ताप्लेजुङ,10106,Phungling Municipality,फुङलिङ्ग नगरपालिका,municipality,11
-1,Koshi,कोशी,101,Taplejung,ताप्लेजुङ,10107,Pathivara Yangwarak Rural Municipality,पाथिभरा याङ्वराक गाउँपालिका,rural_municipality,6
+1,Koshi,कोशी,101,Taplejung,ताप्लेजुङ,10107,Pathivara Yangwarak Rural Municipality,पाथिभरा याङ्वरक गाउँपालिका,rural_municipality,6
 1,Koshi,कोशी,101,Taplejung,ताप्लेजुङ,10108,Sirijanga Rural Municipality,सिरीजङ्गा गाउँपालिका,rural_municipality,8
 1,Koshi,कोशी,101,Taplejung,ताप्लेजुङ,10109,Sidingba Rural Municipality,सिदिङ्गवा गाउँपालिका,rural_municipality,7
 1,Koshi,कोशी,102,Sankhuwasabha,संखुवासभा,10201,Bhotkhola Rural Municipality,भोटखोला गाउँपालिका,rural_municipality,5
@@ -142,7 +142,7 @@ province_code,province_name_en,province_name_ne,district_code,district_name_en,d
 1,Koshi,कोशी,114,Udayapur,उदयपुर,11408,Udayapurgadhi Rural Municipality,उदयपुरगढी गाउँपालिका,rural_municipality,8
 2,Madhesh,मधेश,201,Saptari,सप्तरी,20101,Saptakoshi Municipality,सप्तकोशी नगरपालिका,municipality,11
 2,Madhesh,मधेश,201,Saptari,सप्तरी,20102,Kanchanrup Municipality,कन्चनरुप नगरपालिका,municipality,12
-2,Madhesh,मधेश,201,Saptari,सप्तरी,20103,Agnisair Krishna Sabaran Rural Municipality,अग्मीसयर कृष्ण सवरन गाउँपालिका,rural_municipality,6
+2,Madhesh,मधेश,201,Saptari,सप्तरी,20103,Agnisair Krishna Sabaran Rural Municipality,अग्नीसाइर कृष्णासवरन गाउँपालिका,rural_municipality,6
 2,Madhesh,मधेश,201,Saptari,सप्तरी,20104,Rupani Rural Municipality,रुपनी गाउँपालिका,rural_municipality,6
 2,Madhesh,मधेश,201,Saptari,सप्तरी,20105,Shambhunath Municipality,शम्भुनाथ नगरपालिका,municipality,12
 2,Madhesh,मधेश,201,Saptari,सप्तरी,20106,Khadak Municipality,खडक नगरपालिका,municipality,11
@@ -161,7 +161,7 @@ province_code,province_name_en,province_name_ne,district_code,district_name_en,d
 2,Madhesh,मधेश,202,Siraha,सिरहा,20201,Lahan Municipality,लहान नगरपालिका,municipality,24
 2,Madhesh,मधेश,202,Siraha,सिरहा,20202,Dhangadhimai Municipality,धनगढीमाई नगरपालिका,municipality,14
 2,Madhesh,मधेश,202,Siraha,सिरहा,20203,Golbazar Municipality,गोलबजार नगरपालिका,municipality,13
-2,Madhesh,मधेश,202,Siraha,सिरहा,20204,Mirchaiya Municipality,मिर्चेया नगरपालिका,municipality,12
+2,Madhesh,मधेश,202,Siraha,सिरहा,20204,Mirchaiya Municipality,मिर्चैया नगरपालिका,municipality,12
 2,Madhesh,मधेश,202,Siraha,सिरहा,20205,Karjanha Municipality,कर्जन्हा नगरपालिका,municipality,11
 2,Madhesh,मधेश,202,Siraha,सिरहा,20206,Kalyanpur Municipality,कल्याणपुर नगरपालिका,municipality,12
 2,Madhesh,मधेश,202,Siraha,सिरहा,20207,Naraha Rural Municipality,नरहा गाउँपालिका,rural_municipality,5
@@ -304,7 +304,7 @@ province_code,province_name_en,province_name_ne,district_code,district_name_en,d
 3,Bagmati,बागमती,303,Rasuwa,रसुवा,30305,Naukunda Rural Municipality,नौकुण्ड गाउँपालिका,rural_municipality,6
 3,Bagmati,बागमती,304,Dhading,धादिङ,30401,Rubi Valley Rural Municipality,रुबी भ्याली गाउँपालिका,rural_municipality,6
 3,Bagmati,बागमती,304,Dhading,धादिङ,30402,Khaniyabas Rural Municipality,खनियाबास गाउँपालिका,rural_municipality,5
-3,Bagmati,बागमती,304,Dhading,धादिङ,30403,Ganga Jamuna Rural Municipality,गंङ्गा जमुना गाउँपालिका,rural_municipality,7
+3,Bagmati,बागमती,304,Dhading,धादिङ,30403,Ganga Jamuna Rural Municipality,गङ्गाजमुना गाउँपालिका,rural_municipality,7
 3,Bagmati,बागमती,304,Dhading,धादिङ,30404,Tripurasundari Rural Municipality,त्रिपुरासुन्दरी गाउँपालिका,rural_municipality,7
 3,Bagmati,बागमती,304,Dhading,धादिङ,30405,Netrawati Dabjong Rural Municipality,नेत्रावती डबजोङ गाउँपालिका,rural_municipality,5
 3,Bagmati,बागमती,304,Dhading,धादिङ,30406,Nilkhantha Municipality,नीलकण्ठ नगरपालिका,municipality,14
@@ -320,14 +320,14 @@ province_code,province_name_en,province_name_ne,district_code,district_name_en,d
 3,Bagmati,बागमती,305,Nuwakot,नुवाकोट,30503,Suryagadhi Rural Municipality,सुर्यगढी गाउँपालिका,rural_municipality,5
 3,Bagmati,बागमती,305,Nuwakot,नुवाकोट,30504,Bidur Municipality,बिदुर नगरपालिका,municipality,13
 3,Bagmati,बागमती,305,Nuwakot,नुवाकोट,30505,Kispang Rural Municipality,किस्पाङ्ग गाउँपालिका,rural_municipality,5
-3,Bagmati,बागमती,305,Nuwakot,नुवाकोट,30506,Myagang Rural Municipality,म्यगङ गाउँपालिका,rural_municipality,6
+3,Bagmati,बागमती,305,Nuwakot,नुवाकोट,30506,Myagang Rural Municipality,म्यागङ गाउँपालिका,rural_municipality,6
 3,Bagmati,बागमती,305,Nuwakot,नुवाकोट,30507,Tarakeshwor Rural Municipality,तारकेश्वर गाउँपालिका,rural_municipality,6
 3,Bagmati,बागमती,305,Nuwakot,नुवाकोट,30508,Belkotgadhi Municipality,बेलकोटगढी नगरपालिका,municipality,13
 3,Bagmati,बागमती,305,Nuwakot,नुवाकोट,30509,Likhu Rural Municipality,लिखु गाउँपालिका,rural_municipality,6
 3,Bagmati,बागमती,305,Nuwakot,नुवाकोट,30510,Panchakanya Rural Municipality,पन्चकन्या गाउँपालिका,rural_municipality,5
 3,Bagmati,बागमती,305,Nuwakot,नुवाकोट,30511,Shivapuri Rural Municipality,शिवपुरी गाउँपालिका,rural_municipality,8
 3,Bagmati,बागमती,305,Nuwakot,नुवाकोट,30512,Kakani Rural Municipality,ककनी गाउँपालिका,rural_municipality,8
-3,Bagmati,बागमती,306,Kathmandu,काठमाडौँ,30601,Shankharapur Municipality,शंङ्खरापुर नगरपालिका,municipality,9
+3,Bagmati,बागमती,306,Kathmandu,काठमाडौँ,30601,Shankharapur Municipality,शंखरापुर नगरपालिका,municipality,9
 3,Bagmati,बागमती,306,Kathmandu,काठमाडौँ,30602,Kageshwori Manahara Municipality,कागेश्वरी मनहरा नगरपालिका,municipality,9
 3,Bagmati,बागमती,306,Kathmandu,काठमाडौँ,30603,Gokarneshwor Municipality,गोकर्णेश्वर नगरपालिका,municipality,9
 3,Bagmati,बागमती,306,Kathmandu,काठमाडौँ,30604,Budhanilkhantha Municipality,बुढानिलकण्ठ नगरपालिका,municipality,13
@@ -375,7 +375,7 @@ province_code,province_name_en,province_name_ne,district_code,district_name_en,d
 3,Bagmati,बागमती,311,Sindhuli,सिन्धुली,31104,Golanjor Rural Municipality,गोलन्जोर गाउँपालिका,rural_municipality,7
 3,Bagmati,बागमती,311,Sindhuli,सिन्धुली,31105,Kamalamai Municipality,कमलामाई नगरपालिका,municipality,14
 3,Bagmati,बागमती,311,Sindhuli,सिन्धुली,31106,Sunkoshi Rural Municipality,सुनकोशी गाउँपालिका,rural_municipality,7
-3,Bagmati,बागमती,311,Sindhuli,सिन्धुली,31107,Ghyanglekha Rural Municipality,ध्याङलेख गाउँपालिका,rural_municipality,5
+3,Bagmati,बागमती,311,Sindhuli,सिन्धुली,31107,Ghyanglekha Rural Municipality,घ्याङलेख गाउँपालिका,rural_municipality,5
 3,Bagmati,बागमती,311,Sindhuli,सिन्धुली,31108,Marin Rural Municipality,मरिण गाउँपालिका,rural_municipality,7
 3,Bagmati,बागमती,311,Sindhuli,सिन्धुली,31109,Hariharpurgaghi Rural Municipality,हरिहरपुरगढी गाउँपालिका,rural_municipality,8
 3,Bagmati,बागमती,312,Makwanpur,मकवानपुर,31201,Indrasarowar Rural Municipality,ईन्द्रसरोवर गाउँपालिका,rural_municipality,5
@@ -427,7 +427,7 @@ province_code,province_name_en,province_name_ne,district_code,district_name_en,d
 4,Gandaki,गण्डकी,405,Kaski,कास्की,40504,Pokhara Metropolitan City,पोखरा महानगरपालिका,metropolitan,33
 4,Gandaki,गण्डकी,405,Kaski,कास्की,40505,Rupa Rural Municipality,रूपा गाउँपालिका,rural_municipality,7
 4,Gandaki,गण्डकी,406,Lamjung,लमजुङ,40601,Dordi Rural Municipality,दोर्दी गाउँपालिका,rural_municipality,9
-4,Gandaki,गण्डकी,406,Lamjung,लमजुङ,40602,Marshyangdi Rural Municipality,मस्र्याङ्गदी गाउँपालिका,rural_municipality,9
+4,Gandaki,गण्डकी,406,Lamjung,लमजुङ,40602,Marshyangdi Rural Municipality,मर्स्याङदी गाउँपालिका,rural_municipality,9
 4,Gandaki,गण्डकी,406,Lamjung,लमजुङ,40603,Kwhola Sothar Rural Municipality,क्ब्होलासोथार गाउँपालिका,rural_municipality,9
 4,Gandaki,गण्डकी,406,Lamjung,लमजुङ,40604,Madhya Nepal Municipality,मध्यनेपाल नगरपालिका,municipality,10
 4,Gandaki,गण्डकी,406,Lamjung,लमजुङ,40605,Bensi Shahar Municipality,बेंसीशहर नगरपालिका,municipality,11
@@ -497,7 +497,7 @@ province_code,province_name_en,province_name_ne,district_code,district_name_en,d
 5,Lumbini,लुम्बिनी,503,Pyuthan,प्यूठान,50302,Naubahini Rural Municipality,नौबहिनी गाउँपालिका,rural_municipality,8
 5,Lumbini,लुम्बिनी,503,Pyuthan,प्यूठान,50303,Jhimaruk Rural Municipality,झिमरुक गाउँपालिका,rural_municipality,8
 5,Lumbini,लुम्बिनी,503,Pyuthan,प्यूठान,50304,Pyuthan Municipality,प्यूठान नगरपालिका,municipality,10
-5,Lumbini,लुम्बिनी,503,Pyuthan,प्यूठान,50305,Sworgadwari Municipality,स्वर्गद्धारी नगरपालिका,municipality,9
+5,Lumbini,लुम्बिनी,503,Pyuthan,प्यूठान,50305,Sworgadwari Municipality,स्वर्गद्वारी नगरपालिका,municipality,9
 5,Lumbini,लुम्बिनी,503,Pyuthan,प्यूठान,50306,Mandavi Rural Municipality,माण्डवी गाउँपालिका,rural_municipality,5
 5,Lumbini,लुम्बिनी,503,Pyuthan,प्यूठान,50307,Mallarani Rural Municipality,मल्लरानी गाउँपालिका,rural_municipality,5
 5,Lumbini,लुम्बिनी,503,Pyuthan,प्यूठान,50308,Aairawati Rural Municipality,ऐरावती गाउँपालिका,rural_municipality,6
@@ -660,7 +660,7 @@ province_code,province_name_en,province_name_ne,district_code,district_name_en,d
 6,Karnali,कर्णाली,609,Salyan,सल्यान,60909,Tribeni Rural Municipality,त्रिवेणी गाउँपालिका,rural_municipality,6
 6,Karnali,कर्णाली,609,Salyan,सल्यान,60910,Kapurkot Rural Municipality,कपुरकोट गाउँपालिका,rural_municipality,6
 6,Karnali,कर्णाली,610,Surkhet,सुर्खेत,61001,Simta Rural Municipality,सिम्ता गाउँपालिका,rural_municipality,9
-6,Karnali,कर्णाली,610,Surkhet,सुर्खेत,61002,Chingad Rural Municipality,चिङ्गगाड गाउँपालिका,rural_municipality,6
+6,Karnali,कर्णाली,610,Surkhet,सुर्खेत,61002,Chingad Rural Municipality,चिङ्गाड गाउँपालिका,rural_municipality,6
 6,Karnali,कर्णाली,610,Surkhet,सुर्खेत,61003,Lekabeshi Municipality,लेकबेशी नगरपालिका,municipality,10
 6,Karnali,कर्णाली,610,Surkhet,सुर्खेत,61004,Gurbhakot Municipality,गुर्भाकोट नगरपालिका,municipality,14
 6,Karnali,कर्णाली,610,Surkhet,सुर्खेत,61005,Bheriganga Municipality,भेरीगंगा नगरपालिका,municipality,13
@@ -720,7 +720,7 @@ province_code,province_name_en,province_name_ne,district_code,district_name_en,d
 7,Sudurpashchim,सुदूरपश्चिम,706,Doti,डोटी,70603,Aadarsha Rural Municipality,आदर्श गाउँपालिका,rural_municipality,7
 7,Sudurpashchim,सुदूरपश्चिम,706,Doti,डोटी,70604,Shikhar Municipality,शिखर नगरपालिका,municipality,11
 7,Sudurpashchim,सुदूरपश्चिम,706,Doti,डोटी,70605,Dipayal Silgadhi Municipality,दिपायल सिलगढी नगरपालिका,municipality,9
-7,Sudurpashchim,सुदूरपश्चिम,706,Doti,डोटी,70606,K.I. Singh Rural Municipality,के.आई.सिं. गाउँपालिका,rural_municipality,7
+7,Sudurpashchim,सुदूरपश्चिम,706,Doti,डोटी,70606,K.I. Singh Rural Municipality,के.आई.सिंह गाउँपालिका,rural_municipality,7
 7,Sudurpashchim,सुदूरपश्चिम,706,Doti,डोटी,70607,Bogatan Phudsil Rural Municipality,बोगटान फुड्सिल गाउँपालिका,rural_municipality,7
 7,Sudurpashchim,सुदूरपश्चिम,706,Doti,डोटी,70608,Badi Kedar Rural Municipality,बडीकेदार गाउँपालिका,rural_municipality,5
 7,Sudurpashchim,सुदूरपश्चिम,706,Doti,डोटी,70609,Jorayal Rural Municipality,जोरायल गाउँपालिका,rural_municipality,6
@@ -751,7 +751,7 @@ province_code,province_name_en,province_name_ne,district_code,district_name_en,d
 7,Sudurpashchim,सुदूरपश्चिम,709,Kanchanpur,कञ्चनपुर,70902,Shuklaphanta Municipality,शुक्लाफाँटा नगरपालिका,municipality,12
 7,Sudurpashchim,सुदूरपश्चिम,709,Kanchanpur,कञ्चनपुर,70903,Bedkot Municipality,बेदकोट नगरपालिका,municipality,10
 7,Sudurpashchim,सुदूरपश्चिम,709,Kanchanpur,कञ्चनपुर,70904,Bhimdatta Municipality,भिमदत्त नगरपालिका,municipality,19
-7,Sudurpashchim,सुदूरपश्चिम,709,Kanchanpur,कञ्चनपुर,70905,Dodhara Chandani Municipality,चाँदनी-दोधारा नगरपालिका,municipality,10
+7,Sudurpashchim,सुदूरपश्चिम,709,Kanchanpur,कञ्चनपुर,70905,Dodhara Chandani Municipality,दोधारा चाँदनी नगरपालिका,municipality,10
 7,Sudurpashchim,सुदूरपश्चिम,709,Kanchanpur,कञ्चनपुर,70906,Laljhadi Rural Municipality,लालझाडी गाउँपालिका,rural_municipality,6
 7,Sudurpashchim,सुदूरपश्चिम,709,Kanchanpur,कञ्चनपुर,70907,Punarbas Municipality,पुनर्वास नगरपालिका,municipality,11
 7,Sudurpashchim,सुदूरपश्चिम,709,Kanchanpur,कञ्चनपुर,70908,Belouri Municipality,बेलौरी नगरपालिका,municipality,10

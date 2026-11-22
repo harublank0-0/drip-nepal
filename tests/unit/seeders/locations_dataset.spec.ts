@@ -170,15 +170,27 @@ test.group('T-SHOP-117 the locations dataset', (group) => {
     const overrides = parseCsv(
       await readFile(new URL('./locations_overrides.csv', LOCATIONS_FILE), 'utf8')
     )
-    assert.lengthOf(overrides, 45)
+    assert.lengthOf(overrides, 54)
     for (const override of overrides) {
       const row = at(committed, override.code)
-      assert.equal(row.nameEn, `${override.name_en} ${TYPE_LABELS[row.type]}`, override.code)
-      if (override.name_ne)
+      // A row corrects the English name, the Nepali name, or both.
+      assert.isTrue(Boolean(override.name_en || override.name_ne), override.code)
+      if (override.name_en) {
+        assert.equal(row.nameEn, `${override.name_en} ${TYPE_LABELS[row.type]}`, override.code)
+      }
+      if (override.name_ne) {
         assert.equal(row.nameNe, override.name_ne.normalize('NFC'), override.code)
-      assert.oneOf(override.source, ['survey_department', 'transliterated'], override.code)
+      }
+      // `source` names where name_en comes from; `cbs` rows keep the CBS name.
+      assert.equal(override.source === 'cbs', !override.name_en, override.code)
+      assert.oneOf(override.source, ['survey_department', 'transliterated', 'cbs'], override.code)
       assert.isNotEmpty(override.note, override.code)
     }
+    // The Nepali corrections of the VX-10 cross-check (docs/04 §21.4 step 4).
+    assert.lengthOf(
+      overrides.filter((override) => override.name_ne),
+      13
+    )
   })
 
   test('T-SHOP-117 a dataset where {name} is refused')
