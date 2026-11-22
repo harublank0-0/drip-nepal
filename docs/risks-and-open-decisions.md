@@ -244,8 +244,11 @@ Ruling: (a) 18+ only: an unticked "I am 18 or older" confirmation at signup, sto
 Evidence: The recommendation of §2.2 and A-26; the product owner's go of 2026-11-22 to start
           M1 on the recommended options.
 ADR: none (a signup rule).
-Docs updated: 00 (§7.2, §7.3), 01 (§4.1, REG-25), 02 (J-04), 04 (note), 04a (users), 07 (§5.3),
-              12 (§3, §5.1)  |  Status: Decided
+Docs updated: 00 (§7.2, §7.3, note 28), 01 (§4.1, REG-25, note 30), 02 (J-04, note 26),
+              04 (note 36), 04a (users), 07 (§5.3, note 43), 12 (§3, §5.1, note 56),
+              risks (§2.2, §5, note 50)
+              |  Status: Decided; Resolved when counsel's VX-03 answer confirms it and the M1
+              signup is built
 ```
 
 ```text
@@ -256,8 +259,10 @@ Ruling: (a) Approve the per-account MFA lock: more than 5 wrong TOTP codes in 5 
 Evidence: 07 §3.9 (AP-04: a lock per session or source does not hold against someone with
           the password); the product owner's go of 2026-11-22.
 ADR: none (a limiter scope).
-Docs updated: 00 (§7.2, §7.3), 01 (AC-FR-IAM-007-4, note 19 (c)), 06 (§9.1, §13.3), 07 (§2.3,
-              §3.9), 11 (§9.7), 12 (§3, §5.1), openapi.yaml  |  Status: Decided → Resolved on 2026-11-22
+Docs updated: 00 (§7.2, §7.3, note 28), 01 (AC-FR-IAM-007-4, note 30), 06 (§9.1, §13.3,
+              note 55), 07 (TM-08 in §2.3, §3.9, notes 7 and 43), 11 (§9.7, note 120),
+              12 (§3, §5.1, note 56), openapi.yaml, risks (§2.2, §5, note 50)
+              |  Status: Decided; Resolved when the M1 MFA challenge is built
 ```
 
 ```text
@@ -268,8 +273,9 @@ Ruling: (a) While mfa_enabled_at is null, a password reset or change leaves a li
         startTotpEnrollment.
 Evidence: The E8 review of 2026-11-11 (risks note 33); the product owner's go of 2026-11-22.
 ADR: none (a token rule).
-Docs updated: 00 (§7.2, §7.3), 04 (note), 04a (§5.2), 07 (§3.8), 09 (§9.1), 12 (§3, §5.1)
-              |  Status: Decided → Resolved on 2026-11-22
+Docs updated: 00 (§7.2, §7.3, note 28), 04 (note 36), 04a (§5.2), 07 (§3.8, notes 31 and 43),
+              09 (§9.1, note 113), 12 (§3, §5.1, note 56), risks (§2.2, §5, note 50)
+              |  Status: Decided; Resolved when M1's resetPassword and changePassword are built
 ```
 
 ```text
@@ -908,7 +914,7 @@ ADR: none of its own (reversible tech choice); consistent with ADR-0010 "no Redi
 Docs updated: 03 (process/containers), 07 (rate limits), 11 (no Redis in production)  |  Status: Resolved 2026-09-25
 ```
 
-OD-01, OD-12, OD-13, OD-23 and OD-25 were Decided on 2026-09-30, and the documents named in their entries were updated the same day. OD-47 was Decided on 2026-10-01, and the documents named in its entry follow it. Five rulings of the same day that are not ODs are logged above it, and above those the 17 rulings that the product owner and the tech lead accepted in the cross-document check of the same day, numbered as in that check and grouped in five entries by area; each entry names any document that still has to follow. The newest entry, of 2026-10-04, comes from the final review of the consistency review: shop-application decisions are checked against the version the reviewer loaded. Each OD stays Decided until the work named in its "Resolved when" clause is done, because Resolved (§1.3) also needs the code updated. No other OD is Decided yet. Rows marked Proposed are already used as defaults across the docs set, so approving one only means changing its status and adding its log entry.
+OD-01, OD-12, OD-13, OD-23 and OD-25 were Decided on 2026-09-30, and the documents named in their entries were updated the same day. OD-47 was Decided on 2026-10-01, and the documents named in its entry follow it. Five rulings of the same day that are not ODs are logged above it, and above those the 17 rulings that the product owner and the tech lead accepted in the cross-document check of the same day, numbered as in that check and grouped in five entries by area; each entry names any document that still has to follow. The entry of 2026-10-04 comes from the final review of the consistency review: shop-application decisions are checked against the version the reviewer loaded. Each OD stays Decided until the work named in its "Resolved when" clause is done, because Resolved (§1.3) also needs the code updated. Later decisions are logged above these entries, newest first. Rows marked Proposed are already used as defaults across the docs set, so approving one only means changing its status and adding its log entry.
 
 ---
 
