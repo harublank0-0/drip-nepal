@@ -38,5 +38,9 @@ export interface ApiDefinition {
   dev: {
     designSystem: typeof routes['dev.design_system']
     overlays: typeof routes['dev.overlays']
+    signIn: typeof routes['dev.sign_in'] & {
+      store: typeof routes['dev.sign_in.store']
+    }
+    signOut: typeof routes['dev.sign_out']
   }
 }

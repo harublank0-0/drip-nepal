@@ -379,4 +379,40 @@ export interface Registry {
       errorResponse: unknown
     }
   }
+  'dev.sign_in': {
+    methods: ["GET","HEAD"]
+    pattern: '/dev/sign-in'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/dev/sign_in_controller').default['show']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/dev/sign_in_controller').default['show']>>>
+    }
+  }
+  'dev.sign_in.store': {
+    methods: ["POST"]
+    pattern: '/dev/sign-in/:id'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/dev/sign_in_controller').default['store']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/dev/sign_in_controller').default['store']>>>
+    }
+  }
+  'dev.sign_out': {
+    methods: ["POST"]
+    pattern: '/dev/sign-out'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/dev/sign_in_controller').default['destroy']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/dev/sign_in_controller').default['destroy']>>>
+    }
+  }
 }

@@ -1,5 +1,7 @@
 import db from '@adonisjs/lucid/services/db'
+import User from '#models/user'
 import { maySignIn } from '#modules/identity/domain/user_status'
+import { activeStaffRole } from '#modules/identity/staff'
 import {
   ABSOLUTE_SESSION_LIMIT_MS,
   SELLER_IDLE_LIMIT_MS,
@@ -56,6 +58,71 @@ export function sellerSessionIdle(
 export async function accountExistsWithEmail(email: string) {
   const row = await db.from('users').where('email', email).select('id').first()
   return row !== null
+}
+
+/*
+ * The development-only sign-in (docs/07 §3.13). Its routes exist only
+ * outside production, but these reads ship with the module. The demo
+ * accounts' addresses are under `.invalid` (docs/09 §8.8), so no seeded
+ * address reaches a real inbox.
+ */
+export const DEMO_EMAIL_DOMAIN = 'dev.dripnepal.invalid'
+
+const ACTIVE_STAFF = `EXISTS (SELECT 1 FROM platform_staff s
+  WHERE s.user_id = users.id AND s.revoked_at IS NULL)`
+
+// Guard 3: an active account that is a demo account, or staff with TOTP enrolled.
+const MAY_DEV_SIGN_IN = `users.status = 'active' AND (users.email LIKE ?
+  OR (users.mfa_enabled_at IS NOT NULL AND ${ACTIVE_STAFF}))`
+
+const demoPattern = () => `%@${DEMO_EMAIL_DOMAIN}`
+
+export type DevSignInAccount = {
+  id: string
+  email: string
+  fullName: string | null
+  staffRole: string | null
+}
+
+/** The accounts the development-only sign-in offers, staff first. */
+export async function devSignInAccounts(): Promise<DevSignInAccount[]> {
+  const rows = await db
+    .from('users')
+    .leftJoin('platform_staff', (join) => {
+      join.on('platform_staff.user_id', 'users.id').andOnNull('platform_staff.revoked_at')
+    })
+    .whereRaw(MAY_DEV_SIGN_IN, [demoPattern()])
+    .orderByRaw('platform_staff.role NULLS LAST, users.email')
+    .select('users.id', 'users.email', 'users.full_name', 'platform_staff.role')
+  return rows.map((row) => ({
+    id: row.id,
+    email: row.email,
+    fullName: row.full_name,
+    staffRole: row.role,
+  }))
+}
+
+/** Active staff accounts without TOTP, which the sign-in cannot open until `db:seed` runs. */
+export async function staffWithoutTotpCount() {
+  const row = await db
+    .from('users')
+    .where('users.status', 'active')
+    .whereNull('users.mfa_enabled_at')
+    .whereRaw(ACTIVE_STAFF)
+    .count('* as total')
+    .first()
+  return Number(row?.total ?? 0)
+}
+
+/**
+ * The account the development-only sign-in may sign in as, with whether it
+ * is staff with TOTP enrolled, or null for any other ID (guard 3).
+ */
+export async function devSignInUser(id: string) {
+  const user = await User.query().where('id', id).whereRaw(MAY_DEV_SIGN_IN, [demoPattern()]).first()
+  if (!user) return null
+  const staff = user.mfaEnabledAt !== null && (await activeStaffRole(user.id)) !== null
+  return { user, staff }
 }
 
 /*

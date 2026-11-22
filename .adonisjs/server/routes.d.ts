@@ -35,6 +35,9 @@ export type ScannedRoutes = {
     'receiveCourierCallback': { paramsTuple: [ParamValue,ParamValue]; params: {'providerCode': ParamValue,'accountId': ParamValue} }
     'dev.design_system': { paramsTuple?: []; params?: {} }
     'dev.overlays': { paramsTuple?: []; params?: {} }
+    'dev.sign_in': { paramsTuple?: []; params?: {} }
+    'dev.sign_in.store': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'dev.sign_out': { paramsTuple?: []; params?: {} }
   }
   GET: {
     'drive.fs.serve': { paramsTuple: [...ParamValue[]]; params: {'*': ParamValue[]} }
@@ -46,6 +49,7 @@ export type ScannedRoutes = {
     'adminListCourierEvents': { paramsTuple?: []; params?: {} }
     'dev.design_system': { paramsTuple?: []; params?: {} }
     'dev.overlays': { paramsTuple?: []; params?: {} }
+    'dev.sign_in': { paramsTuple?: []; params?: {} }
   }
   HEAD: {
     'drive.fs.serve': { paramsTuple: [...ParamValue[]]; params: {'*': ParamValue[]} }
@@ -57,6 +61,7 @@ export type ScannedRoutes = {
     'adminListCourierEvents': { paramsTuple?: []; params?: {} }
     'dev.design_system': { paramsTuple?: []; params?: {} }
     'dev.overlays': { paramsTuple?: []; params?: {} }
+    'dev.sign_in': { paramsTuple?: []; params?: {} }
   }
   PUT: {
     'replaceLogisticsSettings': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
@@ -79,6 +84,8 @@ export type ScannedRoutes = {
     'adminResolveCourierEvent': { paramsTuple: [ParamValue]; params: {'courierEventId': ParamValue} }
     'adminRecordOrderVerification': { paramsTuple: [ParamValue]; params: {'orderNumber': ParamValue} }
     'receiveCourierCallback': { paramsTuple: [ParamValue,ParamValue]; params: {'providerCode': ParamValue,'accountId': ParamValue} }
+    'dev.sign_in.store': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'dev.sign_out': { paramsTuple?: []; params?: {} }
   }
   PATCH: {
     'updatePickupAddress': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'addressId': ParamValue} }
