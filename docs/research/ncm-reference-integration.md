@@ -18,6 +18,7 @@ The "Bearing on DripNepal" lines point to the document that owns the design; the
 - [reported] When an order is cancelled, the integration posts the comment "Order cancelled." to the parcel. A failure is only logged, and nobody knows whether NCM acts on the comment. Its status sync follows a cancelled order's parcel for 14 days; if NCM collects it anyway, the order stays cancelled and staff are asked to check with NCM.
 - [reported] Parcels keep moving after a cancel. Early in November, several dozen cancelled orders' parcels were still at `Pickup Order Created`, two at `Sent for Pickup`, and one was delivered.
 - **Still to ask NCM:** how to stop a pickup, and which ticket type to use for it.
+- Edited 2026-11-22: the product owner confirms that NCM has no cancellation API and that a comment on the order asks NCM's staff to cancel it ([risks VX-16](../risks-and-open-decisions.md#31-register)). The observations above still hold: a comment is a request, not a stop.
 - **Bearing on DripNepal:** consistent with the "without `cancellation`" path of [05 §6.3](../05-order-payment-and-inventory-lifecycles.md#63-shipment-fulfillment): a cancellation of a `booked` shipment is a request that staff settle with NCM outside the API. A comment alone does not stop a parcel, and which ticket type staff would use is the open question above.
 
 ## 2. Webhook security, secret changes and retries (skill question 17; the header list also bears on 24)
@@ -97,7 +98,7 @@ The "Bearing on DripNepal" lines point to the document that owns the design; the
 - [reported] Per-parcel figures already available: the order detail has `cod_charge` and `delivery_charge`; the `delivery_completed` webhook carries both too, though this is not documented; `rtv_delivery` carries a `delivery_charge` per order, which suggests a return charge.
 - [reported] The integration owes a shop the COD of its delivered, not returned, cash orders minus NCM's delivery charge. It never subtracts a return charge, does not use `payment_status`, and marks a payout paid by hand, with nothing confirming that NCM paid.
 - **Still to ask NCM:** how often NCM pays out, which charges it deducts (returns included), whether there is a statement per parcel, and the full list of `payment_status` values.
-- **Bearing on DripNepal:** [risks VX-18](../risks-and-open-decisions.md#31-register) and OD-58 stay open.
+- **Bearing on DripNepal:** [risks VX-18](../risks-and-open-decisions.md#31-register) and OD-58 stay open. Edited 2026-11-22: OD-58 was re-decided for R1 as option (b), COD to DripNepal; VX-18 stays open for NCM's schedule, fees and statement.
 
 ## 11. Prepaid parcels (skill question 18)
 

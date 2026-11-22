@@ -106,7 +106,7 @@ flowchart LR
 
 ### 2.1 Product
 
-DripNepal is a marketplace where independent Nepali fashion shops (clothing, footwear, bags, accessories, traditional wear) list products and customers buy from several shops in one checkout. The platform onboards and moderates shops, runs first-line customer support and returns, and takes a commission. At launch (R1) payment is cash on delivery only. [Confirmed] (Q2, Q4, Q5) A shop either ships with a courier it chooses and types in the tracking, or books Nepal Can Move through a courier account of its own (OD-56, decided 2026-11-05); a shop with no account of its own may use a platform account that staff allow it on (OD-58, re-decided for R1 on 2026-11-22).
+DripNepal is a marketplace where independent Nepali fashion shops (clothing, footwear, bags, accessories, traditional wear) list products and customers buy from several shops in one checkout. The platform onboards and moderates shops, runs first-line customer support and returns, and takes a commission. At launch (R1) payment is cash on delivery only. [Confirmed] (Q2, Q4, Q5) A shop either ships with a courier it chooses and types in the tracking, or books Nepal Can Move through a courier account of its own (OD-56, decided 2026-11-05); a shop with no active account of its own may use a platform account that staff allow it on (OD-58, re-decided for R1 on 2026-11-22).
 
 ### 2.2 Surfaces
 
@@ -233,7 +233,7 @@ sequenceDiagram
   P->>P: finance_officer records vendor_remittance
 ```
 
-OD-56 (2026-11-05) named one possible exception: a COD shipment booked on a platform-owned courier account, whose cash the courier might remit to DripNepal. OD-58 was re-decided for R1 on 2026-11-22 as option (b): shops with no account of their own may book on a platform-owned NCM account, whose COD NCM remits to DripNepal for a by-hand reconciliation and payment to the vendor. Live COD on such an account stays off (`platform_account_cod_enabled` (proposed) false) until counsel clears REG-27 and VX-01 and OD-58's other conditions are met, so until then the rule above holds in R1.
+OD-56 (2026-11-05) named one possible exception: a COD shipment booked on a platform-owned courier account, whose cash the courier might remit to DripNepal. OD-58 was re-decided for R1 on 2026-11-22 as option (b): shops with no active account of their own may book on a platform-owned NCM account, whose COD NCM remits to DripNepal for a by-hand reconciliation and payment to the vendor. Live COD on such an account stays off (`platform_account_cod_enabled` (proposed) false) until counsel clears REG-27 and VX-01 and OD-58's other conditions are met, so until then the rule above holds in R1.
 
 Related legal points that need confirmation. E-Commerce Act 2081 s8(1) treats payment to a delivery provider as payment received by the business, which gives COD an express legal basis [Verified-doc: https://giwmscdnone.gov.np/media/files/E-Commerce%20Act,%202081_yr7k9o5.pdf]. Which "business entity" is deemed paid, DripNepal or the vendor, is not settled (VX-02). Directive 2082 s9(2) requires an electronic invoice for cash payments, which may require IRD e-invoice permission (OD-26, VX-05). Directive s8(3) bars collecting anything at the door beyond the pre-agreed price and transport cost, so there is no COD fee at the door and shipping is fixed at checkout.
 

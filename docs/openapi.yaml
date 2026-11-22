@@ -2405,7 +2405,9 @@ paths:
         Scope: `{shopOrderNumber}` inside the shop and released to the vendor (an
         `awaiting_payment` shop order is not), else 404 (T-SEC-001).
         Returns the shop order's live shipment (or `null`), the settings, the accounts the form
-        offers (`active`, shop-owned, with an active row for the shop), `account_id`, the
+        offers (`active`, with an active row for the shop, and of the owner type the shop's mode
+        names: shop-owned for `vendor`, platform-owned for `platform`; until platform mode is built
+        in M6, shop-owned only), `account_id`, the
         chosen account (the one asked for if offered, else the default, else the first; `null`
         when there is none), the live pickup addresses, the chosen courier's service codes, and
         for a courier that books by branch its active branches assigned to the account
@@ -2541,10 +2543,13 @@ paths:
         Rules (05 §6.3), each 409 `INVALID_STATE_TRANSITION` unless marked 422: the parent
         order's verification allows dispatch (the OD-57 dispatch rule, T-ORD-011); the shop
         order is `accepted`; its live shipment is `pending` or `packed` (`pending|packed →
-        booking_requested`); the shop's `fulfillment_mode` is `vendor` (`manual` and `platform`
-        refuse it) and courier booking is enabled for the shop (`is_enabled`); the account has
-        an active row for the shop, is shop-owned and `active`, and its courier is active (422
-        `account_not_usable` on `account_id`); a sandbox account in production is 422
+        booking_requested`); the shop's `fulfillment_mode` is `vendor` or `platform` (`manual`
+        refuses it; until platform mode is built in M6, so does `platform`) and courier booking is
+        enabled for the shop (`is_enabled`); the account has an active row for the shop, is
+        `active`, is of the owner type the mode names, and its courier is active (422
+        `account_not_usable` on `account_id`); a platform-owned account for a shop with an active
+        account of its own is 422 `own_account_active`; a COD shipment on a platform-owned account
+        while `platform_account_cod_enabled` (proposed) is false is 409 (OD-58, 2026-11-22); a sandbox account in production is 422
         `sandbox_account`; `service_code` is one of the courier's services (422
         `unknown_service`); `pickup_address_id` is a live pickup address of the shop (422
         `address_not_usable`); for a courier that books by branch both branch IDs are required
@@ -6662,3 +6667,6 @@ components:
 #     `ReplaceLogisticsSettingsRequest` give the target rule (`own_account_active`, proposed) and
 #     say that the code answers 422 `not_offered` until platform mode is built in M6; the four
 #     platform-owned account operations stay in `x-pending-operations` until they have routes.
+#     After review: `getCourierBookingOptions` and `bookCourierShipment` also give the target rule
+#     (accounts of the owner type the mode names; `own_account_active`; the 409 while
+#     `platform_account_cod_enabled` is false) and what the code does until platform mode is built.
