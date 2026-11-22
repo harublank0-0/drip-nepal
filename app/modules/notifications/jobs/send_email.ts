@@ -18,6 +18,7 @@ import { EmailNotSent, EmailSender, type EmailSent } from '#modules/platform/por
 import { jobTx } from '#modules/platform/tx'
 import { isEmailTemplate, type EmailTemplate } from '#modules/notifications/domain/email_templates'
 import { renderEmail } from '#modules/notifications/internal/render_email'
+import { isAccountNotice } from '#modules/notifications/jobs/dispatch'
 
 /*
  * `notifications.send_email` (docs/03 §8.3, §9; docs/04a §14.3; docs/05
@@ -51,8 +52,9 @@ import { renderEmail } from '#modules/notifications/internal/render_email'
  *   `to_address_hash`: `failed` with `address_changed` and no send, so the
  *   row never claims a send to an address it does not record (04a §14.3);
  * - an account notice (`user.signup_attempted`, M1 part 2a, or
- *   `user.password_changed`, M1 part 4) of an account that is gone or was
- *   anonymised meanwhile: `failed` with `recipient_unreachable` and no send.
+ *   `user.password_changed` and `user.sessions_revoked`, M1 part 4) of an
+ *   account that is gone or was anonymised meanwhile: `failed` with
+ *   `recipient_unreachable` and no send.
  * `last_error` holds short reasons, never an address (04a §14.3): a final
  * reason is appended to the transport error before it, within 1,000
  * characters. Log lines hold IDs only (docs/09 §7.2).
@@ -70,12 +72,13 @@ const TOKEN_PAGES: Record<UserTokenPurpose, string> = {
 
 /*
  * The page each account notice links (docs/08 §2.3): sign-in for "account
- * already exists", and the reset request for "your password was changed",
- * for a holder who did not make the change.
+ * already exists", and the reset request for "your password was changed"
+ * and "sessions revoked", for a holder who did not make the change.
  */
 const NOTICE_PAGES: Partial<Record<EmailTemplate, string>> = {
   'identity.account_exists': '/login',
   'identity.password_changed': '/forgot-password',
+  'identity.sessions_revoked': '/forgot-password',
 }
 
 export type SendOutcome =
@@ -203,7 +206,7 @@ async function readRecipient(
   if (payload.event === 'user_token.issued') {
     return { kind: 'token', token: await tokenEmail(payload.user_token_id, { client }) }
   }
-  if (payload.event === 'user.signup_attempted' || payload.event === 'user.password_changed') {
+  if (isAccountNotice(payload)) {
     return { kind: 'account', account: await accountEmail(payload.user_id, { client }) }
   }
   // A payload from the queue is not checked by the compiler.

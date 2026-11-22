@@ -5,7 +5,10 @@ import db from '@adonisjs/lucid/services/db'
 import { appUrl } from '#config/app'
 import { hmacKeys } from '#config/crypto'
 import { issueUserToken } from '#modules/identity/actions/issue_user_token'
-import { sendPasswordChangedEmail } from '#modules/identity/internal/password_effects'
+import {
+  sendPasswordChangedEmail,
+  sendSessionsRevokedEmail,
+} from '#modules/identity/internal/password_effects'
 import { signUp } from '#modules/identity/actions/sign_up'
 import type { UserTokenPurpose } from '#modules/identity/domain/user_token_purpose'
 import { keyedHash } from '#modules/platform/crypto/keyed_hash'
@@ -35,8 +38,8 @@ import { insertUser } from '#tests/support/schema_rows'
  *   once (compare-and-set on `queued`). Every token purpose, each with its
  *   template, subject and page, and the account-exists notice, whose link
  *   is the sign-in page and carries no token, and the "password changed"
- *   notice of M1 part 4, whose link is the reset request page and carries
- *   no token. A replay after the token was
+ *   and "sessions revoked" notices of M1 part 4, whose link is the reset
+ *   request page and carries no token. A replay after the token was
  *   used is a quiet duplicate; a send job whose row is done is quiet, and
  *   one whose row is missing warns (03 §10.4).
  * - T-NOT-001, the handler part (05 §8.14): a retryable failure keeps the
@@ -64,7 +67,7 @@ type SendPayload = Extract<
   JobEnvelope
 type NoticeDispatch = Extract<
   JobPayloads['notifications.dispatch'],
-  { event: 'user.signup_attempted' | 'user.password_changed' }
+  { event: 'user.signup_attempted' | 'user.password_changed' | 'user.sessions_revoked' }
 > &
   JobEnvelope
 type AnySend = JobPayloads['notifications.send_email'] & JobEnvelope
@@ -119,17 +122,23 @@ async function signupNotice() {
 
 /*
  * The "password changed" event, queued by the step that `resetPassword`
- * and `changePassword` call in their transactions (M1 part 4).
+ * and `changePassword` call in their transactions, or the "sessions
+ * revoked" event of `revokeAllSessions` and the `reauth` lockout (M1 part 4).
  */
-async function passwordNotice() {
+async function passwordNotice(
+  event: 'user.password_changed' | 'user.sessions_revoked' = 'user.password_changed'
+) {
   const userId = await insertUser()
-  await withTx((trx) => sendPasswordChangedEmail(trx, userId, null))
+  await withTx((trx) =>
+    event === 'user.password_changed'
+      ? sendPasswordChangedEmail(trx, userId, null)
+      : sendSessionsRevokedEmail(trx, userId, null)
+  )
   const jobs = await queued<NoticeDispatch>('notifications.dispatch')
   const job = jobs.find(
-    (queuedJob) =>
-      queuedJob.data.event === 'user.password_changed' && queuedJob.data.user_id === userId
+    (queuedJob) => queuedJob.data.event === event && queuedJob.data.user_id === userId
   )
-  if (!job) throw new Error('no password-changed event was queued')
+  if (!job) throw new Error(`no ${event} event was queued`)
   const user = await db.from('users').where('id', userId).firstOrFail()
   return { userId, email: user.email as string, event: job.data }
 }
@@ -334,41 +343,56 @@ test.group('T-NOT-101 a replayed event gives one delivery row and one send', (gr
     assert.notInclude(message.text, 'token=')
   })
 
-  test('T-NOT-101 a password-changed event dispatched three times gives one row, one job and one email linking the reset request page [AC-J18-06]', async ({
-    assert,
-  }) => {
-    const { userId, email, event } = await passwordNotice()
+  test(
+    'T-NOT-101 a {name} event dispatched three times gives one row, one job and one email linking the reset request page [AC-J18-06, AC-FR-NOT-001-1]'
+  )
+    .with([
+      {
+        name: 'password-changed',
+        kind: 'user.password_changed' as const,
+        template: 'identity.password_changed',
+        subject: 'Your DripNepal password was changed',
+      },
+      {
+        name: 'sessions-revoked',
+        kind: 'user.sessions_revoked' as const,
+        template: 'identity.sessions_revoked',
+        subject: 'Your DripNepal account was signed out on your devices',
+      },
+    ])
+    .run(async ({ assert }, { kind, template, subject }) => {
+      const { userId, email, event } = await passwordNotice(kind)
 
-    const outcomes = [
-      await dispatchNotification(event),
-      await dispatchNotification(event),
-      await dispatchNotification(event),
-    ]
-    assert.deepEqual(
-      outcomes.map((outcome) => outcome.kind),
-      ['queued', 'duplicate', 'duplicate']
-    )
-    const rows = await deliveriesOf(userId)
-    assert.lengthOf(rows, 1)
-    assert.equal(rows[0].dedupe_key, `${event.event_id}:identity.password_changed:${userId}`)
-    assert.include(rows[0], { template: 'identity.password_changed', status: 'queued' })
+      const outcomes = [
+        await dispatchNotification(event),
+        await dispatchNotification(event),
+        await dispatchNotification(event),
+      ]
+      assert.deepEqual(
+        outcomes.map((outcome) => outcome.kind),
+        ['queued', 'duplicate', 'duplicate']
+      )
+      const rows = await deliveriesOf(userId)
+      assert.lengthOf(rows, 1)
+      assert.equal(rows[0].dedupe_key, `${event.event_id}:${template}:${userId}`)
+      assert.include(rows[0], { template, status: 'queued' })
 
-    const job = await noticeSendJob(rows[0].id)
-    assert.include(job, { event: 'user.password_changed', user_id: userId })
-    const sent = await sendEmail(job)
-    const resent = await sendEmail(job)
-    assert.equal(sent.kind, 'sent')
-    assert.equal(resent.kind, 'not_queued')
-    assert.lengthOf(emails.fake.sent, 1)
-    const [message] = emails.fake.sent
-    assert.equal(message.to, email)
-    assert.equal(message.template, 'identity.password_changed')
-    assert.equal(message.subject, 'Your DripNepal password was changed')
-    const link = linkIn(message.text)
-    assert.equal(link.origin, new URL(appUrl).origin)
-    assert.equal(link.pathname, '/forgot-password')
-    assert.notInclude(message.text, 'token=')
-  })
+      const job = await noticeSendJob(rows[0].id)
+      assert.include(job, { event: kind, user_id: userId })
+      const sent = await sendEmail(job)
+      const resent = await sendEmail(job)
+      assert.equal(sent.kind, 'sent')
+      assert.equal(resent.kind, 'not_queued')
+      assert.lengthOf(emails.fake.sent, 1)
+      const [message] = emails.fake.sent
+      assert.equal(message.to, email)
+      assert.equal(message.template, template)
+      assert.equal(message.subject, subject)
+      const link = linkIn(message.text)
+      assert.equal(link.origin, new URL(appUrl).origin)
+      assert.equal(link.pathname, '/forgot-password')
+      assert.notInclude(message.text, 'token=')
+    })
 })
 
 test.group('T-NOT-001 notifications.send_email failures', (group) => {

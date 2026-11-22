@@ -82,9 +82,9 @@ export async function changePassword(
   command: ChangePasswordCommand,
   context: ChangePasswordContext
 ): Promise<ChangePasswordResult> {
-  const actor = await withTx((trx) => selfActor(trx, userId))
+  // The actor of the audit rows is read only when one is written (07 §3.6: limiters first).
   const checked = await reauthenticate(userId, command.currentPassword, {
-    actor,
+    actor: 'self',
     requestId: context.requestId,
     ipHash: context.ipHash,
   })
@@ -125,6 +125,7 @@ export async function changePassword(
       startAfter: ACTING_SESSION_GRACE_SECONDS,
     })
     await sendPasswordChangedEmail(trx, userId, context.requestId)
+    const actor = await selfActor(trx, userId)
     await recordAudit(trx, {
       ...actor,
       actorUserId: userId,

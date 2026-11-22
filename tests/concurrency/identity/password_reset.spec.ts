@@ -6,6 +6,7 @@ import { FACTORY_PASSWORD, UserFactory } from '#database/factories/user_factory'
 import { DomainError } from '#exceptions/domain_error'
 import { toProblem } from '#exceptions/to_problem'
 import { changePassword } from '#modules/identity/actions/change_password'
+import { confirmPassword } from '#modules/identity/actions/confirm_password'
 import { requestPasswordReset } from '#modules/identity/actions/request_password_reset'
 import { resetPassword } from '#modules/identity/actions/reset_password'
 import { JOB_SCHEMA } from '#modules/platform/jobs'
@@ -16,10 +17,12 @@ import {
   forgetLogin,
   forgetPasswordReset,
   forgetReauth,
+  forgetResetToken,
   liveToken,
   randomIPv4,
   rawTokenOf,
   revokeJobsFor,
+  sessionsRevokedJobsFor,
 } from '#tests/support/identity'
 import { useJobBoss } from '#tests/support/jobs'
 
@@ -30,12 +33,16 @@ import { useJobBoss } from '#tests/support/jobs'
  * - T-IAM-005: the fourth reset request for one email in an hour gets 429
  *   `RATE_LIMITED` for a known and an unknown email alike, and the
  *   eleventh from one client network too (`pwreset_email`, `pwreset_ip`).
+ * - T-IAM-005: requests carrying one live reset token at once reach the
+ *   hasher at most 5 times (`pwreset_token`, proposed).
  * - T-IAM-105: two concurrent reset requests for one account leave exactly
  *   one live token, and concurrent redemptions of one reset token succeed
  *   once.
  * - T-SEC-011: the sixth wrong current password in 15 minutes on
  *   `changePassword` gets 429 without hashing; the tenth in 24 h rotates
- *   the stamp and queues `identity.revoke_sessions`.
+ *   the stamp and queues `identity.revoke_sessions` and the "sessions
+ *   revoked" email, through `changePassword` and through `confirmPassword`
+ *   (the courier operations' re-entry, as a shop member, on `password`).
  * Each test uses fresh emails under its own prefix and fresh client
  * networks, then deletes its users, tokens, jobs, audit rows and limiter
  * keys, as the migrator, with the retention exemption for the audit rows.
@@ -189,28 +196,64 @@ test.group('T-IAM-105 password reset races', (group) => {
     const live = await liveToken(user.id, 'password_reset')
     const token = await rawTokenOf(live.id, 'password_reset')
 
-    const results = await Promise.allSettled(
-      Array.from({ length: 5 }, (_, n) =>
-        resetPassword(token, `${NEW_PASSWORD}-${n}`, { requestId: null, ipHash: null })
+    try {
+      const results = await Promise.allSettled(
+        Array.from({ length: 5 }, (_, n) =>
+          resetPassword(token, `${NEW_PASSWORD}-${n}`, { requestId: null, ipHash: null })
+        )
       )
-    )
-    const fulfilled = results.filter((result) => result.status === 'fulfilled')
-    assert.lengthOf(fulfilled, 1)
-    for (const result of results) {
-      if (result.status === 'fulfilled') continue
-      assert.instanceOf(result.reason, DomainError)
-      const problem = toProblem(result.reason, 'req-1')
-      assert.equal(problem.status, 422)
-      assert.deepEqual(
-        problem.errors?.map((item) => item.code),
-        ['token_invalid']
-      )
+      const fulfilled = results.filter((result) => result.status === 'fulfilled')
+      assert.lengthOf(fulfilled, 1)
+      for (const result of results) {
+        if (result.status === 'fulfilled') continue
+        assert.instanceOf(result.reason, DomainError)
+        const problem = toProblem(result.reason, 'req-1')
+        assert.equal(problem.status, 422)
+        assert.deepEqual(
+          problem.errors?.map((item) => item.code),
+          ['token_invalid']
+        )
+      }
+      const audits = await db
+        .from('audit_logs')
+        .where({ action: 'auth.password_reset', subject_id: user.id })
+      assert.lengthOf(audits, 1)
+      assert.lengthOf(await revokeJobsFor(user.id), 1)
+    } finally {
+      await forgetResetToken(token)
     }
-    const audits = await db
-      .from('audit_logs')
-      .where({ action: 'auth.password_reset', subject_id: user.id })
-    assert.lengthOf(audits, 1)
-    assert.lengthOf(await revokeJobsFor(user.id), 1)
+  }).timeout(30_000)
+
+  test('T-IAM-005 eight requests carrying one live token at once reach the hasher at most five times [docs/06 §9.1 pwreset_token]', async ({
+    assert,
+  }) => {
+    const user = await account('burst')
+    const ip = randomIPv4()
+    await requestPasswordReset(user.email, { ip, requestId: null })
+    await forgetPasswordReset(user.email, ip)
+    const live = await liveToken(user.id, 'password_reset')
+    const token = await rawTokenOf(live.id, 'password_reset')
+    try {
+      const { result: results, make } = await countingScrypt(() =>
+        Promise.allSettled(
+          Array.from({ length: 8 }, (_, n) =>
+            resetPassword(token, `${NEW_PASSWORD}-${n}`, { requestId: null, ipHash: null })
+          )
+        )
+      )
+      assert.isAtMost(make, 5)
+      assert.lengthOf(
+        results.filter((result) => result.status === 'fulfilled'),
+        1
+      )
+      const statuses = results
+        .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
+        .map((result) => toProblem(result.reason, 'req-1').status)
+      for (const status of statuses) assert.oneOf(status, [422, 429])
+      assert.isAtLeast(statuses.filter((status) => status === 429).length, 1)
+    } finally {
+      await forgetResetToken(token)
+    }
   }).timeout(30_000)
 })
 
@@ -296,6 +339,7 @@ test.group('T-SEC-011 password re-entry on changePassword', (group) => {
       }
       const jobs = await revokeJobsFor(user.id)
       assert.lengthOf(jobs, 1)
+      assert.lengthOf(await sessionsRevokedJobsFor(user.id), 1)
       const [lockout] = await db
         .from('audit_logs')
         .where({ action: 'auth.reauth_failed', subject_id: user.id })
@@ -309,6 +353,43 @@ test.group('T-SEC-011 password re-entry on changePassword', (group) => {
     } finally {
       await forgetReauth(user.id)
       await forgetLogin(user.email, ip)
+    }
+  }).timeout(60_000)
+
+  test("T-SEC-011 confirmPassword, the courier operations' re-entry: a wrong password is 422 on password by a shop member, and the tenth in 24 hours locks out [TM-08, TM-32]", async ({
+    assert,
+  }) => {
+    const user = await account('reauth-confirm')
+    const wrong = () => confirmPassword(user.id, `${FACTORY_PASSWORD}x`, null)
+    try {
+      // A right password passes and gives its points back.
+      await confirmPassword(user.id, FACTORY_PASSWORD, null)
+      for (let n = 0; n < 10; n++) {
+        if (n === 5) await forgetKeys('reauth_user', user.id)
+        const error = await refusal(wrong)
+        assert.instanceOf(error, DomainError, `attempt ${n + 1}`)
+        assert.deepEqual(
+          toProblem(error, 'req-1').errors?.map((item) => [item.field, item.code]),
+          [['password', 'password_incorrect']]
+        )
+      }
+      const failed = await db
+        .from('audit_logs')
+        .where({ action: 'auth.reauth_failed', subject_id: user.id })
+        .orderBy('id', 'asc')
+      assert.lengthOf(failed, 10)
+      assert.include(failed[0], { actor_type: 'shop_member', actor_user_id: user.id })
+      assert.deepEqual(failed[9].changes, { changed: ['security_stamp'] })
+      const fresh = await db.from('users').where('id', user.id).firstOrFail()
+      assert.notEqual(fresh.security_stamp, user.securityStamp)
+      assert.lengthOf(await revokeJobsFor(user.id), 1)
+      assert.lengthOf(await sessionsRevokedJobsFor(user.id), 1)
+
+      await forgetKeys('reauth_user', user.id)
+      const eleventh = await refusal(() => confirmPassword(user.id, FACTORY_PASSWORD, null))
+      assert.instanceOf(eleventh, limiterErrors.E_TOO_MANY_REQUESTS)
+    } finally {
+      await forgetReauth(user.id)
     }
   }).timeout(60_000)
 })

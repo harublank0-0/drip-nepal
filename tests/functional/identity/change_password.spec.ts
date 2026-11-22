@@ -26,6 +26,7 @@ import {
   postJson,
   randomIPv4,
   revokeJobsFor,
+  sessionsRevokedJobsFor,
   type Guest,
 } from '#tests/support/identity'
 
@@ -48,7 +49,8 @@ import {
  * - T-IAM-109: `revokeAllSessions` answers 202, keeps this session's ID
  *   and gives it the new stamp; the job deletes every other tagged session
  *   of the user, an MFA-verified staff session included, and spares this
- *   one; a second run deletes nothing.
+ *   one; the "sessions revoked" email is queued; a tagged row whose data
+ *   does not verify is deleted; a second run deletes nothing.
  * - T-API-002: an extra member on either operation answers 422.
  * The `reauth` limits (T-SEC-011) are in
  * tests/concurrency/identity/password_reset.spec.ts.
@@ -392,6 +394,8 @@ test.group('T-IAM-109 revokeAllSessions and identity.revoke_sessions', (group) =
     const audits = await auditRows('auth.sessions_revoke', user.id)
     assert.lengthOf(audits, 1)
     assert.deepEqual(audits[0].changes, { changed: ['security_stamp'] })
+    // The "sessions revoked" email (01 AC-FR-NOT-001-1), in the same transaction.
+    assert.lengthOf(await sessionsRevokedJobsFor(user.id), 1)
 
     const outcome = await runRevoke(user.id)
     assert.deepEqual(outcome, { destroyed: 2, kept: 1 })
@@ -421,6 +425,20 @@ test.group('T-IAM-109 revokeAllSessions and identity.revoke_sessions', (group) =
     assert.isNull(await sessionRow(sessionIdOf(admin.browser)))
     const refused = await getJson(admin, '/api/v1/admin/logistics/accounts')
     assert.equal(refused.status, 401, refused.text)
+  })
+
+  test('T-IAM-109 the job deletes a tagged row whose data does not verify', async ({ assert }) => {
+    const user = await account()
+    const kept = await device(user.id)
+    await db.table('sessions').insert({
+      id: `t-iam-109-${user.id}`,
+      data: 'not-a-signed-message',
+      user_id: user.id,
+      expires_at: new Date(Date.now() + 3_600_000),
+    })
+    assert.deepEqual(await runRevoke(user.id), { destroyed: 1, kept: 1 })
+    assert.isNull(await sessionRow(`t-iam-109-${user.id}`))
+    assert.isNotNull(await sessionRow(sessionIdOf(kept.browser)))
   })
 
   test('T-IAM-109 the job is idempotent: a second run deletes nothing, and a user with no session is a no-op', async ({

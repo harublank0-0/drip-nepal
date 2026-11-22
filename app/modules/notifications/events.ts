@@ -49,8 +49,22 @@ export type PasswordChanged = {
   user_id: string
 }
 
+/*
+ * The sessions of an account were signed out, by `revokeAllSessions` ("sign
+ * out of all devices") or by the `reauth` lockout, the 10th wrong password
+ * re-entry in 24 h (01 AC-FR-NOT-001-1 "sessions revoked"; M1 part 4): the
+ * holder learns of it even when someone else did it with a stolen session,
+ * with a link to reset the password. A random `event_id`, as for the other
+ * notices; the payload carries the account's ID only.
+ */
+export type SessionsRevoked = {
+  event: 'user.sessions_revoked'
+  event_id: string
+  user_id: string
+}
+
 // The events about an account that carry no token, each with its own template.
-export type AccountNotice = SignupAttempted | PasswordChanged
+export type AccountNotice = SignupAttempted | PasswordChanged | SessionsRevoked
 
 // The events `notifications.dispatch` turns into emails.
 export type NotificationEvent = UserTokenIssued | AccountNotice

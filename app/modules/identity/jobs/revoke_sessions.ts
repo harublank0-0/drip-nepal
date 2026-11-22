@@ -12,17 +12,25 @@ import type { RevokeSessions } from '#modules/identity/events'
  * re-entry in 24 h); `user.suspended` and `requestAccountDeletion` join
  * with their operations.
  *
- * In one `jobTx`: the stamp is read when the job runs, then each live
- * session tagged with the user (`taggedSessions`, the rows and decoded data
- * the store's `tagged()` returns) whose `security_stamp` differs is
- * deleted. The acting session of a password change or "sign out
- * everywhere" holds the new stamp once its request has committed it, so it
- * survives, and so does any session signed in after the change; after a
- * reset or a lockout no session holds it, so all go. A session that is
- * already gone is not found: running the job again, or after a later
- * rotation, deletes only what is stale then (idempotent, docs/03 §10.3).
- * The next request of a deleted session is a guest's: 401 on a protected
- * route (07 §3.3 row 2). Log lines carry IDs and counts only.
+ * In one `jobTx`:
+ * 1. The user's row is read `FOR SHARE`, so an action that rotates the
+ *    stamp meanwhile waits until this job commits; the stamp the job
+ *    compares stays the current one while it deletes.
+ * 2. The live session rows tagged with the user are read
+ *    (`taggedSessions`), and each whose `security_stamp` differs, or whose
+ *    data does not verify, is deleted, but only while its stored data is
+ *    still what the job read: a session that a request has written since
+ *    (the acting session committing the new stamp after the job read it)
+ *    survives.
+ *
+ * The acting session of a password change or "sign out everywhere" holds
+ * the new stamp once its request has committed it, so it survives, and so
+ * does any session signed in after the change; after a reset or a lockout
+ * no session holds it, so all go. A session that is already gone is not
+ * found: running the job again, or after a later rotation, deletes only
+ * what is stale then (idempotent, docs/03 §10.3). The next request of a
+ * deleted session is a guest's: 401 on a protected route (07 §3.3 row 2).
+ * Log lines carry IDs and counts only.
  */
 
 export type RevokeOutcome = { destroyed: number; kept: number }
@@ -31,26 +39,27 @@ export async function revokeSessions(
   payload: RevokeSessions & JobEnvelope
 ): Promise<RevokeOutcome> {
   const outcome = await jobTx(async (trx) => {
-    const user: { security_stamp: string } | null = await trx
-      .from('users')
-      .where('id', payload.user_id)
-      .select('security_stamp')
-      .first()
+    const locked = await trx.rawQuery('SELECT security_stamp FROM users WHERE id = ? FOR SHARE', [
+      payload.user_id,
+    ])
+    const user: { security_stamp: string } | undefined = locked.rows[0]
     const sessions = await taggedSessions(trx, payload.user_id)
-    // A user row that no longer exists keeps no session (users are never deleted, 04a §5.1).
-    const stale = sessions.filter(
-      (session) => !user || session.data.security_stamp !== String(user.security_stamp)
-    )
-    if (stale.length > 0) {
-      await trx
+    let destroyed = 0
+    for (const session of sessions) {
+      // A user row that no longer exists keeps no session (users are never deleted, 04a §5.1).
+      const current =
+        user !== undefined &&
+        session.data !== null &&
+        session.data.security_stamp === String(user.security_stamp)
+      if (current) continue
+      const deleted = await trx
         .from('sessions')
-        .whereIn(
-          'id',
-          stale.map((session) => session.id)
-        )
+        .where('id', session.id)
+        .where('data', session.raw)
         .delete()
+      destroyed += Number(deleted)
     }
-    return { destroyed: stale.length, kept: sessions.length - stale.length }
+    return { destroyed, kept: sessions.length - destroyed }
   })
   logger.info(
     {

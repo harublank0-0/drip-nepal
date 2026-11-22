@@ -67,6 +67,44 @@ export async function endSession(ctx: HttpContext) {
 }
 
 /*
+ * The routes a guest may use with an emailed token, and the reset request
+ * that leads to one (docs/07 §3.3 row 3, its exception): the pages
+ * `/verify-email`, `/forgot-password` and `/reset-password` and the
+ * operations they post to. On these, a stale session (a stamp that no
+ * longer matches, or past the 30-day limit) is ended and the request goes
+ * on as a guest's, and no sign-in redirect ever carries their URL as
+ * `return_to`, because the URL can hold a live token (07 §3.8).
+ */
+export const GUEST_TOKEN_ROUTES: ReadonlySet<string> = new Set([
+  'verify_email',
+  'forgot_password',
+  'reset_password',
+  'confirmEmail',
+  'requestPasswordReset',
+  'resetPassword',
+])
+
+export const onGuestTokenRoute = (ctx: HttpContext) => GUEST_TOKEN_ROUTES.has(ctx.route?.name ?? '')
+
+// Shield's session key for its CSRF secret (@adonisjs/shield 9.0.0 `CsrfGuard`).
+const CSRF_SECRET_KEY = 'csrf-secret'
+
+/*
+ * The forced logout of a stale session on a guest token route: `endSession`,
+ * then Shield's CSRF secret is put back into the new, guest session. Shield
+ * has already checked this request and set the `XSRF-TOKEN` cookie from
+ * that secret, so the page this request renders can still post its form;
+ * without it the first post would fail the CSRF check. The secret belongs to
+ * the browser, not the account, as when `logIn` keeps it (07 §3.2). Nothing
+ * else of the old sign-in survives.
+ */
+export async function endSessionAsGuest(ctx: HttpContext) {
+  const secret: unknown = ctx.session.get(CSRF_SECRET_KEY)
+  await endSession(ctx)
+  if (typeof secret === 'string') ctx.session.put(CSRF_SECRET_KEY, secret)
+}
+
+/*
  * Inertia props a poll asks for (docs/07 §3.4); today the seller
  * dashboard's new-order count (FR-NOT-003).
  */

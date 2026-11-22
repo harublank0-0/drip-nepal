@@ -4,6 +4,7 @@ import { SIGNED_IN_STATUSES, maySignIn } from '#modules/identity/domain/user_sta
 import {
   ACTING_SESSION_GRACE_SECONDS,
   sendRevokeSessions,
+  sendSessionsRevokedEmail,
 } from '#modules/identity/internal/password_effects'
 import { selfActor } from '#modules/identity/internal/self_actor'
 import { withTx } from '#modules/platform/tx'
@@ -22,9 +23,10 @@ import { withTx } from '#modules/platform/tx'
  * next request is refused instead: 403 `ACCOUNT_SUSPENDED` if the status
  * changed, else 401 `UNAUTHENTICATED`). Then `identity.revoke_sessions` is
  * sent with `startAfter` 10 s, which deletes every other session of the
- * user once this one has committed the new stamp, and one
- * `auth.sessions_revoke` audit row is written. No email: 06 lists none for
- * this operation.
+ * user once this one has committed the new stamp; the "sessions revoked"
+ * email is queued (01 AC-FR-NOT-001-1), so the holder learns of it even
+ * when a stolen session did it; and one `auth.sessions_revoke` audit row is
+ * written.
  */
 
 export type RevokeAllSessionsContext = { requestId: string | null; ipHash: Buffer | null }
@@ -55,6 +57,7 @@ export async function revokeAllSessions(
     await sendRevokeSessions(trx, userId, context.requestId, {
       startAfter: ACTING_SESSION_GRACE_SECONDS,
     })
+    await sendSessionsRevokedEmail(trx, userId, context.requestId)
     const actor = await selfActor(trx, userId)
     await recordAudit(trx, {
       ...actor,

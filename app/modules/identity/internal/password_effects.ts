@@ -78,3 +78,24 @@ export async function sendPasswordChangedEmail(
   })
   if (!jobId) throw new InvariantViolation('notifications.dispatch refused the password email job')
 }
+
+/*
+ * The "sessions revoked" email (01 AC-FR-NOT-001-1): the event
+ * `user.sessions_revoked`, sent by `revokeAllSessions` and by the `reauth`
+ * lockout, which signs every device out. The holder learns of it even when
+ * a stolen session did it. A random `event_id`, as for the other notices.
+ */
+export async function sendSessionsRevokedEmail(
+  trx: TransactionClientContract,
+  userId: string,
+  requestId: string | null
+) {
+  const jobId = await sendJob(trx, 'notifications.dispatch', {
+    event: 'user.sessions_revoked',
+    event_id: randomUUID(),
+    user_id: userId,
+    request_id: requestId,
+    causation_id: null,
+  })
+  if (!jobId) throw new InvariantViolation('notifications.dispatch refused the sessions email job')
+}

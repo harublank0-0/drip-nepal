@@ -830,7 +830,9 @@ paths:
         The token is looked up by its SHA-256 for the `password_reset` purpose, live, before the
         password is hashed; an unknown, used, replaced or expired token, or one of another
         purpose, which stays unconsumed (T-SEC-012), is 422 on `token` with `token_invalid` and
-        no account data, and nothing changes (AC-J18-02). Lock order (04a §5.2): the user's row,
+        no account data, and nothing changes (AC-J18-02). A live token then charges the
+        `pwreset_token` limiter (5 per token per hour, proposed, 06 §9.1) before the hash; past
+        it, 429 `RATE_LIMITED`. Lock order (04a §5.2): the user's row,
         then the token, redeemed in one statement, so of two tabs with one link exactly one
         succeeds (T-IAM-105). A suspended, deactivated or anonymised account's token answers the
         same 422.
@@ -898,6 +900,7 @@ paths:
                       - field: token
                         code: token_invalid
                         message: This link has expired or has already been used.
+        '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/Internal' }
 
   /api/v1/me:
@@ -1047,8 +1050,9 @@ paths:
         `UNAUTHENTICATED`); `identity.revoke_sessions`, carrying the user ID only, is sent with
         `startAfter` 10 s; one `auth.sessions_revoke` audit row (AC-FR-IAM-005-3). This session
         receives the new stamp in the same request and keeps its ID and tag, so the job deletes
-        every other session of the user and spares this one (07 §3.3, T-IAM-109). No email.
-        Not ⚷ (06 §7.7). Release R1·M1.
+        every other session of the user and spares this one (07 §3.3, T-IAM-109). The "sessions
+        revoked" email is queued through `notifications.dispatch` (01 AC-FR-NOT-001-1), so the
+        holder learns of it even when a stolen session did it. Not ⚷ (06 §7.7). Release R1·M1.
       x-release: R1·M1
       parameters:
         - $ref: '#/components/parameters/RequestId'
@@ -7887,3 +7891,5 @@ components:
 #     The bodies follow 06 §3.4's envelope with one `status` each. `resetPassword` answers 422
 #     `token_invalid` for every refused token and names the validator's own items; a
 #     `changePassword` or `revokeAllSessions` whose compare-and-set misses answers 401 or 403.
+#     After the Fable review: `resetPassword` answers 429 past the proposed `pwreset_token`
+#     limiter, and `revokeAllSessions` queues the "sessions revoked" email instead of "no email".

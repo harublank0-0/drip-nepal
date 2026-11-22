@@ -1,6 +1,5 @@
 import { createHash } from 'node:crypto'
 import hash from '@adonisjs/core/services/hash'
-import db from '@adonisjs/lucid/services/db'
 import { DomainError } from '#exceptions/domain_error'
 import { InvariantViolation } from '#exceptions/programming_errors'
 import { recordAudit } from '#modules/audit/actions/record_audit'
@@ -11,6 +10,7 @@ import {
   sendRevokeSessions,
 } from '#modules/identity/internal/password_effects'
 import { selfActor } from '#modules/identity/internal/self_actor'
+import { rateLimitKey, rateLimiter } from '#modules/platform/rate_limits'
 import { withTx } from '#modules/platform/tx'
 
 /*
@@ -22,8 +22,12 @@ import { withTx } from '#modules/platform/tx'
  *    (an unknown, used, replaced or expired token, or one of another
  *    purpose, which stays unconsumed, T-SEC-012) answers 422 on `token`
  *    before any hash is spent.
- * 2. The new password is hashed before the transaction, so no row lock
- *    waits on scrypt.
+ * 2. The `pwreset_token` limiter (5 per hour per live token, proposed,
+ *    docs/06 §9.1) takes a point, so however many requests carry one live
+ *    token at once, at most 5 reach the hasher; an unknown or spent token
+ *    has already been refused and writes no limiter row. Then the new
+ *    password is hashed, before the transaction, so no row lock waits on
+ *    scrypt.
  * 3. In one transaction, in the lock order of docs/04a §5.2: the user's row
  *    is locked `FOR NO KEY UPDATE`; an account that may not sign in
  *    (suspended, deactivated, anonymised; those consume their tokens
@@ -67,22 +71,28 @@ export async function resetPassword(
 ): Promise<ResetPasswordResult> {
   const tokenHash = createHash('sha256').update(rawToken).digest()
 
-  const live = await db
-    .from('user_tokens')
-    .where('token_hash', tokenHash)
-    .where('purpose', 'password_reset')
-    .whereNull('consumed_at')
-    .whereRaw('expires_at > now()')
-    .select('user_id')
-    .first()
+  const live: { user_id: string } | null = await withTx((trx) =>
+    trx
+      .from('user_tokens')
+      .where('token_hash', tokenHash)
+      .where('purpose', 'password_reset')
+      .whereNull('consumed_at')
+      .whereRaw('expires_at > now()')
+      .select('user_id')
+      .first()
+  )
   if (!live) throw invalidToken()
+  const userId = live.user_id
 
+  await rateLimiter('pwreset_token').consume(
+    rateLimitKey('pwreset_token', tokenHash.toString('hex'))
+  )
   const passwordHash = await hash.use('scrypt').make(password)
 
   return withTx(async (trx) => {
     const locked = await trx.rawQuery(
       'SELECT status, mfa_enabled_at FROM users WHERE id = ? FOR NO KEY UPDATE',
-      [live.user_id]
+      [userId]
     )
     const user: { status: string; mfa_enabled_at: Date | null } | undefined = locked.rows[0]
     if (!user || !maySignIn(user.status)) throw invalidToken()
@@ -100,7 +110,7 @@ export async function resetPassword(
     const now = trx.knexRawQuery('now()')
     const updated: { id: string }[] = await trx
       .from('users')
-      .where('id', live.user_id)
+      .where('id', userId)
       .whereIn('status', [...SIGNED_IN_STATUSES])
       .update(
         {
@@ -115,19 +125,19 @@ export async function resetPassword(
       throw new InvariantViolation('resetPassword lost a locked account that may sign in')
     }
 
-    await consumeTokensOnPasswordChange(trx, live.user_id, user.mfa_enabled_at !== null)
-    await sendRevokeSessions(trx, live.user_id, context.requestId)
-    await sendPasswordChangedEmail(trx, live.user_id, context.requestId)
+    await consumeTokensOnPasswordChange(trx, userId, user.mfa_enabled_at !== null)
+    await sendRevokeSessions(trx, userId, context.requestId)
+    await sendPasswordChangedEmail(trx, userId, context.requestId)
 
-    const actor = await selfActor(trx, live.user_id)
+    const actor = await selfActor(trx, userId)
     const changed = ['password_hash', 'security_stamp']
     if (verifies) changed.push('email_verified_at')
     await recordAudit(trx, {
       ...actor,
-      actorUserId: live.user_id,
+      actorUserId: userId,
       action: 'auth.password_reset',
       subjectType: 'user',
-      subjectId: live.user_id,
+      subjectId: userId,
       requestId: context.requestId,
       ipHash: context.ipHash,
       changes: {

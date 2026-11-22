@@ -4,7 +4,11 @@ import db from '@adonisjs/lucid/services/db'
 import hash from '@adonisjs/core/services/hash'
 import { FACTORY_PASSWORD, UserFactory } from '#database/factories/user_factory'
 import { placeholderCiphertext } from '#database/factories/placeholder_ciphertext'
+import { DomainError } from '#exceptions/domain_error'
+import { toProblem } from '#exceptions/to_problem'
+import { changePassword } from '#modules/identity/actions/change_password'
 import { issueUserToken } from '#modules/identity/actions/issue_user_token'
+import { resetPassword } from '#modules/identity/actions/reset_password'
 import { revokeSessions } from '#modules/identity/jobs/revoke_sessions'
 import { withTx } from '#modules/platform/tx'
 import { signIn, statusOf } from '#tests/support/courier_http'
@@ -15,11 +19,14 @@ import {
   PASSWORD_RESET_PATH,
   RESET_CONFIRM_PATH,
   forgetPasswordReset,
+  forgetReauth,
+  forgetResetToken,
   getJson,
   guest,
   liveToken,
   passwordChangedJobsFor,
   postJson,
+  randomIPv4,
   rawTokenOf,
   revokeJobsFor,
   type Guest,
@@ -44,13 +51,21 @@ import {
  *   anonymised accounts get the same status and body, and only the first
  *   two a token; an `email_verification` token sent to `resetPassword`
  *   fails, stays unconsumed and still verifies the email.
+ * - T-IAM-005, the race with a change: a reset whose token a committed
+ *   `changePassword` consumed while the reset hashed answers 422 and keeps
+ *   the changed password.
+ * - T-SEC-010, the guest token routes (07 §3.3 row 3): a browser whose
+ *   session went stale opens the reset link and gets the page as a guest,
+ *   then resets with it; `confirmEmail` and `requestPasswordReset` from a
+ *   stale session work as a guest's.
  * - T-API-002: an extra member on either operation answers 422.
  * The limiters and the races (T-IAM-105) are in
  * tests/concurrency/identity/password_reset.spec.ts.
  */
 
-// One random password per run, never a literal (docs/09 §9.2).
+// Random passwords per run, never literals (docs/09 §9.2).
 const NEW_PASSWORD = randomBytes(12).toString('base64url')
+const CHANGED_PASSWORD = randomBytes(12).toString('base64url')
 
 const userRow = (userId: string) => db.from('users').where('id', userId).firstOrFail()
 const tokenRow = (tokenId: string) => db.from('user_tokens').where('id', tokenId).firstOrFail()
@@ -93,14 +108,22 @@ async function passwordVerifies(userId: string, password: string) {
 test.group('T-IAM-005 password reset', (group) => {
   let client: Guest
   let emails: string[]
+  let tokens: string[]
+  let changers: string[]
   group.setup(async () => {
     await useJobBoss()
   })
   group.each.setup(async () => {
     client = await guest()
     emails = []
+    tokens = []
+    changers = []
     return async () => {
       for (const email of emails) await forgetPasswordReset(email, client.ip)
+      for (const token of tokens) await forgetResetToken(token)
+      for (const userId of changers) {
+        await forgetReauth(userId)
+      }
     }
   })
 
@@ -113,7 +136,9 @@ test.group('T-IAM-005 password reset', (group) => {
   async function resetLink(userId: string) {
     const live = await liveToken(userId, 'password_reset')
     if (!live) throw new Error('no live password_reset token')
-    return { id: live.id as string, token: await rawTokenOf(live.id, 'password_reset') }
+    const token = await rawTokenOf(live.id, 'password_reset')
+    tokens.push(token)
+    return { id: live.id as string, token }
   }
 
   test('T-IAM-005 a known active account gets one live reset token and its email; nobody is signed in [AC-FR-IAM-004-1, AC-FR-IAM-004-2, 02 J-18 step 2]', async ({
@@ -312,6 +337,57 @@ test.group('T-IAM-005 password reset', (group) => {
     assert.instanceOf(closed.consumed_at, Date)
   })
 
+  test('T-IAM-005 a reset whose token a committed changePassword consumed meanwhile answers 422 and keeps the changed password', async ({
+    assert,
+  }) => {
+    const user = await account()
+    changers.push(user.id)
+    assert.equal(await statusOf(requestReset(user.email)), 202)
+    const link = await resetLink(user.id)
+
+    // The change commits while the reset hashes its new password, after its token lookup.
+    const scrypt = hash.use('scrypt')
+    const make = scrypt.make
+    let changed = false
+    scrypt.make = async function (this: typeof scrypt, value: string) {
+      if (!changed) {
+        changed = true
+        await changePassword(
+          user.id,
+          {
+            currentPassword: FACTORY_PASSWORD,
+            newPassword: CHANGED_PASSWORD,
+            sessionStamp: user.securityStamp,
+          },
+          { ip: client.ip, requestId: null, ipHash: null }
+        )
+      }
+      return make.call(this, value)
+    }
+    let error: unknown = null
+    try {
+      error = await resetPassword(link.token, NEW_PASSWORD, { requestId: null, ipHash: null }).then(
+        () => null,
+        (refusal) => refusal
+      )
+    } finally {
+      Reflect.deleteProperty(scrypt, 'make')
+    }
+    assert.isTrue(changed)
+    assert.instanceOf(error, DomainError)
+    const problem = toProblem(error, 'req-1')
+    assert.deepEqual(
+      problem.errors?.map((item) => [item.field, item.code]),
+      [['token', 'token_invalid']]
+    )
+    assert.isTrue(await passwordVerifies(user.id, CHANGED_PASSWORD))
+    assert.lengthOf(await resetAudits(user.id), 0)
+    const changes = await db
+      .from('audit_logs')
+      .where({ action: 'auth.password_change', subject_id: user.id })
+    assert.lengthOf(changes, 1)
+  })
+
   test('T-API-002 an extra member on requestPasswordReset or resetPassword answers 422 unknown_field and changes nothing', async ({
     assert,
   }) => {
@@ -403,5 +479,108 @@ test.group('T-SEC-012 password reset enumeration and token purpose', (group) => 
     assert.equal(confirm.status, 200, confirm.text)
     const fresh = await userRow(user.id)
     assert.equal(fresh.status, 'active')
+  })
+})
+
+test.group('T-SEC-010 a stale session on the guest token routes', (group) => {
+  let emails: string[]
+  let tokens: string[]
+  let ip: string
+  group.setup(async () => {
+    await useJobBoss()
+  })
+  group.each.setup(() => {
+    emails = []
+    tokens = []
+    ip = randomIPv4()
+    return async () => {
+      for (const email of emails) await forgetPasswordReset(email, ip)
+      for (const token of tokens) await forgetResetToken(token)
+    }
+  })
+
+  // A browser signed in as `userId` whose session then went stale (the password changed elsewhere).
+  async function staleBrowser(userId: string): Promise<Guest> {
+    const browser = await signIn(userId)
+    await db
+      .from('users')
+      .where('id', userId)
+      .update({ security_stamp: db.raw('gen_random_uuid()') })
+    return { browser, ip }
+  }
+
+  test('T-SEC-010 the reset link opened in a stale session renders as a guest, with no redirect, and the reset then works [docs/07 §3.3 row 3]', async ({
+    assert,
+  }) => {
+    const user = await account()
+    emails.push(user.email)
+    // The link is asked for elsewhere; the stale browser's first request is the link itself.
+    const elsewhere = await guest(ip)
+    assert.equal(
+      await statusOf(postJson(elsewhere, PASSWORD_RESET_PATH, { email: user.email })),
+      202
+    )
+    const stale = await staleBrowser(user.id)
+    const live = await liveToken(user.id, 'password_reset')
+    const token = await rawTokenOf(live.id, 'password_reset')
+    tokens.push(token)
+
+    const page = await stale.browser.request(`/reset-password?token=${encodeURIComponent(token)}`, {
+      headers: { Accept: 'text/html' },
+    })
+    const html = await page.text()
+    assert.equal(page.status, 200)
+    assert.isNull(page.headers.get('location'))
+    assert.equal(page.headers.get('cache-control'), 'no-store')
+    assert.equal(page.headers.get('referrer-policy'), 'no-referrer')
+    assert.include(html, 'Set a new password')
+    assert.notInclude(html, 'return_to')
+    // The stale session was ended: no row of the user is left.
+    assert.lengthOf(await db.from('sessions').where('user_id', user.id), 0)
+    const unused = await db.from('user_tokens').where('id', live.id).firstOrFail()
+    assert.isNull(unused.consumed_at)
+
+    // The guest session kept its CSRF secret, so the page's form posts.
+    const reset = await postJson(stale, RESET_CONFIRM_PATH, { token, password: NEW_PASSWORD })
+    assert.equal(reset.status, 200, reset.text)
+    assert.isTrue(await passwordVerifies(user.id, NEW_PASSWORD))
+  })
+
+  test("T-SEC-010 resetPassword, confirmEmail and requestPasswordReset from a stale session work as a guest's [docs/07 §3.3 row 3]", async ({
+    assert,
+  }) => {
+    const resetter = await account()
+    emails.push(resetter.email)
+    const helper = await guest(ip)
+    assert.equal(
+      await statusOf(postJson(helper, PASSWORD_RESET_PATH, { email: resetter.email })),
+      202
+    )
+    const live = await liveToken(resetter.id, 'password_reset')
+    const token = await rawTokenOf(live.id, 'password_reset')
+    tokens.push(token)
+    const reset = await postJson(await staleBrowser(resetter.id), RESET_CONFIRM_PATH, {
+      token,
+      password: NEW_PASSWORD,
+    })
+    assert.equal(reset.status, 200, reset.text)
+
+    const pending = await account('pending_verification')
+    const issued = await withTx((trx) => issueUserToken(trx, pending.id, 'email_verification'))
+    const verification = await rawTokenOf(issued.id, 'email_verification')
+    const confirm = await postJson(await staleBrowser(pending.id), CONFIRM_PATH, {
+      token: verification,
+    })
+    assert.equal(confirm.status, 200, confirm.text)
+
+    const asker = await account()
+    emails.push(asker.email)
+    const request = await postJson(await staleBrowser(asker.id), PASSWORD_RESET_PATH, {
+      email: asker.email,
+    })
+    assert.equal(request.status, 202, request.text)
+    for (const user of [resetter, pending, asker]) {
+      assert.lengthOf(await db.from('sessions').where('user_id', user.id), 0)
+    }
   })
 })

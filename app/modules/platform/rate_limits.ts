@@ -37,6 +37,8 @@ export const RATE_LIMITS = {
   // request, known email or not, so a 429 says nothing about an account (AC-FR-IAM-004-3).
   pwreset_email: { prefix: 'pwreset:email', requests: 3, duration: '1 hour' },
   pwreset_ip: { prefix: 'pwreset:ip', requests: 10, duration: '1 hour' },
+  // resetPassword, per live token (proposed): charged before the new password is hashed.
+  pwreset_token: { prefix: 'pwreset:token', requests: 5, duration: '1 hour' },
   // Courier callbacks (docs/06 §9.1, M6): per client network before the token, then per account.
   webhook_ip: { prefix: 'webhook:ip', requests: 600, duration: '1 minute' },
   courier_callback: { prefix: 'courier_callback', requests: 120, duration: '1 minute' },

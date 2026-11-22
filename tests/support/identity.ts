@@ -1,4 +1,4 @@
-import { randomBytes, randomInt, randomUUID } from 'node:crypto'
+import { createHash, randomBytes, randomInt, randomUUID } from 'node:crypto'
 import router from '@adonisjs/core/services/router'
 import encryption from '@adonisjs/core/services/encryption'
 import hash from '@adonisjs/core/services/hash'
@@ -219,6 +219,11 @@ export async function forgetPasswordReset(email: string, ip: string) {
   await forgetKeys('pwreset_ip', clientNetwork(ip))
 }
 
+// The `pwreset_token` key of one raw reset token (keyed on its SHA-256, as `resetPassword` does).
+export async function forgetResetToken(token: string) {
+  await forgetKeys('pwreset_token', createHash('sha256').update(token).digest('hex'))
+}
+
 // The two `reauth` keys of one user.
 export async function forgetReauth(userId: string) {
   await forgetKeys('reauth_user', userId)
@@ -245,4 +250,10 @@ export async function revokeJobsFor(userId: string) {
 export async function passwordChangedJobsFor(userId: string) {
   const jobs = await dispatchJobsFor(userId)
   return jobs.filter((job) => job.data.event === 'user.password_changed')
+}
+
+// The `notifications.dispatch` jobs of the "sessions revoked" email for `userId`.
+export async function sessionsRevokedJobsFor(userId: string) {
+  const jobs = await dispatchJobsFor(userId)
+  return jobs.filter((job) => job.data.event === 'user.sessions_revoked')
 }

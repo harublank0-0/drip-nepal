@@ -126,35 +126,37 @@ export class TaggedExpiryStore implements SessionStoreWithTaggingContract {
 }
 
 /*
- * The live sessions tagged with `userId`, as the package's `tagged()`
- * returns them: each row's ID and its data, decoded and verified with the
- * session ID as its purpose; a row whose data does not verify is left out.
- * It reads through `client`, so `identity.revoke_sessions` reads the
- * sessions, and deletes the stale ones, in its own transaction (docs/07
- * §3.3). The container's `SessionCollection` cannot: it is a singleton
- * whose store keeps the connection it resolved first.
+ * The live sessions tagged with `userId`, for `identity.revoke_sessions`
+ * (docs/07 §3.3): each row's ID, its stored `data` as read (`raw`, which the
+ * job's delete compares, so a row written since the read survives), and
+ * that data decoded and verified with the session ID as its purpose, as the
+ * package's `tagged()` does. Unlike `tagged()`, a row whose data does not
+ * verify is returned too, with `data` null: a revocation deletes it rather
+ * than skip it. It reads through `client`, so the job reads and deletes in
+ * its own transaction; the container's `SessionCollection` cannot, being a
+ * singleton whose store keeps the connection it resolved first.
  */
+export type TaggedSessionRow = { id: string; raw: string; data: SessionData | null }
+
 export async function taggedSessions(
   client: QueryClientContract,
   userId: string,
   tableName = 'sessions'
-): Promise<{ id: string; data: SessionData }[]> {
+): Promise<TaggedSessionRow[]> {
   const rows: { id: string; data: string }[] = await client
     .from(tableName)
     .where('user_id', userId)
     .where('expires_at', '>', new Date())
     .select('id', 'data')
-  const sessions: { id: string; data: SessionData }[] = []
-  for (const row of rows) {
+  return rows.map((row) => {
     let data: SessionData | null = null
     try {
       data = new MessageBuilder().verify<SessionData>(row.data, row.id)
     } catch {
       data = null
     }
-    if (data) sessions.push({ id: row.id, data })
-  }
-  return sessions
+    return { id: row.id, raw: row.data, data }
+  })
 }
 
 /*

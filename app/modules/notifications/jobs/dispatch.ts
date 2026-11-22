@@ -29,8 +29,8 @@ import type { AccountNotice, UserTokenIssued } from '#modules/notifications/even
  *
  * The account notices, which carry no token: `user.signup_attempted` (M1
  * part 2a), whose template is `identity.account_exists`, and
- * `user.password_changed` (M1 part 4), whose template is
- * `identity.password_changed`. The event ID is the one the sender gave
+ * `user.password_changed` and `user.sessions_revoked` (M1 part 4), whose
+ * templates are `identity.password_changed` and `identity.sessions_revoked`. The event ID is the one the sender gave
  * it, and the recipient the account. An account that no longer exists or
  * was anonymised meanwhile gets no row, with a warning. Log lines carry IDs
  * only, never the address or its hash (docs/09 §7.2).
@@ -47,7 +47,13 @@ export const TOKEN_EMAIL_TEMPLATES: Record<UserTokenPurpose, EmailTemplate> = {
 export const ACCOUNT_NOTICE_TEMPLATES: Record<AccountNotice['event'], EmailTemplate> = {
   'user.signup_attempted': 'identity.account_exists',
   'user.password_changed': 'identity.password_changed',
+  'user.sessions_revoked': 'identity.sessions_revoked',
 }
+
+// Whether an event from the queue is an account notice (a payload is not checked by the compiler).
+export const isAccountNotice = <T extends { event: string }>(
+  payload: T
+): payload is Extract<T, AccountNotice> => Object.hasOwn(ACCOUNT_NOTICE_TEMPLATES, payload.event)
 
 export type DispatchOutcome =
   | { kind: 'queued'; deliveryId: string }
@@ -61,9 +67,7 @@ type DispatchPayload = JobPayloads['notifications.dispatch'] & JobEnvelope
 
 export async function dispatchNotification(payload: DispatchPayload): Promise<DispatchOutcome> {
   if (payload.event === 'user_token.issued') return dispatchTokenEmail(payload)
-  if (payload.event === 'user.signup_attempted' || payload.event === 'user.password_changed') {
-    return dispatchAccountNotice(payload)
-  }
+  if (isAccountNotice(payload)) return dispatchAccountNotice(payload)
   // A payload from the queue is not checked by the compiler.
   throw new InvariantViolation('notifications.dispatch got an event it has no template for')
 }
