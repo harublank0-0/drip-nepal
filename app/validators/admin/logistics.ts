@@ -1,5 +1,6 @@
 import vine from '@vinejs/vine'
 import { courierCredentials } from '#validators/support/courier_credentials'
+import { COURIER_LIMITS } from '#shared/constants/limits'
 
 // Staff inputs of the M6 courier operations (docs/06 §13.8).
 
@@ -13,9 +14,19 @@ export const CREATE_ACCOUNT_MEMBERS = [
 ] as const
 export const createLogisticsAccountValidator = vine.create({
   provider_code: vine.string().regex(/^[a-z][a-z0-9_]{1,31}$/),
-  name: vine.string().trim().minLength(2).maxLength(80),
+  name: vine
+    .string()
+    .trim()
+    .minLength(COURIER_LIMITS.accountName.min)
+    .maxLength(COURIER_LIMITS.accountName.max),
   environment: vine.enum(['sandbox', 'production'] as const),
-  external_account_ref: vine.string().trim().minLength(1).maxLength(100).nullable().optional(),
+  external_account_ref: vine
+    .string()
+    .trim()
+    .minLength(COURIER_LIMITS.accountRef.min)
+    .maxLength(COURIER_LIMITS.accountRef.max)
+    .nullable()
+    .optional(),
   credentials: courierCredentials(),
 })
 
@@ -27,7 +38,11 @@ export const rekeyLogisticsAccountValidator = vine.create({
 export const ACCOUNT_STATUS_MEMBERS = ['status', 'reason'] as const
 export const setLogisticsAccountStatusValidator = vine.create({
   status: vine.enum(['suspended', 'pending', 'disabled'] as const),
-  reason: vine.string().trim().minLength(3).maxLength(500),
+  reason: vine
+    .string()
+    .trim()
+    .minLength(COURIER_LIMITS.reason.min)
+    .maxLength(COURIER_LIMITS.reason.max),
 })
 
 export const SHOP_ENABLED_MEMBERS = ['is_enabled', 'reason'] as const

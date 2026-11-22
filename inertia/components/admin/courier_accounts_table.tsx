@@ -1,5 +1,6 @@
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '~/components/ui/table'
 import { StatusBadge } from '~/components/common/status_badge'
+import { AccountActions } from '~/components/admin/account_actions'
 import { t } from '~/lib/i18n'
 import { formatDateTime } from '@shared/format/date'
 
@@ -79,6 +80,9 @@ export function CourierAccountsTable({ accounts }: { accounts: CourierAccount[] 
               <TableHead scope="col">{t('admin.logistics.column.environment')}</TableHead>
               <TableHead scope="col">{t('admin.logistics.column.shops')}</TableHead>
               <TableHead scope="col">{t('admin.logistics.column.verified')}</TableHead>
+              <TableHead scope="col">
+                <span className="sr-only">{t('admin.logistics.column.actions')}</span>
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -94,6 +98,9 @@ export function CourierAccountsTable({ accounts }: { accounts: CourierAccount[] 
                   {allowedShops(account) ?? owner(account)}
                 </TableCell>
                 <TableCell>{verified(account)}</TableCell>
+                <TableCell className="text-end">
+                  <AccountActions account={account} />
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -105,7 +112,10 @@ export function CourierAccountsTable({ accounts }: { accounts: CourierAccount[] 
           <li key={account.id} className="space-y-2 rounded-md border p-4">
             <div className="flex items-start justify-between gap-3">
               <p className="font-medium">{account.name}</p>
-              <StatusBadge entity="courier_account" state={account.status} />
+              <div className="flex items-center gap-1">
+                <StatusBadge entity="courier_account" state={account.status} />
+                <AccountActions account={account} />
+              </div>
             </div>
             <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
               <dt className="text-muted-foreground">{t('admin.logistics.column.owner')}</dt>

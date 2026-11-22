@@ -1,4 +1,5 @@
 import vine from '@vinejs/vine'
+import { COURIER_LIMITS } from '#shared/constants/limits'
 
 /*
  * A courier account's credentials in a request (docs/06 §13.8): for NCM a
@@ -10,7 +11,7 @@ export const courierCredentials = () =>
   vine.object({
     token: vine
       .string()
-      .minLength(8)
-      .maxLength(200)
-      .regex(/^[\x21-\x7e]+$/),
+      .minLength(COURIER_LIMITS.token.min)
+      .maxLength(COURIER_LIMITS.token.max)
+      .regex(COURIER_LIMITS.token.pattern),
   })
