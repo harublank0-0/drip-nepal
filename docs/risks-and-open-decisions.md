@@ -253,7 +253,8 @@ Evidence: The product owner's instruction of 2026-11-22 ("we will allow vendors 
           shop; own account wins). Owner answers on VX-16 (no cancellation API; a comment asks
           NCM to cancel), VX-17 (one account serves many vendors) and VX-18 (COD to DripNepal).
 ADR: ADR-0019 (dated note 2026-11-22; decision 8 and the revisit trigger for ADR-0009).
-Docs updated: §2.1, §2.2, §3.1 (VX-16, VX-17, VX-18), §4.2 (R-33), §5, note 45, ADR-0019
+Docs updated: §2.1, §2.2, §3.1 (VX-16, VX-17, VX-18), §4.2 (R-33), §5, note 45, ADR-0019,
+              ADR-0009, 00, 01, 02, 03, 04a, 05, 06, 07, 10, 12, openapi.yaml
               |  Status: Decided
 ```
 
