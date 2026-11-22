@@ -128,7 +128,7 @@ flowchart LR
   seller -->|upload images directly with presigned URL| storage
 
   seller -.->|manual mode: hands parcels to courier, then types tracking into DripNepal| courier
-  courier -.->|delivers and collects COD cash for the vendor's own account (R1: no platform-owned account, OD-58)| customer
+  courier -.->|delivers and collects COD cash for the account owner: the vendor, or DripNepal on a platform-owned account (OD-58)| customer
   staff -.->|listing number, complaints, tax filings done by people| gov
 ```
 
@@ -1510,3 +1510,4 @@ ADR files live in [docs/adr](adr/README.md). Status is the "Decision status" fie
 27. **Browser headers in the server stack (E11, 2026-11-20).** §3.3's first pipeline item says that the browser headers and the CSP nonce are set just before the health answers, so every answer carries them ([07](07-security-threat-model-and-permissions.md#consistency-notes-for-editor) note 36).
 28. **History encryption (E11, 2026-11-21).** The shared-devices row of §6.3 marks `encryptHistory` built for the Account surface of §6.1 (`/account`, `/sell`, `/invitations`), Seller, Admin and Checkout. That row and the logout bullet of §12.2 say that a server-side `clearHistory()` in `logOut`'s 204 has no effect on that answer; adapter 5 also writes a session key the next render pulls ([07](07-security-threat-model-and-permissions.md#consistency-notes-for-editor) note 37).
 29. **M6 courier jobs and configuration (2026-11-21).** §9 adds the seven courier queues built with M6, with their owners, triggers, dedupe and retries, and §11.6 adds the courier base URLs and the callback key ring. The §2 context diagram's courier edge follows OD-58: R1 offers no platform-owned account.
+30. **OD-58 re-decided (2026-11-22).** The context diagram's courier edge says the courier collects COD for the account owner, the vendor or, on a platform-owned account, DripNepal ([risks §2.3](risks-and-open-decisions.md#23-decision-log)).

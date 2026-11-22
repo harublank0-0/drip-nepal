@@ -273,9 +273,9 @@ x-pending-operations:
   - cancelPayout
   - revealPayoutAccount
   - revealUserContact # POST /api/v1/admin/users/{userId}/contact-reveal, R1·M1 (06 §13.8, note 41)
-  # M6 platform-owned courier account operations (06 §13.8; OD-56), proposed. No route in R1,
-  # which offers no platform-owned courier accounts (decided 2026-11-21); the other M6 courier
-  # operations are in `paths` (note 44).
+  # M6 platform-owned courier account operations (06 §13.8; OD-56), proposed. No route yet:
+  # they are built with platform mode in M6 (OD-58, re-decided 2026-11-22, note 45); the other
+  # M6 courier operations are in `paths` (note 44).
   - adminCreateLogisticsAccount
   - adminRekeyLogisticsAccount
   - adminAllowShopOnLogisticsAccount
@@ -1902,9 +1902,11 @@ paths:
         (422 `unknown_field`, 06 §3.5).
         Rules (04a §9.11): `manual` takes no `default_account_id` (422 `not_allowed`); `vendor`
         requires one (422 `required`), which must have an active `logistics_account_shops` row
-        for the shop, be `active` and be shop-owned (422 `account_not_usable`). `platform` is
-        422 `not_offered` on `fulfillment_mode`: R1 offers no platform-owned courier accounts
-        (decided 2026-11-21).
+        for the shop, be `active` and be shop-owned (422 `account_not_usable`). `platform`
+        also requires one, platform-owned and allowed for the shop, and a shop with an active
+        account of its own gets 422 `own_account_active` on `fulfillment_mode` (OD-58,
+        re-decided 2026-11-22). Until platform mode is built in M6, `platform` answers 422
+        `not_offered`.
         Concurrency: ⟳ `If-Match` on `shop_logistics_settings.version`; a first save, before
         the row exists, sends `If-Match: "0"`. Missing, `*` or a list → 428; a stale version, a
         weak tag or any other value → 412 `VERSION_CONFLICT` with `current`, the settings as
@@ -2403,7 +2405,9 @@ paths:
         Scope: `{shopOrderNumber}` inside the shop and released to the vendor (an
         `awaiting_payment` shop order is not), else 404 (T-SEC-001).
         Returns the shop order's live shipment (or `null`), the settings, the accounts the form
-        offers (`active`, shop-owned, with an active row for the shop), `account_id`, the
+        offers (`active`, with an active row for the shop, and of the owner type the shop's mode
+        names: shop-owned for `vendor`, platform-owned for `platform`; until platform mode is built
+        in M6, shop-owned only), `account_id`, the
         chosen account (the one asked for if offered, else the default, else the first; `null`
         when there is none), the live pickup addresses, the chosen courier's service codes, and
         for a courier that books by branch its active branches assigned to the account
@@ -2539,10 +2543,14 @@ paths:
         Rules (05 §6.3), each 409 `INVALID_STATE_TRANSITION` unless marked 422: the parent
         order's verification allows dispatch (the OD-57 dispatch rule, T-ORD-011); the shop
         order is `accepted`; its live shipment is `pending` or `packed` (`pending|packed →
-        booking_requested`); the shop's `fulfillment_mode` is `vendor` (`manual` and `platform`
-        refuse it) and courier booking is enabled for the shop (`is_enabled`); the account has
-        an active row for the shop, is shop-owned and `active`, and its courier is active (422
-        `account_not_usable` on `account_id`); a sandbox account in production is 422
+        booking_requested`); the shop's `fulfillment_mode` is `vendor` or `platform` (`manual`
+        refuses it; until platform mode is built in M6, so does `platform`) and courier booking is
+        enabled for the shop (`is_enabled`); the account has an active row for the shop, is
+        `active`, is of the owner type the mode names, and its courier is active (422
+        `account_not_usable` on `account_id`); a platform-owned account for a shop with an active
+        account of its own is 422 `own_account_active`; a COD shipment on a platform-owned account
+        while `platform_account_cod_enabled` (proposed) is false is 409 (OD-58, 2026-11-22); a
+        sandbox account in production is 422
         `sandbox_account`; `service_code` is one of the courier's services (422
         `unknown_service`); `pickup_address_id` is a live pickup address of the shop (422
         `address_not_usable`); for a courier that books by branch both branch IDs are required
@@ -5410,7 +5418,7 @@ components:
       enum: [sandbox, production]
     FulfillmentMode:
       type: string
-      description: '`shop_logistics_settings.fulfillment_mode` (04a §9.11). `replaceLogisticsSettings` accepts `manual` and `vendor` in R1; `platform` waits for platform-owned accounts.'
+      description: '`shop_logistics_settings.fulfillment_mode` (04a §9.11). `platform` is for a shop with no active account of its own (OD-58, re-decided 2026-11-22); until platform mode is built in M6, `replaceLogisticsSettings` answers 422 `not_offered` to it.'
       enum: [manual, vendor, platform]
     CourierEventProcessingStatus:
       type: string
@@ -5604,8 +5612,10 @@ components:
     ReplaceLogisticsSettingsRequest:
       type: object
       description: |
-        `vendor` requires `default_account_id`, a usable shop-owned account; `manual` takes none
-        (`null` or left out); `platform` is 422 `not_offered` in R1 (decided 2026-11-21).
+        `vendor` requires `default_account_id`, a usable shop-owned account, and `platform` a
+        platform-owned account allowed for the shop (refused with `own_account_active` for a shop
+        with an active account of its own); `manual` takes none (`null` or left out). Until
+        platform mode is built in M6, `platform` answers 422 `not_offered` (OD-58, 2026-11-22).
       additionalProperties: false
       required: [fulfillment_mode]
       properties:
@@ -6651,3 +6661,13 @@ components:
 #     `webhook_ip` limiter and 64 KB cap, which still run before the token check.
 #     Redocly CLI 2.77.0 with `redocly.yaml`: 0 errors, 0 warnings; every new example
 #     validates against its schema.
+#
+# Added with OD-58 re-decided (2026-11-22):
+# 45. R1 offers platform-owned NCM accounts to shops with no active account of their own (OD-58
+#     option (b), 06 §13.8). The descriptions of `replaceLogisticsSettings`, `FulfillmentMode` and
+#     `ReplaceLogisticsSettingsRequest` give the target rule (`own_account_active`, proposed) and
+#     say that the code answers 422 `not_offered` until platform mode is built in M6; the four
+#     platform-owned account operations stay in `x-pending-operations` until they have routes.
+#     After review: `getCourierBookingOptions` and `bookCourierShipment` also give the target rule
+#     (accounts of the owner type the mode names; `own_account_active`; the 409 while
+#     `platform_account_cod_enabled` is false) and what the code does until platform mode is built.
