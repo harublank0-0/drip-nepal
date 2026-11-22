@@ -1,11 +1,10 @@
-import { useState } from 'react'
 import { Head, usePage } from '@inertiajs/react'
 import { Link } from '@adonisjs/inertia/react'
 import type { InertiaProps } from '~/types'
 import { t } from '~/lib/i18n'
-import { Button } from '~/components/ui/button'
 import { EmptyState } from '~/components/common/empty_state'
 import { CreatePlatformAccountDialog } from '~/components/admin/create_platform_account_dialog'
+import { ACCOUNTS_HEADING_ID } from '~/components/admin/account_actions'
 import {
   CourierAccountsTable,
   type CourierAccount,
@@ -25,19 +24,24 @@ export default function AdminLogistics({ accounts }: Props) {
   const next = accounts.meta.next_cursor
   // A later page carries a cursor in its URL; 08 §7.2 offers the way back.
   const onLaterPage = usePage().url.includes('cursor=')
-  const [creating, setCreating] = useState(false)
   return (
     <>
       <Head title={t('admin.logistics.title')} />
       <div className="space-y-6">
         <header className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-1">
-            <h1 className="text-2xl font-semibold">{t('admin.logistics.title')}</h1>
+            {/* Focus lands here when a change removes the row's actions (08 §7.3 rule 1). */}
+            <h1
+              id={ACCOUNTS_HEADING_ID}
+              tabIndex={-1}
+              className="text-2xl font-semibold outline-none"
+            >
+              {t('admin.logistics.title')}
+            </h1>
             <p className="text-muted-foreground max-w-prose">{t('admin.logistics.intro')}</p>
           </div>
-          <Button onClick={() => setCreating(true)}>{t('admin.logistics.add_platform')}</Button>
+          <CreatePlatformAccountDialog />
         </header>
-        <CreatePlatformAccountDialog open={creating} onOpenChange={setCreating} />
         {accounts.items.length === 0 ? (
           <EmptyState
             heading={t('admin.logistics.empty.heading')}

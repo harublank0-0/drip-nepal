@@ -7,5 +7,9 @@
   "form.cancel": "Cancel",
   "form.step_up_title": "Verify it's you",
   "form.step_up_body": "Changes like this need an identity check from the last 15 minutes. Verify again, then retry.",
-  "form.permanent_note": "Kept permanently. Do not enter phone numbers, email addresses or postal addresses."
+  "form.permanent_note": "Kept permanently. Do not enter phone numbers, email addresses or postal addresses.",
+  "form.failed": "Something went wrong. Try again.",
+  "form.gone": "This item no longer exists. The list has been updated.",
+  "form.changed": "This was changed in the meantime. The list has been updated.",
+  "form.now_status": "It is now:"
 }

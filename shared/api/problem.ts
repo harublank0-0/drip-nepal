@@ -27,7 +27,26 @@ export function isProblem(value: unknown): value is Problem {
   )
 }
 
-/** A problem for an answer that is not problem+json, so every failure has one shape. */
+/*
+ * The problem in a failed answer's body. Tuyau 1.2.2 parses a body only when
+ * its type is exactly `application/json`, so a problem+json body reaches
+ * `TuyauHTTPError.response` as text [Verified-repo `@tuyau/core`
+ * `build/client/index.js`, `parseResponse`]; it is parsed here. A body that
+ * is not a problem gives the fallback, so every failure has one shape.
+ */
+export function problemFrom(body: unknown, status: number | undefined): Problem {
+  let value = body
+  if (typeof body === 'string') {
+    try {
+      value = JSON.parse(body)
+    } catch {
+      value = null
+    }
+  }
+  return isProblem(value) ? value : fallbackProblem(status)
+}
+
+/** A problem for an answer that is not problem+json. */
 export function fallbackProblem(status: number | undefined): Problem {
   return {
     type: 'about:blank',

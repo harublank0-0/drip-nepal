@@ -22,10 +22,12 @@ export function useApiMutation() {
       const outcome = await apiCall(send)
       if (!outcome.ok && 'problem' in outcome) {
         const { problem } = outcome
+        // Back to this page afterwards, query included, as the server's page redirects do.
+        const here = encodeURIComponent(`${window.location.pathname}${window.location.search}`)
         if (problem.code === 'UNAUTHENTICATED') {
-          router.visit(`/login?return_to=${encodeURIComponent(window.location.pathname)}`)
+          router.visit(`/login?return_to=${here}`)
         } else if (problem.code === 'MFA_REQUIRED' && problem.mfa === 'enrollment_required') {
-          router.visit('/mfa')
+          router.visit(`/mfa?return_to=${here}`)
         }
       }
       return outcome

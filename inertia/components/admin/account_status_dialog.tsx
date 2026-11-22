@@ -1,177 +1,150 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
+import { useForm } from '@tanstack/react-form'
 import { router } from '@inertiajs/react'
 import { toast } from 'sonner'
 import type { Problem } from '@shared/api/problem'
 import type { StatusChange } from '@shared/ui/courier_account_changes'
-import { splitServerErrors } from '@shared/api/problem'
+import { COURIER_LIMITS } from '@shared/constants/limits'
 import { client } from '~/client'
 import { useApiMutation } from '~/hooks/use_api_mutation'
-import { messageFor } from '~/lib/forms'
+import { useErrorReport } from '~/hooks/use_error_report'
+import { applyServerErrors, changeAndRecheck } from '~/lib/forms'
 import { t } from '~/lib/i18n'
-import { Button } from '~/components/ui/button'
-import { Input } from '~/components/ui/input'
-import { Textarea } from '~/components/ui/textarea'
-import { Field, FieldDescription, FieldError, FieldLabel } from '~/components/ui/field'
-import {
-  AlertDialog,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '~/components/ui/alert-dialog'
+import { ConfirmDialog } from '~/components/common/confirm_dialog'
+import { ErrorSummary } from '~/components/forms/error_summary'
 import { ProblemAlert } from '~/components/forms/problem_alert'
+import { TextareaField } from '~/components/forms/textarea_field'
 
 /*
  * Suspend, resume or disable a courier account (`adminSetLogisticsAccountStatus`,
- * step-up; docs/06 §13.8). The confirmation follows docs/08 §7.3: suspending
- * and resuming are tier 1 (the consequence in one sentence, Cancel focused);
- * disabling erases the credentials for good, so it is tier 2: the confirm
- * button stays disabled until the account's name is typed, and that field
- * takes focus. The reason is required and kept in the audit log (§7.1
- * permanent notes). A refusal keeps the dialog open with the typed reason.
+ * step-up; docs/06 §13.8) in a `ConfirmDialog` (docs/08 §7.3): suspending
+ * and resuming are tier 1; disabling erases the credentials for good, so it
+ * is tier 2, with the account's name typed to confirm. The reason is required
+ * and kept in the audit log (§7.1 permanent notes). A refusal keeps the
+ * dialog open with the typed reason; a 404 or 409 also reloads the list,
+ * because the account changed meanwhile (§8.3).
  */
-
 const KEYS = {
   suspended: 'suspend',
   pending: 'resume',
   disabled: 'disable',
 } as const
 
+const FIELDS = [{ name: 'reason', id: 'status-reason' }] as const
+const KNOWN = new Set(FIELDS.map((field) => field.name))
+const { min, max } = COURIER_LIMITS.reason
+
 export function AccountStatusDialog({
   account,
   change,
-  onClose,
+  open,
+  onOpenChange,
+  onChanged,
+  onCloseAutoFocus,
 }: {
   account: { id: string; name: string }
   change: StatusChange
-  onClose: () => void
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  // The account's new status, so the caller knows whether its menu stays.
+  onChanged: (status: string) => void
+  onCloseAutoFocus: (event: Event) => void
 }) {
   const mutation = useApiMutation()
-  const key = KEYS[change]
-  const typeToConfirm = change === 'disabled'
-  const [reason, setReason] = useState('')
-  const [typed, setTyped] = useState('')
-  const [reasonErrors, setReasonErrors] = useState<string[]>([])
+  const report = useErrorReport(FIELDS)
   const [problem, setProblem] = useState<Problem | null>(null)
   const [offline, setOffline] = useState(false)
-  const typedField = useRef<HTMLInputElement>(null)
+  const key = KEYS[change]
 
-  const matches = typed.trim().toLowerCase() === account.name.trim().toLowerCase()
-  const reasonOk = reason.trim().length >= 3 && reason.trim().length <= 500
+  const form = useForm({
+    defaultValues: { reason: '' },
+    canSubmitWhenInvalid: true,
+    onSubmitInvalid: ({ formApi }) => {
+      setProblem(null)
+      setOffline(false)
+      report.failed(formApi)
+    },
+    onSubmit: async ({ value, formApi }) => {
+      setProblem(null)
+      setOffline(false)
+      report.clear()
+      const outcome = await mutation.run(() =>
+        client.request('adminSetLogisticsAccountStatus', {
+          params: { accountId: account.id },
+          body: { status: change, reason: value.reason.trim() },
+          timeout: 30_000,
+        })
+      )
+      if (!outcome) return
+      if (outcome.ok) {
+        onChanged(outcome.data.data.status)
+        close()
+        toast.success(t(`admin.logistics.status.${key}.done`, { name: account.name }))
+        router.reload({ only: ['accounts'] })
+        return
+      }
+      if ('offline' in outcome) {
+        setOffline(true)
+        return
+      }
+      if (outcome.problem.errors?.length) {
+        report.failed(formApi, applyServerErrors(formApi, outcome.problem, KNOWN))
+        return
+      }
+      setProblem(outcome.problem)
+      if (outcome.problem.status === 404 || outcome.problem.status === 409) {
+        router.reload({ only: ['accounts'] })
+      }
+    },
+  })
 
-  async function confirm() {
+  function close() {
+    form.reset()
+    report.clear()
     setProblem(null)
     setOffline(false)
-    if (!reasonOk) {
-      setReasonErrors([t('admin.logistics.status.reason_rule')])
-      return
-    }
-    const outcome = await mutation.run(() =>
-      client.request('adminSetLogisticsAccountStatus', {
-        params: { accountId: account.id },
-        body: { status: change, reason: reason.trim() },
-        timeout: 30_000,
-      })
-    )
-    if (!outcome) return
-    if (outcome.ok) {
-      onClose()
-      toast.success(t(`admin.logistics.status.${key}.done`, { name: account.name }))
-      router.reload({ only: ['accounts'] })
-      return
-    }
-    if ('offline' in outcome) {
-      setOffline(true)
-      return
-    }
-    const { fields, formLevel } = splitServerErrors(
-      outcome.problem,
-      new Set(['reason']),
-      messageFor
-    )
-    if (fields.size > 0 || formLevel.length > 0) {
-      setReasonErrors([...(fields.get('reason') ?? []), ...formLevel])
-    } else {
-      setProblem(outcome.problem)
-    }
+    onOpenChange(false)
   }
 
   return (
-    <AlertDialog open onOpenChange={(open) => !open && onClose()}>
-      <AlertDialogContent
-        onOpenAutoFocus={(event) => {
-          if (!typeToConfirm) return
-          event.preventDefault()
-          typedField.current?.focus()
+    <ConfirmDialog
+      open={open}
+      onOpenChange={(next) => (next ? onOpenChange(true) : close())}
+      title={t(`admin.logistics.status.${key}.title`, { name: account.name })}
+      consequence={t(`admin.logistics.status.${key}.consequence`)}
+      confirmLabel={t(`admin.logistics.status.${key}.confirm`)}
+      pendingLabel={t(`admin.logistics.status.${key}.pending`)}
+      destructive={change !== 'pending'}
+      identifier={change === 'disabled' ? account.name : undefined}
+      identifierLabel={t('admin.logistics.status.disable.type_name', { name: account.name })}
+      pending={mutation.pending}
+      onConfirm={() => void form.handleSubmit()}
+      onCloseAutoFocus={onCloseAutoFocus}
+    >
+      <ErrorSummary form={form} summary={report.summary} summaryRef={report.summaryRef} />
+      <form.Field
+        name="reason"
+        validators={{
+          onBlur: ({ value }) =>
+            value.trim().length < min || value.trim().length > max
+              ? t('admin.logistics.status.reason_rule', { min, max })
+              : undefined,
         }}
       >
-        <AlertDialogHeader>
-          <AlertDialogTitle>
-            {t(`admin.logistics.status.${key}.title`, { name: account.name })}
-          </AlertDialogTitle>
-          <AlertDialogDescription>
-            {t(`admin.logistics.status.${key}.consequence`)}
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <form
-          className="space-y-4"
-          noValidate
-          onSubmit={(event) => {
-            event.preventDefault()
-            void confirm()
-          }}
-        >
-          <Field data-invalid={reasonErrors.length > 0 || undefined}>
-            <FieldLabel htmlFor="status-reason">{t('admin.logistics.status.reason')}</FieldLabel>
-            <Textarea
-              id="status-reason"
-              value={reason}
-              maxLength={500}
-              aria-invalid={reasonErrors.length > 0 || undefined}
-              aria-describedby="status-reason-help status-reason-error"
-              onChange={(event) => {
-                // A server or client message clears once the reason is edited (08 §7.1).
-                setReason(event.target.value)
-                setReasonErrors([])
-              }}
-            />
-            <FieldDescription id="status-reason-help">
-              {t('common.form.permanent_note')}
-            </FieldDescription>
-            <FieldError
-              id="status-reason-error"
-              errors={reasonErrors.map((message) => ({ message }))}
-            />
-          </Field>
-          {typeToConfirm && (
-            <Field>
-              <FieldLabel htmlFor="status-confirm">
-                {t('admin.logistics.status.disable.type_name', { name: account.name })}
-              </FieldLabel>
-              <Input
-                id="status-confirm"
-                ref={typedField}
-                value={typed}
-                autoComplete="off"
-                onChange={(event) => setTyped(event.target.value)}
-              />
-            </Field>
-          )}
-          <ProblemAlert problem={problem} offline={offline} />
-          <AlertDialogFooter>
-            <AlertDialogCancel type="button">{t('common.form.cancel')}</AlertDialogCancel>
-            <Button
-              type="submit"
-              variant={change === 'pending' ? 'default' : 'destructive'}
-              disabled={mutation.pending || (typeToConfirm && !matches)}
-            >
-              {t(`admin.logistics.status.${key}.confirm`)}
-            </Button>
-          </AlertDialogFooter>
-        </form>
-      </AlertDialogContent>
-    </AlertDialog>
+        {(field) => (
+          <TextareaField
+            id="status-reason"
+            label={t('admin.logistics.status.reason')}
+            description={t('common.form.permanent_note')}
+            value={field.state.value}
+            maxLength={max}
+            errors={field.state.meta.errors}
+            onChange={(value) => changeAndRecheck(field, value)}
+            onBlur={field.handleBlur}
+          />
+        )}
+      </form.Field>
+      <ProblemAlert problem={problem} offline={offline} entity="courier_account" />
+    </ConfirmDialog>
   )
 }

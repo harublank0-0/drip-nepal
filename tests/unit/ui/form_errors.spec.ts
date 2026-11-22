@@ -2,17 +2,21 @@ import { test } from '@japa/runner'
 import {
   fallbackProblem,
   isProblem,
+  problemFrom,
   splitServerErrors,
   toFormPath,
   type Problem,
 } from '#shared/api/problem'
+import { afterFailedSubmit, fieldErrorItems, SUMMARY_TARGET } from '#shared/ui/error_summary'
 
 /*
  * T-UI-005, the mapping part (docs/08 §7.1): a server field error goes under
  * the field it names, in the form's bracket paths; one with `field: null`
  * or an unknown path goes to the error summary; several for one field stay
- * together. The component half (focus, clearing on edit) waits for the
- * component tests.
+ * together. A problem+json body reaches the client as text and is parsed.
+ * After a failed submit, one field error focuses its field and anything
+ * else the summary. The component half (focus in the browser, clearing on
+ * edit) waits for the component tests.
  */
 const problem = (errors: Problem['errors']): Problem => ({
   type: 'about:blank',
@@ -52,4 +56,90 @@ test.group('T-UI-005 server errors on a form', () => {
     assert.deepInclude(fallbackProblem(502), { status: 502, code: 'INTERNAL' })
     assert.equal(fallbackProblem(undefined).status, 500)
   })
+
+  test('T-UI-005 a problem+json body that arrives as text is parsed', ({ assert }) => {
+    // Tuyau 1.2.2 parses only application/json, so the server's
+    // application/problem+json reaches TuyauHTTPError.response as text.
+    const sent = problem([{ field: 'name', code: 'minLength', message: 'Too short' }])
+    assert.deepEqual(problemFrom(JSON.stringify(sent), 422), sent)
+    assert.deepEqual(problemFrom(sent, 422), sent)
+    assert.deepInclude(problemFrom('<html>Bad Gateway</html>', 502), {
+      status: 502,
+      code: 'INTERNAL',
+    })
+    assert.deepInclude(problemFrom('{"message":"no"}', 400), { status: 400, code: 'INTERNAL' })
+    assert.deepInclude(problemFrom(undefined, undefined), { status: 500, code: 'INTERNAL' })
+  })
+})
+
+test.group('T-UI-005 after a failed submit', () => {
+  const FIELDS = [
+    { name: 'name', id: 'account-name' },
+    { name: 'credentials.token', id: 'account-token' },
+  ]
+
+  test('T-UI-005 field messages come in the form order, once each, from every slot', ({
+    assert,
+  }) => {
+    const maps: Record<string, Record<string, unknown>> = {
+      'credentials.token': { onBlur: 'Token rule', onServer: 'Token refused' },
+      'name': { onBlur: 'Name rule', onServer: 'Name rule', onChange: undefined },
+    }
+    assert.deepEqual(
+      fieldErrorItems(FIELDS, (name) => maps[name]),
+      [
+        { message: 'Name rule', target: 'account-name' },
+        { message: 'Token rule', target: 'account-token' },
+        { message: 'Token refused', target: 'account-token' },
+      ]
+    )
+    assert.deepEqual(
+      fieldErrorItems(FIELDS, () => undefined),
+      []
+    )
+  })
+
+  test('T-UI-005 {label}')
+    .with([
+      { label: 'no error moves nothing', fields: 0, formLevel: 0, summary: false, focus: null },
+      {
+        label: 'one field error focuses that field',
+        fields: 1,
+        formLevel: 0,
+        summary: false,
+        focus: 'account-name',
+      },
+      {
+        label: 'two field errors focus the summary',
+        fields: 2,
+        formLevel: 0,
+        summary: true,
+        focus: SUMMARY_TARGET,
+      },
+      {
+        label: 'a form-level error alone shows the summary',
+        fields: 0,
+        formLevel: 1,
+        summary: true,
+        focus: SUMMARY_TARGET,
+      },
+      {
+        label: 'a field and a form-level error show the summary',
+        fields: 1,
+        formLevel: 1,
+        summary: true,
+        focus: SUMMARY_TARGET,
+      },
+    ])
+    .run(({ assert }, row) => {
+      const items = Array.from({ length: row.fields }, () => ({
+        message: 'Name rule',
+        target: 'account-name',
+      }))
+      const formLevel = Array.from({ length: row.formLevel }, () => 'Whole form')
+      assert.deepEqual(afterFailedSubmit(items, formLevel), {
+        summary: row.summary,
+        focus: row.focus,
+      })
+    })
 })

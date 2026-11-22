@@ -4,9 +4,11 @@ import { router } from '@inertiajs/react'
 import { toast } from 'sonner'
 import type { Route } from '@tuyau/core/types'
 import type { Problem } from '@shared/api/problem'
+import { COURIER_LIMITS } from '@shared/constants/limits'
 import { client } from '~/client'
 import { useApiMutation } from '~/hooks/use_api_mutation'
 import { useIntentKey } from '~/hooks/use_intent_key'
+import { useErrorReport } from '~/hooks/use_error_report'
 import { applyServerErrors, changeAndRecheck } from '~/lib/forms'
 import { t } from '~/lib/i18n'
 import { Button } from '~/components/ui/button'
@@ -17,6 +19,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from '~/components/ui/dialog'
 import { TextField } from '~/components/forms/text_field'
 import { ChoiceField } from '~/components/forms/choice_field'
@@ -25,10 +28,12 @@ import { ProblemAlert } from '~/components/forms/problem_alert'
 
 /*
  * Create DripNepal's own Nepal Can Move account (`adminCreateLogisticsAccount`
- * ⚷, step-up; docs/06 §13.8, OD-58). The key is made when the intent starts
- * and kept across retries of the same values (docs/08 §7.3 rule 4). The token
- * is sent once, stored encrypted and never shown again; the account stays
- * `pending` until NCM answers its test call.
+ * ⚷, step-up; docs/06 §13.8, OD-58). The key is made at the first submit
+ * and kept across retries of the same values (docs/06 §7.1, docs/09 §13.4).
+ * The token is sent once, stored encrypted and never shown again; the account
+ * stays `pending` until NCM answers its test call. The dialog owns its
+ * trigger, so focus returns to it on close (docs/08 §7.3 rule 1); closing
+ * drops what was typed, the token included, and cannot happen mid-request.
  */
 type Body = Route.Body<'adminCreateLogisticsAccount'>
 
@@ -47,20 +52,22 @@ const EMPTY: Values = {
   credentials: { token: '' },
 }
 
-const KNOWN = new Set(['name', 'environment', 'external_account_ref', 'credentials.token'])
+// In the form's order, with each input's id, for the error summary (docs/08 §7.1).
+const FIELDS = [
+  { name: 'name', id: 'account-name' },
+  { name: 'environment', id: 'account-environment' },
+  { name: 'external_account_ref', id: 'account-reference' },
+  { name: 'credentials.token', id: 'account-token' },
+] as const
+const KNOWN = new Set(FIELDS.map((field) => field.name))
 
-const PRINTABLE = /^[\x21-\x7e]+$/
+const { accountName, token } = COURIER_LIMITS
 
-export function CreatePlatformAccountDialog({
-  open,
-  onOpenChange,
-}: {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-}) {
+export function CreatePlatformAccountDialog() {
+  const [open, setOpen] = useState(false)
   const mutation = useApiMutation()
   const intentKey = useIntentKey<Body>()
-  const [summary, setSummary] = useState<string[]>([])
+  const report = useErrorReport(FIELDS)
   const [problem, setProblem] = useState<Problem | null>(null)
   const [offline, setOffline] = useState(false)
 
@@ -69,10 +76,15 @@ export function CreatePlatformAccountDialog({
     // Submit re-runs every validator on the current values, so an error the user has just
     // fixed (a blur or server message still in state) never blocks the submit.
     canSubmitWhenInvalid: true,
-    onSubmit: async ({ value, formApi }) => {
-      setSummary([])
+    onSubmitInvalid: ({ formApi }) => {
       setProblem(null)
       setOffline(false)
+      report.failed(formApi)
+    },
+    onSubmit: async ({ value, formApi }) => {
+      setProblem(null)
+      setOffline(false)
+      report.clear()
       const body: Body = {
         provider_code: 'ncm',
         name: value.name.trim(),
@@ -90,9 +102,7 @@ export function CreatePlatformAccountDialog({
       )
       if (!outcome) return
       if (outcome.ok) {
-        intentKey.reset()
-        formApi.reset()
-        onOpenChange(false)
+        close()
         toast.success(t('admin.logistics.create.done'))
         router.reload({ only: ['accounts'] })
         return
@@ -102,15 +112,33 @@ export function CreatePlatformAccountDialog({
         return
       }
       if (outcome.problem.errors?.length) {
-        setSummary(applyServerErrors(formApi, outcome.problem, KNOWN))
+        report.failed(formApi, applyServerErrors(formApi, outcome.problem, KNOWN))
       } else {
         setProblem(outcome.problem)
       }
     },
   })
 
+  function close() {
+    form.reset()
+    intentKey.reset()
+    report.clear()
+    setProblem(null)
+    setOffline(false)
+    setOpen(false)
+  }
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (next) setOpen(true)
+        else if (!mutation.pending) close()
+      }}
+    >
+      <DialogTrigger asChild>
+        <Button>{t('admin.logistics.add_platform')}</Button>
+      </DialogTrigger>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t('admin.logistics.create.title')}</DialogTitle>
@@ -124,13 +152,13 @@ export function CreatePlatformAccountDialog({
             void form.handleSubmit()
           }}
         >
-          <ErrorSummary messages={summary} />
+          <ErrorSummary form={form} summary={report.summary} summaryRef={report.summaryRef} />
           <form.Field
             name="name"
             validators={{
               onBlur: ({ value }) =>
-                value.trim().length < 2 || value.trim().length > 80
-                  ? t('admin.logistics.create.name_rule')
+                value.trim().length < accountName.min || value.trim().length > accountName.max
+                  ? t('admin.logistics.create.name_rule', accountName)
                   : undefined,
             }}
           >
@@ -177,8 +205,8 @@ export function CreatePlatformAccountDialog({
             name="credentials.token"
             validators={{
               onBlur: ({ value }) =>
-                value.length < 8 || value.length > 200 || !PRINTABLE.test(value)
-                  ? t('admin.logistics.create.token_rule')
+                value.length < token.min || value.length > token.max || !token.pattern.test(value)
+                  ? t('admin.logistics.create.token_rule', { min: token.min, max: token.max })
                   : undefined,
             }}
           >
@@ -198,10 +226,11 @@ export function CreatePlatformAccountDialog({
           </form.Field>
           <ProblemAlert problem={problem} offline={offline} />
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button type="button" variant="outline" onClick={() => !mutation.pending && close()}>
               {t('common.form.cancel')}
             </Button>
-            <Button type="submit" disabled={mutation.pending}>
+            {/* Not disabled while pending, so it keeps focus; a second press is ignored (08 §7.1). */}
+            <Button type="submit" aria-disabled={mutation.pending || undefined}>
               {mutation.pending
                 ? t('admin.logistics.create.submitting')
                 : t('admin.logistics.create.submit')}
