@@ -115,7 +115,12 @@ const MUTATIONS: Mutation[] = [
   {
     name: 'an English name does not end with its type',
     change: (rows) => ((at(rows, '10101').nameEn = 'Phaktanlung Municipality'), rows),
-    error: /10101: "Phaktanlung Municipality" does not end with "Rural Municipality"/,
+    error: /10101: "Phaktanlung Municipality" is not labelled "Rural Municipality"/,
+  },
+  {
+    name: 'a municipality is named as a rural municipality',
+    change: (rows) => ((at(rows, '10106').nameEn = 'Phungling Rural Municipality'), rows),
+    error: /10106: "Phungling Rural Municipality" is not labelled "Municipality"/,
   },
 ]
 

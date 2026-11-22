@@ -67,6 +67,13 @@ export const TYPE_LABELS: Record<LocalLevelType, string> = {
   municipality: 'Municipality',
   rural_municipality: 'Rural Municipality',
 }
+// Longer labels first: each of these ends with the one after it.
+const LABEL_ORDER: LocalLevelType[] = [
+  'sub_metropolitan',
+  'metropolitan',
+  'rural_municipality',
+  'municipality',
+]
 
 export class LocationsDatasetError extends Error {}
 
@@ -127,8 +134,10 @@ export function checkLocations(rows: LocationRow[]) {
       problems.push(`${row.code} has the unknown type "${row.type}"`)
     } else {
       byType[row.type] = (byType[row.type] ?? 0) + 1
-      if (!row.nameEn.endsWith(` ${TYPE_LABELS[row.type]}`)) {
-        problems.push(`${row.code}: "${row.nameEn}" does not end with "${TYPE_LABELS[row.type]}"`)
+      // The longest label decides, so "… Rural Municipality" is not a municipality.
+      const labelled = LABEL_ORDER.find((type) => row.nameEn.endsWith(` ${TYPE_LABELS[type]}`))
+      if (labelled !== row.type) {
+        problems.push(`${row.code}: "${row.nameEn}" is not labelled "${TYPE_LABELS[row.type]}"`)
       }
     }
     if (!Number.isInteger(row.wardCount) || row.wardCount < 1 || row.wardCount > 40) {
