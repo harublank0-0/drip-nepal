@@ -48,9 +48,8 @@ let prepared: Promise<void> | undefined
  * `dripnepal_migrator` on the `pg_migrator` connection, so the tables
  * belong to the migrator and the tests, which run as `dripnepal_app` on the
  * default connection, meet the grants of docs/07 §4.10. Tests read the
- * reference rows and never change them (docs/10 §3.4). The locations
- * seeder is not written yet (docs/04 §20.3), so tests that need a district
- * insert it themselves. start/env.ts refuses to boot under NODE_ENV=test
+ * reference rows and never change them (docs/10 §3.4); they include the
+ * locations of docs/04 §21.4. start/env.ts refuses to boot under NODE_ENV=test
  * unless DB_DATABASE ends in _test (RF-32), so this can only ever wipe a
  * test database.
  *

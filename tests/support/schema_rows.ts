@@ -96,6 +96,8 @@ export async function insertPayoutAccount(shopId: string) {
 }
 
 // Kathmandu: province 3, district 306, metropolitan city 30608 (docs/04a §9).
+// The reference seeders load them in every test run (docs/04 §21.4), so this
+// usually inserts nothing; it keeps a test independent of the dataset.
 export async function insertLocation() {
   await db
     .table('provinces')

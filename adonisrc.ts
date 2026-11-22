@@ -137,6 +137,11 @@ export default defineConfig({
       pattern: 'public/**',
       reloadServer: false,
     },
+    // The locations dataset the release step seeds (docs/04 §21.4, docs/09 §8.8).
+    {
+      pattern: 'database/seeders/reference/data/locations.csv',
+      reloadServer: false,
+    },
   ],
 
   hooks: {
