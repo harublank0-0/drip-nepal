@@ -91,6 +91,8 @@ export function AccountStatusDialog({
         report.failed(formApi, applyServerErrors(formApi, outcome.problem, KNOWN))
         return
       }
+      // useApiMutation shows the wait next to the confirm button.
+      if (outcome.problem.code === 'RATE_LIMITED') return
       setProblem(outcome.problem)
       // The codes ProblemAlert words as "the list has been updated".
       if (['NOT_FOUND', 'INVALID_STATE_TRANSITION'].includes(outcome.problem.code)) {
@@ -119,6 +121,7 @@ export function AccountStatusDialog({
       identifier={change === 'disabled' ? account.name : undefined}
       identifierLabel={t('admin.logistics.status.disable.type_name', { name: account.name })}
       pending={mutation.pending}
+      retryIn={mutation.retryIn}
       onConfirm={() => void form.handleSubmit()}
       onCloseAutoFocus={onCloseAutoFocus}
     >

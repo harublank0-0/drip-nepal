@@ -144,6 +144,11 @@ export default defineConfig({
       pattern: 'resources/lang/**/*.json',
       reloadServer: false,
     },
+    // The customer legal documents the legal pages read (docs/08 §2.2, docs/09 §1.2).
+    {
+      pattern: 'resources/legal/**/*.md',
+      reloadServer: false,
+    },
     // The locations dataset the release step seeds (docs/04 §21.4, docs/09 §8.8).
     {
       pattern: 'database/seeders/reference/data/locations.csv',

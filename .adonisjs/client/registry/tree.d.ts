@@ -38,6 +38,11 @@ export interface ApiDefinition {
   adminResolveCourierEvent: typeof routes['adminResolveCourierEvent']
   adminRecordOrderVerification: typeof routes['adminRecordOrderVerification']
   receiveCourierCallback: typeof routes['receiveCourierCallback']
+  legal: {
+    document: typeof routes['legal.document']
+  }
+  signup: typeof routes['signup']
+  verifyEmail: typeof routes['verify_email']
   admin: {
     logistics: typeof routes['admin.logistics']
   }

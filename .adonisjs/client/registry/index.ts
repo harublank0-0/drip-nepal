@@ -198,6 +198,24 @@ const routes = {
     tokens: [{"old":"/api/v1/webhooks/couriers/:providerCode/:accountId","type":0,"val":"api","end":""},{"old":"/api/v1/webhooks/couriers/:providerCode/:accountId","type":0,"val":"v1","end":""},{"old":"/api/v1/webhooks/couriers/:providerCode/:accountId","type":0,"val":"webhooks","end":""},{"old":"/api/v1/webhooks/couriers/:providerCode/:accountId","type":0,"val":"couriers","end":""},{"old":"/api/v1/webhooks/couriers/:providerCode/:accountId","type":1,"val":"providerCode","end":""},{"old":"/api/v1/webhooks/couriers/:providerCode/:accountId","type":1,"val":"accountId","end":""}],
     types: placeholder as Registry['receiveCourierCallback']['types'],
   },
+  'legal.document': {
+    methods: ["GET","HEAD"],
+    pattern: '/legal/:documentSlug',
+    tokens: [{"old":"/legal/:documentSlug","type":0,"val":"legal","end":""},{"old":"/legal/:documentSlug","type":1,"val":"documentSlug","end":""}],
+    types: placeholder as Registry['legal.document']['types'],
+  },
+  'signup': {
+    methods: ["GET","HEAD"],
+    pattern: '/signup',
+    tokens: [{"old":"/signup","type":0,"val":"signup","end":""}],
+    types: placeholder as Registry['signup']['types'],
+  },
+  'verify_email': {
+    methods: ["GET","HEAD"],
+    pattern: '/verify-email',
+    tokens: [{"old":"/verify-email","type":0,"val":"verify-email","end":""}],
+    types: placeholder as Registry['verify_email']['types'],
+  },
   'admin.logistics': {
     methods: ["GET","HEAD"],
     pattern: '/admin/logistics',

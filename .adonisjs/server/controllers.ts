@@ -20,12 +20,22 @@ export const controllers = {
       },
     },
   },
+  auth: {
+    identity: {
+      Registration: () => import('#controllers/auth/identity/registration_controller'),
+    },
+  },
   dev: {
     SignIn: () => import('#controllers/dev/sign_in_controller'),
   },
   seller: {
     CourierBookings: () => import('#controllers/seller/courier_bookings_controller'),
     Logistics: () => import('#controllers/seller/logistics_controller'),
+  },
+  storefront: {
+    platform: {
+      LegalDocuments: () => import('#controllers/storefront/platform/legal_documents_controller'),
+    },
   },
   webhooks: {
     CourierCallbacks: () => import('#controllers/webhooks/courier_callbacks_controller'),

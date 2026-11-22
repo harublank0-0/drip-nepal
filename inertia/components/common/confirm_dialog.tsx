@@ -4,6 +4,7 @@ import { PENDING_BUTTON } from '~/lib/forms'
 import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
 import { Field, FieldLabel } from '~/components/ui/field'
+import { RateLimitNotice } from '~/components/forms/rate_limit_notice'
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -24,7 +25,9 @@ import {
  * be closed while its request runs, and the confirm button keeps focus with
  * its pending label. A dialog opened from a menu has no
  * trigger of its own, so the caller passes `onCloseAutoFocus` to say where
- * focus goes back to (rule 1).
+ * focus goes back to (rule 1). `retryIn` is the caller's
+ * `useApiMutation().retryIn`: while a `RATE_LIMITED` wait runs, the wait
+ * shows next to the confirm button, which stays `aria-disabled` (08 §8.3).
  */
 export function ConfirmDialog({
   open,
@@ -37,6 +40,7 @@ export function ConfirmDialog({
   identifier,
   identifierLabel,
   pending,
+  retryIn = 0,
   onConfirm,
   onCloseAutoFocus,
   children,
@@ -51,6 +55,7 @@ export function ConfirmDialog({
   identifier?: string
   identifierLabel?: string
   pending: boolean
+  retryIn?: number
   onConfirm: () => void
   onCloseAutoFocus?: (event: Event) => void
   children?: ReactNode
@@ -85,6 +90,7 @@ export function ConfirmDialog({
           pendingLabel={pendingLabel}
           destructive={destructive}
           pending={pending}
+          retryIn={retryIn}
           onConfirm={onConfirm}
         >
           {children}
@@ -102,6 +108,7 @@ function ConfirmBody({
   pendingLabel,
   destructive,
   pending,
+  retryIn,
   onConfirm,
   children,
 }: {
@@ -112,10 +119,12 @@ function ConfirmBody({
   pendingLabel: string
   destructive: boolean
   pending: boolean
+  retryIn: number
   onConfirm: () => void
   children?: ReactNode
 }) {
   const [typed, setTyped] = useState('')
+  const rateLimitId = `${typedId}-rate-limit`
   const matches =
     identifier === undefined || typed.trim().toLowerCase() === identifier.trim().toLowerCase()
   return (
@@ -148,12 +157,14 @@ function ConfirmBody({
           type="submit"
           variant={destructive ? 'destructive' : 'default'}
           disabled={!matches}
-          aria-disabled={pending || undefined}
+          aria-disabled={pending || retryIn > 0 || undefined}
+          aria-describedby={retryIn > 0 ? rateLimitId : undefined}
           className={PENDING_BUTTON}
         >
           {pending ? pendingLabel : confirmLabel}
         </Button>
       </AlertDialogFooter>
+      <RateLimitNotice id={rateLimitId} seconds={retryIn} />
     </form>
   )
 }

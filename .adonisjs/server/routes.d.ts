@@ -36,6 +36,9 @@ export type ScannedRoutes = {
     'adminResolveCourierEvent': { paramsTuple: [ParamValue]; params: {'courierEventId': ParamValue} }
     'adminRecordOrderVerification': { paramsTuple: [ParamValue]; params: {'orderNumber': ParamValue} }
     'receiveCourierCallback': { paramsTuple: [ParamValue,ParamValue]; params: {'providerCode': ParamValue,'accountId': ParamValue} }
+    'legal.document': { paramsTuple: [ParamValue]; params: {'documentSlug': ParamValue} }
+    'signup': { paramsTuple?: []; params?: {} }
+    'verify_email': { paramsTuple?: []; params?: {} }
     'admin.logistics': { paramsTuple?: []; params?: {} }
     'dev.design_system': { paramsTuple?: []; params?: {} }
     'dev.overlays': { paramsTuple?: []; params?: {} }
@@ -51,6 +54,9 @@ export type ScannedRoutes = {
     'adminListLogisticsBranches': { paramsTuple?: []; params?: {} }
     'adminListCourierBookings': { paramsTuple?: []; params?: {} }
     'adminListCourierEvents': { paramsTuple?: []; params?: {} }
+    'legal.document': { paramsTuple: [ParamValue]; params: {'documentSlug': ParamValue} }
+    'signup': { paramsTuple?: []; params?: {} }
+    'verify_email': { paramsTuple?: []; params?: {} }
     'admin.logistics': { paramsTuple?: []; params?: {} }
     'dev.design_system': { paramsTuple?: []; params?: {} }
     'dev.overlays': { paramsTuple?: []; params?: {} }
@@ -64,6 +70,9 @@ export type ScannedRoutes = {
     'adminListLogisticsBranches': { paramsTuple?: []; params?: {} }
     'adminListCourierBookings': { paramsTuple?: []; params?: {} }
     'adminListCourierEvents': { paramsTuple?: []; params?: {} }
+    'legal.document': { paramsTuple: [ParamValue]; params: {'documentSlug': ParamValue} }
+    'signup': { paramsTuple?: []; params?: {} }
+    'verify_email': { paramsTuple?: []; params?: {} }
     'admin.logistics': { paramsTuple?: []; params?: {} }
     'dev.design_system': { paramsTuple?: []; params?: {} }
     'dev.overlays': { paramsTuple?: []; params?: {} }

@@ -13,5 +13,9 @@
   "forbidden.title": "Not allowed",
   "forbidden.heading": "You can't open this page",
   "forbidden.body": "Your role doesn't include this page. Ask a platform admin if you need it.",
-  "forbidden.back": "Go to the home page"
+  "forbidden.back": "Go to the home page",
+  "field.email": "Enter an email address, like name@example.com.",
+  "field.reserved_domain": "This email address can't be used. Use another one.",
+  "field.nepal_mobile": "Enter a 10-digit mobile number starting with 96, 97 or 98.",
+  "field.accepted": "Tick this box to continue."
 }
