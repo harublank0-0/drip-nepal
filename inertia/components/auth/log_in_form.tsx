@@ -3,7 +3,7 @@ import { useForm } from '@tanstack/react-form'
 import { router, usePage } from '@inertiajs/react'
 import type { Route } from '@tuyau/core/types'
 import type { Data } from '@generated/data'
-import type { Problem } from '@shared/api/problem'
+import { fallbackProblem, type Problem } from '@shared/api/problem'
 import { INVALID_CREDENTIALS_DETAIL } from '@shared/constants/auth'
 import { ACCOUNT_LIMITS } from '@shared/constants/limits'
 import { client, urlFor } from '~/client'
@@ -138,10 +138,16 @@ export function LogInForm({ notice }: { notice: 'account_suspended' | null }) {
           setProblem(outcome.problem)
         } else {
           // Reloading keeps the form's state; the page answer brings a new XSRF-TOKEN.
+          // If the reload itself fails (offline, a 5xx), say so instead of sitting idle.
+          let reloaded = false
           router.reload({
             onSuccess: () => {
+              reloaded = true
               resending.current = true
               void formApi.handleSubmit()
+            },
+            onFinish: () => {
+              if (!reloaded) setProblem(fallbackProblem(undefined))
             },
           })
         }
