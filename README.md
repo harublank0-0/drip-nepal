@@ -76,7 +76,7 @@ docker compose up -d     # PostgreSQL 18 (dripnepal_dev, dripnepal_test and the 
 # A volume made before 2026-11-20 holds `dripnepal`, not `dripnepal_dev`: recreate it once with `docker compose down -v` (deletes local data).
 node ace migration:run --no-schema-generate   # the 14 baseline files; leaves the generated database/schema.ts alone
 node ace jobs:install    # the pg-boss schema, its queues and its grants (docs/11 §6.1)
-node ace db:seed         # reference data only: no demo shops, products, orders or logins yet (OD-59)
+node ace db:seed         # reference data only: no demo shops, products, orders or logins in M0 (OD-59)
 pnpm dev                 # http://localhost:3333/dev/design-system and /health/live
 ```
 
