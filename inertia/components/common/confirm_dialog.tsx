@@ -1,5 +1,6 @@
 import { useId, useState, type ReactNode } from 'react'
 import { t } from '~/lib/i18n'
+import { PENDING_BUTTON } from '~/lib/forms'
 import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
 import { Field, FieldLabel } from '~/components/ui/field'
@@ -148,6 +149,7 @@ function ConfirmBody({
           variant={destructive ? 'destructive' : 'default'}
           disabled={!matches}
           aria-disabled={pending || undefined}
+          className={PENDING_BUTTON}
         >
           {pending ? pendingLabel : confirmLabel}
         </Button>

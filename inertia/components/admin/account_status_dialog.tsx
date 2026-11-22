@@ -92,7 +92,8 @@ export function AccountStatusDialog({
         return
       }
       setProblem(outcome.problem)
-      if (outcome.problem.status === 404 || outcome.problem.status === 409) {
+      // The codes ProblemAlert words as "the list has been updated".
+      if (['NOT_FOUND', 'INVALID_STATE_TRANSITION'].includes(outcome.problem.code)) {
         router.reload({ only: ['accounts'] })
       }
     },

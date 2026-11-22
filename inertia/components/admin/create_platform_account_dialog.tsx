@@ -9,7 +9,7 @@ import { client } from '~/client'
 import { useApiMutation } from '~/hooks/use_api_mutation'
 import { useIntentKey } from '~/hooks/use_intent_key'
 import { useErrorReport } from '~/hooks/use_error_report'
-import { applyServerErrors, changeAndRecheck } from '~/lib/forms'
+import { applyServerErrors, changeAndRecheck, PENDING_BUTTON } from '~/lib/forms'
 import { t } from '~/lib/i18n'
 import { Button } from '~/components/ui/button'
 import {
@@ -33,7 +33,8 @@ import { ProblemAlert } from '~/components/forms/problem_alert'
  * The token is sent once, stored encrypted and never shown again; the account
  * stays `pending` until NCM answers its test call. The dialog owns its
  * trigger, so focus returns to it on close (docs/08 §7.3 rule 1); closing
- * drops what was typed, the token included, and cannot happen mid-request.
+ * drops what was typed, the token included, and cannot happen mid-request,
+ * except after a timeout, when the values and the key are kept for a replay.
  */
 type Body = Route.Body<'adminCreateLogisticsAccount'>
 
@@ -128,18 +129,21 @@ export function CreatePlatformAccountDialog() {
     setOpen(false)
   }
 
+  // Escape, the close button and Cancel. Never mid-request; after a timeout the account may
+  // exist, so the values and the key stay for a retry that replays (06 §7.1).
+  function requestClose() {
+    if (mutation.pending) return
+    if (offline) setOpen(false)
+    else close()
+  }
+
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (next) setOpen(true)
-        else if (!mutation.pending) close()
-      }}
-    >
+    <Dialog open={open} onOpenChange={(next) => (next ? setOpen(true) : requestClose())}>
       <DialogTrigger asChild>
         <Button>{t('admin.logistics.add_platform')}</Button>
       </DialogTrigger>
-      <DialogContent>
+      {/* A stray click outside never discards what was typed; Escape and Cancel still close. */}
+      <DialogContent onInteractOutside={(event) => event.preventDefault()}>
         <DialogHeader>
           <DialogTitle>{t('admin.logistics.create.title')}</DialogTitle>
           <DialogDescription>{t('admin.logistics.create.description')}</DialogDescription>
@@ -226,11 +230,15 @@ export function CreatePlatformAccountDialog() {
           </form.Field>
           <ProblemAlert problem={problem} offline={offline} />
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => !mutation.pending && close()}>
+            <Button type="button" variant="outline" onClick={requestClose}>
               {t('common.form.cancel')}
             </Button>
             {/* Not disabled while pending, so it keeps focus; a second press is ignored (08 §7.1). */}
-            <Button type="submit" aria-disabled={mutation.pending || undefined}>
+            <Button
+              type="submit"
+              aria-disabled={mutation.pending || undefined}
+              className={PENDING_BUTTON}
+            >
               {mutation.pending
                 ? t('admin.logistics.create.submitting')
                 : t('admin.logistics.create.submit')}

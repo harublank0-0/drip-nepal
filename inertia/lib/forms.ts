@@ -37,3 +37,10 @@ export function changeAndRecheck(field: AnyFieldApi, value: unknown) {
   field.handleChange(value)
   if (field.state.meta.errorMap.onBlur) void field.validate('blur')
 }
+
+/*
+ * A submit button while its request runs: `aria-disabled`, not `disabled`, so it
+ * keeps focus (08 §7.1), dimmed like a disabled one; the `ui/button` copy styles
+ * only `disabled`.
+ */
+export const PENDING_BUTTON = 'aria-disabled:cursor-progress aria-disabled:opacity-50'
