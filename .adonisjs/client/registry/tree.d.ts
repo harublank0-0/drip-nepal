@@ -7,6 +7,9 @@ export interface ApiDefinition {
       serve: typeof routes['drive.fs.serve']
     }
   }
+  signUp: typeof routes['signUp']
+  resendEmailVerification: typeof routes['resendEmailVerification']
+  confirmEmail: typeof routes['confirmEmail']
   getLogisticsSettings: typeof routes['getLogisticsSettings']
   replaceLogisticsSettings: typeof routes['replaceLogisticsSettings']
   createShopCourierAccount: typeof routes['createShopCourierAccount']

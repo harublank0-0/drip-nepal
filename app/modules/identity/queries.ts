@@ -110,6 +110,26 @@ export async function tokenEmail(
 }
 
 /*
+ * An account's address as an email without a token needs it, for the
+ * notification jobs (docs/09 §2.3 item 7): today the "account already
+ * exists" notice of `signUp` (AC-FR-IAM-001-2). `reachable` is false once
+ * the account is anonymised, whose address is a placeholder in the
+ * reserved `.invalid` domain (docs/04a §5.1). Null for a missing row.
+ * `client` reads inside the caller's transaction (docs/09 §3.9).
+ */
+export type AccountEmail = { userId: string; email: string; reachable: boolean }
+
+export async function accountEmail(
+  userId: string,
+  options: { client?: QueryClientContract } = {}
+): Promise<AccountEmail | null> {
+  const client: QueryClientContract = options.client ?? db.connection()
+  const row = await client.from('users').where('id', userId).select('id', 'email', 'status').first()
+  if (!row) return null
+  return { userId: row.id, email: row.email, reachable: row.status !== 'anonymized' }
+}
+
+/*
  * The development-only sign-in (docs/07 §3.13). Its routes exist only
  * outside production, but these reads ship with the module. The demo
  * accounts' addresses are under `.invalid` (docs/09 §8.8), so no seeded

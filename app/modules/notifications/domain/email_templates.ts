@@ -13,8 +13,19 @@
  *   token (docs/09 §9.1), so the copy reads for both.
  * - `identity.mfa_enrollment`: an `mfa_enrollment` token's link to `/mfa`
  *   (docs/07 §3.9).
+ * - `identity.email_verification`: an `email_verification` token's link to
+ *   `/verify-email` (docs/08 §2.3; 02 J-04 step 4), sent by `signUp` and
+ *   `resendEmailVerification`.
+ * - `identity.account_exists`: the "account already exists" notice of a
+ *   signup with a registered email (AC-FR-IAM-001-2), with a link to
+ *   `/login` and no token.
  */
-export const EMAIL_TEMPLATES = ['identity.password_reset', 'identity.mfa_enrollment'] as const
+export const EMAIL_TEMPLATES = [
+  'identity.password_reset',
+  'identity.mfa_enrollment',
+  'identity.email_verification',
+  'identity.account_exists',
+] as const
 export type EmailTemplate = (typeof EMAIL_TEMPLATES)[number]
 
 export const isEmailTemplate = (value: string): value is EmailTemplate =>

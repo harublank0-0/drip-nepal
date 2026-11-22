@@ -1,10 +1,17 @@
 import app from '@adonisjs/core/services/app'
 import encryption from '@adonisjs/core/services/encryption'
 import logger from '@adonisjs/core/services/logger'
+import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
 import { appUrl } from '#config/app'
 import { hmacKeys } from '#config/crypto'
 import { InvariantViolation } from '#exceptions/programming_errors'
-import { tokenEmail, type TokenEmail, type UserTokenPurpose } from '#modules/identity/queries'
+import {
+  accountEmail,
+  tokenEmail,
+  type AccountEmail,
+  type TokenEmail,
+  type UserTokenPurpose,
+} from '#modules/identity/queries'
 import { keyedHash } from '#modules/platform/crypto/keyed_hash'
 import type { JobEnvelope, JobPayloads } from '#modules/platform/jobs'
 import { EmailNotSent, EmailSender, type EmailSent } from '#modules/platform/ports/email_sender'
@@ -42,7 +49,10 @@ import { renderEmail } from '#modules/notifications/internal/render_email'
  *   rule 4);
  * - an address that is no longer the one dispatch hashed into
  *   `to_address_hash`: `failed` with `address_changed` and no send, so the
- *   row never claims a send to an address it does not record (04a §14.3).
+ *   row never claims a send to an address it does not record (04a §14.3);
+ * - the "account already exists" notice (`user.signup_attempted`, M1 part
+ *   2a) of an account that is gone or was anonymised meanwhile: `failed`
+ *   with `recipient_unreachable` and no send.
  * `last_error` holds short reasons, never an address (04a §14.3): a final
  * reason is appended to the transport error before it, within 1,000
  * characters. Log lines hold IDs only (docs/09 §7.2).
@@ -58,6 +68,9 @@ const TOKEN_PAGES: Record<UserTokenPurpose, string> = {
   mfa_enrollment: '/mfa',
 }
 
+// The sign-in page the "account already exists" notice links (docs/08 §2.3).
+const SIGN_IN_PAGE = '/login'
+
 export type SendOutcome =
   | { kind: 'sent'; providerMessageId: string }
   | { kind: 'not_queued' }
@@ -65,6 +78,13 @@ export type SendOutcome =
   | { kind: 'failed'; reason: string }
 
 type SendPayload = JobPayloads['notifications.send_email'] & JobEnvelope
+type TokenSend = Extract<SendPayload, { event: 'user_token.issued' }>
+
+// What the claim read about the recipient, in the claim's transaction.
+type Recipient =
+  | { kind: 'token'; token: TokenEmail | null }
+  | { kind: 'account'; account: AccountEmail | null }
+
 type ClaimedRow = {
   id: string
   template: string
@@ -168,30 +188,78 @@ function sameAddress(email: string, hash: Buffer | null) {
   return hash !== null && keyedHash(hmacKeys.notifyAddress.release(), email).equals(hash)
 }
 
-// The token and its raw value to send, or why this email can no longer be sent.
-function sendable(
+// The recipient of an event, read inside the claim's transaction.
+async function readRecipient(
+  payload: SendPayload,
+  client: TransactionClientContract
+): Promise<Recipient> {
+  if (payload.event === 'user_token.issued') {
+    return { kind: 'token', token: await tokenEmail(payload.user_token_id, { client }) }
+  }
+  if (payload.event === 'user.signup_attempted') {
+    return { kind: 'account', account: await accountEmail(payload.user_id, { client }) }
+  }
+  // A payload from the queue is not checked by the compiler.
+  throw new InvariantViolation('notifications.send_email got an event it has no template for')
+}
+
+// The row and its recipient must name one user; anything else is a bug.
+function assertSameRecipient(row: ClaimedRow, recipient: Recipient) {
+  const userId = recipient.kind === 'token' ? recipient.token?.userId : recipient.account?.userId
+  if (userId !== undefined && userId !== row.recipient_user_id) {
+    throw new InvariantViolation(`notification_deliveries ${row.id} and its event name other users`)
+  }
+}
+
+type Ready = { to: string; values: Record<string, string | number> }
+
+// The token email to send, or why it can no longer be sent.
+function tokenSendable(
   row: ClaimedRow,
   token: TokenEmail | null,
-  tokenEnc: string
-): { token: TokenEmail; raw: string } | { reason: string } {
+  payload: TokenSend
+): Ready | { reason: string } {
   if (!token?.usable) return { reason: 'token_not_usable' }
   if (!sameAddress(token.email, row.to_address_hash)) return { reason: 'address_changed' }
-  const raw = decryptToken(tokenEnc, token.purpose)
-  return raw === null ? { reason: 'token_undecryptable' } : { token, raw }
+  const raw = decryptToken(payload.token_enc, token.purpose)
+  return raw === null
+    ? { reason: 'token_undecryptable' }
+    : { to: token.email, values: tokenValues(token, raw) }
+}
+
+// The "account already exists" notice to send, or why it can no longer be sent.
+function accountSendable(
+  row: ClaimedRow,
+  account: AccountEmail | null
+): Ready | { reason: string } {
+  if (!account?.reachable) return { reason: 'recipient_unreachable' }
+  if (!sameAddress(account.email, row.to_address_hash)) return { reason: 'address_changed' }
+  return { to: account.email, values: { link: new URL(SIGN_IN_PAGE, appUrl).toString() } }
+}
+
+function sendable(
+  row: ClaimedRow,
+  recipient: Recipient,
+  payload: SendPayload
+): Ready | { reason: string } {
+  if (recipient.kind === 'token' && payload.event === 'user_token.issued') {
+    return tokenSendable(row, recipient.token, payload)
+  }
+  if (recipient.kind === 'account') return accountSendable(row, recipient.account)
+  throw new InvariantViolation('notifications.send_email read a recipient of another event')
 }
 
 // Renders and sends, outside any transaction: the port's guard throws inside one (docs/03 §8.3).
 async function send(
   template: EmailTemplate,
   deliveryId: string,
-  token: TokenEmail,
-  raw: string,
+  ready: Ready,
   requestId: string | null
 ) {
-  const rendered = await renderEmail(template, tokenValues(token, raw))
+  const rendered = await renderEmail(template, ready.values)
   const sender = await app.container.make(EmailSender)
   return sender.send(
-    { to: token.email, template, idempotencyKey: deliveryId, ...rendered },
+    { to: ready.to, template, idempotencyKey: deliveryId, ...rendered },
     { requestId, timeoutMs: SEND_TIMEOUT_MS }
   )
 }
@@ -205,7 +273,7 @@ export async function sendEmail(payload: SendPayload): Promise<SendOutcome> {
       [payload.delivery_id]
     )
     const row: ClaimedRow | undefined = claimed.rows[0]
-    if (row) return { row, token: await tokenEmail(payload.user_token_id, { client: trx }) }
+    if (row) return { row, recipient: await readRecipient(payload, trx) }
     const found = await trx
       .from('notification_deliveries')
       .where('id', payload.delivery_id)
@@ -219,16 +287,14 @@ export async function sendEmail(payload: SendPayload): Promise<SendOutcome> {
     notSent(payload.delivery_id, 'delivery_missing', payload.request_id)
     return { kind: 'missing' }
   }
-  const { row, token } = claim
+  const { row, recipient } = claim
   const template = row.template
   if (!isEmailTemplate(template)) {
     throw new InvariantViolation(`notification_deliveries ${row.id} names an unknown template`)
   }
-  if (token && token.userId !== row.recipient_user_id) {
-    throw new InvariantViolation(`notification_deliveries ${row.id} and its token name other users`)
-  }
+  assertSameRecipient(row, recipient)
 
-  const ready = sendable(row, token, payload.token_enc)
+  const ready = sendable(row, recipient, payload)
   if ('reason' in ready) {
     await markFailed(row.id, ready.reason)
     notSent(row.id, ready.reason, payload.request_id)
@@ -237,7 +303,7 @@ export async function sendEmail(payload: SendPayload): Promise<SendOutcome> {
 
   let sent: EmailSent
   try {
-    sent = await send(template, row.id, ready.token, ready.raw, payload.request_id)
+    sent = await send(template, row.id, ready, payload.request_id)
   } catch (error) {
     if (error instanceof EmailNotSent && error.permanent) {
       await markFailed(row.id, error.reason)

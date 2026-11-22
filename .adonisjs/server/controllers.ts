@@ -11,6 +11,15 @@ export const controllers = {
       Accounts: () => import('#controllers/admin/logistics/accounts_controller'),
     },
   },
+  api: {
+    v1: {
+      auth: {
+        identity: {
+          Registration: () => import('#controllers/api/v1/auth/identity/registration_controller'),
+        },
+      },
+    },
+  },
   dev: {
     SignIn: () => import('#controllers/dev/sign_in_controller'),
   },

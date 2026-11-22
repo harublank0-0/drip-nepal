@@ -394,7 +394,7 @@ Each block gives: release · priority · journeys · main operationIds ([06](06-
 
 #### FR-IAM-001 Customer signup
 
-R1 · **Must** · J-04 · `signUp` · T-IAM area, T-SEC-003 · Fixes RF-36, RF-38
+R1 · **Must** · J-04 · `signUp` · T-IAM-001, T-IAM-104, T-SEC-003, T-SEC-012 · Fixes RF-36, RF-38
 
 A visitor creates an account with full name, email and password, and optionally a mobile number. The account starts as `pending_verification`.
 
@@ -407,12 +407,12 @@ A visitor creates an account with full name, email and password, and optionally 
 
 #### FR-IAM-002 Email verification required for checkout and shop application
 
-R1 · **Must** · J-04, J-05, J-08 · `confirmEmail`, `resendEmailVerification` · T-IAM area
+R1 · **Must** · J-04, J-05, J-08 · `confirmEmail`, `resendEmailVerification` · T-IAM-002, T-IAM-105
 
 - AC-FR-IAM-002-1: A verification link is single-use, stored only as a hash in `user_tokens`, and expires after 24 hours [Assumption]. Opening a valid link sets `email_verified_at` and `status = active`.
 - AC-FR-IAM-002-2: A `pending_verification` user can browse, keep a cart, and edit profile and addresses. `placeOrder` and `applyForShop` return 403 `EMAIL_NOT_VERIFIED`, and the UI offers "Resend verification email".
 - AC-FR-IAM-002-3: Resend is limited to 3 per hour per user. Each resend invalidates earlier unconsumed tokens.
-- AC-FR-IAM-002-4: An expired or consumed link shows a page with a resend button and no account details.
+- AC-FR-IAM-002-4: An expired link, or one replaced by a newer link, shows a page with a resend button and no account details. Any link of an account that is already verified, the used link included, says the email is already verified (AC-J04-06).
 
 #### FR-IAM-003 Login and logout, rate-limited
 
@@ -2099,3 +2099,4 @@ In the `manual` mode couriers depend on vendors, not on the platform. Courier bo
 29. **OD-58 re-decided (2026-11-22).** §4.3 item 6, §4.5, AC-FR-FUL-004-1 and AC-FR-FUL-004-5 and the courier row of §11.1 follow the product owner's new R1 ruling ([risks §2.3](risks-and-open-decisions.md#23-decision-log)): a platform-owned NCM account for shops with no active account of their own, COD remitted to DripNepal (option (b)), and live COD on it off behind `platform_account_cod_enabled` (proposed) until OD-58's conditions are met. The product owner's answers on VX-17 and VX-18 are recorded as [Confirmed]; NCM's written answers are still awaited.
 30. **OD-24 and OD-50 decided (2026-11-22).** The product owner chose the recommended options ([risks §2.3](risks-and-open-decisions.md#23-decision-log)). §4.1's 18+ row and §9.4's REG-25 drop the `[Open OD-24]` label; OD-24 is decided for the build, and counsel's VX-03 answer can reopen it before the M1 exit. AC-FR-IAM-007-4 keeps "for that account" and drops `[Open OD-50]`, which closes the OD-50 part of note 19 (c); the OD-49 part stays open.
 31. **Account email retries and logs (2026-11-22).** AC-FR-NOT-001-2 said "up to 5 retries"; [03 §9](03-system-architecture.md#9-asynchronous-work), which owns the retry settings, gives `notifications.send_email` 8, so the AC cites it. AC-FR-NOT-001-3 said logs hold a hash of the address; [09 §7.2](09-code-structure-and-engineering-standards.md#72-redaction-paths) logs neither the address nor its hash, and the hash is kept only in `notification_deliveries.to_address_hash`, so the AC follows 09. Found while building M1 part 1b ([09 note 115](09-code-structure-and-engineering-standards.md#consistency-notes-for-editor)).
+32. **Verification links (2026-11-23, M1 part 2a).** AC-FR-IAM-002-4 said an expired or consumed link shows the resend page, while [02 AC-J04-06](02-user-journeys-and-acceptance-criteria.md#j-04-sign-up--verify) answers the same link again with "already verified" (200), as J-04's concurrency row does for a double click. The AC now separates the two: an expired or replaced link of an account still waiting shows the resend page; any link of an account already verified says so ([06 note 56](06-api-design.md#consistency-notes-for-editor)). FR-IAM-001 and FR-IAM-002 name their tests, `T-IAM-001` and `T-IAM-002`, registered in [10 §6.4](10-testing-and-quality-gates.md#64-security-and-identity-t-sec-t-iam), instead of "T-IAM area".

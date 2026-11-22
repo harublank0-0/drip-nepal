@@ -1,0 +1,29 @@
+{{--
+  identity.email_verification, the HTML part (docs/09 §11.2): an
+  email_verification token's link to /verify-email (docs/08 §2.3, docs/02
+  J-04 step 4), sent by signUp and resendEmailVerification. Every value is
+  printed escaped. Values: `t`, `link`, `hours`.
+--}}
+@component('emails/layouts/html', {
+  t: t,
+  title: t('emails.identity.email_verification.subject'),
+})
+  <p style="margin: 0 0 16px;">{{ t('emails.identity.email_verification.intro') }}</p>
+  <p style="margin: 0 0 16px;">
+    <a
+      href="{{ link }}"
+      style="display: inline-block; padding: 12px 20px; border-radius: 6px; background-color: #18181b; color: #ffffff; font-weight: bold; text-decoration: none;"
+    >
+      {{ t('emails.identity.email_verification.action') }}
+    </a>
+  </p>
+  <p style="margin: 0 0 16px; color: #52525b; font-size: 14px; word-break: break-all;">
+    {{ t('emails.identity.email_verification.link_hint') }}
+    <br />
+    {{ link }}
+  </p>
+  <p style="margin: 0 0 16px;">
+    {{ t('emails.identity.email_verification.expiry', { hours: hours }) }}
+  </p>
+  <p style="margin: 0;">{{ t('emails.identity.email_verification.ignore') }}</p>
+@end

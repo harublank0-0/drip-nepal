@@ -19,6 +19,42 @@ export interface Registry {
       errorResponse: unknown
     }
   }
+  'signUp': {
+    methods: ["POST"]
+    pattern: '/api/v1/auth/signup'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/identity/sign_up').signUpValidator)>>
+      paramsTuple: []
+      params: {}
+      query: ExtractQuery<InferInput<(typeof import('#validators/identity/sign_up').signUpValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/api/v1/auth/identity/registration_controller').default['signUp']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/auth/identity/registration_controller').default['signUp']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
+  'resendEmailVerification': {
+    methods: ["POST"]
+    pattern: '/api/v1/auth/email-verification'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/api/v1/auth/identity/registration_controller').default['resendEmailVerification']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/auth/identity/registration_controller').default['resendEmailVerification']>>>
+    }
+  }
+  'confirmEmail': {
+    methods: ["POST"]
+    pattern: '/api/v1/auth/email-verification/confirm'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/identity/confirm_email').confirmEmailValidator)>>
+      paramsTuple: []
+      params: {}
+      query: ExtractQuery<InferInput<(typeof import('#validators/identity/confirm_email').confirmEmailValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/api/v1/auth/identity/registration_controller').default['confirmEmail']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/auth/identity/registration_controller').default['confirmEmail']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
   'getLogisticsSettings': {
     methods: ["GET","HEAD"]
     pattern: '/api/v1/seller/shops/:shopSlug/logistics'
