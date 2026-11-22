@@ -239,13 +239,11 @@ Newest first. The entry format is in §1.5. A ruling that is not an OD but chang
 ```text
 Not an OD — Decided 2026-11-22 by product owner: courier pages before M1, a development-only
         sign-in, and OD-59 amended for factory-built demo data
-Ruling: The M6 courier screens of 08 §3.1 are built now, ahead of M1 to M5, in five pull requests
-        (12 §5.6). Until M1's sign-in exists, a development-only sign-in under /dev opens the
-        signed-in pages: it is registered outside production only (T-UI-026), and 07 and 09
-        specify it with the pull request that builds it. OD-59 is amended for demo data: until
-        sign-up, shop approval and order placement exist, a development seeder may build its
-        rows with the test factories, under the DevSeeder guards; it moves to the real actions
-        when they arrive (04 §20.3, 09 §8.8).
+Ruling: The M6 courier screens of 08 §3.1 are built now in five pull requests (12 §5.6), with a
+        development-only sign-in under /dev until M1's exists (never registered in production,
+        T-UI-026; 07 and 09 specify it with the pull request that builds it). OD-59 is amended:
+        until the real actions exist, a development seeder may build demo rows with the test
+        factories under the DevSeeder guards (04 §20.3, 09 §8.8).
 Evidence: The product owner's answers of 2026-11-22 ("Pages now, dev sign-in"; "Dev seeder with
           factories"). The actions OD-59 relies on are not built: no sign-up in identity, no
           shop application or approval in shops, no placeOrder in orders.
