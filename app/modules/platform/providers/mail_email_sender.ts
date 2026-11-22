@@ -20,9 +20,11 @@ import {
  *   never the address, subject, body or link (docs/09 §7.2, §7.4).
  * - A failure becomes `EmailNotSent`. It is permanent only when the server
  *   refused the recipient's address (docs/03 §9: "an address the provider
- *   rejects as invalid"); a refused sender, a suspended account, a policy
- *   refusal, an outage, a timeout or a login failure is retryable, so the
- *   retries and a redrive deliver once it is fixed (docs/11 §10.10).
+ *   rejects as invalid"): `RCPT TO` with a 5.1.x status, or with 550, 551
+ *   or 553 and no enhanced status. A refused sender, a suspended account, a
+ *   policy refusal, a full mailbox, an outage, a timeout or a login failure
+ *   is retryable, so the retries and a redrive deliver once it is fixed
+ *   (docs/11 §10.10). The provider's reply table is checked when OD-08 picks it.
  * - The time limit and `CallContext.signal` end the wait, not the SMTP
  *   conversation: a message that still goes out can be sent again by the
  *   retry, because SMTP has no idempotency key.
@@ -35,8 +37,11 @@ export type MailTransport = {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null
 
-// An enhanced status 5.7.x is a policy refusal (relay, authentication, sender), not the address.
-const POLICY_REPLY = /^\d{3}[ -]5\.7\.\d+/
+// The enhanced status of a reply ("550 5.1.1 …"), when the server sends one.
+const ENHANCED_STATUS = /^\d{3}[ -](\d)\.(\d{1,3})\.\d{1,3}\b/
+
+// Without an enhanced status, the replies that refuse the mailbox itself (RFC 5321 §4.2.3).
+const ADDRESS_REPLIES = new Set([550, 551, 553])
 
 // Whether a nodemailer error is final for this message: the server refused the recipient's address.
 export function isPermanentMailError(error: unknown): boolean {
@@ -48,8 +53,12 @@ export function isPermanentMailError(error: unknown): boolean {
   }
   const reply = error.responseCode
   if (error.command !== 'RCPT TO' || typeof reply !== 'number') return false
-  if (reply < 500 || reply >= 600 || reply === 503) return false
-  return !POLICY_REPLY.test(typeof error.response === 'string' ? error.response : '')
+  if (reply < 500 || reply >= 600) return false
+  // With an enhanced status, only 5.1.x is about the address (5.7.x is policy, 5.2.x and
+  // 5.4.x the mailbox or the network); without one, only the mailbox replies.
+  const status = ENHANCED_STATUS.exec(typeof error.response === 'string' ? error.response : '')
+  if (status) return status[1] === '5' && status[2] === '1'
+  return ADDRESS_REPLIES.has(reply)
 }
 
 // A short reason without the address: nodemailer messages can quote the recipient.
@@ -97,6 +106,11 @@ export class MailEmailSender extends PortAdapter implements EmailSender {
       request_id: ctx.requestId,
     })
 
+    if (ctx.signal?.aborted) {
+      // Cancelled before it started: nothing goes out, so the retry cannot duplicate it.
+      this.logger.warn(fields('retryable', 'aborted'), 'provider.call')
+      throw new EmailNotSent(false, 'aborted')
+    }
     const limit = deadline(ctx)
     try {
       const sent = await Promise.race([

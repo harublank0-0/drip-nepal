@@ -8,8 +8,10 @@ import { JSONTransport } from '@adonisjs/mail/transports/json'
  * default mailer:
  * - `smtp` when SMTP_HOST is set: Mailpit in development, the provider OD-08
  *   picks in staging and production, where TLS is required;
- * - `json` otherwise: tests and the web process, which send no email
- *   (docs/11 §4.5). It builds the message and sends nothing.
+ * - `json` otherwise. It builds the message and sends nothing, so only tests
+ *   send through it; any other process without SMTP gets a sender that
+ *   fails each send retryably (`emailSenderFor`), and the web process sends
+ *   no email at all (docs/11 §4.5).
  * `sendLater` is not used: the notification jobs queue and dedupe the
  * emails (docs/03 §11.5).
  */

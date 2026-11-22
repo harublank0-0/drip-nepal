@@ -107,8 +107,9 @@ export const envSchema = {
 
   /*
    * Email (docs/09 §6.1; the provider waits for OD-08): Mailpit in development.
-   * Unset in tests and in the web process, which sends no email (docs/11 §4.5):
-   * without SMTP_HOST, config/mail.ts uses the JSON transport, which sends nothing.
+   * Unset in tests and in the web process, which sends no email (docs/11 §4.5).
+   * Without SMTP_HOST, tests send through the JSON transport, which sends
+   * nothing, and any other process fails each send retryably (config/mail.ts).
    */
   SMTP_HOST: Env.schema.string.optional({ format: 'host' }),
   SMTP_PORT: Env.schema.number.optional(),

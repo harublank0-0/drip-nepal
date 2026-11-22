@@ -202,6 +202,19 @@ test.group('T-NOT-001 email adapter failures', () => {
     const late = await failureOf(sender.send(MESSAGE, { requestId: null, timeoutMs: 20 }))
     assert.deepInclude(late, { permanent: false, reason: 'timeout' })
 
+    // Aborted before the call: the transport is never reached.
+    let calls = 0
+    const counting = { name: 'smtp', send: async () => ({ messageId: `m-${++calls}` }) }
+    const early = await failureOf(
+      new MailEmailSender(counting, recordingLogger().logger).send(MESSAGE, {
+        requestId: null,
+        timeoutMs: 5000,
+        signal: AbortSignal.abort(),
+      })
+    )
+    assert.deepInclude(early, { permanent: false, reason: 'aborted' })
+    assert.equal(calls, 0)
+
     const controller = new AbortController()
     const pending = sender.send(MESSAGE, {
       requestId: null,
@@ -243,6 +256,36 @@ test.group('T-NOT-001 email adapter failures', () => {
         label: 'nodemailer refusing the recipient',
         error: { code: 'EENVELOPE', command: 'API', message: 'Invalid recipient "a"' },
         verdict: 'permanent',
+      },
+      {
+        label: 'RCPT TO 552 5.2.2, a full mailbox',
+        error: {
+          code: 'EENVELOPE',
+          command: 'RCPT TO',
+          responseCode: 552,
+          response: '552 5.2.2 Mailbox full',
+        },
+        verdict: 'retryable',
+      },
+      {
+        label: 'RCPT TO 550 5.4.5, a quota',
+        error: {
+          code: 'EENVELOPE',
+          command: 'RCPT TO',
+          responseCode: 550,
+          response: '550 5.4.5 Daily limit exceeded',
+        },
+        verdict: 'retryable',
+      },
+      {
+        label: 'RCPT TO 554 without an enhanced status',
+        error: {
+          code: 'EENVELOPE',
+          command: 'RCPT TO',
+          responseCode: 554,
+          response: '554 Transaction failed',
+        },
+        verdict: 'retryable',
       },
       {
         label: 'RCPT TO 554 5.7.1, a relay refusal',
