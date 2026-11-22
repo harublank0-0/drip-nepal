@@ -5,6 +5,9 @@ type ParamValue = string | number | bigint | boolean
 export type ScannedRoutes = {
   ALL: {
     'drive.fs.serve': { paramsTuple: [...ParamValue[]]; params: {'*': ParamValue[]} }
+    'signUp': { paramsTuple?: []; params?: {} }
+    'resendEmailVerification': { paramsTuple?: []; params?: {} }
+    'confirmEmail': { paramsTuple?: []; params?: {} }
     'getLogisticsSettings': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'replaceLogisticsSettings': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'createShopCourierAccount': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
@@ -66,12 +69,10 @@ export type ScannedRoutes = {
     'dev.overlays': { paramsTuple?: []; params?: {} }
     'dev.sign_in': { paramsTuple?: []; params?: {} }
   }
-  PUT: {
-    'replaceLogisticsSettings': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
-    'adminAllowShopOnLogisticsAccount': { paramsTuple: [ParamValue,ParamValue]; params: {'accountId': ParamValue,'shopId': ParamValue} }
-    'adminSetShopLogisticsEnabled': { paramsTuple: [ParamValue]; params: {'shopId': ParamValue} }
-  }
   POST: {
+    'signUp': { paramsTuple?: []; params?: {} }
+    'resendEmailVerification': { paramsTuple?: []; params?: {} }
+    'confirmEmail': { paramsTuple?: []; params?: {} }
     'createShopCourierAccount': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'rekeyShopCourierAccount': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'accountId': ParamValue} }
     'disableShopCourierAccount': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'accountId': ParamValue} }
@@ -89,6 +90,11 @@ export type ScannedRoutes = {
     'receiveCourierCallback': { paramsTuple: [ParamValue,ParamValue]; params: {'providerCode': ParamValue,'accountId': ParamValue} }
     'dev.sign_in.store': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'dev.sign_out': { paramsTuple?: []; params?: {} }
+  }
+  PUT: {
+    'replaceLogisticsSettings': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
+    'adminAllowShopOnLogisticsAccount': { paramsTuple: [ParamValue,ParamValue]; params: {'accountId': ParamValue,'shopId': ParamValue} }
+    'adminSetShopLogisticsEnabled': { paramsTuple: [ParamValue]; params: {'shopId': ParamValue} }
   }
   PATCH: {
     'updatePickupAddress': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'addressId': ParamValue} }

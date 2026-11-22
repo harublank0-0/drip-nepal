@@ -7,7 +7,8 @@ import type { ProblemCode } from '#exceptions/problem_codes'
  * to the request field it stands for. A constraint missing here answers 500,
  * so no database message ever reaches a client.
  *
- * `users_email_key` is deliberately absent: `signUp` catches that violation
+ * `users_email_key` is deliberately absent: `signUp` inserts with
+ * `ON CONFLICT (email) DO NOTHING`, so that violation never arises there,
  * and answers the neutral 202, so the handler can never tell a caller an
  * address is registered (RF-38).
  */

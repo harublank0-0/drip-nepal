@@ -12,6 +12,24 @@ const routes = {
     tokens: [{"old":"/uploads/*","type":0,"val":"uploads","end":""},{"old":"/uploads/*","type":2,"val":"*","end":""}],
     types: placeholder as Registry['drive.fs.serve']['types'],
   },
+  'signUp': {
+    methods: ["POST"],
+    pattern: '/api/v1/auth/signup',
+    tokens: [{"old":"/api/v1/auth/signup","type":0,"val":"api","end":""},{"old":"/api/v1/auth/signup","type":0,"val":"v1","end":""},{"old":"/api/v1/auth/signup","type":0,"val":"auth","end":""},{"old":"/api/v1/auth/signup","type":0,"val":"signup","end":""}],
+    types: placeholder as Registry['signUp']['types'],
+  },
+  'resendEmailVerification': {
+    methods: ["POST"],
+    pattern: '/api/v1/auth/email-verification',
+    tokens: [{"old":"/api/v1/auth/email-verification","type":0,"val":"api","end":""},{"old":"/api/v1/auth/email-verification","type":0,"val":"v1","end":""},{"old":"/api/v1/auth/email-verification","type":0,"val":"auth","end":""},{"old":"/api/v1/auth/email-verification","type":0,"val":"email-verification","end":""}],
+    types: placeholder as Registry['resendEmailVerification']['types'],
+  },
+  'confirmEmail': {
+    methods: ["POST"],
+    pattern: '/api/v1/auth/email-verification/confirm',
+    tokens: [{"old":"/api/v1/auth/email-verification/confirm","type":0,"val":"api","end":""},{"old":"/api/v1/auth/email-verification/confirm","type":0,"val":"v1","end":""},{"old":"/api/v1/auth/email-verification/confirm","type":0,"val":"auth","end":""},{"old":"/api/v1/auth/email-verification/confirm","type":0,"val":"email-verification","end":""},{"old":"/api/v1/auth/email-verification/confirm","type":0,"val":"confirm","end":""}],
+    types: placeholder as Registry['confirmEmail']['types'],
+  },
   'getLogisticsSettings': {
     methods: ["GET","HEAD"],
     pattern: '/api/v1/seller/shops/:shopSlug/logistics',

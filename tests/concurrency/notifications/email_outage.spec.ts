@@ -52,7 +52,11 @@ import { queued, useJobBoss } from '#tests/support/jobs'
  *   becomes `failed` (docs/07 §3.8 rules 2 and 4).
  */
 
-type SendPayload = JobPayloads['notifications.send_email'] & JobEnvelope
+type SendPayload = Extract<
+  JobPayloads['notifications.send_email'],
+  { event: 'user_token.issued' }
+> &
+  JobEnvelope
 
 const DISPATCH = 'notifications.dispatch'
 const SEND = 'notifications.send_email'

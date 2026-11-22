@@ -1,4 +1,5 @@
 import vine from '@vinejs/vine'
+import { ACCOUNT_LIMITS } from '#shared/constants/limits'
 
 /*
  * The one email rule of every account email (docs/09 §3.6): trimmed and
@@ -23,4 +24,11 @@ const notReservedDomain = vine.createRule((value, _options, field) => {
 })
 
 export const accountEmail = () =>
-  vine.string().trim().toLowerCase().minLength(3).maxLength(254).email().use(notReservedDomain())
+  vine
+    .string()
+    .trim()
+    .toLowerCase()
+    .minLength(ACCOUNT_LIMITS.email.min)
+    .maxLength(ACCOUNT_LIMITS.email.max)
+    .email()
+    .use(notReservedDomain())

@@ -20,7 +20,8 @@ import {
  * 4. Sends one `notifications.dispatch` job carrying the row ID and the raw
  *    token encrypted for `email_token:<purpose>` with the token's lifetime
  *    (docs/07 §3.8 rules 1 and 2), so the job exists only if the
- *    transaction commits.
+ *    transaction commits. The job carries the request that caused it, when
+ *    there is one (docs/09 §7.4 item 5); a command passes none.
  *
  * The raw token leaves this function only inside that ciphertext: nothing
  * returns, logs or prints it (docs/09 §9.1 "Output").
@@ -28,7 +29,8 @@ import {
 export async function issueUserToken(
   trx: TransactionClientContract,
   userId: string,
-  purpose: UserTokenPurpose
+  purpose: UserTokenPurpose,
+  options: { requestId?: string | null } = {}
 ) {
   const lifetime = USER_TOKEN_LIFETIME_SECONDS[purpose]
   await trx.rawQuery('SELECT id FROM users WHERE id = ? FOR NO KEY UPDATE', [userId])
@@ -55,7 +57,7 @@ export async function issueUserToken(
     event: 'user_token.issued',
     user_token_id: row.id,
     token_enc: tokenEnc,
-    request_id: null,
+    request_id: options.requestId ?? null,
     causation_id: null,
   })
   // A standard queue never refuses a send; a null id would mean the email is lost.

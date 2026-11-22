@@ -12,5 +12,17 @@
   "identity.mfa_enrollment.action": "Set up your authenticator",
   "identity.mfa_enrollment.link_hint": "If the button doesn't work, copy this link into your browser:",
   "identity.mfa_enrollment.expiry": "The link expires in {hours, plural, one {# hour} other {# hours}}. After that, ask the platform team for a new one.",
-  "identity.mfa_enrollment.ignore": "If you didn't expect this email, tell the DripNepal platform team."
+  "identity.mfa_enrollment.ignore": "If you didn't expect this email, tell the DripNepal platform team.",
+  "identity.email_verification.subject": "Confirm your email for DripNepal",
+  "identity.email_verification.intro": "Thanks for signing up. Confirm your email address to finish setting up your DripNepal account.",
+  "identity.email_verification.action": "Confirm your email",
+  "identity.email_verification.link_hint": "If the button doesn't work, copy this link into your browser:",
+  "identity.email_verification.expiry": "The link works once and expires in {hours, plural, one {# hour} other {# hours}}. After that, sign in to get a new one.",
+  "identity.email_verification.ignore": "If you didn't create a DripNepal account, you can ignore this email. The account stays unconfirmed until the link is used.",
+  "identity.account_exists.subject": "Someone tried to sign up with your email",
+  "identity.account_exists.intro": "Someone, maybe you, tried to create a DripNepal account with this email address. You already have an account, so no new one was created.",
+  "identity.account_exists.action": "Sign in",
+  "identity.account_exists.link_hint": "If the button doesn't work, copy this link into your browser:",
+  "identity.account_exists.forgot": "If you forgot your password, choose \"Forgot password\" on the sign-in page to set a new one.",
+  "identity.account_exists.ignore": "If you didn't try to sign up, you can ignore this email. Your account has not changed."
 }

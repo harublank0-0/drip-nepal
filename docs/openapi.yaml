@@ -132,12 +132,9 @@ x-pending-operations:
   - listLocalLevels
   - getCurrentSellerAgreement
   # Auth and self (06 §13.3)
-  - signUp
   - logIn
   - logOut
   - verifyMfaChallenge
-  - resendEmailVerification
-  - confirmEmail
   - requestPasswordReset
   - resetPassword
   - getMe
@@ -441,6 +438,194 @@ paths:
                   - type: object
                     properties:
                       code: { const: SERVICE_BUSY }
+
+  /api/v1/auth/signup:
+    post:
+      operationId: signUp
+      tags: [Auth]
+      summary: Create a customer account and send the verification email
+      description: |
+        Actor: anyone; no signed-in session is needed and none is created or changed (07 TM-09;
+        02 J-04 step 2). The `guest` middleware is not on this route (09 §3.4 row 3). The request
+        still carries the session cookie that holds Shield's CSRF secret, so a missing or stale
+        `X-XSRF-TOKEN` is 403 `FORBIDDEN` (06 §4.1, T-SEC-013).
+        Input: the members of `SignUpRequest` only; any other member, such as `status`,
+        `email_verified_at`, `security_stamp` or a role, is 422 `unknown_field` and nothing is
+        written (AC-FR-IAM-001-4, T-SEC-003). The email is trimmed and lower-cased (RF-22) and
+        refused in the reserved `.invalid` top-level domain (T-IAM-112); the password is 10 to
+        128 characters (07 §3.7); the name is normalised to NFC, then 1 to 100 code points
+        (`users_full_name_check` counts them after NFC, 04 §2.8); `age_confirmed` must be the
+        JSON value `true`; `phone`, when given, a
+        Nepali mobile number accepted with or without `+977`, stored in E.164, encrypted, with
+        its blind index and last four digits (AC-FR-IAM-001-5, T-IAM-103).
+        Answer: the same 202 status and body whether or not the email has an account
+        (AC-FR-IAM-001-2, T-SEC-012, T-IAM-104). The `signup_ip` limiter (5 per hour per client
+        network, 06 §9.1) is charged on every valid request before the password is hashed; the
+        password is hashed before the email is looked up, so both branches spend one hash.
+        Side effects, in one transaction: for a new email, the user (`pending_verification`,
+        inserted `ON CONFLICT (email) DO NOTHING`, whose arbiter is `users_email_key`, so a
+        concurrent signup raises no violation), its `email_verification` token (24 h, 07 §3.8) and the
+        verification email through `notifications.dispatch`, and one `user.signup` audit row
+        with the consents by name and the legal-document versions the page links
+        (AC-FR-IAM-001-6, AC-FR-IAM-013-4); for a known email, only the `notifications.dispatch`
+        job of the "account already exists" email. Not ⚷ (06 §7.7). T-IAM-001. Release R1·M1.
+      x-release: R1·M1
+      security:
+        - xsrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SignUpRequest' }
+            examples:
+              withPhone:
+                summary: A sign-up with a mobile number and the marketing email box ticked
+                value:
+                  email: ram@example.com
+                  password: example-new-password
+                  full_name: Ram Thapa
+                  phone: '+977 980-000-0000'
+                  age_confirmed: true
+                  marketing_email_consent: true
+                  marketing_sms_consent: false
+      responses:
+        '202':
+          description: Accepted, for a new and a registered email alike; nobody is signed in.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VerificationEmailSentResponse' }
+              examples:
+                sent:
+                  summary: The neutral answer of AC-FR-IAM-001-2
+                  value: { data: { status: verification_email_sent } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422': { $ref: '#/components/responses/UnprocessableContent' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /api/v1/auth/email-verification:
+    post:
+      operationId: resendEmailVerification
+      tags: [Auth]
+      summary: Send a new verification link to the signed-in user
+      description: |
+        Actor: a signed-in user (`auth`) whose account is `pending_verification`; a user who is
+        already `active` gets 403 `FORBIDDEN` and nothing is issued. The account-status check of
+        06 §4.2 has already refused any other status. Input: an empty body; any member is 422
+        `unknown_field`.
+        The `verify_resend` limiter (3 per hour per user, 06 §9.1) is charged first, so the
+        fourth request in an hour is 429 and queues nothing (AC-FR-IAM-002-3, AC-J04-10).
+        Side effects, in one transaction with the user's row locked (04a §5.2): the earlier live
+        `email_verification` token is consumed, so its link stops working, a new one is
+        issued, and its email is queued through `notifications.dispatch`. Not ⚷ (06 §7.7).
+        T-IAM-002, T-IAM-105. Release R1·M1.
+      x-release: R1·M1
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '202':
+          description: A new link is on its way; the earlier one no longer works.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VerificationEmailSentResponse' }
+              examples:
+                sent:
+                  summary: A resend
+                  value: { data: { status: verification_email_sent } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422': { $ref: '#/components/responses/UnprocessableContent' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /api/v1/auth/email-verification/confirm:
+    post:
+      operationId: confirmEmail
+      tags: [Auth]
+      summary: Redeem a verification link
+      description: |
+        Actor: anyone holding the token; no session is needed and none is created or changed
+        (07 TM-09). The request still needs `X-XSRF-TOKEN` (06 §4.1).
+        Lookup and lock order (04a §5.2): the token's user is read by the SHA-256 of the token
+        for the `email_verification` purpose only, the user's row is locked, then the token is
+        redeemed in one statement. A user already `active` answers 200 with no write, so the
+        same link again, a double click or a second tab, is not an error (AC-J04-06). For a
+        `pending_verification` user, a live token is consumed and the user becomes `active`
+        with `email_verified_at` (compare-and-set, 07 §3.12), with one `user.email_verify`
+        audit row. A suspended or deactivated user's link answers 422 and stays unconsumed.
+        An unknown, malformed, expired or replaced token, or one of another purpose, which
+        stays unconsumed (T-SEC-012), is 422 on `token` with the item code `token_invalid`
+        and no account data (AC-FR-IAM-002-4); nothing changes. A `token` that is missing or
+        empty, not a string, or longer than 256 characters is refused by the validator first,
+        with Vine's `required`, `string` or `max_length` on `token`. Not ⚷ (06 §7.7).
+        T-IAM-002, T-IAM-105. Release R1·M1.
+      x-release: R1·M1
+      security:
+        - xsrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ConfirmEmailRequest' }
+            examples:
+              link:
+                summary: The token from the emailed `/verify-email?token=…` link (placeholder)
+                value: { token: EXAMPLE-NOT-A-REAL-TOKEN }
+      responses:
+        '200':
+          description: The account is `active`, now or already.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmailVerifiedResponse' }
+              examples:
+                active:
+                  summary: Verified
+                  value: { data: { status: active } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422':
+          description: |
+            `VALIDATION_FAILED`: the token is unknown, malformed, expired, replaced, of another
+            purpose or its account is suspended or deactivated (one `token_invalid` item, no
+            account data); a missing, empty, non-string or over-256-character `token` (one
+            `required`, `string` or `max_length` item); or a member is unknown
+            (`unknown_field`).
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem422' }
+              examples:
+                expired:
+                  summary: An expired or already replaced link (AC-FR-IAM-002-4)
+                  value:
+                    type: https://dripnepal.com/problems/validation-failed
+                    title: Validation failed
+                    status: 422
+                    detail: This link has expired or has already been used.
+                    code: VALIDATION_FAILED
+                    request_id: 01929d01-0000-7000-8000-000000000422
+                    errors:
+                      - field: token
+                        code: token_invalid
+                        message: This link has expired or has already been used.
+        '500': { $ref: '#/components/responses/Internal' }
 
   /api/v1/seller/shops/{shopSlug}/products:
     parameters:
@@ -4751,6 +4936,92 @@ components:
           }
         name: { type: string, minLength: 2, maxLength: 60 }
 
+    # ---------- signUp, resendEmailVerification, confirmEmail (06 §13.3; M1 part 2a) ----------
+    SignUpRequest:
+      type: object
+      description: |
+        The whole input of `signUp`; any other member is 422 `unknown_field` (06 §3.5,
+        T-SEC-003). Limits mirror `users` (04a §5.1) and 07 §3.7.
+      additionalProperties: false
+      required:
+        [email, password, full_name, age_confirmed, marketing_email_consent, marketing_sms_consent]
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 3
+          maxLength: 254
+          description: Trimmed and lower-cased before storage (RF-22); never in the reserved `.invalid` TLD.
+        password:
+          type: string
+          minLength: 10
+          maxLength: 128
+          writeOnly: true
+          description: No composition rule; paste allowed (07 §3.7). Never stored or logged.
+        full_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: |
+            Trimmed and normalised to NFC, then counted in code points (`char_length`), so a
+            name that NFC lengthens, such as one with the Devanagari letter U+0958, is measured
+            after it grows (04 §2.8).
+        phone:
+          type: [string, 'null']
+          maxLength: 32
+          description: |
+            Optional. A Nepali mobile number, with or without `+977`, `977` or a leading `0`, with
+            spaces or hyphens; it must be `9`, then `6`, `7` or `8`, then eight digits (04 §2.8).
+            Stored in E.164, encrypted, with its blind index and last four digits. Another
+            account may use the same number. Anything else is 422 `nepal_mobile`.
+        age_confirmed:
+          const: true
+          description: |
+            The unticked "I am 18 or older" box, which must be ticked (A-26; OD-24): the JSON
+            value `true` only; `false` is 422 `accepted`, and `"yes"`, `"on"` or `1` are 422
+            `boolean`.
+        marketing_email_consent:
+          type: boolean
+          description: The unticked marketing email box; `true` stores the time of consent (FR-IAM-013).
+        marketing_sms_consent:
+          type: boolean
+          description: The unticked marketing SMS box; `true` stores the time of consent (FR-IAM-013).
+    ConfirmEmailRequest:
+      type: object
+      additionalProperties: false
+      required: [token]
+      properties:
+        token:
+          type: string
+          minLength: 1
+          maxLength: 256
+          writeOnly: true
+          description: The raw token of the emailed link (32 random bytes, base64url, 07 §3.8).
+    VerificationEmailSentResponse:
+      type: object
+      description: The neutral 202 of `signUp` and `resendEmailVerification` (06 §3.7).
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required: [status]
+          properties:
+            status: { const: verification_email_sent }
+    EmailVerifiedResponse:
+      type: object
+      description: The 200 of `confirmEmail`.
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required: [status]
+          properties:
+            status: { const: active }
+
     # ---------- listProducts ----------
     ListingCard:
       type: object
@@ -6939,3 +7210,17 @@ components:
 #     (none once the shop has an active account of its own), and `bookCourierShipment` books on
 #     them, with the 422 `own_account_active` and the 409 while `platform_account_cod_enabled` is
 #     false.
+#
+# Added with sign-up and email verification (2026-11-23, M1 part 2a):
+# 47. `signUp`, `resendEmailVerification` and `confirmEmail` move from `x-pending-operations` to
+#     `paths`, written from the code, with the new schemas `SignUpRequest`, `ConfirmEmailRequest`,
+#     `VerificationEmailSentResponse` and `EmailVerifiedResponse` (06 note 56). The two operations
+#     a guest may call declare `security: [xsrfHeader]`: no signed-in session, but the CSRF header
+#     and the session cookie that holds its secret. `confirmEmail` answers 200 for any link of an
+#     account already `active`, and 422 `token_invalid` for every other refused token;
+#     `resendEmailVerification` answers 403 `FORBIDDEN` to a user who is no longer
+#     `pending_verification`. After the Fable review: the `signUp` insert is described as the
+#     statement that runs, `ON CONFLICT (email) DO NOTHING` with `users_email_key` as its
+#     arbiter; `full_name` is counted in code points after NFC; `age_confirmed` accepts the
+#     JSON `true` only; and `confirmEmail`'s 422 names the validator's own items for a missing,
+#     non-string or over-long token, and the suspended or deactivated account's link.

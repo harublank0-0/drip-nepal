@@ -19,7 +19,13 @@ let shared: PgBoss | null = null
 
 // Starts the shared instance once and returns it, for a test that fetches or sends itself.
 export async function useJobBoss(): Promise<PgBoss> {
-  if (hasJobBoss() && shared) return shared
+  // A test that swapped in a fake and then cleared it (setJobBoss(null)) leaves the shared
+  // instance running: register it again rather than start a second one that is never stopped,
+  // whose timers would keep the test process alive after the run.
+  if (shared) {
+    if (!hasJobBoss()) setJobBoss(shared)
+    return shared
+  }
   const config = db.manager.get(db.primaryConnectionName)?.config as PostgreConfig
   const boss = createJobBoss(jobDatabaseOf(config)!, 'web')
   await boss.start()

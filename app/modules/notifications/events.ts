@@ -20,8 +20,22 @@ export type UserTokenIssued = {
   token_enc: string
 }
 
+/*
+ * Someone signed up with an email that already has an account, whose
+ * holder gets the "account already exists" email instead of a verification
+ * email (AC-FR-IAM-001-2; M1 part 2a). The event has no row of its own, so
+ * `signUp` gives it a random `event_id`, which the delivery row's
+ * `dedupe_key` names: a replayed job sends nothing new. The payload carries
+ * the account's ID only; the handlers read the address when they run.
+ */
+export type SignupAttempted = {
+  event: 'user.signup_attempted'
+  event_id: string
+  user_id: string
+}
+
 // The events `notifications.dispatch` turns into emails.
-export type NotificationEvent = UserTokenIssued
+export type NotificationEvent = UserTokenIssued | SignupAttempted
 
 /*
  * One `notification_deliveries` row to send (docs/04a §14.3): the row's ID

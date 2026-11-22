@@ -29,6 +29,7 @@ router.where('orderNumber', upperCase)
 router.where('shopOrderNumber', upperCase)
 
 // The JSON operations (docs/06 §13) and webhooks (§12).
+await import('#start/routes/api_v1/auth')
 await import('#start/routes/api_v1/seller')
 await import('#start/routes/api_v1/admin')
 await import('#start/routes/webhooks')

@@ -29,6 +29,10 @@ export const RATE_LIMITS = {
   // Password re-entry (docs/07 §3.6): both keys checked before hashing, charged before the check.
   reauth_user: { prefix: 'reauth:user', requests: 5, duration: '15 minutes' },
   reauth_user_day: { prefix: 'reauth:user_day', requests: 10, duration: '24 hours' },
+  // signUp, per client network; charged on every valid request, known email or not (RF-38).
+  signup_ip: { prefix: 'signup:ip', requests: 5, duration: '1 hour' },
+  // resendEmailVerification, per user (AC-FR-IAM-002-3).
+  verify_resend: { prefix: 'verify:user', requests: 3, duration: '1 hour' },
   // Courier callbacks (docs/06 §9.1, M6): per client network before the token, then per account.
   webhook_ip: { prefix: 'webhook:ip', requests: 600, duration: '1 minute' },
   courier_callback: { prefix: 'courier_callback', requests: 120, duration: '1 minute' },

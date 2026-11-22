@@ -5,6 +5,8 @@ import db from '@adonisjs/lucid/services/db'
 import { appUrl } from '#config/app'
 import { hmacKeys } from '#config/crypto'
 import { issueUserToken } from '#modules/identity/actions/issue_user_token'
+import { signUp } from '#modules/identity/actions/sign_up'
+import type { UserTokenPurpose } from '#modules/identity/domain/user_token_purpose'
 import { keyedHash } from '#modules/platform/crypto/keyed_hash'
 import type { JobEnvelope, JobPayloads } from '#modules/platform/jobs'
 import { EmailNotSent } from '#modules/platform/ports/email_sender'
@@ -14,38 +16,57 @@ import { sendEmail, type SendOutcome } from '#modules/notifications/jobs/send_em
 import { captureEmails } from '#tests/support/email'
 import { queued, useJobBoss } from '#tests/support/jobs'
 import { captureLogs } from '#tests/support/logs'
+import { SIGN_UP_PASSWORD, forgetSignUp, randomIPv4 } from '#tests/support/identity'
 import { insertUser } from '#tests/support/schema_rows'
 
 /*
  * The token emails of M1 part 1b (docs/03 §9, docs/04a §14.3, docs/05
- * §8.14, docs/07 §3.8). Tokens are issued by the real step action
- * `issueUserToken`, which queues `notifications.dispatch`; the handlers are
- * called directly with the queued payloads, and the `EmailSender` port is
- * the capturing fake, which, like the real adapter, throws if a handler
- * sends inside a transaction (T-ARCH-003).
+ * §8.14, docs/07 §3.8), and the email verification and "account already
+ * exists" emails of M1 part 2a. Tokens are issued by the real step action
+ * `issueUserToken`, and the account-exists event by the real `signUp`,
+ * each of which queues `notifications.dispatch`; the handlers are called
+ * directly with the queued payloads, and the `EmailSender` port is the
+ * capturing fake, which, like the real adapter, throws if a handler sends
+ * inside a transaction (T-ARCH-003).
  *
  * - T-NOT-101: an event dispatched three times gives one delivery row, one
  *   `notifications.send_email` job and one email; the job run twice sends
- *   once (compare-and-set on `queued`). Both token purposes, each with its
- *   template, subject and page. A replay after the token was used is a
- *   quiet duplicate; a send job whose row is done is quiet, and one whose
- *   row is missing warns (03 §10.4).
+ *   once (compare-and-set on `queued`). Every token purpose, each with its
+ *   template, subject and page, and the account-exists notice, whose link
+ *   is the sign-in page and carries no token. A replay after the token was
+ *   used is a quiet duplicate; a send job whose row is done is quiet, and
+ *   one whose row is missing warns (03 §10.4).
  * - T-NOT-001, the handler part (05 §8.14): a retryable failure keeps the
  *   row `queued` with `attempts` and `last_error`, so the retry or a
  *   redrive still sends it, and any other error is recorded by its name
  *   only; a permanent one, a replaced or expired token, a user suspended
  *   meanwhile, an address changed since dispatch, and a `token_enc` that no
  *   longer decrypts (07 §3.8 rule 4) make it `failed` with no send, keeping
- *   an earlier transport error in `last_error`; nothing sends a `failed`
- *   row again. The dead-letter and redrive part, with `jobs:redrive`, is
+ *   an earlier transport error in `last_error`, and so does an
+ *   account-exists notice whose account was anonymised meanwhile; nothing
+ *   sends a `failed` row again. The dead-letter and redrive part, with `jobs:redrive`, is
  *   in tests/concurrency/notifications/email_outage.spec.ts.
  */
 
-type DispatchPayload = JobPayloads['notifications.dispatch'] & JobEnvelope
-type SendPayload = JobPayloads['notifications.send_email'] & JobEnvelope
+type DispatchPayload = Extract<
+  JobPayloads['notifications.dispatch'],
+  { event: 'user_token.issued' }
+> &
+  JobEnvelope
+type SendPayload = Extract<
+  JobPayloads['notifications.send_email'],
+  { event: 'user_token.issued' }
+> &
+  JobEnvelope
+type NoticeDispatch = Extract<
+  JobPayloads['notifications.dispatch'],
+  { event: 'user.signup_attempted' }
+> &
+  JobEnvelope
+type AnySend = JobPayloads['notifications.send_email'] & JobEnvelope
 
 // A token issued by the real step action, and the dispatch job it queued.
-async function issueToken(purpose: 'password_reset' | 'mfa_enrollment', userId?: string) {
+async function issueToken(purpose: UserTokenPurpose, userId?: string) {
   const owner = userId ?? (await insertUser())
   const token = await withTx((trx) => issueUserToken(trx, owner, purpose))
   const jobs = await queued<DispatchPayload>('notifications.dispatch')
@@ -57,6 +78,46 @@ async function issueToken(purpose: 'password_reset' | 'mfa_enrollment', userId?:
 async function sendJobsOf(deliveryId: string) {
   const jobs = await queued<SendPayload>('notifications.send_email')
   return jobs.filter((job) => job.data.delivery_id === deliveryId).map((job) => job.data)
+}
+
+/*
+ * The "account already exists" event of a real `signUp`: the account is
+ * created by a first sign-up and the event is queued by a second one with
+ * the same email, from its own client network (tests/support/identity.ts).
+ */
+async function signupNotice() {
+  const ip = randomIPv4()
+  const email = `t-not-101-${randomUUID()}@example.com`
+  const command = {
+    email,
+    password: SIGN_UP_PASSWORD,
+    fullName: 'Sita Shrestha',
+    phoneE164: null,
+    marketingEmailConsent: false,
+    marketingSmsConsent: false,
+  }
+  const context = { ip, requestId: null, ipHash: null }
+  try {
+    await signUp(command, context)
+    await signUp(command, context)
+  } finally {
+    await forgetSignUp(ip)
+  }
+  const user = await db.from('users').where('email', email).firstOrFail()
+  const jobs = await queued<NoticeDispatch>('notifications.dispatch')
+  const job = jobs.find(
+    (queuedJob) =>
+      queuedJob.data.event === 'user.signup_attempted' && queuedJob.data.user_id === user.id
+  )
+  if (!job) throw new Error('signUp queued no account-exists event')
+  return { userId: user.id as string, email, event: job.data }
+}
+
+async function noticeSendJob(deliveryId: string) {
+  const jobs = await queued<AnySend>('notifications.send_email')
+  const job = jobs.find((queuedJob) => queuedJob.data.delivery_id === deliveryId)
+  if (!job) throw new Error('dispatch queued no send job')
+  return job.data
 }
 
 const deliveriesOf = (userId: string) =>
@@ -94,6 +155,12 @@ test.group('T-NOT-101 a replayed event gives one delivery row and one send', (gr
     'T-NOT-101 a {purpose} token event dispatched three times gives one row, one job and one email'
   )
     .with([
+      {
+        purpose: 'email_verification' as const,
+        template: 'identity.email_verification',
+        subject: 'Confirm your email for DripNepal',
+        page: '/verify-email',
+      },
       {
         purpose: 'password_reset' as const,
         template: 'identity.password_reset',
@@ -205,6 +272,45 @@ test.group('T-NOT-101 a replayed event gives one delivery row and one send', (gr
     assert.lengthOf(warnings, 1)
     assert.include(warnings[0].fields, { delivery_id: missingId, reason: 'delivery_missing' })
     assert.lengthOf(emails.fake.sent, 1)
+  })
+
+  test('T-NOT-101 an account-exists event dispatched three times gives one row, one job and one email with no token', async ({
+    assert,
+  }) => {
+    const { userId, email, event } = await signupNotice()
+
+    const first = await dispatchNotification(event)
+    const second = await dispatchNotification(event)
+    const third = await dispatchNotification(event)
+    assert.equal(first.kind, 'queued')
+    assert.deepEqual([second.kind, third.kind], ['duplicate', 'duplicate'])
+
+    const rows = await deliveriesOf(userId)
+    assert.lengthOf(rows, 1)
+    assert.equal(rows[0].dedupe_key, `${event.event_id}:identity.account_exists:${userId}`)
+    assert.include(rows[0], { template: 'identity.account_exists', status: 'queued' })
+    assert.deepEqual(rows[0].to_address_hash, keyedHash(hmacKeys.notifyAddress.release(), email))
+
+    const job = await noticeSendJob(rows[0].id)
+    assert.include(job, {
+      event: 'user.signup_attempted',
+      event_id: event.event_id,
+      user_id: userId,
+      causation_id: event.event_id,
+    })
+    const sent = await sendEmail(job)
+    const resent = await sendEmail(job)
+    assert.equal(sent.kind, 'sent')
+    assert.equal(resent.kind, 'not_queued')
+    assert.lengthOf(emails.fake.sent, 1)
+    const [message] = emails.fake.sent
+    assert.equal(message.to, email)
+    assert.equal(message.template, 'identity.account_exists')
+    assert.equal(message.subject, 'Someone tried to sign up with your email')
+    const link = linkIn(message.text)
+    assert.equal(link.origin, new URL(appUrl).origin)
+    assert.equal(link.pathname, '/login')
+    assert.notInclude(message.text, 'token=')
   })
 })
 
@@ -386,6 +492,37 @@ test.group('T-NOT-001 notifications.send_email failures', (group) => {
     const failed = await delivery(payload.delivery_id)
     assert.include(failed, { status: 'failed', last_error: 'address_changed' })
     assert.lengthOf(emails.fake.sent, 0)
+  })
+
+  test('T-NOT-001 an account-exists notice whose account was anonymised before the send fails without sending', async ({
+    assert,
+  }) => {
+    const { userId, event } = await signupNotice()
+    const outcome = await dispatchNotification(event)
+    if (outcome.kind !== 'queued') throw new Error(`dispatch gave ${outcome.kind}`)
+    const job = await noticeSendJob(outcome.deliveryId)
+    // The anonymisation of docs/04 §19.2, as M7's action will write it.
+    await db
+      .from('users')
+      .where('id', userId)
+      .update({
+        status: 'anonymized',
+        anonymized_at: db.raw('now()'),
+        email: `deleted-${userId}@anonymized.invalid`,
+        full_name: null,
+        password_hash: null,
+        age_confirmed_at: null,
+      })
+
+    const sent = await sendEmail(job)
+    assert.deepEqual(sent, { kind: 'failed', reason: 'recipient_unreachable' })
+    const failed = await delivery(outcome.deliveryId)
+    assert.include(failed, { status: 'failed', last_error: 'recipient_unreachable' })
+    assert.lengthOf(emails.fake.sent, 0)
+
+    // A replay of the event after the anonymisation dispatches nothing new.
+    const replay = await dispatchNotification(event)
+    assert.equal(replay.kind, 'duplicate')
   })
 
   test('T-NOT-001 an unexpected error is recorded by its name only, keeps the row queued and is rethrown', async ({
