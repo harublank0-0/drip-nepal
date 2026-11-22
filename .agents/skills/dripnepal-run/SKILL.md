@@ -15,13 +15,14 @@ The v1 store (storefront, seller dashboard, admin pages, demo logins) was remove
 | -------------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `/dev/design-system` | development only | The theme tokens, buttons and cards: the one Inertia page                                                                                                                     |
 | `/dev/sign-in`       | development only | The development-only sign-in ([docs/07 §3.13](../../../docs/07-security-threat-model-and-permissions.md#313-development-only-sign-in)): sign in as a demo account or as staff |
+| `/admin/logistics`   | every mode       | The admin courier accounts list (docs/08 §3.1): a platform admin with fresh MFA; open it after the dev sign-in                                                                |
 | `/dev/overlays`      | development only | A dialog and a toast, for the overlay checks of docs/08 §5.7 and §5.9                                                                                                         |
 | `/health/live`       | every mode       | `{"status":"ok","release":…}`: the process serves HTTP ([docs/11 §7.1](../../../docs/11-deployment-and-operations.md#71-endpoints))                                           |
 | `/health/ready`      | every mode       | `{"status":"ok"}`, or 503 when the database does not answer                                                                                                                   |
 | `/uploads/*`         | every mode       | Files in `./storage`, served by the `fs` disk of `config/drive.ts`; nothing uploads yet                                                                                       |
 | anything else        | every mode       | 404: the server-rendered error page (`errors/not_found`), or a problem+json body under `/api/`                                                                                |
 
-There is no login page until M1. To see signed-in pages, `node ace db:seed` creates the demo accounts (`owner@`, `manager@`, `fulfiller@` and `approver@dev.dripnepal.invalid`, with the active shop `demo-pasal`) and writes their password to `tmp/dev_credentials.json`; `node ace platform:create-admin --interactive` creates a staff account, and running `db:seed` again gives it a placeholder TOTP enrolment. Then open `/dev/sign-in` and pick an account ([docs/07 §3.13](../../../docs/07-security-threat-model-and-permissions.md#313-development-only-sign-in)). The page checker cannot sign in yet: its `--login` fills M1's login form, so until then it checks pages that need no session. `node ace list:routes` lists the routes that exist (one JSON line per route in a non-interactive shell, a table in a terminal).
+There is no login page until M1. To see signed-in pages, `node ace db:seed` creates the demo accounts (`owner@`, `manager@`, `fulfiller@` and `approver@dev.dripnepal.invalid`, with the active shop `demo-pasal`) and writes their password to `tmp/dev_credentials.json`; `node ace platform:create-admin --interactive` creates a staff account, and running `db:seed` again gives it a placeholder TOTP enrolment. Then open `/dev/sign-in` and pick an account ([docs/07 §3.13](../../../docs/07-security-threat-model-and-permissions.md#313-development-only-sign-in)). For signed-in pages, the page checker's `--dev-sign-in <email>` signs in through `/dev/sign-in` first; its `--login` waits for M1's form. `node ace list:routes` lists the routes that exist (one JSON line per route in a non-interactive shell, a table in a terminal).
 
 ## 1. Database and environment
 
@@ -84,7 +85,7 @@ node .agents/skills/dripnepal-run/scripts/check_pages.cjs
 node .agents/skills/dripnepal-run/scripts/check_pages.cjs --widths 390 --full --scale 2 /dev/design-system
 ```
 
-Options: `--base <url>` (another server), `--widths 390,768,1280`, `--themes light`, `--full` (the whole page, clipped to the screen width so it shows what a phone shows), `--scale 2` (sharper screenshots for a person to look at), `--out <dir>`. `--login email:password` fills the login form at `/auth/login` before the visits; no login page exists until M1, so check the form's path and field names when one does. It exits 1 when any page fails.
+Options: `--base <url>` (another server), `--widths 390,768,1280`, `--themes light`, `--full` (the whole page, clipped to the screen width so it shows what a phone shows), `--scale 2` (sharper screenshots for a person to look at), `--out <dir>`. `--login email:password` fills the login form at `/auth/login` before the visits; no login page exists until M1, so check the form's path and field names when one does. `--dev-sign-in email` clicks that account's button on `/dev/sign-in` instead, for a demo or staff account. It exits 1 when any page fails.
 
 What a line means:
 

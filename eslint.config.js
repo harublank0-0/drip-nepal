@@ -424,7 +424,8 @@ export default configApp(
     ignores: A11Y_IGNORES,
     rules: {
       'jsx-a11y/alt-text': 'error',
-      'jsx-a11y/anchor-is-valid': 'error',
+      // The typed `Link` of @adonisjs/inertia/react renders its href from `route` (docs/08 §2.1).
+      'jsx-a11y/anchor-is-valid': ['error', { components: ['Link'], specialLink: ['route'] }],
       'jsx-a11y/label-has-associated-control': 'error',
       'jsx-a11y/no-autofocus': 'error',
       'jsx-a11y/click-events-have-key-events': 'error',

@@ -12,6 +12,8 @@ type ExtractProps<T> =
 
 declare module '@adonisjs/inertia/types' {
   export interface InertiaPages {
+    'admin/forbidden': ExtractProps<(typeof import('../../inertia/pages/admin/forbidden.tsx'))['default']>
+    'admin/logistics': ExtractProps<(typeof import('../../inertia/pages/admin/logistics.tsx'))['default']>
     'dev/design_system/color_card': ExtractProps<(typeof import('../../inertia/pages/dev/design_system/color_card.tsx'))['default']>
     'dev/design_system/colors': ExtractProps<(typeof import('../../inertia/pages/dev/design_system/colors.ts'))['default']>
     'dev/design_system/design_buttons': ExtractProps<(typeof import('../../inertia/pages/dev/design_system/design_buttons.tsx'))['default']>
@@ -20,6 +22,7 @@ declare module '@adonisjs/inertia/types' {
     'dev/design_system/theme_section': ExtractProps<(typeof import('../../inertia/pages/dev/design_system/theme_section.tsx'))['default']>
     'dev/overlays': ExtractProps<(typeof import('../../inertia/pages/dev/overlays.tsx'))['default']>
     'dev/sign_in': ExtractProps<(typeof import('../../inertia/pages/dev/sign_in.tsx'))['default']>
+    'errors/forbidden': ExtractProps<(typeof import('../../inertia/pages/errors/forbidden.tsx'))['default']>
     'errors/not_found': ExtractProps<(typeof import('../../inertia/pages/errors/not_found.tsx'))['default']>
     'errors/server_error': ExtractProps<(typeof import('../../inertia/pages/errors/server_error.tsx'))['default']>
   }

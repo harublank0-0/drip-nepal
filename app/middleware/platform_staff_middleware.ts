@@ -39,8 +39,9 @@ export default class PlatformStaffMiddleware {
     if (!mfaWithin(ctx, MFA_WINDOW_MS)) {
       throw new DomainError('MFA_REQUIRED', { extensions: { mfa: 'verification_required' } })
     }
-    if (!staffMay(role, options.permission)) throw new DomainError('FORBIDDEN')
+    // Set before the permission check, so the 403 page's navigation shows what the role can use.
     ctx.staff = { userId: user.id, role }
+    if (!staffMay(role, options.permission)) throw new DomainError('FORBIDDEN')
     return next()
   }
 }

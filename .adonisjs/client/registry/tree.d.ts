@@ -35,6 +35,9 @@ export interface ApiDefinition {
   adminResolveCourierEvent: typeof routes['adminResolveCourierEvent']
   adminRecordOrderVerification: typeof routes['adminRecordOrderVerification']
   receiveCourierCallback: typeof routes['receiveCourierCallback']
+  admin: {
+    logistics: typeof routes['admin.logistics']
+  }
   dev: {
     designSystem: typeof routes['dev.design_system']
     overlays: typeof routes['dev.overlays']

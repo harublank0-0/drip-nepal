@@ -180,6 +180,12 @@ const routes = {
     tokens: [{"old":"/api/v1/webhooks/couriers/:providerCode/:accountId","type":0,"val":"api","end":""},{"old":"/api/v1/webhooks/couriers/:providerCode/:accountId","type":0,"val":"v1","end":""},{"old":"/api/v1/webhooks/couriers/:providerCode/:accountId","type":0,"val":"webhooks","end":""},{"old":"/api/v1/webhooks/couriers/:providerCode/:accountId","type":0,"val":"couriers","end":""},{"old":"/api/v1/webhooks/couriers/:providerCode/:accountId","type":1,"val":"providerCode","end":""},{"old":"/api/v1/webhooks/couriers/:providerCode/:accountId","type":1,"val":"accountId","end":""}],
     types: placeholder as Registry['receiveCourierCallback']['types'],
   },
+  'admin.logistics': {
+    methods: ["GET","HEAD"],
+    pattern: '/admin/logistics',
+    tokens: [{"old":"/admin/logistics","type":0,"val":"admin","end":""},{"old":"/admin/logistics","type":0,"val":"logistics","end":""}],
+    types: placeholder as Registry['admin.logistics']['types'],
+  },
   'dev.design_system': {
     methods: ["GET","HEAD"],
     pattern: '/dev/design-system',

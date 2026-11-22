@@ -73,3 +73,19 @@ export async function resolveSellerContext(
     viaRedirect: row.via_redirect,
   }
 }
+
+export type ShopLabel = { id: string; slug: string; name: string }
+
+/*
+ * The slug and name of each shop in `ids`, for pages that show other
+ * modules' rows by shop (the admin courier accounts, docs/08 §3.1). An ID
+ * with no shop is left out.
+ */
+export async function shopLabels(ids: readonly string[]): Promise<Map<string, ShopLabel>> {
+  if (ids.length === 0) return new Map()
+  const rows = await db
+    .from('shops')
+    .whereIn('id', [...new Set(ids)])
+    .select('id', 'slug', 'name')
+  return new Map(rows.map((row) => [row.id, { id: row.id, slug: row.slug, name: row.name }]))
+}

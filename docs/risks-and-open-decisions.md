@@ -237,6 +237,17 @@ OD-28 to OD-54 register the owner decisions that the three deep audits left open
 Newest first. The entry format is in §1.5. A ruling that is not an OD but changes an owning document or an ADR is logged in the same format, headed "Not an OD".
 
 ```text
+Not an OD — Decided 2026-11-22 by product owner: review-pending ui/ copies on pages built before M1
+Ruling: Pages built ahead of M1 may use ui/ copies whose second review is pending, because no one
+        outside development reaches them before M1's sign-in exists; every copy a page uses
+        passes its 08 §12.3 second review before that page is released.
+Evidence: The product owner's answer of 2026-11-22 ("Allow before release"), when the admin
+          courier accounts page needed sidebar, table and other copies still under review.
+ADR: none (ADR-0015's review policy is applied, not changed).
+Docs updated: 08 (§12.1, §12.3, note 75), 12 (§5.6, note 54), note 49  |  Status: Decided
+```
+
+```text
 Not an OD — Decided 2026-11-22 by product owner: courier pages before M1, a development-only
         sign-in, and OD-59 amended for factory-built demo data
 Ruling: The M6 courier screens of 08 §3.1 are built now in five pull requests (12 §5.6), with a
@@ -1052,3 +1063,4 @@ This matrix is authoritative for decision gates. [12 §3](12-roadmap-and-backlog
 46. **VX-10 second archive search (2026-11-22).** VX-10's owner action notes that the 19 uncovered local levels are absent from all 301 archived MoFAGA copies (278 of them listing local levels), so they need a check from Nepal ([research](research/locations-mofaga-cross-check.md)).
 47. **Courier pages and OD-59 amended (2026-11-22).** §2.3 logs the product owner's ruling: the courier pages are built before M1 with a development-only sign-in, and OD-59 allows a factory-built development seeder until the real actions exist; §2.2's OD-59 row records the amendment.
 48. **Development-only sign-in built (2026-11-22).** The §2.3 entry of 2026-11-22 lists the documents the built sign-in and demo seeder changed: ADR-0004 decision 6 gains its one exception, the sign-in's two `POST` routes, and 07 §3.13 specifies the sign-in.
+49. **Review-pending copies on early pages (2026-11-22).** §2.3 logs the product owner's ruling that pages built before M1 may use `ui/` copies whose second review is pending, with the review a release blocker for each page that uses them.

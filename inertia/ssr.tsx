@@ -1,11 +1,10 @@
 import { client } from '~/client'
-import { StrictMode, type ComponentType, type ReactElement } from 'react'
-import { type Data } from '@generated/data'
+import { StrictMode, type ComponentType } from 'react'
 import ReactDOMServer from 'react-dom/server'
 import { createInertiaApp, type usePage } from '@inertiajs/react'
 import { TuyauProvider } from '@adonisjs/inertia/react'
 import { resolvePageComponent } from '@adonisjs/inertia/helpers'
-import RootLayout from '~/layouts/root_layout'
+import { layoutFor } from '~/layouts/layout_for'
 
 const appName = import.meta.env.VITE_APP_NAME || 'Drip Nepal'
 
@@ -30,7 +29,7 @@ export default function render(page: ReturnType<typeof usePage>) {
           ],
           { eager: true }
         ),
-        (child: ReactElement<Data.SharedProps>) => <RootLayout children={child} />
+        layoutFor(name)
       )
       return resolved.default
     },
