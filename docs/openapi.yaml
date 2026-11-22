@@ -6533,8 +6533,8 @@ components:
 # 11. Limiters `mfa`, `payment_return`, `webhook_ip` and the 64 KB webhook body limit (proposed,
 #     06 §9.1, §9.2); test IDs T-API-002..T-API-008, T-PAY-001 and T-SEC-101 are proposed (docs/10).
 #     Done in the consistency review, 2026-09-30: 10 §6 registers these test IDs (and T-SEC-006,
-#     T-SEC-021, T-FUL-004), so this file cites them plainly; the limiters `mfa_user` (OD-50) and
-#     `payment_return_ip` (06 §9.1, note 29) are proposed too.
+#     T-SEC-021, T-FUL-004), so this file cites them plainly; the limiter `payment_return_ip`
+#     (06 §9.1, note 29) is proposed too. `mfa_user` was approved with OD-50 on 2026-11-22.
 # 12. `NextAction` variants `redirect` and `form_post` for R1.1 gateways are a proposed shape; 06
 #     §13.4 only says "Khalti `payment_url` or eSewa form fields". `startOrderPayment`'s PR fixes it.
 #
