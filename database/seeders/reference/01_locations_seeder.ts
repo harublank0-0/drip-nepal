@@ -60,6 +60,14 @@ const COLUMNS = [
   'ward_count',
 ] as const
 
+// A local level's `name_en` is its place name followed by this label (docs/04 §21.4 step 3).
+export const TYPE_LABELS: Record<LocalLevelType, string> = {
+  metropolitan: 'Metropolitan City',
+  sub_metropolitan: 'Sub-Metropolitan City',
+  municipality: 'Municipality',
+  rural_municipality: 'Rural Municipality',
+}
+
 export class LocationsDatasetError extends Error {}
 
 export async function readLocations(file: URL | string = LOCATIONS_FILE): Promise<LocationRow[]> {
@@ -93,6 +101,7 @@ const isCleanName = (name: string) =>
 export function checkLocations(rows: LocationRow[]) {
   const problems: string[] = []
   const codes = new Set<string>()
+  const englishNames = new Set<string>()
   const provinces = new Map<string, string>()
   const districts = new Map<string, string>()
   const byType: Record<string, number> = {}
@@ -118,6 +127,9 @@ export function checkLocations(rows: LocationRow[]) {
       problems.push(`${row.code} has the unknown type "${row.type}"`)
     } else {
       byType[row.type] = (byType[row.type] ?? 0) + 1
+      if (!row.nameEn.endsWith(` ${TYPE_LABELS[row.type]}`)) {
+        problems.push(`${row.code}: "${row.nameEn}" does not end with "${TYPE_LABELS[row.type]}"`)
+      }
     }
     if (!Number.isInteger(row.wardCount) || row.wardCount < 1 || row.wardCount > 40) {
       problems.push(`${row.code} has ${row.wardCount} wards, outside 1 to 40`)
@@ -126,6 +138,14 @@ export function checkLocations(rows: LocationRow[]) {
     if (![row.nameEn, row.nameNe].every(isCleanName)) {
       problems.push(`${row.code} has a name that is empty, padded or not NFC`)
     }
+    // A picker lists the local levels of one district by name, so two may not share one.
+    const englishName = `${row.districtCode} ${row.nameEn.toLowerCase()}`
+    if (englishNames.has(englishName)) {
+      problems.push(
+        `${row.code}: "${row.nameEn}" is already a local level of district ${row.districtCode}`
+      )
+    }
+    englishNames.add(englishName)
     const districtNames = [row.districtNameEn, row.districtNameNe]
     const provinceNames = [row.provinceNameEn, row.provinceNameNe]
     if (![...districtNames, ...provinceNames].every(isCleanName)) {

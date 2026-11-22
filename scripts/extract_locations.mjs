@@ -11,8 +11,9 @@
 // --cbs: the Central Bureau of Statistics' local-unit list from Open Data Nepal
 //   (columns S.N., District, Local unit, स्थानीय तह, Code). It gives the English
 //   names of local levels and districts under the same codes.
-// --overrides: the corrections file (default next to the output). Its rows
-//   replace an English place name, or a Nepali name, for one code.
+// --overrides: the corrections file (default
+//   database/seeders/reference/data/locations_overrides.csv). Each code
+//   appears once; its row replaces an English place name, or a Nepali name.
 //
 // The output is fully determined by these inputs. The script refuses to write
 // unless every count of docs/04 §21.4 holds and every override is used.
@@ -155,7 +156,11 @@ for (const row of parseCsv(readFileSync(args.cbs, 'utf8'))) {
 }
 
 // 3. Corrections.
-const overrides = new Map(parseCsv(readFileSync(args.overrides, 'utf8')).map((r) => [r.code, r]))
+const overrides = new Map()
+for (const row of parseCsv(readFileSync(args.overrides, 'utf8'))) {
+  if (overrides.has(row.code)) fail(`override ${row.code}: listed twice`)
+  overrides.set(row.code, row)
+}
 const usedOverrides = new Set()
 
 for (const code of post.keys())

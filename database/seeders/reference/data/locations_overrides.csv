@@ -11,7 +11,7 @@ code,name_en,name_ne,source,note
 10503,Rawa Besi,,survey_department,renamed since the CBS list (Lamidanda)
 10505,Diktel Rupakot Majhuwagadhi,,survey_department,renamed since the CBS list (Rupakot Majhuwagadhi)
 10507,Diprung Chuichumma,,survey_department,renamed since the CBS list (Diprung)
-10603,Temkemaiyum,,survey_department,spelling follows the Nepal Post name (CBS: Tyamke Maiyum)
+10603,Temkemaiyum,,survey_department,spelling closer to the Nepal Post name टेम्केमैयुङ (CBS: Tyamke Maiyum); the HDX spelling ends -um where the Nepali ends -ङ
 10705,Shahidbhumi,,survey_department,renamed since the CBS list (Khalsa Chhintang Sahidbhumi)
 11302,Barahachhetra,,survey_department,renamed since the CBS list (Baraha)
 11304,Bhokraha Narsingh,,survey_department,renamed since the CBS list (Bhokraha)
@@ -34,7 +34,7 @@ code,name_en,name_ne,source,note
 40303,Varagung Muktichhetra,,survey_department,renamed since the CBS list (Bahragaun Muktikshetra)
 40504,Pokhara,,survey_department,renamed since the CBS list (Pokhara Lekhnath)
 40803,Baudikali,,survey_department,spelling follows the Nepal Post name (CBS: Bungdikali)
-41110,Jaimini,,transliterated,spelling follows the Nepal Post name; CBS and HDX have Jaimuni
+41110,Jaimini,,transliterated,spelling follows the Nepal Post name जैमिनी; CBS and HDX have Jaimuni
 50203,Pariwartan,,survey_department,renamed since the CBS list (Duikholi)
 50204,Gangadev,गङ्गादेव गाउँपालिका,survey_department,renamed since the CBS list (Sukidaha); the Nepal Post text has a broken conjunct
 50209,Sunil Smriti,,survey_department,renamed since the CBS list (Subarnabati)

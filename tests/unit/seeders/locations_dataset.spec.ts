@@ -1,9 +1,12 @@
+import { readFile } from 'node:fs/promises'
 import { test } from '@japa/runner'
 import { CsvError, parseCsv } from '#database/support/csv'
 import {
   checkLocations,
+  LOCATIONS_FILE,
   LocationsDatasetError,
   readLocations,
+  TYPE_LABELS,
   type LocationRow,
 } from '#database/seeders/reference/01_locations_seeder'
 
@@ -91,6 +94,29 @@ const MUTATIONS: Mutation[] = [
     change: (rows) => ((at(rows, '10101').nameNe = ''), rows),
     error: /10101 has a name that is empty, padded or not NFC/,
   },
+  {
+    name: 'a name is padded',
+    change: (rows) => ((at(rows, '10101').nameEn = ' Phaktanlung Rural Municipality'), rows),
+    error: /10101 has a name that is empty, padded or not NFC/,
+  },
+  {
+    name: 'a province name is empty',
+    change: (rows) => {
+      for (const row of rows) if (row.provinceCode === '7') row.provinceNameNe = ''
+      return rows
+    },
+    error: /has a district or province name that is empty, padded or not NFC/,
+  },
+  {
+    name: 'two local levels of one district share an English name',
+    change: (rows) => ((at(rows, '10102').nameEn = 'Phaktanlung Rural Municipality'), rows),
+    error: /10102: "Phaktanlung Rural Municipality" is already a local level of district 101/,
+  },
+  {
+    name: 'an English name does not end with its type',
+    change: (rows) => ((at(rows, '10101').nameEn = 'Phaktanlung Municipality'), rows),
+    error: /10101: "Phaktanlung Municipality" does not end with "Rural Municipality"/,
+  },
 ]
 
 test.group('T-SHOP-117 the locations dataset', (group) => {
@@ -129,6 +155,25 @@ test.group('T-SHOP-117 the locations dataset', (group) => {
     assert.include(district('507'), { provinceCode: '5', districtNameEn: 'Nawalparasi (West)' })
     assert.include(district('501'), { provinceCode: '5', districtNameEn: 'Rukum (East)' })
     assert.include(district('608'), { provinceCode: '6', districtNameEn: 'Rukum (West)' })
+  })
+
+  test('T-SHOP-117 every correction in locations_overrides.csv is in the committed dataset', async ({
+    assert,
+  }) => {
+    // The CSV is generated from the corrections (docs/04 §21.4 step 4); this
+    // fails when one is edited without regenerating, or the CSV by hand.
+    const overrides = parseCsv(
+      await readFile(new URL('./locations_overrides.csv', LOCATIONS_FILE), 'utf8')
+    )
+    assert.lengthOf(overrides, 45)
+    for (const override of overrides) {
+      const row = at(committed, override.code)
+      assert.equal(row.nameEn, `${override.name_en} ${TYPE_LABELS[row.type]}`, override.code)
+      if (override.name_ne)
+        assert.equal(row.nameNe, override.name_ne.normalize('NFC'), override.code)
+      assert.oneOf(override.source, ['survey_department', 'transliterated'], override.code)
+      assert.isNotEmpty(override.note, override.code)
+    }
   })
 
   test('T-SHOP-117 a dataset where {name} is refused')
