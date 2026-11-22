@@ -20,6 +20,11 @@ import { RESERVATION_STATUSES } from '#modules/inventory/domain/reservation_stat
 import { LEDGER_ENTRY_TYPES } from '#modules/ledger/domain/ledger_entry_type'
 import { PAYOUT_STATUSES } from '#modules/ledger/domain/payout_status'
 import { REMITTANCE_METHODS } from '#modules/ledger/domain/remittance_method'
+import { BOOKING_ATTEMPT_KINDS } from '#modules/logistics/domain/booking_attempt_kind'
+import { BOOKING_ATTEMPT_OUTCOMES } from '#modules/logistics/domain/booking_attempt_outcome'
+import { COURIER_EVENT_HOLD_REASONS } from '#modules/logistics/domain/courier_event_hold_reason'
+import { COURIER_EVENT_PROCESSING_STATUSES } from '#modules/logistics/domain/courier_event_processing_status'
+import { COURIER_EVENT_SOURCES } from '#modules/logistics/domain/courier_event_source'
 import { LOCAL_LEVEL_TYPES } from '#modules/logistics/domain/local_level_type'
 import { LOGISTICS_ACCOUNT_OWNER_TYPES } from '#modules/logistics/domain/logistics_account_owner_type'
 import { LOGISTICS_ACCOUNT_STATUSES } from '#modules/logistics/domain/logistics_account_status'
@@ -39,6 +44,7 @@ import { RETURN_REASONS } from '#modules/orders/domain/return_reason'
 import { RETURN_STATUSES } from '#modules/orders/domain/return_status'
 import { SHIPMENT_EVENTS } from '#modules/orders/domain/shipment_event'
 import { SHIPMENT_EVENT_ACTOR_TYPES } from '#modules/orders/domain/shipment_event_actor_type'
+import { SHIPMENT_CANCEL_REQUESTERS } from '#modules/orders/domain/shipment_cancel_requester'
 import { SHIPMENT_STATUSES } from '#modules/orders/domain/shipment_status'
 import { SHOP_ORDER_CANCEL_REASONS } from '#modules/orders/domain/shop_order_cancel_reason'
 import { SHOP_ORDER_REJECTION_REASONS } from '#modules/orders/domain/shop_order_rejection_reason'
@@ -106,6 +112,10 @@ const VOCABULARIES: Record<string, Vocabulary> = {
   'brands.status': exact(BRAND_STATUSES),
   'carts.status': exact(CART_STATUSES),
   'category_attributes.usage': exact(CATEGORY_ATTRIBUTE_USAGES),
+  'courier_events.hold_reason': exact(COURIER_EVENT_HOLD_REASONS),
+  'courier_events.mapped_status': within(SHIPMENT_STATUSES),
+  'courier_events.processing_status': exact(COURIER_EVENT_PROCESSING_STATUSES),
+  'courier_events.source': exact(COURIER_EVENT_SOURCES),
   'idempotency_keys.status': exact(IDEMPOTENCY_KEY_STATUSES),
   'inventory_movements.kind': exact(MOVEMENT_KINDS),
   'inventory_movements.reason_code': exact(VENDOR_ADJUSTMENT_REASONS),
@@ -158,6 +168,9 @@ const VOCABULARIES: Record<string, Vocabulary> = {
   'shipment_events.event': exact(SHIPMENT_EVENTS),
   'shipment_events.reason_code': exact(DELIVERY_FAILURE_REASONS),
   'shipment_events.status': within(SHIPMENT_STATUSES),
+  'shipment_booking_attempts.kind': exact(BOOKING_ATTEMPT_KINDS),
+  'shipment_booking_attempts.outcome': exact(BOOKING_ATTEMPT_OUTCOMES),
+  'shipments.cancel_requested_by': exact(SHIPMENT_CANCEL_REQUESTERS),
   'shipments.currency': exact(CURRENCIES),
   'shipments.status': exact(SHIPMENT_STATUSES),
   'shop_addresses.purpose': exact(SHOP_ADDRESS_PURPOSES),

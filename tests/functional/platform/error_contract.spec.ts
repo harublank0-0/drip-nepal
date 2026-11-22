@@ -3,7 +3,7 @@ import { gzipSync } from 'node:zlib'
 import vine from '@vinejs/vine'
 import router from '@adonisjs/core/services/router'
 import db from '@adonisjs/lucid/services/db'
-import { Logger } from '@adonisjs/core/logger'
+import { captureLogs } from '#tests/support/logs'
 import { LimiterResponse, errors as limiterErrors } from '@adonisjs/limiter'
 import env from '#start/env'
 import { middleware } from '#start/kernel'
@@ -97,34 +97,6 @@ router
   .prefix('/__test__')
 
 const baseUrl = () => `http://${env.get('HOST')}:${env.get('PORT')}`
-
-type LogLine = {
-  level: string
-  fields: Record<string, unknown>
-  message: string
-  request_id: unknown
-}
-
-// Every line written through an Adonis Logger while `run` runs.
-async function captureLogs(run: () => Promise<void>) {
-  const lines: LogLine[] = []
-  const original = Logger.prototype.log
-  Logger.prototype.log = function (this: Logger, level, fields, message, ...values) {
-    lines.push({
-      level,
-      fields: (fields ?? {}) as Record<string, unknown>,
-      message: String(message),
-      request_id: (this.bindings() as Record<string, unknown>).request_id,
-    })
-    return original.call(this, level, fields, message, ...values)
-  } as Logger['log']
-  try {
-    await run()
-  } finally {
-    Logger.prototype.log = original
-  }
-  return lines
-}
 
 async function problemOf(response: Response) {
   return (await response.json()) as Record<string, unknown>

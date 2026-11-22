@@ -60,4 +60,6 @@ export const middleware = router.named({
   guest: () => import('#middleware/guest_middleware'),
   auth: () => import('#middleware/auth_middleware'),
   sellerContext: () => import('#middleware/seller_context_middleware'),
+  platformStaff: () => import('#middleware/platform_staff_middleware'),
+  courierCallbackBody: () => import('#middleware/courier_callback_body_middleware'),
 })

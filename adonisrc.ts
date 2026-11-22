@@ -61,6 +61,7 @@ export default defineConfig({
     () => import('#providers/api_provider'),
     () => import('@adonisjs/drive/drive_provider'),
     () => import('@adonisjs/limiter/limiter_provider'),
+    { file: () => import('#providers/jobs_provider'), environment: ['web'] },
   ],
 
   /*

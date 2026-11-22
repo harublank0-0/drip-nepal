@@ -17,6 +17,7 @@
     "./**/*.tsx",
     "../.adonisjs/client/**/*.ts",
     "../.adonisjs/server/**/*.ts",
+    "../app/modules/*/events.ts",
     "../types/**/*.d.ts"
   ]
 }

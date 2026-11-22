@@ -8,6 +8,7 @@ import { browserClient } from '@japa/browser-client'
 import { authBrowserClient } from '@adonisjs/auth/plugins/browser_client'
 import { sessionBrowserClient } from '@adonisjs/session/plugins/browser_client'
 import { prepareTestDatabase } from '#tests/support/database'
+import { stopJobBoss } from '#tests/support/jobs'
 
 /**
  * This file is imported by the "bin/test.ts" entrypoint file
@@ -35,7 +36,8 @@ export const plugins: Config['plugins'] = [
  */
 export const runnerHooks: Required<Pick<Config, 'setup' | 'teardown'>> = {
   setup: [],
-  teardown: [],
+  // A test that started the shared pg-boss instance leaves its pool open: close it (tests/support/jobs.ts).
+  teardown: [() => stopJobBoss()],
 }
 
 /**
@@ -52,6 +54,8 @@ export const runnerHooks: Required<Pick<Config, 'setup' | 'teardown'>> = {
 export const configureSuite: Config['configureSuite'] = (suite) => {
   if (['functional', 'concurrency', 'browser'].includes(suite.name)) {
     suite.setup(() => prepareTestDatabase())
+    // A suite that started the shared pg-boss stops it before the next suite rebuilds its schema.
+    suite.setup(() => () => stopJobBoss())
   }
 
   if (suite.name === 'functional') {

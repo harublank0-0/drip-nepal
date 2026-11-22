@@ -1,4 +1,5 @@
 import { minorToRupeesFixed, parseRupeesToMinor } from '#shared/format/money'
+import { PortAdapter } from '#modules/platform/ports/port_adapter'
 import type { CourierCapabilities } from '#modules/logistics/domain/courier_capability'
 import type { LogisticsEnvironment } from '#modules/logistics/domain/logistics_environment'
 import type {
@@ -36,6 +37,9 @@ import type {
  * - Nothing it returns carries the token, a value DripNepal sent, or the
  *   courier's own messages (docs/04a §9.13).
  */
+
+// The longest `vref_id` NCM's demo host accepted (VX-16, 2026-11-19; OD-61).
+export const NCM_VREF_MAX_LENGTH = 15
 
 export const NCM_CAPABILITIES: CourierCapabilities = {
   booking: true,
@@ -227,7 +231,8 @@ function checkedBaseUrl(value: string | null): string | null {
   return url.origin
 }
 
-export class NcmCourierProvider implements CourierProvider {
+export class NcmCourierProvider extends PortAdapter implements CourierProvider {
+  protected readonly adapterName = 'NcmCourierProvider'
   readonly code = 'ncm'
   readonly capabilities = NCM_CAPABILITIES
 
@@ -236,6 +241,7 @@ export class NcmCourierProvider implements CourierProvider {
   readonly #fetch: typeof globalThis.fetch
 
   constructor(options: NcmOptions) {
+    super()
     // A wrong host is a configuration error: fail at start-up, not on a booking.
     this.#baseUrls = {
       sandbox: checkedBaseUrl(options.baseUrls.sandbox),
@@ -251,6 +257,8 @@ export class NcmCourierProvider implements CourierProvider {
     path: string,
     body?: unknown
   ): Promise<Reply> {
+    // Every network call goes through here: never inside a transaction (docs/03 §11.4).
+    this.guard(`${method} ${path.split('?')[0]}`)
     const base = this.#baseUrls[account.environment]
     if (!base) return { kind: 'not_configured' }
 
@@ -333,6 +341,13 @@ export class NcmCourierProvider implements CourierProvider {
       // NCM books between branches (`branches`); the action checks this before claiming.
       return { outcome: 'refused', error: error('invalid_branch', null, missing, false) }
     }
+    // OD-61 (decided 2026-11-21): NCM takes a `vref_id` of at most 15 characters, so the
+    // reference goes without its hyphens (DN-4K7Q2M9-12-S10 -> DN4K7Q2M912S10, 12 to 14
+    // characters, still unique). A longer value is refused here and never sent.
+    const vrefId = request.merchantReference.replaceAll('-', '')
+    if (vrefId.length < 1 || vrefId.length > NCM_VREF_MAX_LENGTH) {
+      return { outcome: 'refused', error: error('invalid_request', null, ['vref_id'], false) }
+    }
     if (!Number.isSafeInteger(request.codAmountMinor) || request.codAmountMinor < 0) {
       return {
         outcome: 'refused',
@@ -348,7 +363,7 @@ export class NcmCourierProvider implements CourierProvider {
       address: request.recipient.address,
       fbranch: origin,
       branch: destination,
-      vref_id: request.merchantReference,
+      vref_id: vrefId,
       delivery_type: request.serviceCode,
     }
     if (request.packageDescription) body.package = request.packageDescription

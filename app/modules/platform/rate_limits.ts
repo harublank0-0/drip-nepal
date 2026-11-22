@@ -26,6 +26,12 @@ export const RATE_LIMITS = {
   login_acct_ip: { prefix: 'login:acct_ip', requests: 5, duration: '1 minute' },
   // logIn, per client network; checked before any credential work.
   login_ip: { prefix: 'login:ip', requests: 20, duration: '1 minute' },
+  // Password re-entry (docs/07 §3.6): both keys checked before hashing, charged before the check.
+  reauth_user: { prefix: 'reauth:user', requests: 5, duration: '15 minutes' },
+  reauth_user_day: { prefix: 'reauth:user_day', requests: 10, duration: '24 hours' },
+  // Courier callbacks (docs/06 §9.1, M6): per client network before the token, then per account.
+  webhook_ip: { prefix: 'webhook:ip', requests: 600, duration: '1 minute' },
+  courier_callback: { prefix: 'courier_callback', requests: 120, duration: '1 minute' },
 } as const satisfies Record<string, RateLimit>
 
 export type RateLimitName = keyof typeof RATE_LIMITS
