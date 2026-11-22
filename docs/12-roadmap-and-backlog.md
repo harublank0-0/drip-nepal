@@ -343,7 +343,7 @@ Still to come with M6's other work:
 
 VX-16 stays open: NCM has no cancellation API and cancels on a comment (product owner, 2026-11-22), but it has not confirmed callback authentication or rate limits, and no callback from NCM has reached DripNepal, which needs a public URL.
 
-**Platform mode (2026-11-22).** Built after OD-58 was re-decided: the four platform-owned account operations with step-up, the `platform` mode of `replaceLogisticsSettings`, `getCourierBookingOptions` and `bookCourierShipment`, the `own_account_active` refusals, and `platform_account_cod_enabled` with its migration and seeded `false`, under `T-SHOP-115`, `T-FUL-006` and `T-SEC-041`. Because every R1 order is COD, nothing is booked on a platform-owned account until that setting is turned on (OD-58's conditions). Still to come for it: a callback URL staff can register with NCM for a platform-owned account (until then its parcels are tracked by the status poll).
+**Platform mode (2026-11-22).** Built after OD-58 was re-decided: the four platform-owned account operations with step-up, the `platform` mode of `replaceLogisticsSettings`, `getCourierBookingOptions` and `bookCourierShipment`, the `own_account_active` refusals, and `platform_account_cod_enabled` with its two migrations (the `NOT VALID` swap, then `VALIDATE`) and seeded `false`, under `T-SHOP-115`, `T-FUL-006` and `T-SEC-041`. Because every R1 order is COD, nothing is booked on a platform-owned account until that setting is turned on (OD-58's conditions). Still to come for it: a callback URL staff can register with NCM for a platform-owned account (until then its parcels are tracked by the status poll).
 
 **Effort.** XL.
 
