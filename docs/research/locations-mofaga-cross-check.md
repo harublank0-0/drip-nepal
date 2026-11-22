@@ -24,6 +24,8 @@ No local level has a different type in the two sources. The English names, which
 
 The 19 local levels not in the copies: `10208`, `10507`, `10509`, `10703`, `11203`, `11301`, `11306`, `20511`, `30905`, `40107`, `40403`, `40503`, `60306`, `70103`, `70203`, `70210`, `70401`, `70404`, `70710`.
 
+**Second search (2026-11-22).** To find them, 199 more snapshots of the pages that should list them were read, from 2024-05-26 to 2026-08-18, newest first, up to four per page number. None of the 19 appears in any of them, and no name in their tables is close to one after folding spellings. Across all 297 copies the tables list 735 distinct local levels, the 734 above and one duplicate spelling. The 19 cannot be checked from the archive; they need someone who can open `mofaga.gov.np` from Nepal.
+
 ## What the 44 other differences are
 
 The 44 are the 11 corrections below that are not `30403`, 23 spelling variants, 2 MoFAGA typos, 4 names where the sources split and 4 possible renames.
