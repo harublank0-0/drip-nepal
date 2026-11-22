@@ -157,6 +157,18 @@ test.group('T-SEC-014 the email-template grep', (group) => {
         line: 1,
       },
       {
+        label: 'an @include whose target is a concatenation',
+        file: `${EMAILS}/identity/reset.html.edge`,
+        content: "@include('emails/' + partialName)\n",
+        line: 1,
+      },
+      {
+        label: 'an @include whose target is a template literal',
+        file: `${EMAILS}/identity/reset.html.edge`,
+        content: '@include(`emails/${partialName}`)\n',
+        line: 1,
+      },
+      {
         label: 'a nested template without the .html suffix',
         file: `${EMAILS}/orders/placed/customer.edge`,
         content: RAW,

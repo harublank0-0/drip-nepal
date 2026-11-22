@@ -53,9 +53,12 @@ function templates() {
 }
 
 // Why a partial's target is refused, or null when it is an HTML email partial.
-// `@includeIf` names its template second, after the condition.
+// `@includeIf` names its template second, after the condition. The target is a
+// plain quoted string that ends the argument: a concatenation or a template
+// literal could name any file at render time.
 function badTarget(tag, args) {
-  const literal = tag === 'includeIf' ? /^[^,]*,\s*(['"`])([^'"`]*)\1/ : /^\s*(['"`])([^'"`]*)\1/
+  const literal =
+    tag === 'includeIf' ? /^[^,]*,\s*(['"])([^'"]*)\1\s*[,)]/ : /^\s*(['"])([^'"]*)\1\s*[,)]/
   const match = literal.exec(args)
   if (!match) return 'a target that is not a literal path'
   const target = match[2].replace(/\.edge$/, '')
