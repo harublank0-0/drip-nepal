@@ -7,7 +7,7 @@ import { keyedHash } from '#modules/platform/crypto/keyed_hash'
 import { sendJob, type JobEnvelope, type JobPayloads } from '#modules/platform/jobs'
 import { jobTx } from '#modules/platform/tx'
 import type { EmailTemplate } from '#modules/notifications/domain/email_templates'
-import type { SignupAttempted, UserTokenIssued } from '#modules/notifications/events'
+import type { AccountNotice, UserTokenIssued } from '#modules/notifications/events'
 
 /*
  * `notifications.dispatch` (docs/03 §9, docs/04a §14.3; M1 part 1b): turns
@@ -27,10 +27,12 @@ import type { SignupAttempted, UserTokenIssued } from '#modules/notifications/ev
  * no row: there is nothing to send, so the job completes with a warning,
  * as a permanent outcome does (docs/03 §10.4).
  *
- * `user.signup_attempted` (M1 part 2a): the event ID is the one `signUp`
- * gave it, the recipient the account, and the template
- * `identity.account_exists`. An account that no longer exists or was
- * anonymised meanwhile gets no row, with a warning. Log lines carry IDs
+ * The account notices, which carry no token: `user.signup_attempted` (M1
+ * part 2a), whose template is `identity.account_exists`, and
+ * `user.password_changed` (M1 part 4), whose template is
+ * `identity.password_changed`. The event ID is the one the sender gave
+ * it, and the recipient the account. An account that no longer exists or
+ * was anonymised meanwhile gets no row, with a warning. Log lines carry IDs
  * only, never the address or its hash (docs/09 §7.2).
  */
 
@@ -41,7 +43,11 @@ export const TOKEN_EMAIL_TEMPLATES: Record<UserTokenPurpose, EmailTemplate> = {
   mfa_enrollment: 'identity.mfa_enrollment',
 }
 
-export const SIGNUP_ATTEMPT_TEMPLATE: EmailTemplate = 'identity.account_exists'
+// The template of each account notice.
+export const ACCOUNT_NOTICE_TEMPLATES: Record<AccountNotice['event'], EmailTemplate> = {
+  'user.signup_attempted': 'identity.account_exists',
+  'user.password_changed': 'identity.password_changed',
+}
 
 export type DispatchOutcome =
   | { kind: 'queued'; deliveryId: string }
@@ -55,7 +61,9 @@ type DispatchPayload = JobPayloads['notifications.dispatch'] & JobEnvelope
 
 export async function dispatchNotification(payload: DispatchPayload): Promise<DispatchOutcome> {
   if (payload.event === 'user_token.issued') return dispatchTokenEmail(payload)
-  if (payload.event === 'user.signup_attempted') return dispatchSignupAttempt(payload)
+  if (payload.event === 'user.signup_attempted' || payload.event === 'user.password_changed') {
+    return dispatchAccountNotice(payload)
+  }
   // A payload from the queue is not checked by the compiler.
   throw new InvariantViolation('notifications.dispatch got an event it has no template for')
 }
@@ -147,7 +155,7 @@ function dispatchTokenEmail(payload: UserTokenIssued & JobEnvelope): Promise<Dis
   })
 }
 
-function dispatchSignupAttempt(payload: SignupAttempted & JobEnvelope): Promise<DispatchOutcome> {
+function dispatchAccountNotice(payload: AccountNotice & JobEnvelope): Promise<DispatchOutcome> {
   const ids = { event_id: payload.event_id, user_id: payload.user_id }
   return jobTx(async (trx) => {
     const account = await accountEmail(payload.user_id, { client: trx })
@@ -155,7 +163,7 @@ function dispatchSignupAttempt(payload: SignupAttempted & JobEnvelope): Promise<
       notDispatched(ids, 'recipient_missing', payload.request_id)
       return { kind: 'dropped', reason: 'recipient_missing' } as const
     }
-    const template = SIGNUP_ATTEMPT_TEMPLATE
+    const template = ACCOUNT_NOTICE_TEMPLATES[payload.event]
     const dedupeKey = `${payload.event_id}:${template}:${account.userId}`
 
     if (await alreadyDispatched(trx, dedupeKey)) return { kind: 'duplicate' } as const
@@ -172,12 +180,10 @@ function dispatchSignupAttempt(payload: SignupAttempted & JobEnvelope): Promise<
     })
     if (!row) return { kind: 'duplicate' } as const
 
+    // The event's own members, whichever notice it is; its cause is the event (docs/03 §10.8).
     const jobId = await sendJob(trx, 'notifications.send_email', {
+      ...payload,
       delivery_id: row.id,
-      event: payload.event,
-      event_id: payload.event_id,
-      user_id: payload.user_id,
-      request_id: payload.request_id,
       causation_id: payload.event_id,
     })
     if (!jobId) throw new InvariantViolation('notifications.send_email refused the delivery job')

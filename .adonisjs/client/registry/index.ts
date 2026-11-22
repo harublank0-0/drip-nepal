@@ -42,11 +42,35 @@ const routes = {
     tokens: [{"old":"/api/v1/auth/email-verification/confirm","type":0,"val":"api","end":""},{"old":"/api/v1/auth/email-verification/confirm","type":0,"val":"v1","end":""},{"old":"/api/v1/auth/email-verification/confirm","type":0,"val":"auth","end":""},{"old":"/api/v1/auth/email-verification/confirm","type":0,"val":"email-verification","end":""},{"old":"/api/v1/auth/email-verification/confirm","type":0,"val":"confirm","end":""}],
     types: placeholder as Registry['confirmEmail']['types'],
   },
+  'requestPasswordReset': {
+    methods: ["POST"],
+    pattern: '/api/v1/auth/password-reset',
+    tokens: [{"old":"/api/v1/auth/password-reset","type":0,"val":"api","end":""},{"old":"/api/v1/auth/password-reset","type":0,"val":"v1","end":""},{"old":"/api/v1/auth/password-reset","type":0,"val":"auth","end":""},{"old":"/api/v1/auth/password-reset","type":0,"val":"password-reset","end":""}],
+    types: placeholder as Registry['requestPasswordReset']['types'],
+  },
+  'resetPassword': {
+    methods: ["POST"],
+    pattern: '/api/v1/auth/password-reset/confirm',
+    tokens: [{"old":"/api/v1/auth/password-reset/confirm","type":0,"val":"api","end":""},{"old":"/api/v1/auth/password-reset/confirm","type":0,"val":"v1","end":""},{"old":"/api/v1/auth/password-reset/confirm","type":0,"val":"auth","end":""},{"old":"/api/v1/auth/password-reset/confirm","type":0,"val":"password-reset","end":""},{"old":"/api/v1/auth/password-reset/confirm","type":0,"val":"confirm","end":""}],
+    types: placeholder as Registry['resetPassword']['types'],
+  },
   'getMe': {
     methods: ["GET","HEAD"],
     pattern: '/api/v1/me',
     tokens: [{"old":"/api/v1/me","type":0,"val":"api","end":""},{"old":"/api/v1/me","type":0,"val":"v1","end":""},{"old":"/api/v1/me","type":0,"val":"me","end":""}],
     types: placeholder as Registry['getMe']['types'],
+  },
+  'changePassword': {
+    methods: ["POST"],
+    pattern: '/api/v1/me/password',
+    tokens: [{"old":"/api/v1/me/password","type":0,"val":"api","end":""},{"old":"/api/v1/me/password","type":0,"val":"v1","end":""},{"old":"/api/v1/me/password","type":0,"val":"me","end":""},{"old":"/api/v1/me/password","type":0,"val":"password","end":""}],
+    types: placeholder as Registry['changePassword']['types'],
+  },
+  'revokeAllSessions': {
+    methods: ["POST"],
+    pattern: '/api/v1/me/sessions/revoke-all',
+    tokens: [{"old":"/api/v1/me/sessions/revoke-all","type":0,"val":"api","end":""},{"old":"/api/v1/me/sessions/revoke-all","type":0,"val":"v1","end":""},{"old":"/api/v1/me/sessions/revoke-all","type":0,"val":"me","end":""},{"old":"/api/v1/me/sessions/revoke-all","type":0,"val":"sessions","end":""},{"old":"/api/v1/me/sessions/revoke-all","type":0,"val":"revoke-all","end":""}],
+    types: placeholder as Registry['revokeAllSessions']['types'],
   },
   'getLogisticsSettings': {
     methods: ["GET","HEAD"],
@@ -245,6 +269,18 @@ const routes = {
     pattern: '/verify-email',
     tokens: [{"old":"/verify-email","type":0,"val":"verify-email","end":""}],
     types: placeholder as Registry['verify_email']['types'],
+  },
+  'forgot_password': {
+    methods: ["GET","HEAD"],
+    pattern: '/forgot-password',
+    tokens: [{"old":"/forgot-password","type":0,"val":"forgot-password","end":""}],
+    types: placeholder as Registry['forgot_password']['types'],
+  },
+  'reset_password': {
+    methods: ["GET","HEAD"],
+    pattern: '/reset-password',
+    tokens: [{"old":"/reset-password","type":0,"val":"reset-password","end":""}],
+    types: placeholder as Registry['reset_password']['types'],
   },
   'admin.logistics': {
     methods: ["GET","HEAD"],

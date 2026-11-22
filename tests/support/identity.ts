@@ -10,6 +10,7 @@ import {
   type RateLimitName,
 } from '#modules/platform/rate_limits'
 import type { UserTokenPurpose } from '#modules/identity/domain/user_token_purpose'
+import { JOB_SCHEMA } from '#modules/platform/jobs'
 import { send } from '#tests/support/courier_http'
 import { testBrowser, type Browser } from '#tests/support/browser'
 import { queued } from '#tests/support/jobs'
@@ -198,4 +199,50 @@ export async function countingScrypt<T>(run: () => Promise<T>) {
     Reflect.deleteProperty(scrypt, 'make')
     Reflect.deleteProperty(scrypt, 'verify')
   }
+}
+
+/*
+ * Helpers of the password reset and change tests (docs/06 §13.3; M1 part
+ * 4). `requestPasswordReset` charges `pwreset_ip` and `pwreset_email`, and
+ * `changePassword` the two `reauth` keys of the user (and, on a wrong
+ * password, `login_acct_ip`); the limiter store commits them on its own
+ * connection, so each test deletes the keys it made (docs/10 §3.3).
+ */
+export const PASSWORD_RESET_PATH = '/api/v1/auth/password-reset'
+export const RESET_CONFIRM_PATH = '/api/v1/auth/password-reset/confirm'
+export const CHANGE_PASSWORD_PATH = '/api/v1/me/password'
+export const REVOKE_ALL_PATH = '/api/v1/me/sessions/revoke-all'
+
+// The `pwreset_email` and `pwreset_ip` keys of one email (normalised) and client network.
+export async function forgetPasswordReset(email: string, ip: string) {
+  await forgetKeys('pwreset_email', email.trim().toLowerCase())
+  await forgetKeys('pwreset_ip', clientNetwork(ip))
+}
+
+// The two `reauth` keys of one user.
+export async function forgetReauth(userId: string) {
+  await forgetKeys('reauth_user', userId)
+  await forgetKeys('reauth_user_day', userId)
+}
+
+// The `identity.revoke_sessions` jobs queued for `userId`, with their `start_after`.
+export async function revokeJobsFor(userId: string) {
+  const rows = await db
+    .from(`${JOB_SCHEMA}.job`)
+    .where('name', 'identity.revoke_sessions')
+    .whereIn('state', ['created', 'retry'])
+    .whereRaw(`data->>'user_id' = ?`, [userId])
+    .select('id', 'data', 'created_on', 'start_after')
+  return rows as {
+    id: string
+    data: { user_id: string; request_id: string | null; causation_id: string | null }
+    created_on: Date
+    start_after: Date
+  }[]
+}
+
+// The `notifications.dispatch` jobs of the "password changed" email for `userId`.
+export async function passwordChangedJobsFor(userId: string) {
+  const jobs = await dispatchJobsFor(userId)
+  return jobs.filter((job) => job.data.event === 'user.password_changed')
 }

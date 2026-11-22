@@ -19,12 +19,16 @@
  * - `identity.account_exists`: the "account already exists" notice of a
  *   signup with a registered email (AC-FR-IAM-001-2), with a link to
  *   `/login` and no token.
+ * - `identity.password_changed`: the "your password was changed" notice of
+ *   `resetPassword` and `changePassword` (AC-J18-06, FR-NOT-001; M1 part
+ *   4), with a link to `/forgot-password` and no token.
  */
 export const EMAIL_TEMPLATES = [
   'identity.password_reset',
   'identity.mfa_enrollment',
   'identity.email_verification',
   'identity.account_exists',
+  'identity.password_changed',
 ] as const
 export type EmailTemplate = (typeof EMAIL_TEMPLATES)[number]
 

@@ -16,6 +16,7 @@ export const controllers = {
       auth: {
         identity: {
           Me: () => import('#controllers/api/v1/auth/identity/me_controller'),
+          Password: () => import('#controllers/api/v1/auth/identity/password_controller'),
           Registration: () => import('#controllers/api/v1/auth/identity/registration_controller'),
           Session: () => import('#controllers/api/v1/auth/identity/session_controller'),
         },
@@ -24,6 +25,7 @@ export const controllers = {
   },
   auth: {
     identity: {
+      PasswordReset: () => import('#controllers/auth/identity/password_reset_controller'),
       Registration: () => import('#controllers/auth/identity/registration_controller'),
       Session: () => import('#controllers/auth/identity/session_controller'),
     },

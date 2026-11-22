@@ -34,8 +34,26 @@ export type SignupAttempted = {
   user_id: string
 }
 
+/*
+ * The password of an account was changed, by `resetPassword` or
+ * `changePassword` (AC-J18-06, AC-FR-IAM-004-4, AC-FR-IAM-005-4; M1 part
+ * 4): the holder gets the "your password was changed" email, with a link to
+ * reset it if the change was not theirs. Like `user.signup_attempted`, the
+ * event has no row of its own, so the sender gives it a random `event_id`
+ * for the delivery row's `dedupe_key`, and the payload carries the
+ * account's ID only.
+ */
+export type PasswordChanged = {
+  event: 'user.password_changed'
+  event_id: string
+  user_id: string
+}
+
+// The events about an account that carry no token, each with its own template.
+export type AccountNotice = SignupAttempted | PasswordChanged
+
 // The events `notifications.dispatch` turns into emails.
-export type NotificationEvent = UserTokenIssued | SignupAttempted
+export type NotificationEvent = UserTokenIssued | AccountNotice
 
 /*
  * One `notification_deliveries` row to send (docs/04a §14.3): the row's ID

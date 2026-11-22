@@ -79,6 +79,30 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/auth/identity/registration_controller').default['confirmEmail']>>> | { status: 422; response: { errors: SimpleError[] } }
     }
   }
+  'requestPasswordReset': {
+    methods: ["POST"]
+    pattern: '/api/v1/auth/password-reset'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/identity/request_password_reset').requestPasswordResetValidator)>>
+      paramsTuple: []
+      params: {}
+      query: ExtractQuery<InferInput<(typeof import('#validators/identity/request_password_reset').requestPasswordResetValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/api/v1/auth/identity/password_controller').default['requestPasswordReset']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/auth/identity/password_controller').default['requestPasswordReset']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
+  'resetPassword': {
+    methods: ["POST"]
+    pattern: '/api/v1/auth/password-reset/confirm'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/identity/reset_password').resetPasswordValidator)>>
+      paramsTuple: []
+      params: {}
+      query: ExtractQuery<InferInput<(typeof import('#validators/identity/reset_password').resetPasswordValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/api/v1/auth/identity/password_controller').default['resetPassword']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/auth/identity/password_controller').default['resetPassword']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
   'getMe': {
     methods: ["GET","HEAD"]
     pattern: '/api/v1/me'
@@ -89,6 +113,30 @@ export interface Registry {
       query: {}
       response: ExtractResponse<Awaited<ReturnType<import('#controllers/api/v1/auth/identity/me_controller').default['getMe']>>>
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/auth/identity/me_controller').default['getMe']>>>
+    }
+  }
+  'changePassword': {
+    methods: ["POST"]
+    pattern: '/api/v1/me/password'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/identity/change_password').changePasswordValidator)>>
+      paramsTuple: []
+      params: {}
+      query: ExtractQuery<InferInput<(typeof import('#validators/identity/change_password').changePasswordValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/api/v1/auth/identity/password_controller').default['changePassword']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/auth/identity/password_controller').default['changePassword']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
+  'revokeAllSessions': {
+    methods: ["POST"]
+    pattern: '/api/v1/me/sessions/revoke-all'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/api/v1/auth/identity/session_controller').default['revokeAllSessions']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/auth/identity/session_controller').default['revokeAllSessions']>>>
     }
   }
   'getLogisticsSettings': {
@@ -485,6 +533,30 @@ export interface Registry {
       query: {}
       response: ExtractResponse<Awaited<ReturnType<import('#controllers/auth/identity/registration_controller').default['verifyEmail']>>>
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/auth/identity/registration_controller').default['verifyEmail']>>>
+    }
+  }
+  'forgot_password': {
+    methods: ["GET","HEAD"]
+    pattern: '/forgot-password'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/auth/identity/password_reset_controller').default['forgotPassword']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/auth/identity/password_reset_controller').default['forgotPassword']>>>
+    }
+  }
+  'reset_password': {
+    methods: ["GET","HEAD"]
+    pattern: '/reset-password'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/auth/identity/password_reset_controller').default['resetPassword']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/auth/identity/password_reset_controller').default['resetPassword']>>>
     }
   }
   'admin.logistics': {

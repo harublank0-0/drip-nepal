@@ -1,7 +1,8 @@
 import type { HttpContext } from '@adonisjs/core/http'
-import { endSession, startSession } from '#controllers/support/session'
+import { SESSION_KEYS, endSession, startSession } from '#controllers/support/session'
 import { auditIpHash } from '#modules/audit/actions/record_audit'
 import { logIn } from '#modules/identity/actions/log_in'
+import { revokeAllSessions } from '#modules/identity/actions/revoke_all_sessions'
 import { safeReturnPath } from '#modules/identity/queries'
 import { sessionUserJson } from '#transformers/identity/account_transformer'
 import { assertKnownMembers } from '#validators/support/strict_keys'
@@ -24,6 +25,12 @@ import { LOG_IN_MEMBERS, logInValidator } from '#validators/identity/log_in'
  * finds nothing (docs/07 §3.11, AC-FR-IAM-003-6). Its 204 cannot clear the
  * browser's history; the client does (`router.clearHistory()`), and the
  * `/login` page it visits next renders with `clearHistory` too.
+ *
+ * `revokeAllSessions` (M1 part 4) runs behind `auth`: the identity action
+ * rotates the stamp, and this session receives the new one in the same
+ * request, keeping its ID and tag, so `identity.revoke_sessions` ends
+ * every other session of the user and spares this one (docs/07 §3.3,
+ * AC-FR-IAM-005-3).
  */
 export default class SessionController {
   // logIn: 200 `{ data: { user, redirect_to } }`; one 401 for a wrong password or an unknown email.
@@ -47,6 +54,19 @@ export default class SessionController {
       ctx.logger.info({ return_to_length: returnTo.length }, 'auth.return_to_rejected')
     }
     return { data: { user: sessionUserJson(result.user), redirect_to: redirectTo ?? '/' } }
+  }
+
+  // revokeAllSessions: 202; this session holds the new stamp, the others end when the job runs.
+  async revokeAllSessions(ctx: HttpContext) {
+    assertKnownMembers(ctx.request.body(), [])
+    const user = ctx.auth.getUserOrFail()
+    // The account check has just compared `user.securityStamp` with the session's (docs/07 §3.3).
+    const result = await revokeAllSessions(user.id, user.securityStamp, {
+      requestId: ctx.request.id() ?? null,
+      ipHash: auditIpHash(ctx.request.ip()),
+    })
+    ctx.session.put(SESSION_KEYS.securityStamp, result.securityStamp)
+    return ctx.response.accepted({ data: { status: 'sessions_revoked' as const } })
   }
 
   // logOut: 204; the session row is gone and the cookie names a new, empty session.

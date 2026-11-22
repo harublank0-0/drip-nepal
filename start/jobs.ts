@@ -1,3 +1,4 @@
+import { revokeSessions } from '#modules/identity/jobs/revoke_sessions'
 import { verifyAccount } from '#modules/logistics/jobs/verify_account'
 import { syncBranches } from '#modules/logistics/jobs/sync_branches'
 import { dispatchNotification } from '#modules/notifications/jobs/dispatch'
@@ -30,6 +31,8 @@ export const JOB_HANDLERS: { [Q in QueueName]?: Handler<Q> } = {
   // M1 part 1b: the token emails (docs/03 §9, docs/04a §14.3).
   'notifications.dispatch': (payload) => dispatchNotification(payload),
   'notifications.send_email': (payload) => sendEmail(payload),
+  // M1 part 4: sessions that no longer hold the user's stamp (docs/03 §9, docs/07 §3.3).
+  'identity.revoke_sessions': (payload) => revokeSessions(payload),
   'logistics.verify_account': (payload) => verifyAccount(payload),
   'logistics.sync_branches': (payload) => syncBranches(payload),
   'orders.book_courier_shipment': (payload, attempt) => bookCourierShipmentJob(payload, attempt),

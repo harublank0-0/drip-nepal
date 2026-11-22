@@ -4,8 +4,9 @@ import type User from '#models/user'
 /*
  * The session helpers of docs/09 §3.4. They take `ctx`, so they live with
  * the HTTP layer; controllers and middleware share them. They implement
- * docs/07 §3.1, §3.2 and §3.11. `rotateSessionId` joins them with its first
- * caller in M1 (`verifyMfaChallenge`, `changePassword`).
+ * docs/07 §3.1, §3.2 and §3.11. `rotateSessionId` joined them with its
+ * first caller, `changePassword` (M1 part 4); `verifyMfaChallenge` and the
+ * shop operations that make the caller an owner or member follow.
  */
 
 // The session keys of docs/07 §3.2 that belong to one sign-in.
@@ -32,6 +33,22 @@ export async function startSession(ctx: HttpContext, user: User, stamp: string) 
   ctx.session.put(SESSION_KEYS.authenticatedAt, now)
   ctx.session.put(SESSION_KEYS.sellerSeenAt, now)
   ctx.session.put(SESSION_KEYS.adminSeenAt, now)
+  await ctx.session.tag(String(user.id))
+}
+
+/*
+ * A new session ID for the signed-in session, which keeps its values
+ * (docs/07 §3.1): after `changePassword`, whose controller first puts the
+ * new stamp, and later after `verifyMfaChallenge` and a privilege the user
+ * gains in their own request. The store's commit writes the new ID with its
+ * data and expiry only, so the new row is tagged again here; `tag()`
+ * upserts it at once, and the commit then writes the data over it. Every
+ * `regenerate()` of a signed-in session other than `login()`'s, and the
+ * forced logouts' (`endSession`), goes through this helper.
+ */
+export async function rotateSessionId(ctx: HttpContext) {
+  const user = ctx.auth.getUserOrFail()
+  ctx.session.regenerate()
   await ctx.session.tag(String(user.id))
 }
 

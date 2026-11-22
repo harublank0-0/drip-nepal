@@ -9,12 +9,17 @@ import { LogInForm } from '~/components/auth/log_in_form'
  * `logIn` and then goes where the server's `redirect_to` says
  * (log_in_form.tsx). `notice` is `account_suspended` after the account
  * check ended a suspended user's session on a page visit, else null.
+ *
+ * `password_changed` is never a server prop: `/reset-password` sets it on
+ * its client-side visit here after a reset (02 J-18 step 4), so the form
+ * says the password was changed. A reload drops it.
  */
 type Props = InertiaProps<{
   notice: 'account_suspended' | null
+  password_changed?: boolean
 }>
 
-export default function LogIn({ notice }: Props) {
+export default function LogIn({ notice, password_changed }: Props) {
   return (
     <>
       <Head title={t('auth.login.title')} />
@@ -28,7 +33,7 @@ export default function LogIn({ notice }: Props) {
           </h1>
           <p className="text-muted-foreground">{t('auth.login.intro')}</p>
         </header>
-        <LogInForm notice={notice} />
+        <LogInForm notice={notice} passwordChanged={password_changed === true} />
       </div>
     </>
   )

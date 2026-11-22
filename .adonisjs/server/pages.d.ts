@@ -14,7 +14,9 @@ declare module '@adonisjs/inertia/types' {
   export interface InertiaPages {
     'admin/forbidden': ExtractProps<(typeof import('../../inertia/pages/admin/forbidden.tsx'))['default']>
     'admin/logistics': ExtractProps<(typeof import('../../inertia/pages/admin/logistics.tsx'))['default']>
+    'auth/forgot_password': ExtractProps<(typeof import('../../inertia/pages/auth/forgot_password.tsx'))['default']>
     'auth/login': ExtractProps<(typeof import('../../inertia/pages/auth/login.tsx'))['default']>
+    'auth/reset_password': ExtractProps<(typeof import('../../inertia/pages/auth/reset_password.tsx'))['default']>
     'auth/signup': ExtractProps<(typeof import('../../inertia/pages/auth/signup.tsx'))['default']>
     'auth/verify_email': ExtractProps<(typeof import('../../inertia/pages/auth/verify_email.tsx'))['default']>
     'dev/design_system/color_card': ExtractProps<(typeof import('../../inertia/pages/dev/design_system/color_card.tsx'))['default']>
