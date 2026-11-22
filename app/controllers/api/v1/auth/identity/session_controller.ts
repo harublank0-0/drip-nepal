@@ -26,7 +26,7 @@ import { LOG_IN_MEMBERS, logInValidator } from '#validators/identity/log_in'
  * `/login` page it visits next renders with `clearHistory` too.
  */
 export default class SessionController {
-  // logIn: 200 `{ data: { user, redirect_to } }`; the same 401 for a wrong password and an unknown email.
+  // logIn: 200 `{ data: { user, redirect_to } }`; one 401 for a wrong password or an unknown email.
   async logIn(ctx: HttpContext) {
     assertKnownMembers(ctx.request.body(), LOG_IN_MEMBERS)
     const input = await ctx.request.validateUsing(logInValidator)
@@ -42,8 +42,10 @@ export default class SessionController {
 
     const returnTo = input.return_to ?? null
     const redirectTo = safeReturnPath(returnTo)
-    // TM-14's detective control; the value itself is not logged, since it may carry a token.
-    if (returnTo !== null && redirectTo === null) ctx.logger.info('auth.return_to_rejected')
+    // TM-14's detective control: the length only, never the value, which may carry a token.
+    if (returnTo !== null && redirectTo === null) {
+      ctx.logger.info({ return_to_length: returnTo.length }, 'auth.return_to_rejected')
+    }
     return { data: { user: sessionUserJson(result.user), redirect_to: redirectTo ?? '/' } }
   }
 

@@ -12,7 +12,8 @@ import { testBrowser, type Browser } from '#tests/support/browser'
  * - T-UI-036: `/` renders on the server for a guest, with links to sign up
  *   and sign in, and for a signed-in user, with a greeting by first name
  *   and the sign-out button; staff whose role may open the admin pages get
- *   a link to them, other roles do not.
+ *   a link to them once the session holds fresh MFA (a session signed in
+ *   with a password only would meet the `/mfa` redirect); other roles never.
  * - T-SEC-036: the page's prop key set, the shared props and `admin_link`.
  */
 
@@ -69,15 +70,15 @@ test.group('T-UI-036 the interim home page', () => {
     assert.notInclude(html, 'href="/admin/logistics"')
   })
 
-  test(
-    'T-UI-036 staff whose role opens the admin pages get a link to them: {role} sees it: {linked}'
-  )
+  test('T-UI-036 the admin link: {role} with MFA {mfa} sees it: {linked}')
     .with([
-      { role: 'platform_admin', linked: true },
-      { role: 'support_agent', linked: false },
+      { role: 'platform_admin', mfa: true, linked: true },
+      { role: 'platform_admin', mfa: false, linked: false },
+      { role: 'support_agent', mfa: true, linked: false },
     ])
-    .run(async ({ assert }, { role, linked }) => {
-      const browser = await signIn(await staffUser(role))
+    .run(async ({ assert }, { role, mfa, linked }) => {
+      const staff = await staffUser(role)
+      const browser = await signIn(staff, mfa ? new Date().toISOString() : undefined)
       const { status, html, page } = await htmlPage(browser, '/')
       assert.equal(status, 200)
       assert.equal(page?.props.admin_link, linked)

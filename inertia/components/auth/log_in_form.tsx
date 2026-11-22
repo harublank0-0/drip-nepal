@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useForm } from '@tanstack/react-form'
 import { router, usePage } from '@inertiajs/react'
 import type { Route } from '@tuyau/core/types'
 import type { Data } from '@generated/data'
 import type { Problem } from '@shared/api/problem'
+import { INVALID_CREDENTIALS_DETAIL } from '@shared/constants/auth'
 import { ACCOUNT_LIMITS } from '@shared/constants/limits'
 import { client, urlFor } from '~/client'
 import { useApiMutation } from '~/hooks/use_api_mutation'
@@ -33,8 +34,13 @@ import { RateLimitNotice } from '~/components/forms/rate_limit_notice'
  *
  * The form pattern of docs/08 §7.1, and the refusals of 06 §13.3:
  * - 401: one message for a wrong password and an unknown email
- *   (AC-FR-IAM-003-2); `useApiMutation` hands it back instead of visiting
- *   this page again.
+ *   (AC-FR-IAM-003-2), told apart by its `detail`; `useApiMutation` hands
+ *   it back instead of visiting this page again. Any other 401 is the
+ *   account check's (docs/07 §3.3): this browser still held a session that
+ *   had gone stale (the password changed elsewhere), which that request
+ *   has just ended, with its CSRF secret. The page reloads for a fresh
+ *   token and sends the same values once more; if that fails too, the
+ *   problem shows with its reference.
  * - 403 `ACCOUNT_SUSPENDED`: the suspension notice with the support
  *   contact (06 §5.2); the same notice shows when the account check sent a
  *   suspended user here (`notice`).
@@ -85,6 +91,8 @@ export function LogInForm({ notice }: { notice: 'account_suspended' | null }) {
   const [problem, setProblem] = useState<Problem | null>(null)
   const [offline, setOffline] = useState(false)
   const returnTo = useReturnTo()
+  // Set for the one automatic resend after a stale session was ended.
+  const resending = useRef(false)
 
   function resetMessages() {
     setRefusal(null)
@@ -101,6 +109,8 @@ export function LogInForm({ notice }: { notice: 'account_suspended' | null }) {
       report.failed(formApi)
     },
     onSubmit: async ({ value, formApi }) => {
+      const resend = resending.current
+      resending.current = false
       resetMessages()
       report.clear()
       const body: Body = {
@@ -122,7 +132,19 @@ export function LogInForm({ notice }: { notice: 'account_suspended' | null }) {
       // useApiMutation shows the wait next to the button.
       if (code === 'RATE_LIMITED') return
       if (code === 'UNAUTHENTICATED') {
-        setRefusal('invalid')
+        if (outcome.problem.detail === INVALID_CREDENTIALS_DETAIL) {
+          setRefusal('invalid')
+        } else if (resend) {
+          setProblem(outcome.problem)
+        } else {
+          // Reloading keeps the form's state; the page answer brings a new XSRF-TOKEN.
+          router.reload({
+            onSuccess: () => {
+              resending.current = true
+              void formApi.handleSubmit()
+            },
+          })
+        }
         return
       }
       if (code === 'ACCOUNT_SUSPENDED') {
@@ -183,7 +205,7 @@ export function LogInForm({ notice }: { notice: 'account_suspended' | null }) {
           )}
         </form.Field>
         <p className="text-sm">
-          {/* `/forgot-password` is a route of M1 part 4; until then the link opens the 404 page. */}
+          {/* `/forgot-password` comes with M1 part 4; until then the link opens the 404 page. */}
           <a className="text-link underline underline-offset-4" href="/forgot-password">
             {t('auth.login.forgot')}
           </a>
@@ -196,7 +218,7 @@ export function LogInForm({ notice }: { notice: 'account_suspended' | null }) {
       )}
       <ProblemAlert problem={problem} offline={offline} />
       <div className="space-y-2">
-        {/* Not disabled while pending or rate limited, so it keeps focus; presses are ignored (08 §7.1). */}
+        {/* aria-disabled, not disabled, while busy: it keeps focus (08 §7.1). */}
         <Button
           type="submit"
           className={`h-11 w-full text-base ${PENDING_BUTTON}`}

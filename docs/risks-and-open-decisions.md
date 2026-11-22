@@ -243,7 +243,8 @@ Ruling: GET / (route name home) renders the storefront/home component as an inte
         until M4 builds the storefront home in the same component: it says the store is
         being built, with no date; a guest gets links to sign up and sign in; a signed-in
         user gets a greeting by first name and the sign-out button, and staff whose role
-        may open /admin/logistics a link to it. Its one prop is admin_link (T-SEC-036).
+        may open /admin/logistics, in a session with MFA from the last 12 hours, a link to
+        it. Its one prop is admin_link (T-SEC-036).
 Evidence: The browser walk-through of M1 part 3: every redirect after sign-in (the logIn
           default redirect_to), after a verified link ("Continue to DripNepal"), away
           from the guest pages and the brand link land on /, which had no route, so a

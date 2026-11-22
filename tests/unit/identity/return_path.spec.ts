@@ -1,5 +1,5 @@
 import { test } from '@japa/runner'
-import { safeReturnPath } from '#modules/identity/domain/return_path'
+import { MAX_RETURN_PATH_LENGTH, safeReturnPath } from '#modules/identity/domain/return_path'
 
 /*
  * T-SEC-017: where `logIn` may send someone back to (`return_to`, docs/07
@@ -44,6 +44,15 @@ test.group('T-SEC-017 return path after login', () => {
     .run(({ assert }, row) => {
       assert.isNull(safeReturnPath(row.$self))
     })
+
+  test('T-SEC-017 a path longer than 2,048 characters is refused; one of 2,048 is kept', ({
+    assert,
+  }) => {
+    assert.equal(MAX_RETURN_PATH_LENGTH, 2048)
+    const longest = `/${'a'.repeat(2047)}`
+    assert.equal(safeReturnPath(longest), longest)
+    assert.isNull(safeReturnPath(`/${'a'.repeat(2048)}`))
+  })
 
   test('T-SEC-017 a value that is not a string is refused', ({ assert }) => {
     assert.isNull(safeReturnPath(undefined))

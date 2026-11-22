@@ -1,5 +1,8 @@
 const BASE = 'http://return.invalid'
 
+// Longer than any page path of the site; a longer one would end on a 414 or 431, not a page.
+export const MAX_RETURN_PATH_LENGTH = 2048
+
 /*
  * The one return-path helper of docs/07 TM-14: the page to send someone
  * back to after signing in, or null when the value isn't a path on this
@@ -13,10 +16,13 @@ const BASE = 'http://return.invalid'
  * site that doesn't itself start with `//`. The answer is that resolved
  * path and query, never a value whose dot segments resolve to `//host`
  * (`/..//host`, `/.//host`): those are refused, not passed on. API paths
- * are refused: they aren't pages. The fragment is dropped.
+ * are refused: they aren't pages, and so is a value longer than
+ * `MAX_RETURN_PATH_LENGTH`, which `logIn` would otherwise echo and the
+ * browser visit. The fragment is dropped.
  */
 export function safeReturnPath(value: unknown): string | null {
-  if (typeof value !== 'string' || !value.startsWith('/') || value.startsWith('//')) return null
+  if (typeof value !== 'string' || value.length > MAX_RETURN_PATH_LENGTH) return null
+  if (!value.startsWith('/') || value.startsWith('//')) return null
   // eslint-disable-next-line no-control-regex -- control characters are what this refuses
   if (/[\\\u0000-\u001F\u007F]/.test(value)) return null
 

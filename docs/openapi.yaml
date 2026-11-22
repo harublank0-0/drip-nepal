@@ -645,15 +645,19 @@ paths:
         before anyone is signed in: `suspended` or `deactivated` with the right password is 403
         `ACCOUNT_SUSPENDED` and no session (AC-FR-IAM-003-4). Every refusal after the check
         keeps the limiter point and writes one `auth.login_failed` row (04a §15.3).
-        On success, in one transaction: `last_login_at` (a compare-and-set on a signed-in
-        status, which returns the current `security_stamp`), a rehash if the scrypt parameters
-        changed (07 §3.7), and one `auth.login` row; the account key is deleted. Then the
+        On success, in one transaction: `last_login_at` by a compare-and-set on what the check
+        read (a signed-in status, the same `security_stamp`, and the same `password_hash` when a
+        hash made with older scrypt parameters is replaced, 07 §3.7), and one `auth.login` row;
+        the account key is deleted. A miss, because a password reset or change, "sign out
+        everywhere" or a suspension committed in between, starts no session: 403
+        `ACCOUNT_SUSPENDED` if the status changed, else the generic 401. Then the
         session: the keys of an earlier sign-in are forgotten, the guard's `login()` issues a
         new session ID, the stamp and the login times are stored and the new row is tagged
         with the user ID (07 §3.1, §3.2, T-SEC-009). A staff member signs in the same way; the
         admin surface then answers 401 `MFA_REQUIRED` until `verifyMfaChallenge` (06 §4.3).
         `redirect_to` is `return_to` when the helper of 07 TM-14 keeps it (a path on this site,
-        not under `/api/`, without its fragment), else `/` (T-SEC-017). Not ⚷ (06 §7.7).
+        not under `/api/`, at most 2,048 characters, without its fragment), else `/`
+        (T-SEC-017). Not ⚷ (06 §7.7).
         T-IAM-003. Release R1·M1.
       x-release: R1·M1
       security:
@@ -5231,7 +5235,8 @@ components:
           type: [string, 'null']
           description: |
             The `return_to` query of `/login`, passed on unchanged; checked by the helper of 07
-            TM-14, which turns a rejected value into `/` rather than an error.
+            TM-14, which turns a rejected value, one over 2,048 characters included, into `/`
+            rather than an error.
     SessionUser:
       type: object
       description: Who is signed in, as `logIn` answers it.
@@ -7516,5 +7521,7 @@ components:
 #     calls do; its 200 follows 06 §3.4's envelope, `{data: {user, redirect_to}}`; its refusals
 #     are the one 401 of a wrong password and an unknown email, 403 `ACCOUNT_SUSPENDED`, 409
 #     `CONFLICT` for a signed-in caller and 429. `logOut` answers 204, as the header's envelope
-#     rule says. `getMe` is a closed schema listing every member, as 07 TM-06 asks of responses that hold
-#     personal data.
+#     rule says. `getMe` is a closed schema listing every member, as 07 TM-06 asks of responses
+#     that hold personal data. After the Fable review: `logIn`'s compare-and-set covers the stamp
+#     and, on a rehash, the hash the check read, and a miss answers 403 or the generic 401;
+#     a `return_to` over 2,048 characters becomes `/`.

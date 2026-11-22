@@ -4,9 +4,10 @@ import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
 import User from '#models/user'
 import { DomainError } from '#exceptions/domain_error'
 import { auditEmailSubject, recordAudit } from '#modules/audit/actions/record_audit'
-import { maySignIn } from '#modules/identity/domain/user_status'
+import { SIGNED_IN_STATUSES, maySignIn } from '#modules/identity/domain/user_status'
 import { throttledLogin } from '#modules/identity/internal/login_throttle'
 import { withTx } from '#modules/platform/tx'
+import { INVALID_CREDENTIALS_DETAIL } from '#shared/constants/auth'
 
 /*
  * `logIn` (docs/06 §13.3; 01 FR-IAM-003; 02 J-04 step 5), the identity
@@ -35,11 +36,19 @@ import { withTx } from '#modules/platform/tx'
  *    email's keyed hash (docs/04a §15.3). Any other error is rethrown and
  *    reported (RF-12, AC-FR-IAM-003-5).
  * 5. A sign-in, in one transaction: `last_login_at` is set by a
- *    compare-and-set on a signed-in status, which also returns the current
- *    `security_stamp` the session stores; a hash made with older scrypt
- *    parameters is replaced (docs/07 §3.7); and one `auth.login` row is
- *    written (AC-FR-IAM-003-1). A status that changed since the check
- *    answers 403 as step 3 does.
+ *    compare-and-set on what the check read: a signed-in status and the
+ *    same `security_stamp`, and, when a hash made with older scrypt
+ *    parameters is replaced (docs/07 §3.7), the same `password_hash`. One
+ *    `auth.login` row is written (AC-FR-IAM-003-1) and the stamp goes to
+ *    the session. The CAS closes the window between the check and the
+ *    write: a password reset or change, or "sign out everywhere", that
+ *    rotated the stamp meanwhile must not leave this sign-in holding the
+ *    new stamp (which the revoke job spares, docs/07 §3.3), nor have its
+ *    new hash overwritten by a rehash of the old password. On a miss the
+ *    row is read again: a status that may no longer sign in answers 403 as
+ *    step 3 does; anything else (the stamp or the hash changed) answers the
+ *    generic 401 of step 4. Either writes one `auth.login_failed` row, and
+ *    no session starts.
  */
 
 export type LogInCommand = {
@@ -57,12 +66,15 @@ export type LogInContext = {
 
 export type LogInResult = { user: User; securityStamp: string }
 
-// The statuses that keep a session, as the CAS of step 5 lists them (docs/07 §3.3 row 1).
-const SIGNED_IN = ['pending_verification', 'active']
+// What step 5's transaction found: a sign-in, or why the compare-and-set missed.
+type Finish =
+  | { kind: 'signed_in'; securityStamp: string }
+  | { kind: 'status'; status: string }
+  | { kind: 'changed' }
 
 // The one answer of a wrong password and an unknown email (AC-FR-IAM-003-2).
 const invalidCredentials = () =>
-  new DomainError('UNAUTHENTICATED', { detail: 'Invalid email or password.' })
+  new DomainError('UNAUTHENTICATED', { detail: INVALID_CREDENTIALS_DETAIL })
 
 const accountSuspended = () =>
   new DomainError('ACCOUNT_SUSPENDED', { detail: 'Your account is suspended.' })
@@ -77,7 +89,10 @@ class RefusedStatus extends Error {
 async function recordFailure(
   command: LogInCommand,
   context: LogInContext,
-  changes: { cause: 'invalid_credentials' } | { cause: 'account_status'; status: string }
+  changes:
+    | { cause: 'invalid_credentials' }
+    | { cause: 'account_status'; status: string }
+    | { cause: 'account_changed' }
 ) {
   await withTx(async (trx) => {
     // A row names the account when the email matches one, whatever its status (04a §15.3).
@@ -134,21 +149,27 @@ export async function logIn(command: LogInCommand, context: LogInContext): Promi
   const stored = user.passwordHash ?? ''
   const rehashed = scrypt.needsReHash(stored) ? await scrypt.make(command.password) : null
 
-  const securityStamp = await withTx(async (trx) => {
-    // Only while the account may still sign in (compare-and-set on the status).
-    const rows: { security_stamp: string }[] = await trx
+  const finish = await withTx(async (trx): Promise<Finish> => {
+    const cas = trx
       .from('users')
       .where('id', user.id)
-      .whereIn('status', SIGNED_IN)
-      .update(
-        {
-          last_login_at: trx.knexRawQuery('now()'),
-          ...(rehashed ? { password_hash: rehashed } : {}),
-        },
-        ['security_stamp']
-      )
+      .whereIn('status', [...SIGNED_IN_STATUSES])
+      .where('security_stamp', user.securityStamp)
+    // A rehash replaces only the hash this check verified.
+    if (rehashed) cas.where('password_hash', stored)
+    const rows: { security_stamp: string }[] = await cas.update(
+      {
+        last_login_at: trx.knexRawQuery('now()'),
+        ...(rehashed ? { password_hash: rehashed } : {}),
+      },
+      ['security_stamp']
+    )
     const row = rows[0]
-    if (!row) return null
+    if (!row) {
+      const current = await trx.from('users').where('id', user.id).select('status').first()
+      if (current && !maySignIn(current.status)) return { kind: 'status', status: current.status }
+      return { kind: 'changed' }
+    }
     const actor = await loginActor(trx, user.id)
     await recordAudit(trx, {
       ...actor,
@@ -160,11 +181,18 @@ export async function logIn(command: LogInCommand, context: LogInContext): Promi
       ipHash: context.ipHash,
       changes: rehashed ? { changed: ['password_hash'] } : {},
     })
-    return row.security_stamp
+    return { kind: 'signed_in', securityStamp: row.security_stamp }
   })
-  if (securityStamp === null) {
+
+  if (finish.kind === 'status') {
     // Suspended or deactivated between the check and now.
+    await recordFailure(command, context, { cause: 'account_status', status: finish.status })
     throw accountSuspended()
   }
-  return { user, securityStamp }
+  if (finish.kind === 'changed') {
+    // The stamp or the hash changed between the check and now: no session for the old one.
+    await recordFailure(command, context, { cause: 'account_changed' })
+    throw invalidCredentials()
+  }
+  return { user, securityStamp: finish.securityStamp }
 }

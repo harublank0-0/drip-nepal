@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto'
 import { test } from '@japa/runner'
 import db from '@adonisjs/lucid/services/db'
 import encryption from '@adonisjs/core/services/encryption'
+import hash from '@adonisjs/core/services/hash'
+import { Scrypt } from '@adonisjs/core/hash/drivers/scrypt'
 import { CookieClient } from '@adonisjs/core/http'
 import { MessageBuilder } from '@adonisjs/core/helpers'
 import { FACTORY_PASSWORD, UserFactory } from '#database/factories/user_factory'
@@ -10,8 +12,10 @@ import { placeholderCiphertext } from '#database/factories/placeholder_ciphertex
 import { auditEmailSubject } from '#modules/audit/actions/record_audit'
 import { phoneBlindIndex } from '#modules/platform/crypto/blind_index'
 import { encryptField } from '#modules/platform/crypto/field_encrypter'
+import { INVALID_CREDENTIALS_DETAIL } from '#shared/constants/auth'
 import type { Browser } from '#tests/support/browser'
 import { send, signIn, statusOf } from '#tests/support/courier_http'
+import { captureLogs } from '#tests/support/logs'
 import {
   LOG_IN_PATH,
   ME_PATH,
@@ -41,7 +45,14 @@ import {
  * - T-SEC-011: an anonymised account's email answers the unknown email's
  *   401, without an error.
  * - T-SEC-017: `return_to` becomes `redirect_to` only when it is a path on
- *   this site.
+ *   this site, percent-encoded values included; a rejected one is logged
+ *   by its length, never its value.
+ * - T-IAM-003, the compare-and-set of the sign-in: a hash with older scrypt
+ *   parameters is replaced once; an account suspended between the check
+ *   and the write gets 403, and a stamp rotated or a password reset in that
+ *   window gets the generic 401, with no session and the new hash kept.
+ *   The window is entered through the rehash: a patched `scrypt.make` runs
+ *   the change, as a concurrent request would commit it.
  * - T-SEC-101: a 254-character unknown email answers 401 with one
  *   `auth.login_failed` row whose subject is a 64-character hash.
  * - T-SEC-013 and T-API-002: no XSRF header, or an extra member, is
@@ -80,6 +91,34 @@ async function activeUser(state?: 'pending_verification' | 'suspended' | 'deacti
   // `security_stamp` comes from the column default.
   await user.refresh()
   return user
+}
+
+// The factory password hashed with older scrypt parameters (cost 8192), which logIn replaces.
+async function withOlderHash(userId: string) {
+  const older = await new Scrypt({ cost: 8192, blockSize: 8, parallelization: 1 }).make(
+    FACTORY_PASSWORD
+  )
+  await db.from('users').where('id', userId).update({ password_hash: older })
+  return older
+}
+
+/*
+ * Runs `change` inside logIn's rehash (`scrypt.make`), after the password
+ * check and before step 5's compare-and-set, as a request that commits in
+ * that window would.
+ */
+async function duringRehash<T>(change: () => Promise<unknown>, run: () => Promise<T>) {
+  const scrypt = hash.use('scrypt')
+  const make = scrypt.make
+  scrypt.make = async function (this: typeof scrypt, value: string) {
+    await change()
+    return make.call(this, value)
+  }
+  try {
+    return await run()
+  } finally {
+    Reflect.deleteProperty(scrypt, 'make')
+  }
 }
 
 // A staff member with TOTP enrolled (a placeholder secret) and a password that signs in.
@@ -336,6 +375,12 @@ test.group('T-IAM-003 logIn', (group) => {
       { return_to: '/..//evil.example', expected: '/' },
       { return_to: '/%2e//evil.example', expected: '/' },
       { return_to: '/api/v1/me', expected: '/' },
+      { return_to: `/${'a'.repeat(2048)}`, expected: '/' },
+      // Percent-encoded, a backslash, tab or newline is path text on this site (TM-14).
+      { return_to: '/%5Cevil.example', expected: '/%5Cevil.example' },
+      { return_to: '/%09/evil.example', expected: '/%09/evil.example' },
+      { return_to: '/%0A/evil.example', expected: '/%0A/evil.example' },
+      { return_to: '/%0D%0A/evil.example', expected: '/%0D%0A/evil.example' },
     ])
     .run(async ({ assert }, { return_to: returnTo, expected }) => {
       const user = await activeUser()
@@ -343,6 +388,27 @@ test.group('T-IAM-003 logIn', (group) => {
       assert.equal(response.status, 200, response.text)
       assert.equal(response.body.data.redirect_to, expected)
     })
+
+  test('T-SEC-017 a rejected return_to is logged as auth.return_to_rejected by its length, never its value', async ({
+    assert,
+  }) => {
+    const user = await activeUser()
+    const value = 'https://evil.example/collect?token=t-sec-017-secret'
+    let requestId: string | null = null
+    const lines = await captureLogs(async () => {
+      const response = await logInAs(user.email, FACTORY_PASSWORD, { return_to: value })
+      assert.equal(response.status, 200, response.text)
+      assert.equal(response.body.data.redirect_to, '/')
+      requestId = response.headers.get('x-request-id')
+    })
+    const rejected = lines.filter((line) => line.message === 'auth.return_to_rejected')
+    assert.lengthOf(rejected, 1)
+    assert.deepEqual(rejected[0].fields, { return_to_length: value.length })
+    assert.equal(rejected[0].request_id, requestId)
+    for (const leak of ['evil.example', 't-sec-017-secret']) {
+      assert.notInclude(JSON.stringify(lines), leak)
+    }
+  })
 
   test('T-SEC-101 a 254-character unknown email answers 401 with one auth.login_failed row of a 64-character subject', async ({
     assert,
@@ -383,6 +449,104 @@ test.group('T-IAM-003 logIn', (group) => {
     assert.lengthOf(await db.from('sessions').where('user_id', second.id), 0)
     await forgetLogin(second.email, other.ip)
   })
+})
+
+test.group('T-IAM-003 the compare-and-set of the sign-in', (group) => {
+  let client: Guest
+  let emails: string[]
+  group.each.setup(async () => {
+    client = await guest()
+    emails = []
+    return async () => {
+      for (const email of emails) await forgetLogin(email, client.ip)
+    }
+  })
+
+  function logInAs(email: string) {
+    emails.push(email)
+    return postJson(client, LOG_IN_PATH, { email, password: FACTORY_PASSWORD })
+  }
+
+  test('T-IAM-003 a hash made with older scrypt parameters is replaced at sign-in, once [docs/07 §3.7]', async ({
+    assert,
+  }) => {
+    const user = await activeUser()
+    const older = await withOlderHash(user.id)
+    const { result, make, verify } = await countingScrypt(() => logInAs(user.email))
+    assert.equal(result.status, 200, result.text)
+    // One verify against the older hash, one make for its replacement.
+    assert.deepEqual({ make, verify }, { make: 1, verify: 1 })
+
+    const fresh = await db.from('users').where('id', user.id).firstOrFail()
+    assert.notEqual(fresh.password_hash, older)
+    const scrypt = hash.use('scrypt')
+    assert.isFalse(scrypt.needsReHash(fresh.password_hash))
+    assert.isTrue(await scrypt.verify(fresh.password_hash, FACTORY_PASSWORD))
+    const audits = await auditRows('auth.login', user.id)
+    assert.lengthOf(audits, 1)
+    assert.deepEqual(audits[0].changes, { changed: ['password_hash'] })
+  })
+
+  test('T-IAM-003 an account suspended between the check and the write gets 403, no session, and keeps its hash', async ({
+    assert,
+  }) => {
+    const user = await activeUser()
+    const older = await withOlderHash(user.id)
+    const response = await duringRehash(
+      () => db.from('users').where('id', user.id).update({ status: 'suspended' }),
+      () => logInAs(user.email)
+    )
+    assert.equal(response.status, 403, response.text)
+    assert.equal(response.body.code, 'ACCOUNT_SUSPENDED')
+    assert.lengthOf(await db.from('sessions').where('user_id', user.id), 0)
+
+    const fresh = await db.from('users').where('id', user.id).firstOrFail()
+    assert.equal(fresh.password_hash, older)
+    assert.isNull(fresh.last_login_at)
+    const failed = await auditRows('auth.login_failed', user.id)
+    assert.lengthOf(failed, 1)
+    assert.deepEqual(failed[0].changes, { cause: 'account_status', status: 'suspended' })
+    assert.lengthOf(await auditRows('auth.login', user.id), 0)
+  })
+
+  test(
+    'T-IAM-003 a {name} between the check and the write gets the generic 401, no session, and keeps the account as changed'
+  )
+    .with([
+      { name: 'stamp rotation ("sign out everywhere")', password: false },
+      { name: 'password reset', password: true },
+    ])
+    .run(async ({ assert }, { password }) => {
+      const user = await activeUser()
+      const older = await withOlderHash(user.id)
+      const newHash = await hash.use('scrypt').make(randomUUID())
+      const response = await duringRehash(
+        () =>
+          db
+            .from('users')
+            .where('id', user.id)
+            .update({
+              security_stamp: db.raw('gen_random_uuid()'),
+              ...(password ? { password_hash: newHash } : {}),
+            }),
+        () => logInAs(user.email)
+      )
+      assert.equal(response.status, 401, response.text)
+      assert.include(response.body, {
+        code: 'UNAUTHENTICATED',
+        detail: INVALID_CREDENTIALS_DETAIL,
+      })
+      assert.lengthOf(await db.from('sessions').where('user_id', user.id), 0)
+
+      // No rehash of the old password over what the change wrote.
+      const fresh = await db.from('users').where('id', user.id).firstOrFail()
+      assert.equal(fresh.password_hash, password ? newHash : older)
+      assert.notEqual(fresh.security_stamp, user.securityStamp)
+      assert.isNull(fresh.last_login_at)
+      const failed = await auditRows('auth.login_failed', user.id)
+      assert.lengthOf(failed, 1)
+      assert.deepEqual(failed[0].changes, { cause: 'account_changed' })
+    })
 })
 
 test.group('T-SEC-009 sessions at sign-in and sign-out', (group) => {
