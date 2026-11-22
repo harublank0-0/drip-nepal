@@ -856,7 +856,7 @@ A storefront listing page beyond the last page returns an empty list with 200 ([
 | 403 inside the user's own scope | `PermissionDenied` inside the surface layout (§8.5)                                                                                                            |
 | 500–599                         | `errors/server_error`: apology, "Try again" (reloads the same URL), help link and "Reference: `request_id`"; no stack trace (RF-36)                            |
 
-The exception handler already maps 404 and 500–599 to those two pages [Verified-repo `app/exceptions/handler.ts` `statusPages`]; a 403 page is added in M1 with the permission work. Edited 2026-11-22 (note 75): built early for the admin courier pages; 403 `FORBIDDEN` renders `PermissionDenied`, inside the admin layout under `/admin` (`admin/forbidden`) and in `errors/forbidden` elsewhere; other 403s keep the title page.
+The exception handler already maps 404 and 500–599 to those two pages [Verified-repo `app/exceptions/handler.ts` `statusPages`]; a 403 page is added in M1 with the permission work. Edited 2026-11-22 (note 75): built early for the admin courier pages; 403 `FORBIDDEN` renders `PermissionDenied`, inside the admin layout under `/admin` (`admin/forbidden`) and in `errors/forbidden` elsewhere, only for a thrown permission refusal; a CSRF failure is redirected back by Shield.
 
 **API errors.** The client behaviour per code is owned by [06 §5.2](06-api-design.md#52-codes) and ADR-0018; this table fixes where the message appears and what the user can do. `detail` is shown as the message unless the catalog has a better text for the code.
 

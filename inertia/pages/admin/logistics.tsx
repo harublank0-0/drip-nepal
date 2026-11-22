@@ -38,7 +38,7 @@ export default function AdminLogistics({ accounts }: Props) {
           <CourierAccountsTable accounts={accounts.items} />
         )}
         {(next || onLaterPage) && (
-          <nav className="flex gap-4" aria-label={t('admin.logistics.table_label')}>
+          <nav className="flex gap-4" aria-label={t('admin.logistics.pages')}>
             {onLaterPage && (
               <Link
                 route="admin.logistics"

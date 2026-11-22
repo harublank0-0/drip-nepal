@@ -124,6 +124,24 @@ test.group('T-SEC-030 /admin/logistics access', () => {
     })
   })
 
+  test('T-SEC-030 a CSRF failure on a page is redirected back, never the role page', async ({
+    assert,
+  }) => {
+    // Shield's CSRF error handles itself with a redirect back, so it never reaches the
+    // status pages; the handler also gates the role page on a thrown FORBIDDEN DomainError.
+    // The one page-route write today is the development sign-out (docs/07 §3.13).
+    const browser = await adminBrowser()
+    const response = await browser.request('/dev/sign-out', {
+      method: 'POST',
+      headers: { 'Accept': 'text/html', 'X-XSRF-TOKEN': 'stale' },
+    })
+    const html = await response.text()
+    assert.equal(response.status, 302)
+    assert.notInclude(html, 'forbidden')
+    // The session survives: the admin page still opens.
+    assert.equal(await statusOf(htmlStatus(browser, PAGE)), 200)
+  })
+
   test('T-SEC-030 a platform admin opens it', async ({ assert }) => {
     assert.equal(await statusOf(htmlStatus(await adminBrowser(), PAGE)), 200)
   })

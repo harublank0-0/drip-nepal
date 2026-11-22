@@ -1,6 +1,7 @@
 import app from '@adonisjs/core/services/app'
 import { type HttpContext, ExceptionHandler } from '@adonisjs/core/http'
 import type { HttpError, StatusPageRange, StatusPageRenderer } from '@adonisjs/core/types/http'
+import { DomainError } from '#exceptions/domain_error'
 import { databaseError, toProblem, type Problem } from '#exceptions/to_problem'
 import { reportToTracker, scrubbedDatabaseError, userReference } from '#exceptions/tracker'
 import { hmacKeys } from '#config/crypto'
@@ -93,7 +94,7 @@ export default class HttpExceptionHandler extends ExceptionHandler {
   /*
    * 403 `FORBIDDEN` renders `PermissionDenied` (docs/08 §8.5) in the layout of
    * the visited surface: `admin/forbidden` under /admin, `errors/forbidden`
-   * elsewhere. Other 403s (a CSRF failure) keep the title page.
+   * elsewhere. Any other 403 keeps the title page.
    */
   protected statusPages: Record<StatusPageRange, StatusPageRenderer> = {
     '403': (error, ctx) =>
@@ -167,10 +168,13 @@ export default class HttpExceptionHandler extends ExceptionHandler {
   async renderErrorAsHTML(error: HttpError, ctx: HttpContext) {
     if (this.debug) return super.renderErrorAsHTML(error, ctx)
     const problem = problemFor(error, ctx)
+    // A thrown permission refusal: a CSRF failure maps to the same code (to_problem.ts),
+    // though Shield's error redirects back before it would reach here.
+    const permissionDenied =
+      (error as unknown) instanceof DomainError &&
+      (error as unknown as DomainError).problemCode === 'FORBIDDEN'
     const hasStatusPage =
-      problem.status === 404 ||
-      problem.code === 'FORBIDDEN' ||
-      (problem.status >= 500 && problem.status < 600)
+      problem.status === 404 || permissionDenied || (problem.status >= 500 && problem.status < 600)
     if (this.renderStatusPages && hasStatusPage) {
       // The base renderer picks the page by `status`; it gets the problem's, and only the title.
       const shim = Object.assign(new Error(problem.title), { status: problem.status })

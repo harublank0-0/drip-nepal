@@ -10,7 +10,8 @@ export default function AdminForbidden() {
   return (
     <>
       <Head title={t('errors.forbidden.title')} />
-      <div className="max-w-prose">
+      <div className="max-w-prose space-y-4">
+        <h1 className="text-2xl font-semibold">{t('errors.forbidden.title')}</h1>
         <PermissionDenied />
       </div>
     </>
