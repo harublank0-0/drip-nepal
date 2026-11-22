@@ -9,7 +9,8 @@ import { BaseSeeder } from '@adonisjs/lucid/seeders'
  *
  * Placeholders that open decisions own: `default_commission_rate_bp`
  * [Open OD-04], the COD limits [Assumption A-08; Open OD-18],
- * `single_operator_mode` [Assumption A-20; Open OD-14]. The legal
+ * `single_operator_mode` [Assumption A-20; Open OD-14], and
+ * `platform_account_cod_enabled` (OD-58). The legal
  * disclosures start empty and are filled by the platform admin before
  * launch (docs/09 §9.3 step 8).
  */
@@ -27,6 +28,9 @@ export const PLATFORM_SETTING_DEFAULTS: Record<string, unknown> = {
   reservation_ttl_minutes: 30,
   max_shops_per_owner: 3,
   single_operator_mode: false,
+  // OD-58 (re-decided 2026-11-22): live COD on platform-owned courier accounts stays off
+  // until counsel, the accountant and NCM allow it; only a platform admin turns it on.
+  platform_account_cod_enabled: false,
   platform_legal_disclosures: {
     platform_name: '',
     business_name: '',

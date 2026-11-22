@@ -17,6 +17,10 @@ export type ScannedRoutes = {
     'bookCourierShipment': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'shopOrderNumber': ParamValue} }
     'cancelCourierBooking': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'shopOrderNumber': ParamValue} }
     'adminListLogisticsAccounts': { paramsTuple?: []; params?: {} }
+    'adminCreateLogisticsAccount': { paramsTuple?: []; params?: {} }
+    'adminRekeyLogisticsAccount': { paramsTuple: [ParamValue]; params: {'accountId': ParamValue} }
+    'adminAllowShopOnLogisticsAccount': { paramsTuple: [ParamValue,ParamValue]; params: {'accountId': ParamValue,'shopId': ParamValue} }
+    'adminRemoveShopFromLogisticsAccount': { paramsTuple: [ParamValue,ParamValue]; params: {'accountId': ParamValue,'shopId': ParamValue} }
     'adminSetLogisticsAccountStatus': { paramsTuple: [ParamValue]; params: {'accountId': ParamValue} }
     'adminSetShopLogisticsEnabled': { paramsTuple: [ParamValue]; params: {'shopId': ParamValue} }
     'adminListLogisticsBranches': { paramsTuple?: []; params?: {} }
@@ -56,6 +60,7 @@ export type ScannedRoutes = {
   }
   PUT: {
     'replaceLogisticsSettings': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
+    'adminAllowShopOnLogisticsAccount': { paramsTuple: [ParamValue,ParamValue]; params: {'accountId': ParamValue,'shopId': ParamValue} }
     'adminSetShopLogisticsEnabled': { paramsTuple: [ParamValue]; params: {'shopId': ParamValue} }
   }
   POST: {
@@ -65,6 +70,8 @@ export type ScannedRoutes = {
     'createPickupAddress': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'bookCourierShipment': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'shopOrderNumber': ParamValue} }
     'cancelCourierBooking': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'shopOrderNumber': ParamValue} }
+    'adminCreateLogisticsAccount': { paramsTuple?: []; params?: {} }
+    'adminRekeyLogisticsAccount': { paramsTuple: [ParamValue]; params: {'accountId': ParamValue} }
     'adminSetLogisticsAccountStatus': { paramsTuple: [ParamValue]; params: {'accountId': ParamValue} }
     'adminSyncLogisticsBranches': { paramsTuple?: []; params?: {} }
     'adminResolveCourierBooking': { paramsTuple: [ParamValue]; params: {'shopOrderNumber': ParamValue} }
@@ -79,6 +86,7 @@ export type ScannedRoutes = {
   }
   DELETE: {
     'archivePickupAddress': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'addressId': ParamValue} }
+    'adminRemoveShopFromLogisticsAccount': { paramsTuple: [ParamValue,ParamValue]; params: {'accountId': ParamValue,'shopId': ParamValue} }
   }
 }
 declare module '@adonisjs/core/types/http' {

@@ -424,8 +424,8 @@ export async function recordOrderVerification(
 }
 
 /*
- * What the booking form offers (`getCourierBookingOptions`): the accounts the
- * shop may book through, its pickup addresses (read by the caller from
+ * What the booking form offers (`getCourierBookingOptions`): the active
+ * accounts of the owner type the shop's mode names, its pickup addresses (read by the caller from
  * `shops`), the courier's services, the account's assigned origin branches
  * (read live and cached, null when the courier did not answer) and the
  * destination branches suggested from the delivery district.
@@ -440,9 +440,16 @@ export async function courierBookingOptions(command: {
   const shipment = await liveShipmentOf(db, shopOrder.id)
   const settings = await logisticsSettings(command.shopId)
   const usable = await accountsUsableByShop(command.shopId)
-  const accounts = usable.filter(
-    (account) => account.status === 'active' && account.ownerType === 'shop'
+  // The accounts of the owner type the mode names (OD-58): the shop's own, or, in the `platform`
+  // mode, the platform-owned ones it is allowed on, none once it has an active account of its own.
+  const ownAccountActive = usable.some(
+    (account) => account.ownerType === 'shop' && account.status === 'active'
   )
+  const ownerType = settings.fulfillmentMode === 'platform' ? 'platform' : 'shop'
+  const accounts =
+    ownerType === 'platform' && ownAccountActive
+      ? []
+      : usable.filter((account) => account.status === 'active' && account.ownerType === ownerType)
   const chosen =
     accounts.find((account) => account.id === command.accountId) ??
     accounts.find((account) => account.id === settings.defaultAccountId) ??

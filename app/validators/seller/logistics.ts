@@ -1,18 +1,12 @@
 import vine from '@vinejs/vine'
+import { courierCredentials } from '#validators/support/courier_credentials'
 
 /*
  * Seller inputs of the M6 courier operations (docs/06 §13.8). Credentials are
- * the courier's documented fields: for NCM a token [Verify-external VX-16],
- * printable ASCII without spaces, as the adapter checks before any call.
+ * the courier's documented fields (`courierCredentials`).
  */
 
 const uuid = () => vine.string().uuid()
-const token = () =>
-  vine
-    .string()
-    .minLength(8)
-    .maxLength(200)
-    .regex(/^[\x21-\x7e]+$/)
 
 export const LOGISTICS_SETTINGS_MEMBERS = ['fulfillment_mode', 'default_account_id'] as const
 export const replaceLogisticsSettingsValidator = vine.create({
@@ -33,13 +27,13 @@ export const createShopCourierAccountValidator = vine.create({
   name: vine.string().trim().minLength(2).maxLength(80),
   environment: vine.enum(['sandbox', 'production'] as const),
   external_account_ref: vine.string().trim().minLength(1).maxLength(100).nullable().optional(),
-  credentials: vine.object({ token: token() }),
+  credentials: courierCredentials(),
   password: vine.string().minLength(1).maxLength(128),
 })
 
 export const REKEY_MEMBERS = ['credentials', 'password'] as const
 export const rekeyShopCourierAccountValidator = vine.create({
-  credentials: vine.object({ token: token() }),
+  credentials: courierCredentials(),
   password: vine.string().minLength(1).maxLength(128),
 })
 

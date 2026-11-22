@@ -84,6 +84,30 @@ const routes = {
     tokens: [{"old":"/api/v1/admin/logistics/accounts","type":0,"val":"api","end":""},{"old":"/api/v1/admin/logistics/accounts","type":0,"val":"v1","end":""},{"old":"/api/v1/admin/logistics/accounts","type":0,"val":"admin","end":""},{"old":"/api/v1/admin/logistics/accounts","type":0,"val":"logistics","end":""},{"old":"/api/v1/admin/logistics/accounts","type":0,"val":"accounts","end":""}],
     types: placeholder as Registry['adminListLogisticsAccounts']['types'],
   },
+  'adminCreateLogisticsAccount': {
+    methods: ["POST"],
+    pattern: '/api/v1/admin/logistics/accounts',
+    tokens: [{"old":"/api/v1/admin/logistics/accounts","type":0,"val":"api","end":""},{"old":"/api/v1/admin/logistics/accounts","type":0,"val":"v1","end":""},{"old":"/api/v1/admin/logistics/accounts","type":0,"val":"admin","end":""},{"old":"/api/v1/admin/logistics/accounts","type":0,"val":"logistics","end":""},{"old":"/api/v1/admin/logistics/accounts","type":0,"val":"accounts","end":""}],
+    types: placeholder as Registry['adminCreateLogisticsAccount']['types'],
+  },
+  'adminRekeyLogisticsAccount': {
+    methods: ["POST"],
+    pattern: '/api/v1/admin/logistics/accounts/:accountId/credentials',
+    tokens: [{"old":"/api/v1/admin/logistics/accounts/:accountId/credentials","type":0,"val":"api","end":""},{"old":"/api/v1/admin/logistics/accounts/:accountId/credentials","type":0,"val":"v1","end":""},{"old":"/api/v1/admin/logistics/accounts/:accountId/credentials","type":0,"val":"admin","end":""},{"old":"/api/v1/admin/logistics/accounts/:accountId/credentials","type":0,"val":"logistics","end":""},{"old":"/api/v1/admin/logistics/accounts/:accountId/credentials","type":0,"val":"accounts","end":""},{"old":"/api/v1/admin/logistics/accounts/:accountId/credentials","type":1,"val":"accountId","end":""},{"old":"/api/v1/admin/logistics/accounts/:accountId/credentials","type":0,"val":"credentials","end":""}],
+    types: placeholder as Registry['adminRekeyLogisticsAccount']['types'],
+  },
+  'adminAllowShopOnLogisticsAccount': {
+    methods: ["PUT"],
+    pattern: '/api/v1/admin/logistics/accounts/:accountId/shops/:shopId',
+    tokens: [{"old":"/api/v1/admin/logistics/accounts/:accountId/shops/:shopId","type":0,"val":"api","end":""},{"old":"/api/v1/admin/logistics/accounts/:accountId/shops/:shopId","type":0,"val":"v1","end":""},{"old":"/api/v1/admin/logistics/accounts/:accountId/shops/:shopId","type":0,"val":"admin","end":""},{"old":"/api/v1/admin/logistics/accounts/:accountId/shops/:shopId","type":0,"val":"logistics","end":""},{"old":"/api/v1/admin/logistics/accounts/:accountId/shops/:shopId","type":0,"val":"accounts","end":""},{"old":"/api/v1/admin/logistics/accounts/:accountId/shops/:shopId","type":1,"val":"accountId","end":""},{"old":"/api/v1/admin/logistics/accounts/:accountId/shops/:shopId","type":0,"val":"shops","end":""},{"old":"/api/v1/admin/logistics/accounts/:accountId/shops/:shopId","type":1,"val":"shopId","end":""}],
+    types: placeholder as Registry['adminAllowShopOnLogisticsAccount']['types'],
+  },
+  'adminRemoveShopFromLogisticsAccount': {
+    methods: ["DELETE"],
+    pattern: '/api/v1/admin/logistics/accounts/:accountId/shops/:shopId',
+    tokens: [{"old":"/api/v1/admin/logistics/accounts/:accountId/shops/:shopId","type":0,"val":"api","end":""},{"old":"/api/v1/admin/logistics/accounts/:accountId/shops/:shopId","type":0,"val":"v1","end":""},{"old":"/api/v1/admin/logistics/accounts/:accountId/shops/:shopId","type":0,"val":"admin","end":""},{"old":"/api/v1/admin/logistics/accounts/:accountId/shops/:shopId","type":0,"val":"logistics","end":""},{"old":"/api/v1/admin/logistics/accounts/:accountId/shops/:shopId","type":0,"val":"accounts","end":""},{"old":"/api/v1/admin/logistics/accounts/:accountId/shops/:shopId","type":1,"val":"accountId","end":""},{"old":"/api/v1/admin/logistics/accounts/:accountId/shops/:shopId","type":0,"val":"shops","end":""},{"old":"/api/v1/admin/logistics/accounts/:accountId/shops/:shopId","type":1,"val":"shopId","end":""}],
+    types: placeholder as Registry['adminRemoveShopFromLogisticsAccount']['types'],
+  },
   'adminSetLogisticsAccountStatus': {
     methods: ["POST"],
     pattern: '/api/v1/admin/logistics/accounts/:accountId/status',

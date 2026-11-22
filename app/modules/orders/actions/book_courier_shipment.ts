@@ -7,6 +7,7 @@ import { bookingTerms } from '#modules/logistics/queries'
 import type { Actor } from '#modules/platform/actor'
 import { idempotentTx, type IdempotencyScope } from '#modules/platform/idempotency'
 import { sendJob } from '#modules/platform/jobs'
+import { settingIn } from '#modules/platform/settings'
 import { assertTransition } from '#modules/platform/state_machine'
 import { COURIER_SHIPMENT } from '#modules/orders/domain/shipment_machine'
 import type { ShipmentStatus } from '#modules/orders/domain/shipment_status'
@@ -29,6 +30,14 @@ import { shipmentById, type ShipmentView } from '#modules/orders/queries'
  * unit; the reservations stay `committed` until the courier picks the parcel
  * up. No courier call happens here: the job `orders.book_courier_shipment`,
  * sent in this transaction, makes it (docs/03 §11.4).
+ *
+ * The shop's mode names the account's owner type: `vendor` its own account,
+ * `platform` a platform-owned one it is allowed on (OD-58, re-decided
+ * 2026-11-22). A shop with an active account of its own is refused a
+ * platform-owned one (`own_account_active`), and a COD shipment on a
+ * platform-owned account waits for `platform_account_cod_enabled` (docs/04a
+ * §15.1): NCM would remit that cash to DripNepal, which REG-27 does not allow
+ * until counsel clears it.
  */
 
 export type BookCommand = {
@@ -42,6 +51,7 @@ export type BookCommand = {
 }
 
 const VERIFICATION_HOLDS = new Set(['review_required', 'failed'])
+const OWNER_TYPE_OF_MODE: Record<string, string> = { vendor: 'shop', platform: 'platform' }
 
 function invalid(field: string, code: string, message: string) {
   return new DomainError('VALIDATION_FAILED', { errors: [{ field, code, message }] })
@@ -110,7 +120,8 @@ export async function bookCourierShipment<T>(
     assertTransition(COURIER_SHIPMENT, from, 'booking_requested')
 
     const terms = await bookingTerms(trx, command.shopId, command.accountId)
-    if (terms.fulfillmentMode !== 'vendor') {
+    const ownerType = OWNER_TYPE_OF_MODE[terms.fulfillmentMode]
+    if (!ownerType) {
       throw conflict(from, 'Choose your courier account in the shipping settings before booking.')
     }
     if (!terms.isEnabled) throw conflict(from, 'Courier booking is switched off for this shop.')
@@ -118,11 +129,18 @@ export async function bookCourierShipment<T>(
     if (
       !account ||
       !terms.linkActive ||
-      account.ownerType !== 'shop' ||
+      account.ownerType !== ownerType ||
       account.status !== 'active' ||
       !account.providerActive
     ) {
       throw invalid('account_id', 'account_not_usable', 'This courier account cannot book now.')
+    }
+    if (account.ownerType === 'platform' && terms.ownAccountActive) {
+      throw invalid(
+        'account_id',
+        'own_account_active',
+        'This shop has its own active courier account. Switch to the vendor mode to book with it.'
+      )
     }
     if (app.inProduction && account.environment !== 'production') {
       throw invalid('account_id', 'sandbox_account', 'A sandbox account cannot book real parcels.')
@@ -175,6 +193,15 @@ export async function bookCourierShipment<T>(
       .first()
     if (!cod || cod.status !== 'awaiting_collection') {
       throw conflict(from, 'The cash-on-delivery payment of this order cannot be collected now.')
+    }
+    if (
+      account.ownerType === 'platform' &&
+      !(await settingIn(trx, 'platform_account_cod_enabled', false))
+    ) {
+      throw conflict(
+        from,
+        'Cash on delivery is not yet available on the platform courier account. Ship this parcel yourself.'
+      )
     }
 
     const references = await trx

@@ -174,6 +174,8 @@ export async function bookingTerms(
     .where({ account_id: accountId, shop_id: shopId })
     .forShare()
     .first()
+  // Before the settings, as disabling the shop's own account takes it, its rows, then the settings.
+  const ownAccountActive = await shopHasActiveOwnAccount(trx, shopId)
   const settings = await trx
     .from('shop_logistics_settings')
     .where('shop_id', shopId)
@@ -186,6 +188,7 @@ export async function bookingTerms(
     fulfillmentMode: (settings?.fulfillment_mode as string | undefined) ?? 'manual',
     isEnabled: (settings?.is_enabled as boolean | undefined) ?? true,
     linkActive: Boolean(link?.is_active),
+    ownAccountActive,
     account: row
       ? {
           id: row.id as string,
@@ -198,6 +201,24 @@ export async function bookingTerms(
         }
       : null,
   }
+}
+
+/*
+ * Whether the shop has an `active` courier account of its own. A shop that
+ * has one books on it: the platform-owned accounts are for shops without one
+ * (OD-58, re-decided 2026-11-22; `own_account_active`). The active accounts
+ * found are read `FOR SHARE`, so disabling or suspending one waits for the
+ * caller. An account that becomes active meanwhile is not locked: that is the
+ * caller committing first, and a later booking refuses the platform account
+ * (docs/04a §9.11).
+ */
+export async function shopHasActiveOwnAccount(trx: TransactionClientContract, shopId: string) {
+  const own = await trx
+    .from('logistics_accounts')
+    .where({ owner_type: 'shop', shop_id: shopId, status: 'active' })
+    .forShare()
+    .select('id')
+  return own.length > 0
 }
 
 export type BranchView = {

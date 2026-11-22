@@ -163,6 +163,54 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/admin/logistics_controller').default['accounts']>>>
     }
   }
+  'adminCreateLogisticsAccount': {
+    methods: ["POST"]
+    pattern: '/api/v1/admin/logistics/accounts'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/admin/logistics').createLogisticsAccountValidator)>>
+      paramsTuple: []
+      params: {}
+      query: ExtractQuery<InferInput<(typeof import('#validators/admin/logistics').createLogisticsAccountValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/admin/logistics_controller').default['createAccount']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/admin/logistics_controller').default['createAccount']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
+  'adminRekeyLogisticsAccount': {
+    methods: ["POST"]
+    pattern: '/api/v1/admin/logistics/accounts/:accountId/credentials'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/admin/logistics').rekeyLogisticsAccountValidator)>>
+      paramsTuple: [ParamValue]
+      params: { accountId: ParamValue }
+      query: ExtractQuery<InferInput<(typeof import('#validators/admin/logistics').rekeyLogisticsAccountValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/admin/logistics_controller').default['rekeyAccount']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/admin/logistics_controller').default['rekeyAccount']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
+  'adminAllowShopOnLogisticsAccount': {
+    methods: ["PUT"]
+    pattern: '/api/v1/admin/logistics/accounts/:accountId/shops/:shopId'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue, ParamValue]
+      params: { accountId: ParamValue; shopId: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/admin/logistics_controller').default['allowShop']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/admin/logistics_controller').default['allowShop']>>>
+    }
+  }
+  'adminRemoveShopFromLogisticsAccount': {
+    methods: ["DELETE"]
+    pattern: '/api/v1/admin/logistics/accounts/:accountId/shops/:shopId'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue, ParamValue]
+      params: { accountId: ParamValue; shopId: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/admin/logistics_controller').default['removeShop']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/admin/logistics_controller').default['removeShop']>>>
+    }
+  }
   'adminSetLogisticsAccountStatus': {
     methods: ["POST"]
     pattern: '/api/v1/admin/logistics/accounts/:accountId/status'

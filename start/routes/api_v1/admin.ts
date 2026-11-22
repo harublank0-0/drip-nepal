@@ -20,6 +20,33 @@ router
       .as('adminListLogisticsAccounts')
       .use(logistics)
     router
+      .post('/logistics/accounts', [AdminLogisticsController, 'createAccount'])
+      .as('adminCreateLogisticsAccount')
+      .use(logistics)
+    router
+      .post('/logistics/accounts/:accountId/credentials', [
+        AdminLogisticsController,
+        'rekeyAccount',
+      ])
+      .as('adminRekeyLogisticsAccount')
+      .where('accountId', router.matchers.uuid())
+      .use(logistics)
+    router
+      .put('/logistics/accounts/:accountId/shops/:shopId', [AdminLogisticsController, 'allowShop'])
+      .as('adminAllowShopOnLogisticsAccount')
+      .where('accountId', router.matchers.uuid())
+      .where('shopId', router.matchers.uuid())
+      .use(logistics)
+    router
+      .delete('/logistics/accounts/:accountId/shops/:shopId', [
+        AdminLogisticsController,
+        'removeShop',
+      ])
+      .as('adminRemoveShopFromLogisticsAccount')
+      .where('accountId', router.matchers.uuid())
+      .where('shopId', router.matchers.uuid())
+      .use(logistics)
+    router
       .post('/logistics/accounts/:accountId/status', [AdminLogisticsController, 'setAccountStatus'])
       .as('adminSetLogisticsAccountStatus')
       .where('accountId', router.matchers.uuid())

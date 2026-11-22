@@ -12,12 +12,13 @@ import { courierProvider } from '#modules/logistics/providers/registry'
 import type { AccountView } from '#modules/logistics/queries'
 
 /*
- * Courier accounts (docs/04a §9.9, docs/06 §13.8; M6, OD-56). R1 offers
- * shop-owned accounts only (decided 2026-11-21): the owner creates, re-keys
- * and disables them under `shop.courier_accounts.manage`, after password
- * re-entry, which the HTTP layer checks before calling here; platform staff
- * suspend, resume and disable any account under `platform.logistics.manage`
- * with step-up. Every change writes one `audit_logs` row that names the
+ * Courier accounts (docs/04a §9.9–§9.10, docs/06 §13.8; M6, OD-56). A shop's
+ * owner creates, re-keys and disables the shop's own accounts under
+ * `shop.courier_accounts.manage`, after password re-entry, which the HTTP
+ * layer checks before calling here. Platform staff, under
+ * `platform.logistics.manage` with step-up, create and re-key platform-owned
+ * accounts and allow shops on them (OD-58, re-decided 2026-11-22), and
+ * suspend, resume and disable any account. Every change writes one `audit_logs` row that names the
  * account and never the credentials (TM-32). The credentials exist in
  * plaintext only in the caller's memory: they are encrypted before any
  * write and never returned, logged, queued or audited (T-SEC-040).
@@ -99,20 +100,37 @@ export async function returnShopsToManual(
   })
 }
 
-export async function createShopCourierAccount<T>(
-  command: {
-    shopId: string
-    providerCode: string
-    name: string
-    environment: 'sandbox' | 'production'
-    externalAccountRef: string | null
-    credentials: Credentials
-  },
-  context: {
-    actor: Actor
-    idempotency: IdempotencyScope | null
-    present: (account: AccountView) => T
-  }
+type NewAccount = {
+  providerCode: string
+  name: string
+  environment: 'sandbox' | 'production'
+  externalAccountRef: string | null
+  credentials: Credentials
+}
+
+type CreateContext<T> = {
+  actor: Actor
+  idempotency: IdempotencyScope | null
+  present: (account: AccountView) => T
+}
+
+export function createShopCourierAccount<T>(
+  command: NewAccount & { shopId: string },
+  context: CreateContext<T>
+) {
+  return createAccount(command.shopId, command, context)
+}
+
+// Staff: a platform-owned account, which no shop may use until staff allow it (docs/04a §9.10).
+export function createPlatformLogisticsAccount<T>(command: NewAccount, context: CreateContext<T>) {
+  return createAccount(null, command, context)
+}
+
+// `shopId` null makes a platform-owned account; otherwise the shop owns it and gets its row.
+async function createAccount<T>(
+  shopId: string | null,
+  command: NewAccount,
+  context: CreateContext<T>
 ) {
   const provider = await withTx((trx) =>
     trx.from('logistics_providers').where('code', command.providerCode).first()
@@ -149,8 +167,8 @@ export async function createShopCourierAccount<T>(
       .table('logistics_accounts')
       .insert({
         provider_code: command.providerCode,
-        owner_type: 'shop',
-        shop_id: command.shopId,
+        owner_type: shopId === null ? 'platform' : 'shop',
+        shop_id: shopId,
         name: command.name,
         environment: command.environment,
         external_account_ref: command.externalAccountRef,
@@ -158,18 +176,20 @@ export async function createShopCourierAccount<T>(
         status: 'pending',
       })
       .returning(['id', 'version'])
-    await trx.table('logistics_account_shops').insert({
-      account_id: row.id,
-      shop_id: command.shopId,
-      account_owner_type: 'shop',
-      owner_shop_id: command.shopId,
-    })
+    if (shopId !== null) {
+      await trx.table('logistics_account_shops').insert({
+        account_id: row.id,
+        shop_id: shopId,
+        account_owner_type: 'shop',
+        owner_shop_id: shopId,
+      })
+    }
     await recordAudit(trx, {
       ...auditRow(context.actor),
       action: 'logistics_account.create',
       subjectType: 'logistics_account',
       subjectId: row.id,
-      shopId: command.shopId,
+      shopId,
       changes: {
         provider_code: command.providerCode,
         environment: command.environment,
@@ -182,13 +202,33 @@ export async function createShopCourierAccount<T>(
   })
 }
 
-export async function rekeyShopCourierAccount<T>(
+type RekeyContext<T> = { actor: Actor; present: (account: AccountView) => T }
+
+export function rekeyShopCourierAccount<T>(
   command: { shopId: string; accountId: string; credentials: Credentials; expectedVersion: number },
-  context: { actor: Actor; present: (account: AccountView) => T }
+  context: RekeyContext<T>
+) {
+  return rekeyAccount(command.shopId, command, context)
+}
+
+// Staff: replace a platform-owned account's credentials; a shop's own account answers 404.
+export function rekeyPlatformLogisticsAccount<T>(
+  command: { accountId: string; credentials: Credentials; expectedVersion: number },
+  context: RekeyContext<T>
+) {
+  return rekeyAccount(null, command, context)
+}
+
+async function rekeyAccount<T>(
+  shopId: string | null,
+  command: { accountId: string; credentials: Credentials; expectedVersion: number },
+  context: RekeyContext<T>
 ) {
   return withTx(async (trx) => {
-    const row = await lockedAccount(trx, command.accountId, command.shopId)
-    if (!row) throw new DomainError('NOT_FOUND')
+    const row = await lockedAccount(trx, command.accountId, shopId ?? undefined)
+    if (!row || row.owner_type !== (shopId === null ? 'platform' : 'shop')) {
+      throw new DomainError('NOT_FOUND')
+    }
     if (row.status === 'disabled') throw new InvalidStateTransition('disabled', [])
     if (row.version !== command.expectedVersion) {
       throw new VersionConflict(
@@ -212,7 +252,7 @@ export async function rekeyShopCourierAccount<T>(
       action: 'logistics_account.rekey',
       subjectType: 'logistics_account',
       subjectId: row.id,
-      shopId: command.shopId,
+      shopId,
       changes: { status: { from: row.status, to: suspended ? 'suspended' : 'pending' } },
     })
     if (!suspended) await sendVerify(trx, row.id, updated.version, context.actor)
@@ -314,6 +354,121 @@ export async function setLogisticsAccountStatus<T>(
     })
     return context.present(await viewIn(trx, row.id))
   })
+}
+
+export type AccountShopView = {
+  accountId: string
+  shopId: string
+  isActive: boolean
+  createdAt: Date
+  disabledAt: Date | null
+}
+
+// A platform-owned account, locked; a shop's own account or an unknown ID answers 404.
+async function lockedPlatformAccount(trx: TransactionClientContract, accountId: string) {
+  const row = await lockedAccount(trx, accountId)
+  if (!row || row.owner_type !== 'platform') throw new DomainError('NOT_FOUND')
+  return row
+}
+
+/*
+ * Staff: let a shop book through a platform-owned account (docs/04a §9.10).
+ * Inserts the shop's row or reactivates it; allowing an allowed shop changes
+ * nothing and writes no audit row. Whether the shop may then choose the
+ * `platform` mode is the settings' rule (`own_account_active`).
+ */
+export async function allowShopOnLogisticsAccount<T>(
+  command: { accountId: string; shopId: string },
+  context: { actor: Actor; present: (link: AccountShopView) => T }
+) {
+  return withTx(async (trx) => {
+    const account = await lockedPlatformAccount(trx, command.accountId)
+    if (account.status === 'disabled') throw new InvalidStateTransition('disabled', [])
+    const shop = await trx.from('shops').where('id', command.shopId).select('id').first()
+    if (!shop) throw new DomainError('NOT_FOUND')
+    const current = await trx
+      .from('logistics_account_shops')
+      .where({ account_id: account.id, shop_id: command.shopId })
+      .forUpdate()
+      .first()
+    if (!current?.is_active) {
+      if (current) {
+        await trx
+          .from('logistics_account_shops')
+          .where({ account_id: account.id, shop_id: command.shopId })
+          .update({ is_active: true, disabled_at: null, updated_at: trx.raw('now()') })
+      } else {
+        await trx.table('logistics_account_shops').insert({
+          account_id: account.id,
+          shop_id: command.shopId,
+          account_owner_type: 'platform',
+          owner_shop_id: null,
+        })
+      }
+      await recordAudit(trx, {
+        ...auditRow(context.actor),
+        action: 'logistics_account_shop.allow',
+        subjectType: 'logistics_account',
+        subjectId: account.id,
+        shopId: command.shopId,
+        // This branch runs only for a shop that is not allowed now: no row, or an inactive one.
+        changes: { shop_id: command.shopId, is_active: { from: false, to: true } },
+      })
+    }
+    return context.present(await accountShopIn(trx, account.id, command.shopId))
+  })
+}
+
+/*
+ * Staff: stop a shop using a platform-owned account (docs/04a §9.10). The
+ * row is deactivated, a shop whose default it was returns to `manual`, and
+ * bookings already made keep the account. Removing a shop that is not
+ * allowed changes nothing.
+ */
+export async function removeShopFromLogisticsAccount(
+  command: { accountId: string; shopId: string },
+  context: { actor: Actor }
+) {
+  await withTx(async (trx) => {
+    const account = await lockedPlatformAccount(trx, command.accountId)
+    const current = await trx
+      .from('logistics_account_shops')
+      .where({ account_id: account.id, shop_id: command.shopId })
+      .forUpdate()
+      .first()
+    if (!current?.is_active) return
+    await trx
+      .from('logistics_account_shops')
+      .where({ account_id: account.id, shop_id: command.shopId })
+      .update({ is_active: false, disabled_at: trx.raw('now()'), updated_at: trx.raw('now()') })
+    await returnShopsToManual(trx, account.id, command.shopId)
+    await recordAudit(trx, {
+      ...auditRow(context.actor),
+      action: 'logistics_account_shop.remove',
+      subjectType: 'logistics_account',
+      subjectId: account.id,
+      shopId: command.shopId,
+      changes: { shop_id: command.shopId, is_active: { from: true, to: false } },
+    })
+  })
+}
+
+async function accountShopIn(
+  trx: TransactionClientContract,
+  accountId: string,
+  shopId: string
+): Promise<AccountShopView> {
+  const row = await trx
+    .from('logistics_account_shops')
+    .where({ account_id: accountId, shop_id: shopId })
+    .first()
+  return {
+    accountId: row.account_id,
+    shopId: row.shop_id,
+    isActive: row.is_active,
+    createdAt: row.created_at,
+    disabledAt: row.disabled_at,
+  }
 }
 
 // The booking job's `auth_failed` (the courier's 401 or 403 only) moves an active account to `invalid`.
