@@ -1412,7 +1412,7 @@ CONSTRAINT delivery_zone_districts_district_fkey FOREIGN KEY (district_code)
   REFERENCES districts (code) ON DELETE RESTRICT
 ```
 
-"At most one zone" is the unique key. "At least one zone" cannot be a constraint on this table, so the reference-data test T-SHOP-108 (proposed) asserts that every active district has exactly one zone after seeding.
+"At most one zone" is the unique key. "At least one zone" cannot be a constraint on this table, so the reference-data test `T-SHOP-108` asserts that every active district has exactly one zone after seeding, and `02_delivery_zones_seeder.ts` refuses otherwise (built 2026-11-22, [04 §21.5](04-domain-model-and-data-dictionary.md#215-delivery-zones)).
 
 **Indexes.** `delivery_zone_districts_district_key` serves the checkout zone lookup `SELECT zone_code … WHERE district_code = :d`.
 

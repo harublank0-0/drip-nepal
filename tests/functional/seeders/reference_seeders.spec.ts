@@ -19,7 +19,11 @@ import { MIGRATOR_CONNECTION, runReferenceSeeders } from '#tests/support/databas
 
 // The tables the reference seeders write, with the row count docs/04 §21 gives.
 const SEEDED: Record<string, number> = {
+  provinces: 7, // §21.4
+  districts: 77, // §21.4
+  local_levels: 753, // §21.4
   delivery_zones: 2, // §21.5
+  delivery_zone_districts: 77, // §21.5: every district in exactly one zone
   shop_categories: 13, // §20.3
   categories: 50, // §21.1: 6 top-level, 2 groups, 42 leaves
   attributes: 8, // §21.2, without the R2 `kids_age`
