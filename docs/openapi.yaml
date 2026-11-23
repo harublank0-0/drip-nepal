@@ -127,15 +127,8 @@ x-pending-operations:
   - listCategories
   - listAttributes
   - getPublicShop # closed response schema when specified (06 §13.2, 07 TM-29)
-  - listProvinces
-  - listDistricts
-  - listLocalLevels
   - getCurrentSellerAgreement
   # Customer (06 §13.4)
-  - listAddresses
-  - createAddress
-  - updateAddress
-  - deleteAddress
   - getCart
   - addCartItem
   - updateCartItem
@@ -425,6 +418,197 @@ paths:
                   - type: object
                     properties:
                       code: { const: SERVICE_BUSY }
+
+  /api/v1/locations/provinces:
+    get:
+      operationId: listProvinces
+      tags: [Public]
+      summary: The provinces, the first step of the address cascade
+      description: |
+        Actor: anyone, signed in or not; neither `auth` nor `guest` is on the route (06 §13.2).
+        The cascade is Province → District → Local level (01 AC-FR-IAM-012-1, 08 §4.3
+        `AddressForm`). Answer: the active provinces of 04a §9.1, ordered by code, each as its
+        code and English name. The location data is VX-10 [Verify-external]: it is offered as
+        choices and never described as official. The list is bounded (seven rows), so it takes
+        no `cursor` or `limit` and answers `{ "data": [...] }` without `meta`.
+        Query: none; any parameter is 400 `INVALID_QUERY_PARAMETER` with one `invalid` item
+        naming it (06 §6.3).
+        Order: the API limits middleware charges `catalog_ip` (120 per minute per client network,
+        06 §9.1) on every call, signed in or not, instead of `api_user`; past it, 429 before the
+        query is read. A session that fails the account check (06 §4.2) is answered 401 or 403
+        and ended first, as on every route. Side effects: none. Release R1·M1.
+      x-release: R1·M1
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: The active provinces.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProvinceList' }
+              examples:
+                provinces:
+                  summary: The seven provinces (04a §9.1)
+                  value:
+                    data:
+                      - { code: '1', name: Koshi }
+                      - { code: '2', name: Madhesh }
+                      - { code: '3', name: Bagmati }
+                      - { code: '4', name: Gandaki }
+                      - { code: '5', name: Lumbini }
+                      - { code: '6', name: Karnali }
+                      - { code: '7', name: Sudurpashchim }
+        '400':
+          description: '`INVALID_QUERY_PARAMETER`: any query parameter, with one `invalid` item naming it.'
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem400' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /api/v1/locations/districts:
+    get:
+      operationId: listDistricts
+      tags: [Public]
+      summary: The districts of a province, the second step of the address cascade
+      description: |
+        Actor: anyone, signed in or not, as `listProvinces`.
+        Query: `province` only, required, sent once, one digit from 1 to 7 (`^[1-7]$`, 04a §9.1).
+        A missing, repeated or malformed `province`, or any other parameter, is 400
+        `INVALID_QUERY_PARAMETER` with one `invalid` item naming the parameter (06 §6.3). A
+        well-formed code whose province is not active answers 200 with an empty list.
+        Answer: the active districts of an active province (04a §9.2), ordered by English name
+        and then code, each as its code and English name; bounded (at most 14), so no `cursor`,
+        no `limit` and no `meta`. The data is VX-10 [Verify-external].
+        Order: `catalog_ip` first, as `listProvinces`; a 400 has taken its point. Side effects:
+        none. Release R1·M1.
+      x-release: R1·M1
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - name: province
+          in: query
+          required: true
+          description: Province code (04a §9.1); one value.
+          schema: { type: string, pattern: '^[1-7]$' }
+      responses:
+        '200':
+          description: The active districts of the province; empty when it is not active.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DistrictList' }
+              examples:
+                bagmati:
+                  summary: '`province=3`, the first five of its thirteen districts'
+                  value:
+                    data:
+                      - { code: '307', name: Bhaktapur }
+                      - { code: '313', name: Chitawan }
+                      - { code: '304', name: Dhading }
+                      - { code: '301', name: Dolakha }
+                      - { code: '306', name: Kathmandu }
+        '400':
+          description: |
+            `INVALID_QUERY_PARAMETER`: `province` missing, repeated or not one digit from 1 to 7,
+            or another parameter; one `invalid` item names it.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem400' }
+              examples:
+                badProvince:
+                  summary: '`province=8`'
+                  value:
+                    type: https://dripnepal.com/problems/invalid-query-parameter
+                    title: Invalid query parameter
+                    status: 400
+                    detail: Send one province code, 1 to 7.
+                    code: INVALID_QUERY_PARAMETER
+                    request_id: 01929d03-0000-7000-8000-000000000400
+                    errors:
+                      - {
+                          field: province,
+                          code: invalid,
+                          message: 'Send one province code, 1 to 7.',
+                        }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /api/v1/locations/local-levels:
+    get:
+      operationId: listLocalLevels
+      tags: [Public]
+      summary: The local levels of a district, the last step of the address cascade
+      description: |
+        Actor: anyone, signed in or not, as `listProvinces`.
+        Query: `district` only, required, sent once, three digits with a province digit first
+        (`^[1-7][0-9]{2}$`, 04a §9.2). A missing, repeated or malformed `district`, or any other
+        parameter, is 400 `INVALID_QUERY_PARAMETER` with one `invalid` item naming the parameter
+        (06 §6.3). A well-formed code whose district, or the district's province, is not active
+        answers 200 with an empty list.
+        Answer: the active local levels of that district (04a §9.3), ordered by English name and
+        then code, each as its code, English name and `ward_count`, which the address form uses
+        to bound `ward_no` (AC-FR-IAM-012-2); bounded by the district, so no `cursor`, no
+        `limit` and no `meta`. The data is VX-10 [Verify-external].
+        Order: `catalog_ip` first, as `listProvinces`; a 400 has taken its point. Side effects:
+        none. Release R1·M1.
+      x-release: R1·M1
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - name: district
+          in: query
+          required: true
+          description: District code (04a §9.2); one value.
+          schema: { type: string, pattern: '^[1-7][0-9]{2}$' }
+      responses:
+        '200':
+          description: The active local levels of the district; empty when it is not active.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LocalLevelList' }
+              examples:
+                kathmandu:
+                  summary: '`district=306`, the first four of its eleven local levels'
+                  value:
+                    data:
+                      - { code: '30604', name: Budhanilkhantha Municipality, ward_count: 13 }
+                      - { code: '30610', name: Chandragiri Municipality, ward_count: 15 }
+                      - { code: '30611', name: Dakshinkali Municipality, ward_count: 9 }
+                      - { code: '30603', name: Gokarneshwor Municipality, ward_count: 9 }
+        '400':
+          description: |
+            `INVALID_QUERY_PARAMETER`: `district` missing, repeated or not three digits with a
+            province digit first, or another parameter; one `invalid` item names it.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem400' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/Internal' }
 
   /api/v1/auth/signup:
     post:
@@ -1516,6 +1700,346 @@ paths:
           content:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem422' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /api/v1/me/addresses:
+    get:
+      operationId: listAddresses
+      tags: [Me]
+      summary: The signed-in user's address book
+      description: |
+        Actor: a signed-in user (`auth`), `pending_verification` included (07 §4.4, `/account`
+        self-service); a guest gets 401. Scope: `user_addresses.user_id = auth.user.id AND
+        archived_at IS NULL` is part of the query (06 §4.5, 07 §4.6). Query: none; any
+        parameter is 400 `INVALID_QUERY_PARAMETER` (06 §6.3). Answer: the active addresses, the default first, then the oldest first (the order of
+        `user_addresses_user_active_idx`, 04a §5.5), as `Address`: the phone as its last four
+        digits only (AC-FR-IAM-012-5), and the English names of the saved province, district and
+        local level from the reference data, active or not (04a §9), the saved code standing in
+        for a name the data does not have. The recipient name, area and landmark are decrypted by
+        the customer address transformer of the 07 §5.5 allowlist (T-SEC-034). A user keeps at
+        most 10 active addresses (AC-FR-IAM-012-4), so the list is bounded (06 §6.2 "Bounded
+        lists"): it takes no `cursor` or `limit` and answers `{ "data": [...] }` without `meta`.
+        Side effects: none. Charged to `api_user` (300 per minute per user, 06 §9.1); past it,
+        429. T-SEC-006. Release R1·M1.
+      x-release: R1·M1
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: The caller's active addresses; an empty list when there are none.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AddressList' }
+              examples:
+                one:
+                  summary: One address, the default (placeholders)
+                  value:
+                    data:
+                      - id: 01929d04-0000-7000-8000-0000000000a1
+                        label: Home
+                        recipient_name: Example Recipient
+                        recipient_phone_last4: '0001'
+                        province_code: '3'
+                        province_name: Bagmati
+                        district_code: '306'
+                        district_name: Kathmandu
+                        local_level_code: '30608'
+                        local_level_name: Kathmandu Metropolitan City
+                        ward_no: 4
+                        area_tole: Example Tole
+                        street_landmark: null
+                        postal_code: '3060804'
+                        is_default: true
+        '400':
+          description: A query parameter; the list takes none, and one `invalid` item names it.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem400' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/Internal' }
+    post:
+      operationId: createAddress
+      tags: [Me]
+      summary: Add an address to the signed-in user's address book
+      description: |
+        Actor: a signed-in user (`auth`), `pending_verification` included; a guest gets 401.
+        Scope: the address is the caller's; no user ID is taken.
+        Input: the members of `CreateAddressRequest` only; any other member, `user_id`,
+        `postal_code` or `archived_at` included, is 422 `unknown_field` and nothing is written
+        (T-SEC-003). `is_default: null` is 422 `required`. The schema gives each member's rule.
+        Order: unknown members, the `is_default` null check and the validator, then one
+        transaction: the user's row is
+        locked `FOR NO KEY UPDATE` (04a §5.5, level 0 of 05 §4.4) and the status and stamp read
+        under the lock are compared with what the account check compared (07 §3.3), so a
+        suspension, deletion request or stamp rotation that committed after the check wins (403
+        `ACCOUNT_SUSPENDED` if the status changed, else 401 `UNAUTHENTICATED`) and nothing is
+        written; then the place: the province, district and local level must be one active
+        chain (422 `location_mismatch` on `local_level_code`) and the ward within the local
+        level's `ward_count` (422 `ward_out_of_range` on `ward_no`), before the insert, so the
+        location foreign keys are only a backstop (AC-FR-IAM-012-1, -2; T-IAM-108); then the
+        cap: a user who already has 10 active addresses [Assumption, AC-FR-IAM-012-4] gets 422
+        `VALIDATION_FAILED` with one item whose `field` is `null` and whose code is
+        `address_limit`, exact under concurrency because of the lock (T-IAM-107).
+        Side effects: the `user_addresses` row, with the recipient name, phone, area and landmark
+        encrypted (AAD `user_addresses.<column>`, 04 §2.9) and the phone's last four digits
+        (AC-FR-IAM-012-5). The user's first active address is the default whatever `is_default`
+        says; on a later one, `is_default: true` clears the old default, then inserts the new
+        one as the default (INV-17, 04 §16.3). No audit row (04a §15.3 lists no address action)
+        and no email. Not ⚷ (06 §7.7 does not list it): a repeat adds a second address, which
+        the user can remove. Charged to `api_user` (06 §9.1).
+        Answer: 201 with the new address and no `Location`, because no read operation serves one
+        address (06 §3.7). T-IAM-107, T-IAM-108, T-SEC-003. Release R1·M1.
+      x-release: R1·M1
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateAddressRequest' }
+            examples:
+              home:
+                summary: A first address from `/account/addresses` (placeholders)
+                value:
+                  label: Home
+                  recipient_name: Example Recipient
+                  recipient_phone: '+977 980-000-0001'
+                  province_code: '3'
+                  district_code: '306'
+                  local_level_code: '30608'
+                  ward_no: 4
+                  area_tole: Example Tole
+                  street_landmark: null
+      responses:
+        '201':
+          description: The new address; no `Location` (06 §3.7).
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AddressResponse' }
+              examples:
+                created:
+                  summary: The first address becomes the default
+                  value:
+                    data:
+                      id: 01929d04-0000-7000-8000-0000000000a1
+                      label: Home
+                      recipient_name: Example Recipient
+                      recipient_phone_last4: '0001'
+                      province_code: '3'
+                      province_name: Bagmati
+                      district_code: '306'
+                      district_name: Kathmandu
+                      local_level_code: '30608'
+                      local_level_name: Kathmandu Metropolitan City
+                      ward_no: 4
+                      area_tole: Example Tole
+                      street_landmark: null
+                      postal_code: '3060804'
+                      is_default: true
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422':
+          description: |
+            `VALIDATION_FAILED`: an unknown member (`unknown_field`); a missing required member or
+            `is_default: null` (`required`); a text member outside its bounds after trimming and
+            NFC (`min_length`, `max_length`); a phone that is not a Nepali mobile number
+            (`nepal_mobile`); a code not of its shape (`regex`); a `ward_no` that is not an integer
+            from 1 to 40, or an `is_default` that is not a boolean (Vine's type and range rules);
+            a province, district and local level that are not one active chain
+            (`location_mismatch` on `local_level_code`); a ward beyond the local level's
+            `ward_count` (`ward_out_of_range` on `ward_no`); or 10 active addresses already
+            (`address_limit`, `field` `null`).
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem422' }
+              examples:
+                limit:
+                  summary: An eleventh address (AC-FR-IAM-012-4)
+                  value:
+                    type: https://dripnepal.com/problems/validation-failed
+                    title: Validation failed
+                    status: 422
+                    detail: Some fields need attention.
+                    code: VALIDATION_FAILED
+                    request_id: 01929d04-0000-7000-8000-000000000422
+                    errors:
+                      - field: null
+                        code: address_limit
+                        message: You can keep up to 10 addresses. Remove one to add another.
+                mismatch:
+                  summary: A local level of another district (T-IAM-108)
+                  value:
+                    type: https://dripnepal.com/problems/validation-failed
+                    title: Validation failed
+                    status: 422
+                    detail: Some fields need attention.
+                    code: VALIDATION_FAILED
+                    request_id: 01929d04-0000-7000-8000-000000000423
+                    errors:
+                      - field: local_level_code
+                        code: location_mismatch
+                        message: The province, district and local level do not match.
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /api/v1/me/addresses/{addressId}:
+    parameters:
+      - $ref: '#/components/parameters/CustomerAddressId'
+    patch:
+      operationId: updateAddress
+      tags: [Me]
+      summary: Edit one of the signed-in user's addresses or make it the default
+      description: |
+        Actor: a signed-in user (`auth`), `pending_verification` included; a guest gets 401.
+        Scope: `{addressId}` is looked up with the caller's ID and `archived_at IS NULL` in the
+        query, so another user's, an archived or a missing address is 404 with the same body, and
+        so is a value that is not a UUID (T-SEC-006, 07 §4.6).
+        Input: the members of `UpdateAddressRequest`, each optional; an absent member keeps its
+        column and an empty body changes nothing. `label: null` and `street_landmark: null`
+        clear those two (`""` too, which the JSON body parser turns into `null`); the other members may be left out but not sent as `null` or `""` (422
+        `required`). Any other member is 422 `unknown_field` (T-SEC-003).
+        Order: unknown members, the null check and the validator, then one transaction: the
+        user's row locked and the account compared as in `createAddress`; the address loaded (404
+        otherwise); `is_default: false` on the current default is 422 `default_required` on
+        `is_default`, because the default moves only when another address is made the default
+        (04a §5.5); then the place: the place members sent are laid over the saved ones and the
+        result is checked as one chain with its ward (`location_mismatch`, `ward_out_of_range`),
+        so a ward alone is checked against the saved local level and a district without its
+        local level is `location_mismatch`; without a place member the saved place is kept, even
+        a unit made inactive since (04a §9: saved addresses stay valid).
+        Side effects: the members sent, encrypted as in `createAddress`; `is_default: true` on
+        another address clears the old default, then sets this one (INV-17, 04 §16.3);
+        `is_default: false` on an address that is not the default changes nothing. Past orders
+        keep their snapshot (04a §5.5). No audit row and no email. Not ⟳: `user_addresses` has
+        no `version` (04 §2.10, 06 §8); not ⚷ (06 §7.7 does not list it): a repeat sets the same
+        values. Charged to `api_user` (06 §9.1). T-IAM-107, T-IAM-108, T-SEC-003, T-SEC-006.
+        Release R1·M1.
+      x-release: R1·M1
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateAddressRequest' }
+            examples:
+              makeDefault:
+                summary: Make this address the default
+                value: { is_default: true }
+              ward:
+                summary: Another ward of the saved local level, and no landmark
+                value: { ward_no: 10, street_landmark: null }
+      responses:
+        '200':
+          description: The address after the change.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AddressResponse' }
+              examples:
+                ward:
+                  summary: After the ward change above
+                  value:
+                    data:
+                      id: 01929d04-0000-7000-8000-0000000000a1
+                      label: Home
+                      recipient_name: Example Recipient
+                      recipient_phone_last4: '0001'
+                      province_code: '3'
+                      province_name: Bagmati
+                      district_code: '306'
+                      district_name: Kathmandu
+                      local_level_code: '30608'
+                      local_level_name: Kathmandu Metropolitan City
+                      ward_no: 10
+                      area_tole: Example Tole
+                      street_landmark: null
+                      postal_code: '3060810'
+                      is_default: true
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422':
+          description: |
+            `VALIDATION_FAILED`: the items of `createAddress` except `address_limit`, with
+            `required` for a member that may not be empty sent as `null` or `""`; and
+            `default_required` on `is_default` for `false` on the current default.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem422' }
+              examples:
+                defaultRequired:
+                  summary: '`is_default: false` on the current default'
+                  value:
+                    type: https://dripnepal.com/problems/validation-failed
+                    title: Validation failed
+                    status: 422
+                    detail: Some fields need attention.
+                    code: VALIDATION_FAILED
+                    request_id: 01929d04-0000-7000-8000-000000000424
+                    errors:
+                      - field: is_default
+                        code: default_required
+                        message: Make another address the default instead.
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/Internal' }
+    delete:
+      operationId: deleteAddress
+      tags: [Me]
+      summary: Remove one of the signed-in user's addresses (archive it)
+      description: |
+        Actor: a signed-in user (`auth`), `pending_verification` included; a guest gets 401.
+        Scope: as `updateAddress`; another user's, an archived, a missing or a non-UUID address
+        is 404 with the same body (T-SEC-006). Input: no body members; any member is 422
+        `unknown_field`.
+        Side effects, in one transaction: the user's row locked and the account compared as in
+        `createAddress`; the address loaded (404 otherwise); `archived_at` set, with `is_default`
+        cleared in the same update (`user_addresses_default_not_archived_check`); archiving the
+        default makes the most recently created remaining active address the default, so a user
+        with an address always has exactly one default (AC-FR-IAM-012-4, INV-17, T-IAM-107). The
+        row leaves every list and checkout; the daily `platform.retention_purge` job (proposed,
+        not built yet) is to hard-delete it after 30 days [Assumption] (04a §5.5, 04 §19.3). Past
+        orders keep their snapshot. No audit row and no email.
+        Not ⚷: a repeat finds nothing and answers 404. Charged to `api_user` (06 §9.1).
+        Release R1·M1.
+      x-release: R1·M1
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '204':
+          description: Archived.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422': { $ref: '#/components/responses/UnprocessableContent' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/Internal' }
 
@@ -5059,6 +5583,15 @@ components:
       required: true
       description: Pickup address UUID, looked up among the resolved shop's `purpose = 'pickup'` rows (404 otherwise, T-SEC-001).
       schema: { $ref: '#/components/schemas/Uuid' }
+    CustomerAddressId:
+      name: addressId
+      in: path
+      required: true
+      description: |
+        UUID of one of the caller's own active addresses, looked up with the caller's ID and
+        `archived_at IS NULL` in the query; another user's, an archived or a missing address, and
+        a value that is not a UUID (the route's matcher), all answer the same 404 (T-SEC-006).
+      schema: { $ref: '#/components/schemas/Uuid' }
     BranchId:
       name: branchId
       in: path
@@ -6062,6 +6595,193 @@ components:
           required: [status]
           properties:
             status: { const: deletion_requested }
+
+    # ---------- the address book and the location cascades (06 §13.2, §13.4; M1 part 6b) ----------
+    ProvinceList:
+      type: object
+      description: The 200 of `listProvinces`; a bounded list, so no `meta`.
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          type: array
+          maxItems: 7
+          items:
+            type: object
+            additionalProperties: false
+            required: [code, name]
+            properties:
+              code: { type: string, pattern: '^[1-7]$' }
+              name: { type: string, minLength: 1, description: The English name (04a §9.1). }
+    DistrictList:
+      type: object
+      description: The 200 of `listDistricts`; a bounded list, so no `meta`.
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [code, name]
+            properties:
+              code: { type: string, pattern: '^[1-7][0-9]{2}$' }
+              name: { type: string, minLength: 1, description: The English name (04a §9.2). }
+    LocalLevelList:
+      type: object
+      description: The 200 of `listLocalLevels`; a bounded list, so no `meta`.
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [code, name, ward_count]
+            properties:
+              code: { type: string, pattern: '^[1-7][0-9]{4}$' }
+              name: { type: string, minLength: 1, description: The English name (04a §9.3). }
+              ward_count:
+                type: integer
+                minimum: 1
+                maximum: 40
+                description: The local level's wards (`local_levels_ward_count_check`); `ward_no` is 1 to this.
+    Address:
+      type: object
+      description: |
+        One active address of the caller's own address book (`user_addresses`, 04a §5.5), built
+        by the customer address transformer of the 07 §5.5 allowlist (T-SEC-034), which lists
+        each member, so no other column follows: never the ciphertext, the full phone, `user_id`
+        or `archived_at`. The phone is its last four digits only, in lists and after a write
+        alike (AC-FR-IAM-012-5). The place names are the English names of the saved units from
+        the reference data, active or not (04a §9); a unit the data has no name for shows its
+        code. `postal_code` is the generated local level code followed by the two-digit ward.
+      additionalProperties: false
+      required:
+        [
+          id,
+          label,
+          recipient_name,
+          recipient_phone_last4,
+          province_code,
+          province_name,
+          district_code,
+          district_name,
+          local_level_code,
+          local_level_name,
+          ward_no,
+          area_tole,
+          street_landmark,
+          postal_code,
+          is_default,
+        ]
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        label: { type: [string, 'null'], minLength: 1, maxLength: 30 }
+        recipient_name: { type: string, minLength: 1, maxLength: 100 }
+        recipient_phone_last4: { type: string, pattern: '^[0-9]{4}$' }
+        province_code: { type: string, pattern: '^[1-7]$' }
+        province_name: { type: string, minLength: 1 }
+        district_code: { type: string, pattern: '^[1-7][0-9]{2}$' }
+        district_name: { type: string, minLength: 1 }
+        local_level_code: { type: string, pattern: '^[1-7][0-9]{4}$' }
+        local_level_name: { type: string, minLength: 1 }
+        ward_no: { type: integer, minimum: 1, maximum: 40 }
+        area_tole: { type: string, minLength: 2, maxLength: 200 }
+        street_landmark: { type: [string, 'null'], minLength: 1, maxLength: 200 }
+        postal_code: { type: string, pattern: '^[1-7][0-9]{6}$' }
+        is_default: { type: boolean }
+    AddressResponse:
+      type: object
+      description: The 201 of `createAddress` and the 200 of `updateAddress`.
+      additionalProperties: false
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/Address' }
+    AddressList:
+      type: object
+      description: The 200 of `listAddresses`; at most 10 active addresses (AC-FR-IAM-012-4), so no `meta`.
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          type: array
+          maxItems: 10
+          items: { $ref: '#/components/schemas/Address' }
+    CreateAddressRequest:
+      type: object
+      description: |
+        The whole input of `createAddress`; any other member, `user_id`, `postal_code` or
+        `archived_at` included, is 422 `unknown_field` (T-SEC-003). Text members are trimmed and
+        normalised to NFC, then counted in code points (04 §2.8); `""` reaches the server as
+        `null` (06 §3.5). The province, district and local level must be one active chain (422
+        `location_mismatch` on `local_level_code`) and `ward_no` within the local level's
+        `ward_count` (422 `ward_out_of_range` on `ward_no`; 04a §5.5, AC-FR-IAM-012-1, -2).
+        `postal_code` is generated by the database and never taken.
+      additionalProperties: false
+      required:
+        [
+          recipient_name,
+          recipient_phone,
+          province_code,
+          district_code,
+          local_level_code,
+          ward_no,
+          area_tole,
+        ]
+      properties:
+        label:
+          type: [string, 'null']
+          minLength: 1
+          maxLength: 30
+          description: '"Home", "Office"; `null` or left out: no label.'
+        recipient_name: { type: string, minLength: 1, maxLength: 100 }
+        recipient_phone:
+          type: string
+          maxLength: 32
+          description: |
+            A Nepali mobile number, with or without `+977`, `977` or a leading `0`, spaces and
+            hyphens (`^9[678]\d{8}$` once those are dropped; anything else, a landline included,
+            is 422 `nepal_mobile`, AC-FR-IAM-012-3); stored in E.164, encrypted (04 §2.9). Only
+            its last four digits are ever answered.
+        province_code: { type: string, pattern: '^[1-7]$' }
+        district_code: { type: string, pattern: '^[1-7][0-9]{2}$' }
+        local_level_code: { type: string, pattern: '^[1-7][0-9]{4}$' }
+        ward_no:
+          type: integer
+          minimum: 1
+          maximum: 40
+          description: A JSON integer (`user_addresses_ward_no_check`); the exact maximum is the local level's `ward_count`.
+        area_tole: { type: string, minLength: 2, maxLength: 200 }
+        street_landmark: { type: [string, 'null'], minLength: 1, maxLength: 200 }
+        is_default:
+          type: boolean
+          description: |
+            `true` makes the new address the default; the user's first active address is the
+            default whatever this says. Left out: `false`. `null` is 422 `required`.
+    UpdateAddressRequest:
+      type: object
+      description: |
+        The input of `updateAddress`: the members of `CreateAddressRequest`, each optional; any
+        other member is 422 `unknown_field`. An absent member keeps its column. `label` and
+        `street_landmark` may be `null`, which clears them; the others may be left out but not
+        sent as `null` or `""` (422 `required`). Place members sent are laid over the saved ones
+        and the result is checked as one chain with its ward. `is_default: true` makes the
+        address the default; `false` on the current default is 422 `default_required`.
+      additionalProperties: false
+      properties:
+        label: { type: [string, 'null'], minLength: 1, maxLength: 30 }
+        recipient_name: { type: string, minLength: 1, maxLength: 100 }
+        recipient_phone: { type: string, maxLength: 32, description: As in `CreateAddressRequest`. }
+        province_code: { type: string, pattern: '^[1-7]$' }
+        district_code: { type: string, pattern: '^[1-7][0-9]{2}$' }
+        local_level_code: { type: string, pattern: '^[1-7][0-9]{4}$' }
+        ward_no: { type: integer, minimum: 1, maximum: 40 }
+        area_tole: { type: string, minLength: 2, maxLength: 200 }
+        street_landmark: { type: [string, 'null'], minLength: 1, maxLength: 200 }
+        is_default: { type: boolean }
 
     # ---------- password reset and change, revokeAllSessions (06 §13.3; M1 part 4) ----------
     RequestPasswordResetRequest:
@@ -8518,3 +9238,27 @@ components:
 #     refuses a null or empty name or consent (422 `required`) and reads `phone: ""` as null;
 #     `requestAccountDeletion` takes the password only (its `reason` was removed, because the
 #     audit row that held it outlives anonymisation); each description says why it is not ⚷.
+#
+# Added with the address book and the location cascades (2026-11-23, M1 part 6b):
+# 52. `listProvinces`, `listDistricts`, `listLocalLevels`, `listAddresses`, `createAddress`,
+#     `updateAddress` and `deleteAddress` move from `x-pending-operations` to `paths`, written
+#     from the code, with the new parameter `CustomerAddressId` and the new schemas
+#     `ProvinceList`, `DistrictList`, `LocalLevelList`, `Address`, `AddressResponse`,
+#     `AddressList`, `CreateAddressRequest` and `UpdateAddressRequest` (06 note 61). The three
+#     cascades declare `security: []` and charge `catalog_ip` per client network, signed in or
+#     not; a missing, repeated or malformed code, or any other parameter, is 400
+#     `INVALID_QUERY_PARAMETER` with one `invalid` item, and a well-formed code that names no
+#     active unit answers an empty list. The four address operations keep the default security
+#     (`listAddresses` the cookie only, as `getMe`) and charge `api_user`. As built, the four
+#     lists answer `{ "data": [...] }` without `meta` and take no `cursor` or `limit`, because
+#     each is bounded (7 provinces, a province's districts, a district's local levels, 10
+#     addresses); 06 §3.4 and §6.2 give every list a `meta` and a cursor, which 06 note 61
+#     leaves open. `Address` lists the transformer's 15 members: the phone as
+#     `recipient_phone_last4` only, the place names from the reference data, and the generated
+#     `postal_code`. `createAddress` answers 201 without `Location` (06 §3.7); `updateAddress`
+#     takes every member as optional, `label` and `street_landmark` nullable; `deleteAddress`
+#     answers 204 and takes no body member. Neither write is ⚷ or ⟳ (`user_addresses` has no
+#     `version`). The 422 item codes `location_mismatch`, `ward_out_of_range` and
+#     `default_required` are those of the pickup-address operations; `address_limit` (`field`
+#     `null`) is new and is described in the operations, since `ProblemErrorItem` names its
+#     codes by example only. The `AddressId` parameter stays the pickup address's.

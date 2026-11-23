@@ -22,6 +22,13 @@ export interface ApiDefinition {
   revokeAllSessions: typeof routes['revokeAllSessions']
   startTotpEnrollment: typeof routes['startTotpEnrollment']
   confirmTotpEnrollment: typeof routes['confirmTotpEnrollment']
+  listProvinces: typeof routes['listProvinces']
+  listDistricts: typeof routes['listDistricts']
+  listLocalLevels: typeof routes['listLocalLevels']
+  listAddresses: typeof routes['listAddresses']
+  createAddress: typeof routes['createAddress']
+  updateAddress: typeof routes['updateAddress']
+  deleteAddress: typeof routes['deleteAddress']
   getLogisticsSettings: typeof routes['getLogisticsSettings']
   replaceLogisticsSettings: typeof routes['replaceLogisticsSettings']
   createShopCourierAccount: typeof routes['createShopCourierAccount']
@@ -61,6 +68,7 @@ export interface ApiDefinition {
   mfa: typeof routes['mfa']
   account: {
     overview: typeof routes['account.overview']
+    addresses: typeof routes['account.addresses']
     security: typeof routes['account.security']
   }
   admin: {

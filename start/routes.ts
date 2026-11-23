@@ -22,6 +22,8 @@ const uuid = {
   cast: (value: string) => value.toLowerCase(),
 }
 router.where('id', uuid)
+// The customer address routes (start/routes/api_v1/customer.ts); a route's own matcher wins.
+router.where('addressId', uuid)
 
 // Order and shop-order numbers match in any case (06 §3); stored numbers are upper case.
 const upperCase = { cast: (value: string) => value.toUpperCase() }
@@ -30,6 +32,8 @@ router.where('shopOrderNumber', upperCase)
 
 // The JSON operations (docs/06 §13) and webhooks (§12).
 await import('#start/routes/api_v1/auth')
+await import('#start/routes/api_v1/public')
+await import('#start/routes/api_v1/customer')
 await import('#start/routes/api_v1/seller')
 await import('#start/routes/api_v1/admin')
 await import('#start/routes/webhooks')

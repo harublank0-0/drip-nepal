@@ -1,6 +1,12 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import type { NextFn } from '@adonisjs/core/types/http'
-import { OWN_LIMIT_OPERATIONS, rateLimitKey, rateLimiter } from '#modules/platform/rate_limits'
+import {
+  IP_LIMIT_OPERATIONS,
+  OWN_LIMIT_OPERATIONS,
+  clientNetwork,
+  rateLimitKey,
+  rateLimiter,
+} from '#modules/platform/rate_limits'
 
 /*
  * The per-user API limits of docs/06 §9.1 (M1 part 6a), in the router stack
@@ -14,16 +20,29 @@ import { OWN_LIMIT_OPERATIONS, rateLimitKey, rateLimiter } from '#modules/platfo
  * nothing is counted twice. Past the limit: 429 `RATE_LIMITED` with
  * `Retry-After` (docs/06 §5.3), before the route's own middleware and the
  * controller run.
+ *
+ * The public reads of `IP_LIMIT_OPERATIONS` (M1 part 6b: the location
+ * cascades, `catalog_ip`) take a point of their row instead, keyed on the
+ * client network (`clientNetwork`, docs/07 §3.6), whether a user is signed
+ * in or not: they are open to guests, so a per-user key would not bound
+ * them.
  */
 export default class ApiLimitsMiddleware {
   async handle(ctx: HttpContext, next: NextFn) {
+    const operation = ctx.route?.name ?? ''
+    const perNetwork = IP_LIMIT_OPERATIONS.get(operation)
+    if (perNetwork) {
+      const network = clientNetwork(ctx.request.ip())
+      await rateLimiter(perNetwork).consume(rateLimitKey(perNetwork, network))
+      return next()
+    }
     const user = ctx.auth.user
     const path = ctx.request.url()
     if (
       user &&
       path.startsWith('/api/v1/') &&
       !path.startsWith('/api/v1/webhooks/') &&
-      !OWN_LIMIT_OPERATIONS.has(ctx.route?.name ?? '')
+      !OWN_LIMIT_OPERATIONS.has(operation)
     ) {
       const name = path.startsWith('/api/v1/admin/') ? 'api_staff' : 'api_user'
       await rateLimiter(name).consume(rateLimitKey(name, String(user.id)))

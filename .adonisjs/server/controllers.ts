@@ -27,6 +27,16 @@ export const controllers = {
           Session: () => import('#controllers/api/v1/auth/identity/session_controller'),
         },
       },
+      customer: {
+        identity: {
+          Addresses: () => import('#controllers/api/v1/customer/identity/addresses_controller'),
+        },
+      },
+      public: {
+        logistics: {
+          Locations: () => import('#controllers/api/v1/public/logistics/locations_controller'),
+        },
+      },
     },
   },
   auth: {

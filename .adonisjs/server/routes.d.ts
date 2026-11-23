@@ -20,6 +20,13 @@ export type ScannedRoutes = {
     'revokeAllSessions': { paramsTuple?: []; params?: {} }
     'startTotpEnrollment': { paramsTuple?: []; params?: {} }
     'confirmTotpEnrollment': { paramsTuple?: []; params?: {} }
+    'listProvinces': { paramsTuple?: []; params?: {} }
+    'listDistricts': { paramsTuple?: []; params?: {} }
+    'listLocalLevels': { paramsTuple?: []; params?: {} }
+    'listAddresses': { paramsTuple?: []; params?: {} }
+    'createAddress': { paramsTuple?: []; params?: {} }
+    'updateAddress': { paramsTuple: [ParamValue]; params: {'addressId': ParamValue} }
+    'deleteAddress': { paramsTuple: [ParamValue]; params: {'addressId': ParamValue} }
     'getLogisticsSettings': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'replaceLogisticsSettings': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'createShopCourierAccount': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
@@ -57,6 +64,7 @@ export type ScannedRoutes = {
     'reset_password': { paramsTuple?: []; params?: {} }
     'mfa': { paramsTuple?: []; params?: {} }
     'account.overview': { paramsTuple?: []; params?: {} }
+    'account.addresses': { paramsTuple?: []; params?: {} }
     'account.security': { paramsTuple?: []; params?: {} }
     'admin.logistics': { paramsTuple?: []; params?: {} }
     'dev.design_system': { paramsTuple?: []; params?: {} }
@@ -68,6 +76,10 @@ export type ScannedRoutes = {
   GET: {
     'drive.fs.serve': { paramsTuple: [...ParamValue[]]; params: {'*': ParamValue[]} }
     'getMe': { paramsTuple?: []; params?: {} }
+    'listProvinces': { paramsTuple?: []; params?: {} }
+    'listDistricts': { paramsTuple?: []; params?: {} }
+    'listLocalLevels': { paramsTuple?: []; params?: {} }
+    'listAddresses': { paramsTuple?: []; params?: {} }
     'getLogisticsSettings': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'getCourierBookingOptions': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'shopOrderNumber': ParamValue} }
     'adminListLogisticsAccounts': { paramsTuple?: []; params?: {} }
@@ -83,6 +95,7 @@ export type ScannedRoutes = {
     'reset_password': { paramsTuple?: []; params?: {} }
     'mfa': { paramsTuple?: []; params?: {} }
     'account.overview': { paramsTuple?: []; params?: {} }
+    'account.addresses': { paramsTuple?: []; params?: {} }
     'account.security': { paramsTuple?: []; params?: {} }
     'admin.logistics': { paramsTuple?: []; params?: {} }
     'dev.design_system': { paramsTuple?: []; params?: {} }
@@ -92,6 +105,10 @@ export type ScannedRoutes = {
   HEAD: {
     'drive.fs.serve': { paramsTuple: [...ParamValue[]]; params: {'*': ParamValue[]} }
     'getMe': { paramsTuple?: []; params?: {} }
+    'listProvinces': { paramsTuple?: []; params?: {} }
+    'listDistricts': { paramsTuple?: []; params?: {} }
+    'listLocalLevels': { paramsTuple?: []; params?: {} }
+    'listAddresses': { paramsTuple?: []; params?: {} }
     'getLogisticsSettings': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'getCourierBookingOptions': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'shopOrderNumber': ParamValue} }
     'adminListLogisticsAccounts': { paramsTuple?: []; params?: {} }
@@ -107,6 +124,7 @@ export type ScannedRoutes = {
     'reset_password': { paramsTuple?: []; params?: {} }
     'mfa': { paramsTuple?: []; params?: {} }
     'account.overview': { paramsTuple?: []; params?: {} }
+    'account.addresses': { paramsTuple?: []; params?: {} }
     'account.security': { paramsTuple?: []; params?: {} }
     'admin.logistics': { paramsTuple?: []; params?: {} }
     'dev.design_system': { paramsTuple?: []; params?: {} }
@@ -126,6 +144,7 @@ export type ScannedRoutes = {
     'revokeAllSessions': { paramsTuple?: []; params?: {} }
     'startTotpEnrollment': { paramsTuple?: []; params?: {} }
     'confirmTotpEnrollment': { paramsTuple?: []; params?: {} }
+    'createAddress': { paramsTuple?: []; params?: {} }
     'createShopCourierAccount': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'rekeyShopCourierAccount': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'accountId': ParamValue} }
     'disableShopCourierAccount': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'accountId': ParamValue} }
@@ -146,11 +165,13 @@ export type ScannedRoutes = {
   }
   DELETE: {
     'logOut': { paramsTuple?: []; params?: {} }
+    'deleteAddress': { paramsTuple: [ParamValue]; params: {'addressId': ParamValue} }
     'archivePickupAddress': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'addressId': ParamValue} }
     'adminRemoveShopFromLogisticsAccount': { paramsTuple: [ParamValue,ParamValue]; params: {'accountId': ParamValue,'shopId': ParamValue} }
   }
   PATCH: {
     'updateMe': { paramsTuple?: []; params?: {} }
+    'updateAddress': { paramsTuple: [ParamValue]; params: {'addressId': ParamValue} }
     'updatePickupAddress': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'addressId': ParamValue} }
     'adminUpdateLogisticsBranch': { paramsTuple: [ParamValue]; params: {'branchId': ParamValue} }
   }

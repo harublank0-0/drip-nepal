@@ -9,7 +9,9 @@ import type { InferSharedProps, InferFlashData } from '@adonisjs/inertia/types'
 import type CourierTransformer from '#transformers/courier_transformer'
 import type DevSignInTransformer from '#transformers/dev_sign_in_transformer'
 import type IdentityAccountTransformer from '#transformers/identity/account_transformer'
+import type IdentityAddressTransformer from '#transformers/identity/address_transformer'
 import type LegalDocumentTransformer from '#transformers/legal_document_transformer'
+import type LogisticsLocationTransformer from '#transformers/logistics/location_transformer'
 import type SellerLogisticsTransformer from '#transformers/seller/logistics_transformer'
 import type InertiaMiddleware from '#middleware/inertia_middleware'
 
@@ -27,10 +29,20 @@ export namespace Data {
     export namespace Account {
       export type Variants = InferVariants<IdentityAccountTransformer>
     }
+    export type Address = InferData<IdentityAddressTransformer>
+    export namespace Address {
+      export type Variants = InferVariants<IdentityAddressTransformer>
+    }
   }
   export type LegalDocument = InferData<LegalDocumentTransformer>
   export namespace LegalDocument {
     export type Variants = InferVariants<LegalDocumentTransformer>
+  }
+  export namespace Logistics {
+    export type Location = InferData<LogisticsLocationTransformer>
+    export namespace Location {
+      export type Variants = InferVariants<LogisticsLocationTransformer>
+    }
   }
   export namespace Seller {
     export type Logistics = InferData<SellerLogisticsTransformer>

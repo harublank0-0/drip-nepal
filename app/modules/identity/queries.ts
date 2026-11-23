@@ -313,3 +313,70 @@ export async function platformAdminExists() {
     .first()
   return row !== null
 }
+
+/*
+ * The caller's address book (docs/04a §5.5; 06 §13.4 `listAddresses`; 07
+ * §4.6): the owner condition and `archived_at IS NULL` are part of the query,
+ * so another user's or an archived address is simply not found (T-SEC-006).
+ * The default first, then the oldest first, the order of
+ * `user_addresses_user_active_idx`. The encrypted members stay ciphertext:
+ * only the address transformer decrypts them (07 §5.5, T-SEC-034).
+ */
+export type AddressRow = {
+  id: string
+  label: string | null
+  recipient_name_enc: string
+  recipient_phone_enc: string
+  recipient_phone_last4: string
+  province_code: string
+  district_code: string
+  local_level_code: string
+  ward_no: number
+  area_tole_enc: string
+  street_landmark_enc: string | null
+  postal_code: string
+  is_default: boolean
+}
+
+const ADDRESS_COLUMNS = [
+  'id',
+  'label',
+  'recipient_name_enc',
+  'recipient_phone_enc',
+  'recipient_phone_last4',
+  'province_code',
+  'district_code',
+  'local_level_code',
+  'ward_no',
+  'area_tole_enc',
+  'street_landmark_enc',
+  'postal_code',
+  'is_default',
+] as const
+
+export async function ownAddresses(userId: string): Promise<AddressRow[]> {
+  return db
+    .from('user_addresses')
+    .where('user_id', userId)
+    .whereNull('archived_at')
+    .orderBy('is_default', 'desc')
+    .orderBy('created_at', 'asc')
+    .orderBy('id', 'asc')
+    .select(...ADDRESS_COLUMNS)
+}
+
+// One active address of the caller, or null for a missing, foreign or archived ID.
+export async function ownAddress(
+  userId: string,
+  addressId: string,
+  options: { client?: QueryClientContract } = {}
+): Promise<AddressRow | null> {
+  const client: QueryClientContract = options.client ?? db.connection()
+  const row = await client
+    .from('user_addresses')
+    .where({ id: addressId, user_id: userId })
+    .whereNull('archived_at')
+    .select(...ADDRESS_COLUMNS)
+    .first()
+  return row ?? null
+}
