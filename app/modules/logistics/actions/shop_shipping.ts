@@ -1,6 +1,6 @@
 import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
 import { DomainError, type ProblemErrorItem } from '#exceptions/domain_error'
-import { shopShipping, type ShopRate } from '#modules/logistics/queries'
+import { offeredDistrictZones, shopShipping, type ShopRate } from '#modules/logistics/queries'
 
 /*
  * The step action behind `replaceShopShipping` (docs/06 §13.5; 04a §9.6,
@@ -20,10 +20,15 @@ import { shopShipping, type ShopRate } from '#modules/logistics/queries'
  *   the shop does not cover is kept: it prices nothing until the shop
  *   covers a district there.
  * Then the rules of 04a §9.6 on the result, the saved sets with the changes
- * laid over them: at least one covered district (AC-FR-SHOP-004-1; 422
- * `required` on `coverage`), and every covered district's zone with a rate
- * (05 §3.3 item 3, T-SHOP-109; 422 `rate_required` on `rates`, naming the
- * zone). A set that equals the saved one is not written.
+ * laid over them, over the covered districts the editor offers: at least
+ * one (AC-FR-SHOP-004-1; 422 `required` on `coverage`), and every one's
+ * zone with a rate (05 §3.3 item 3, T-SHOP-109; 422 `rate_required` on
+ * `rates`, naming the zone). A saved district that is no longer offered (it,
+ * its province or its zone made inactive) is kept until the next coverage
+ * save, which must leave it out (`not_offered`), and needs no rate: it
+ * prices nothing, and a rate for an inactive zone is refused, so requiring
+ * one would block every rates-only save. A set that equals the saved one is
+ * not written.
  *
  * Writes delete and re-insert the changed set (04a §9.6: hard delete is
  * allowed; placed orders keep their fee and zone snapshot,
@@ -86,20 +91,10 @@ export async function replaceShippingRows(
   const zoneNames = new Map(zoneRows.map((zone) => [zone.code, zone.name_en]))
 
   const errors: ProblemErrorItem[] = []
-  if (changes.coverage && changes.coverage.length > 0) {
-    const offered: { code: string }[] = await trx
-      .from('districts as d')
-      .join('provinces as p', 'p.code', 'd.province_code')
-      .join('delivery_zone_districts as dz', 'dz.district_code', 'd.code')
-      .join('delivery_zones as z', 'z.code', 'dz.zone_code')
-      .whereIn('d.code', changes.coverage)
-      .where('d.is_active', true)
-      .where('p.is_active', true)
-      .where('z.is_active', true)
-      .select('d.code')
-    const offeredCodes = new Set(offered.map((row) => row.code))
+  if (changes.coverage) {
+    const offered = await offeredDistrictZones(changes.coverage, { client: trx })
     for (const [index, code] of changes.coverage.entries()) {
-      if (!offeredCodes.has(code)) {
+      if (!offered.has(code)) {
         errors.push({
           field: `coverage.${index}`,
           code: 'not_offered',
@@ -128,7 +123,10 @@ export async function replaceShippingRows(
 
   const coverage = changes.coverage ? [...new Set(changes.coverage)].sort() : saved.coverage
   const rates = changes.rates ?? saved.rates
-  if (coverage.length === 0) {
+  // The rule reads the covered districts the editor offers; a saved one no longer offered is kept
+  // until the next coverage save, which must leave it out, and needs no rate (04a §9.6).
+  const offeredZones = await offeredDistrictZones(coverage, { client: trx })
+  if (offeredZones.size === 0) {
     throw invalid([
       {
         field: 'coverage',
@@ -137,12 +135,8 @@ export async function replaceShippingRows(
       },
     ])
   }
-  const zoned: { zone_code: string }[] = await trx
-    .from('delivery_zone_districts')
-    .whereIn('district_code', coverage)
-    .distinct('zone_code')
   const rated = new Set(rates.map((rate) => rate.zoneCode))
-  const unrated = zoned.map((row) => row.zone_code).filter((zone) => !rated.has(zone))
+  const unrated = [...new Set(offeredZones.values())].filter((zone) => !rated.has(zone))
   if (unrated.length > 0) {
     throw invalid(
       unrated.sort().map((zone) => ({

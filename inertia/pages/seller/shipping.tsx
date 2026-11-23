@@ -14,6 +14,7 @@ import { Alert, AlertDescription } from '~/components/ui/alert'
 import { ShopShippingForm } from '~/components/seller/shop_shipping_form'
 import { PickupAddresses } from '~/components/seller/pickup_addresses'
 import type { PickupAddress } from '~/components/seller/pickup_address_form'
+import type { Place } from '~/components/forms/location_cascade'
 
 /*
  * `/seller/{shopSlug}/shipping` (docs/08 §2.5 `/shipping` row; R1-S part
@@ -21,7 +22,9 @@ import type { PickupAddress } from '~/components/seller/pickup_address_form'
  * controller (app/controllers/seller/shops/shop_controller.ts):
  * `shipping`, what `getShopShipping` answers; `delivery_areas`, the zones
  * and the districts by province (public reference data); and, for members
- * with `shop.shipping.manage` while the shop is `active`, `pickup_addresses`.
+ * with `shop.shipping.manage` while the shop is `active`, `pickup_addresses`
+ * and `provinces` (what `listProvinces` answers, the pickup form's first
+ * step: an address cascade, not the delivery areas).
  *
  * - Delivery areas and rates: whether shipping is set up (the overview's
  *   "Shipping zones and rates set" item and the publish gate's condition),
@@ -30,7 +33,7 @@ import type { PickupAddress } from '~/components/seller/pickup_address_form'
  *   (`profileEditable`, the server's "profile, shipping" gate: the owner
  *   alone while `pending_review` or `rejected`, OD-47), else the saved
  *   coverage and rates read-only, with a line saying why.
- * - Pickup addresses (`PickupAddresses`), when the prop is there. The rest
+ * - Pickup addresses (`PickupAddresses`), when the props are there. The rest
  *   of the Courier section waits for R1-S part 6.
  * The UI hides; the server decides (docs/08 §11.6).
  */
@@ -38,12 +41,14 @@ type Props = InertiaProps<{
   shipping: ShopShipping
   delivery_areas: DeliveryAreas
   pickup_addresses?: PickupAddress[]
+  provinces?: Place[]
 }>
 
 export default function SellerShipping({
   shipping,
   delivery_areas: areas,
   pickup_addresses: pickups,
+  provinces,
   current_shop: current,
 }: Props) {
   if (!current) return null
@@ -90,7 +95,7 @@ export default function SellerShipping({
             <ShippingSummary shipping={shipping} areas={areas} />
           )}
         </section>
-        {pickups && (
+        {pickups && provinces && (
           <section aria-labelledby="shipping-pickup-heading" className="space-y-4">
             <div className="space-y-1">
               <h2
@@ -101,7 +106,7 @@ export default function SellerShipping({
               </h2>
               <p className="text-muted-foreground">{t('seller.shipping.pickup.intro')}</p>
             </div>
-            <PickupAddresses addresses={pickups} areas={areas} slug={current.slug} />
+            <PickupAddresses addresses={pickups} provinces={provinces} slug={current.slug} />
           </section>
         )}
       </div>

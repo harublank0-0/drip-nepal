@@ -1,7 +1,8 @@
 import { test } from '@japa/runner'
 import db from '@adonisjs/lucid/services/db'
 import { DomainError } from '#exceptions/domain_error'
-import { shippingConfigured } from '#modules/logistics/queries'
+import { deliveryAreas, shippingConfigured } from '#modules/logistics/queries'
+import { SHIPPING_LIMITS } from '#shared/constants/limits'
 import { replaceShopShipping } from '#modules/shops/actions/replace_shop_shipping'
 import { shopShippingJson } from '#transformers/seller/shipping_transformer'
 import type { Browser } from '#tests/support/browser'
@@ -18,7 +19,12 @@ import { addMember, createOwnerShop, setShopStatus } from '#tests/support/shops'
  *   it and the next ETag, the fee as money in paisa; each set is replaced
  *   whole and an absent one is kept; a rate for a zone the shop does not
  *   cover is kept; a request that changes nothing writes nothing and keeps
- *   the version; a member out of rule answers 422 on it; one
+ *   the version; a member out of rule answers 422 on it, a fee above the
+ *   most the rupee field reads included; an inactive district, a district
+ *   of an inactive province and an inactive zone answer `not_offered`, and
+ *   `delivery_areas` leaves them out; a covered district whose zone is made
+ *   inactive stays saved, needs no rate (a rates-only save passes) and is
+ *   dropped by the next coverage save, which may not keep it; one
  *   `shop.shipping_replace` audit row holds the from and to values of the
  *   sets written; `configured` and `shippingConfigured` follow the publish
  *   gate's condition (AC-FR-CAT-005-2).
@@ -74,6 +80,39 @@ const RATES = [
   { zone_code: 'outside_valley', fee_minor: 15050, est_min_days: 2, est_max_days: 5 },
 ]
 const FULL = { coverage: [OUTSIDE, VALLEY], rates: RATES }
+
+/*
+ * Reference rows no longer offered, rolled back with the test: district 398
+ * (inactive) and 797 (active, in province 7, made inactive here: every
+ * province code is seeded, `^[1-7]$`), each in an active zone, and the
+ * inactive zone `test_retired`. None of the codes is seeded.
+ */
+async function insertRetiredAreas() {
+  await db.table('districts').insert([
+    {
+      code: '398',
+      province_code: '3',
+      name_en: 'Test Retired District',
+      name_ne: 'परीक्षण जिल्ला',
+      is_active: false,
+    },
+    {
+      code: '797',
+      province_code: '7',
+      name_en: 'Test Far District',
+      name_ne: 'परीक्षण जिल्ला',
+      is_active: true,
+    },
+  ])
+  await db.table('delivery_zone_districts').insert([
+    { zone_code: 'outside_valley', district_code: '398' },
+    { zone_code: 'outside_valley', district_code: '797' },
+  ])
+  await db.from('provinces').where('code', '7').update({ is_active: false })
+  await db
+    .table('delivery_zones')
+    .insert({ code: 'test_retired', name_en: 'Test Retired Zone', position: 9, is_active: false })
+}
 
 // The users this file signed in; updateShopProfile's limiter keys go with them.
 const made: string[] = []
@@ -261,6 +300,15 @@ test.group('T-SHOP-010 getShopShipping and replaceShopShipping', (group) => {
         code: 'without_decimals',
       },
       {
+        label: 'a fee above the most the rupee field reads',
+        body: {
+          coverage: [VALLEY],
+          rates: [{ ...RATES[0], fee_minor: SHIPPING_LIMITS.feeMinor.max + 1 }],
+        },
+        field: 'rates.0.fee_minor',
+        code: 'range',
+      },
+      {
         label: 'a negative fee',
         body: { coverage: [VALLEY], rates: [{ ...RATES[0], fee_minor: -1 }] },
         field: 'rates.0.fee_minor',
@@ -301,6 +349,106 @@ test.group('T-SHOP-010 getShopShipping and replaceShopShipping', (group) => {
       assert.lengthOf(await coverageRows(shop.shopId), 0)
       assert.lengthOf(await rateRows(shop.shopId), 0)
     })
+
+  test(
+    'T-SHOP-010 a district or zone that is no longer active is refused with not_offered: {label}'
+  )
+    .with([
+      {
+        label: 'an inactive district',
+        body: { coverage: [VALLEY, '398'], rates: RATES },
+        field: 'coverage.1',
+      },
+      {
+        label: 'a district of an inactive province',
+        body: { coverage: [VALLEY, '797'], rates: RATES },
+        field: 'coverage.1',
+      },
+      {
+        label: 'an inactive zone',
+        body: { coverage: [VALLEY], rates: [RATES[0], { ...RATES[1], zone_code: 'test_retired' }] },
+        field: 'rates.1.zone_code',
+      },
+    ])
+    .run(async ({ assert }, { body, field }) => {
+      await insertRetiredAreas()
+      const { shop, browser } = await shopFor()
+      const before = await shopRow(shop.shopId)
+      const response = await put(browser, shop.slug, body)
+      assert.equal(response.status, 422, response.text)
+      assert.deepEqual(problemFields(response.body), [[field, 'not_offered']])
+      assert.deepEqual(await shopRow(shop.shopId), before)
+      assert.lengthOf(await coverageRows(shop.shopId), 0)
+      assert.lengthOf(await rateRows(shop.shopId), 0)
+
+      // The editor offers none of them either.
+      const areas = await deliveryAreas()
+      const codes = areas.provinces.flatMap((province) => province.districts.map((d) => d.code))
+      for (const code of ['398', '797']) assert.notInclude(codes, code)
+      assert.notInclude(
+        areas.zones.map((zone) => zone.code),
+        'test_retired'
+      )
+      assert.notInclude(
+        areas.provinces.map((province) => province.code),
+        '7'
+      )
+    })
+
+  test('T-SHOP-010 a covered district whose zone is made inactive stays saved, needs no rate and is dropped by the next coverage save', async ({
+    assert,
+  }) => {
+    // Test rows with codes the seed does not have, rolled back with the test.
+    await db
+      .table('delivery_zones')
+      .insert({ code: 'test_zone', name_en: 'Test Zone', position: 9, is_active: true })
+    await db.table('districts').insert({
+      code: '397',
+      province_code: '3',
+      name_en: 'Test District',
+      name_ne: 'परीक्षण जिल्ला',
+      is_active: true,
+    })
+    await db
+      .table('delivery_zone_districts')
+      .insert({ zone_code: 'test_zone', district_code: '397' })
+    const testRate = { zone_code: 'test_zone', fee_minor: 500, est_min_days: 1, est_max_days: 2 }
+    const { shop, browser } = await shopFor()
+    const first = await put(browser, shop.slug, {
+      coverage: [VALLEY, '397'],
+      rates: [RATES[0], testRate],
+    })
+    assert.equal(first.status, 200, first.text)
+
+    await db.from('delivery_zones').where('code', 'test_zone').update({ is_active: false })
+    // Kept, and out of the rule: the valley alone is covered and rated.
+    const read = await send(browser, 'GET', shippingPath(shop.slug))
+    assert.deepEqual(read.body.data.coverage, [VALLEY, '397'])
+    assert.isTrue(read.body.data.configured)
+    assert.isTrue(await shippingConfigured(shop.shopId))
+
+    // A rates-only save, as the form sends it: no rate for the retired zone is asked for.
+    const rates = await put(
+      browser,
+      shop.slug,
+      { rates: [{ ...RATES[0], fee_minor: 12000 }] },
+      '"2"'
+    )
+    assert.equal(rates.status, 200, rates.text)
+    assert.deepEqual(rates.body.data.coverage, [VALLEY, '397'])
+    assert.deepEqual(
+      rates.body.data.rates.map((rate: { zone_code: string }) => rate.zone_code),
+      ['ktm_valley']
+    )
+
+    // A coverage save may not keep it; the form's next one leaves it out.
+    const kept = await put(browser, shop.slug, { coverage: [VALLEY, '397'] }, '"3"')
+    assert.equal(kept.status, 422, kept.text)
+    assert.deepEqual(problemFields(kept.body), [['coverage.1', 'not_offered']])
+    const dropped = await put(browser, shop.slug, { coverage: [VALLEY] }, '"3"')
+    assert.equal(dropped.status, 200, dropped.text)
+    assert.deepEqual(dropped.body.data.coverage, [VALLEY])
+  })
 
   test('T-SHOP-010 one shop.shipping_replace row holds the sets written, by the owner', async ({
     assert,

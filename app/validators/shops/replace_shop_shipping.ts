@@ -18,11 +18,12 @@ import { SHIPPING_LIMITS } from '#shared/constants/limits'
  *   district (`not_offered`).
  * - `rates`: one object per zone, each zone once (`distinct`): `zone_code`
  *   (the shape of `delivery_zones_code_check`), `fee_minor` in paisa, a
- *   JSON integer from 0 (free delivery) up to a safe integer (ADR-0007,
- *   06 §3.3: never a float or a string), and `est_min_days` and
- *   `est_max_days`, JSON integers from 0 to 30. That the fastest is no
- *   longer than the slowest, that the zone is active, and that every
- *   covered zone has a rate are the action's checks.
+ *   JSON integer from 0 (free delivery) up to `SHIPPING_LIMITS.feeMinor.max`,
+ *   the most the form's rupee field reads, so a saved fee always loads back
+ *   into it (ADR-0007, 06 §3.3: never a float or a string), and
+ *   `est_min_days` and `est_max_days`, JSON integers from 0 to 30. That the
+ *   fastest is no longer than the slowest, that the zone is active, and
+ *   that every covered zone has a rate are the action's checks.
  */
 export const SHIPPING_MEMBERS = ['coverage', 'rates'] as const
 export const RATE_MEMBERS = ['zone_code', 'fee_minor', 'est_min_days', 'est_max_days'] as const
@@ -46,7 +47,7 @@ export const replaceShopShippingValidator = vine.create({
         fee_minor: vine
           .number({ strict: true })
           .withoutDecimals()
-          .range([0, Number.MAX_SAFE_INTEGER]),
+          .range([SHIPPING_LIMITS.feeMinor.min, SHIPPING_LIMITS.feeMinor.max]),
         est_min_days: days(),
         est_max_days: days(),
       })

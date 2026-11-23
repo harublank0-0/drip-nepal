@@ -69,12 +69,13 @@ import { RateLimitNotice } from '~/components/forms/rate_limit_notice'
  * (`shops.version`, which the settings form also moves), and nothing when
  * neither differs. After a save the form restarts from the 200's shipping
  * and the props are read again (docs/09 §13.3 rule 3). A 412
- * `VERSION_CONFLICT` keeps every value typed, moves focus to a panel naming
- * what changed since the page was opened (`current`), and offers "Keep my
- * changes", which sends the same sets on the new version, and "Discard mine
- * and reload", which restarts from `current` (docs/08 §7.1 "Concurrent
- * edits"); when the panel closes, focus moves to the save button. As in
- * the settings form (shop_settings_form.tsx).
+ * `VERSION_CONFLICT` keeps the values of the sets the user changed, shows
+ * the sets the user left alone as saved now (`current`), moves focus to a
+ * panel naming what changed since the page was opened, and offers "Keep my
+ * changes", which sends what differs from `current` on the new version, and
+ * "Discard mine and reload", which restarts from `current` (docs/08 §7.1
+ * "Concurrent edits"); when the panel closes, focus moves to the save
+ * button. As in the settings form (shop_settings_form.tsx).
  *
  * The form pattern of docs/08 §7.1: client rules mirror the server's
  * (`SHIPPING_LIMITS`, shared/ui/shop_shipping.ts) and run on blur and
@@ -91,8 +92,9 @@ type RateMember = keyof RateValues
 
 const RATE_MEMBERS: RateMember[] = ['fee', 'min_days', 'max_days']
 const DISTRICTS_ID = 'shipping-districts'
+const COVERAGE_LEGEND_ID = 'shipping-coverage-legend'
 const RATE_LIMIT_ID = 'shipping-rate-limit'
-const { estimateDays } = SHIPPING_LIMITS
+const { estimateDays, feeMinor } = SHIPPING_LIMITS
 
 const rateId = (zone: string, member: RateMember) => `shipping-rate-${zone}-${member}`
 const blankRate = (rate: RateValues) =>
@@ -235,7 +237,9 @@ export function ShopShippingForm({
       if (mutation.pending || reloading) return
       resetMessages()
       report.clear()
-      const body = changedMembers(value, base, areas)
+      // After a 412 the sets compare with the shipping saved now (`current`), not the one the page
+      // opened with, so "Keep my changes" sends what differs from it.
+      const body = changedMembers(value, conflict ?? base, areas)
       if (Object.keys(body).length === 0) {
         // Nothing of the user's is left to keep after a 412: the form catches up instead.
         if (conflict) restartFrom(formApi, conflict)
@@ -267,8 +271,22 @@ export function ShopShippingForm({
       if (found.code === 'RATE_LIMITED') return
       if (found.code === 'VERSION_CONFLICT') {
         const current = conflictShipping(found)
-        if (current) setConflict(current)
-        else setProblem(found)
+        if (!current) {
+          setProblem(found)
+          return
+        }
+        /*
+         * The sets the user changed keep their values; a set the user left alone shows the
+         * values saved now, so the next "Keep my changes" checks the kept set against them (a
+         * rate the other save removed and the kept coverage needs surfaces as a field error).
+         */
+        const fresh = valuesFrom(current, areas)
+        if (!body.coverage) {
+          formApi.setFieldValue('all_districts', fresh.all_districts)
+          formApi.setFieldValue('districts', fresh.districts)
+        }
+        if (!body.rates) formApi.setFieldValue('rates', fresh.rates)
+        setConflict(current)
         return
       }
       // Suspended or closed since the page opened: the page says so once its props are read.
@@ -318,7 +336,9 @@ export function ShopShippingForm({
     if (!zoneCovered(index) && blankRate(rate)) return undefined
     if (member === 'fee') {
       if (rate.fee.trim() === '') return t('seller.shipping.fee_required', { zone: zone.name })
-      return parseRupeesToMinor(rate.fee) === null ? t('seller.shipping.fee_rule') : undefined
+      const fee = parseRupeesToMinor(rate.fee)
+      // The server's bound (`SHIPPING_LIMITS.feeMinor`), which the parser's 9 rupee digits meet.
+      return fee === null || fee > feeMinor.max ? t('seller.shipping.fee_rule') : undefined
     }
     const typed = member === 'min_days' ? rate.min_days : rate.max_days
     if (typed.trim() === '') {
@@ -385,7 +405,7 @@ export function ShopShippingForm({
       <ErrorSummary form={form} summary={report.summary} summaryRef={report.summaryRef} />
 
       <FieldSet className="gap-4">
-        <FieldLegend>{t('seller.shipping.coverage_legend')}</FieldLegend>
+        <FieldLegend id={COVERAGE_LEGEND_ID}>{t('seller.shipping.coverage_legend')}</FieldLegend>
         <FieldDescription>{t('seller.shipping.coverage_help')}</FieldDescription>
         <form.Field name="all_districts">
           {(field) => (
@@ -420,8 +440,11 @@ export function ShopShippingForm({
             )
             const picked = new Set(field.state.value)
             return (
+              // The error summary's link focuses this group; its name and error are read then.
               <div
                 id={DISTRICTS_ID}
+                role="group"
+                aria-labelledby={COVERAGE_LEGEND_ID}
                 tabIndex={-1}
                 className="space-y-3 outline-none"
                 aria-describedby={messages.length > 0 ? `${DISTRICTS_ID}-error` : undefined}

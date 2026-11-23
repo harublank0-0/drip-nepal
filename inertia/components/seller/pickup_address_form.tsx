@@ -4,7 +4,6 @@ import type { Route } from '@tuyau/core/types'
 import type { Problem } from '@shared/api/problem'
 import { ACCOUNT_LIMITS, ADDRESS_LIMITS } from '@shared/constants/limits'
 import { nepalShopPhoneNational, toNepalShopPhoneE164 } from '@shared/format/phone'
-import type { DeliveryAreas } from '@shared/ui/shop_shipping'
 import { client } from '~/client'
 import { useApiMutation } from '~/hooks/use_api_mutation'
 import { useErrorReport } from '~/hooks/use_error_report'
@@ -21,6 +20,7 @@ import { ErrorSummary } from '~/components/forms/error_summary'
 import { ProblemAlert } from '~/components/forms/problem_alert'
 import { RateLimitNotice } from '~/components/forms/rate_limit_notice'
 import {
+  districtsOf,
   LoadFailed,
   localLevelsOf,
   placeholderFor,
@@ -36,11 +36,14 @@ import {
  * parcels from. It is the address book's form (`AddressForm`, M1 part 6b)
  * for a shop: the same cascade (location_cascade.tsx), with a contact
  * person and phone in place of the recipient. Province → District → Local
- * level → Ward: the provinces and their districts come with the page
- * (`delivery_areas`), the local levels are read when a district is chosen
- * (`listLocalLevels`); only places of the reference data can be chosen
- * (VX-10). A saved place the data has since made inactive stays as saved
- * until it is changed.
+ * level → Ward from the location reference data, as `AddressForm` reads it:
+ * the provinces come with the page (`provinces`, what `listProvinces`
+ * answers), the districts and local levels are read when the step before
+ * is chosen (`listDistricts`, `listLocalLevels`). A pickup address is an
+ * address, not a delivery rule, so every active district is offered,
+ * whatever its delivery zone. Only places of the reference data can be
+ * chosen (VX-10); a saved place the data has since made inactive stays as
+ * saved until it is changed.
  *
  * The contact phone is the shop's own data, shown in full to members with
  * `shop.shipping.manage` (06 §13.8 `getLogisticsSettings`), so on edit the
@@ -180,14 +183,15 @@ function changedMembers(value: Values, saved: PickupAddress): UpdateBody {
 }
 
 export function PickupAddressForm({
-  areas,
+  provinces,
   saved,
   hasAddresses,
   slug,
   onDone,
   onCancel,
 }: {
-  areas: DeliveryAreas
+  // What `listProvinces` answers: the cascade's first step.
+  provinces: Place[]
   // The address being edited, or null to add one.
   saved: PickupAddress | null
   // Whether the shop has a pickup address already: the first one is the default.
@@ -283,11 +287,12 @@ export function PickupAddressForm({
   const provinceCode = useStore(form.store, (state) => state.values.province_code)
   const districtCode = useStore(form.store, (state) => state.values.district_code)
   const localLevelCode = useStore(form.store, (state) => state.values.local_level_code)
+  const districts = useCascade(provinceCode, districtsOf)
   const localLevels = useCascade(districtCode, localLevelsOf)
 
   /*
-   * The provinces and their districts are the page's; the saved place shows
-   * at once on edit, and stays choosable, marked as no longer offered, when
+   * On edit the saved place shows on its buttons at once, while its lists
+   * load, and stays choosable, marked as no longer offered, when
    * the reference data has made it inactive. The ward stays disabled until
    * a current local level is chosen, as in `AddressForm`.
    */
@@ -300,14 +305,9 @@ export function PickupAddressForm({
     saved && districtCode === saved.district_code
       ? { code: saved.local_level_code, name: saved.local_level_name, ward_count: 0 }
       : null
-  const provinceItems = withSaved<Place>(
-    areas.provinces.map((province) => ({ code: province.code, name: province.name })),
-    savedProvince
-  )
-  const districtItems = withSaved<Place>(
-    (areas.provinces.find((province) => province.code === provinceCode)?.districts ?? []).map(
-      (district) => ({ code: district.code, name: district.name })
-    ),
+  const provinceItems = withSaved(provinces, savedProvince)
+  const districtItems = withSaved(
+    districts.state.status === 'ready' ? districts.state.items : [],
     savedDistrict
   )
   const localLevelItems = withSaved(
@@ -463,28 +463,31 @@ export function PickupAddressForm({
           }}
         >
           {(field) => (
-            <ChoiceField
-              id="pickup-district"
-              label={t('seller.shipping.pickup.district')}
-              value={field.state.value}
-              options={districtItems.map((district) => ({
-                value: district.code,
-                label: district.name,
-              }))}
-              placeholder={
-                provinceCode === ''
-                  ? t('seller.shipping.pickup.district_waiting')
-                  : t('seller.shipping.pickup.district_placeholder')
-              }
-              disabled={provinceCode === ''}
-              triggerClassName={TALL}
-              errors={field.state.meta.errors}
-              onChange={(value) => {
-                if (value === field.state.value) return
-                changeAndRecheck(field, value)
-                clearAfter('district_code')
-              }}
-            />
+            <div className="space-y-2">
+              <ChoiceField
+                id="pickup-district"
+                label={t('seller.shipping.pickup.district')}
+                value={field.state.value}
+                options={districtItems.map((district) => ({
+                  value: district.code,
+                  label: district.name,
+                }))}
+                placeholder={placeholderFor(
+                  districts.state,
+                  t('seller.shipping.pickup.district_waiting'),
+                  t('seller.shipping.pickup.district_placeholder')
+                )}
+                disabled={districts.state.status !== 'ready'}
+                triggerClassName={TALL}
+                errors={field.state.meta.errors}
+                onChange={(value) => {
+                  if (value === field.state.value) return
+                  changeAndRecheck(field, value)
+                  clearAfter('district_code')
+                }}
+              />
+              <LoadFailed state={districts.state} onRetry={districts.retry} />
+            </div>
           )}
         </form.Field>
         <form.Field

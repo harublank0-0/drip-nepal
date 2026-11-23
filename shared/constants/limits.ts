@@ -68,11 +68,16 @@ export const SHOP_LIMITS = {
 // A shop's delivery settings (docs/06 §13.5 `replaceShopShipping`; 01
 // AC-FR-SHOP-004-1; docs/04a §9.7): each estimate is a whole number of days
 // from 0 (same day) to 30, the bound of `shop_shipping_rates_estimate_check`
-// [Assumption]. `coverage` and `zones` only bound the request's size: the
-// reference data has 77 districts and 2 zones (A-27), and the action checks
-// each code against it.
+// [Assumption]. `feeMinor` is the most the rupee field reads, 9 rupee digits
+// and 2 of paisa (`parseRupeesToMinor`, shared/format/money.ts; Rs
+// 999,999,999.99), so every fee the server accepts loads back into the form
+// (T-UI-041 pins the two together); it bounds input, it is not a price rule.
+// `coverage` and `zones` only bound the request's size: the reference data
+// has 77 districts and 2 zones (A-27), and the action checks each code
+// against it.
 export const SHIPPING_LIMITS = {
   estimateDays: { min: 0, max: 30 },
+  feeMinor: { min: 0, max: 99_999_999_999 },
   coverage: { max: 100 },
   zones: { max: 20 },
 } as const

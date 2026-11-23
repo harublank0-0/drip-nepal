@@ -46,8 +46,8 @@ import { addMember, createOwnerShop, GRIEVANCE, setShopStatus } from '#tests/sup
  *   `getShopShipping` answers; `delivery_areas`, the 2 zones and the 77
  *   districts by province with the valley's three in `ktm_valley`; and
  *   `pickup_addresses`, with the contact phone in full and the place names,
- *   only for roles with `shop.shipping.manage` while the shop is `active`
- *   (T-SEC-030). The overview's shipping and pickup items turn done after
+ *   with `provinces` for the pickup form, only for roles with
+ *   `shop.shipping.manage` while the shop is `active` (T-SEC-030). The overview's shipping and pickup items turn done after
  *   the shop saves its shipping and adds a pickup address through the API.
  *   Another shop's page is the 404 page (T-SEC-001).
  */
@@ -558,7 +558,10 @@ test.group('T-UI-041 the seller shipping page', () => {
       'shipping',
       'delivery_areas',
       'pickup_addresses',
+      'provinces',
     ])
+    // The pickup form's first step is every active province, as the address book's is.
+    assert.lengthOf(props.provinces as unknown[], 7)
     const read = await send(browser, 'GET', `/api/v1/seller/shops/${shop.slug}/shipping`)
     assert.deepEqual(props.shipping, read.body.data)
 
@@ -589,7 +592,7 @@ test.group('T-UI-041 the seller shipping page', () => {
     assert.notInclude(JSON.stringify(props), '_enc')
   })
 
-  test('T-SEC-030 the pickup addresses are left out for {label}')
+  test('T-SEC-030 the pickup addresses and their provinces are left out for {label}')
     .with([
       { label: 'a viewer', role: 'viewer', status: null },
       { label: 'an order fulfiller', role: 'order_fulfiller', status: null },

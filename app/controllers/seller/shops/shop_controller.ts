@@ -1,6 +1,11 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import { DomainError } from '#exceptions/domain_error'
-import { deliveryAreas, placeNames, shippingConfigured } from '#modules/logistics/queries'
+import {
+  activeProvinces,
+  deliveryAreas,
+  placeNames,
+  shippingConfigured,
+} from '#modules/logistics/queries'
 import { livePickupAddresses } from '#modules/shops/actions/pickup_addresses'
 import { assertShopGate, shopGateAllows, shopMay } from '#modules/shops/permissions'
 import {
@@ -10,6 +15,7 @@ import {
   shopShippingState,
 } from '#modules/shops/queries'
 import { pickupAddressPlaceJson } from '#transformers/seller/logistics_transformer'
+import { placeJson } from '#transformers/logistics/location_transformer'
 import { deliveryAreasJson, shopShippingJson } from '#transformers/seller/shipping_transformer'
 import { sellerShopJson } from '#transformers/seller/shop_transformer'
 
@@ -96,8 +102,11 @@ export default class ShopController {
    *   "Page routes");
    * - `pickup_addresses`: the live pickup addresses of
    *   `getLogisticsSettings`, with the contact phone in full as the shop's
-   *   own data and the place names, only with `shop.shipping.manage` while
-   *   the shop is `active` (the `logistics` gate); left out otherwise.
+   *   own data and the place names, and with them `provinces`, what
+   *   `listProvinces` answers, the pickup form's first step (a pickup
+   *   address takes any active district, as an address does, not only the
+   *   delivery areas'); both only with `shop.shipping.manage` while the shop
+   *   is `active` (the `logistics` gate), left out otherwise.
    * The rest of the Courier section (the logistics settings and the courier
    * accounts) comes with R1-S part 6. Whether the coverage form can be saved
    * is the `current_shop` permissions and the shared profile gate
@@ -113,11 +122,13 @@ export default class ShopController {
     if (shopMay(ctx.shop.actor, 'shop.shipping.manage') && shopGateAllows(ctx.shop, 'logistics')) {
       const rows = await livePickupAddresses(ctx.shop.id)
       const names = await placeNames(rows.map((row) => row.local_level_code))
+      const provinces = await activeProvinces()
       return ctx.inertia.render('seller/shipping', {
         ...props,
         pickup_addresses: rows.map((row) =>
           pickupAddressPlaceJson(row, names.get(row.local_level_code))
         ),
+        provinces: provinces.map(placeJson),
       })
     }
     return ctx.inertia.render('seller/shipping', props)

@@ -2466,14 +2466,16 @@ paths:
         `coverage`: district codes, each once (`distinct`), each an active district of an active
         province with an active zone (else `not_offered` on `coverage.<i>`). `rates`: one per
         zone, each zone once (`distinct`) and active (else `not_offered` on
-        `rates.<i>.zone_code`); `fee_minor` a JSON integer of paisa from 0 (free delivery), never
-        a float or a string (ADR-0007, 06 §3.3); `est_min_days` and `est_max_days` JSON integers
+        `rates.<i>.zone_code`); `fee_minor` a JSON integer of paisa from 0 (free delivery) to
+        99,999,999,999 (the most the form reads), never a float or a string (ADR-0007, 06 §3.3); `est_min_days` and `est_max_days` JSON integers
         from 0 (same day) to 30 [Assumption], the fastest no longer than the slowest
         (`less_than_min` on `rates.<i>.est_max_days`). On the result, the saved sets with the
         changes laid over them (04a §9.6, 05 §3.3 item 3): at least one covered district
         (`required` on `coverage`, AC-FR-SHOP-004-1) and a rate for every covered district's
-        zone (`rate_required` on `rates`, naming the zone, T-SHOP-109). A rate for a zone the
-        shop does not cover is kept.
+        zone (`rate_required` on `rates`, naming the zone, T-SHOP-109), both over the covered
+        districts the editor offers: a saved district no longer offered (it, its province or
+        its zone made inactive) stays until the next coverage save, which must leave it out,
+        and needs no rate. A rate for a zone the shop does not cover is kept.
         Order: the permission, the status gate, the members, the validator, then `If-Match`.
         Concurrency: ⟳ `If-Match` on `shops.version`, from `getShopShipping`'s `ETag` (the
         version `updateShopProfile` moves too). Missing, `*` or a list → 428; a stale version, a
@@ -7596,8 +7598,11 @@ components:
           type: integer
           format: int64
           minimum: 0
-          maximum: 9007199254740991
-          description: Paisa, a JSON integer (never a float or a string, ADR-0007); 0 is free delivery.
+          maximum: 99999999999
+          description: |
+            Paisa, a JSON integer (never a float or a string, ADR-0007); 0 is free delivery. At
+            most Rs 999,999,999.99, the most the seller form's rupee field reads, so every saved
+            fee loads back into it.
         est_min_days:
           type: integer
           minimum: 0
@@ -10137,3 +10142,8 @@ components:
 #     item codes `not_offered`, `less_than_min` and `rate_required` are new and are described
 #     in the operation, as `ProblemErrorItem` names its codes by example only. Both refuse any
 #     query parameter (400) and are charged to `api_user`.
+#     Round 2 (after the Fable review): `fee_minor` is at most 99,999,999,999 paisa, the most
+#     the form's rupee field reads, so a saved fee always loads back into it; the rate rule and
+#     `configured` read only the covered districts the editor offers, so a saved district no
+#     longer offered stays until the next coverage save, which must leave it out
+#     (`not_offered`), and needs no rate.

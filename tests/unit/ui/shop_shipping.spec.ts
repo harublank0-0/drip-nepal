@@ -1,4 +1,6 @@
 import { test } from '@japa/runner'
+import { SHIPPING_LIMITS } from '#shared/constants/limits'
+import { minorToRupeesText, parseRupeesToMinor } from '#shared/format/money'
 import {
   changedSince,
   coverageFor,
@@ -19,7 +21,8 @@ import {
  * 1c; shared/ui/shop_shipping.ts): which districts a choice covers and
  * which zones then need a rate, what differs from the saved shipping (only
  * the changed set is sent), what a 412 changed, where a server error on a
- * nested member lands in the form, and the day counts the form accepts.
+ * nested member lands in the form, the day counts the form accepts, and
+ * that the server's largest fee is the largest the rupee field reads.
  * A small dataset stands in for the 77 districts: the rules read only its
  * shape.
  */
@@ -142,6 +145,16 @@ test.group('T-UI-041 the shipping form rules', () => {
       // The request sent the outside zone's rate first, then the valley's.
       assert.equal(formFieldOf(field, ['outside_valley', 'ktm_valley'], AREAS.zones), expected)
     })
+
+  test('T-UI-041 the largest fee the server accepts is the largest the rupee field reads', ({
+    assert,
+  }) => {
+    const { max } = SHIPPING_LIMITS.feeMinor
+    // A saved fee at the bound loads back into the form and reads as the same paisa.
+    assert.equal(parseRupeesToMinor(minorToRupeesText(max)), max)
+    // One paisa more is a tenth rupee digit, which the field refuses as the server does.
+    assert.isNull(parseRupeesToMinor(minorToRupeesText(max + 1)))
+  })
 
   test('T-UI-041 a day count is a whole number from 0 to 30: {typed}')
     .with([

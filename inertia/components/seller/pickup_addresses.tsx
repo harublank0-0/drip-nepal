@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { router } from '@inertiajs/react'
 import type { Problem } from '@shared/api/problem'
-import type { DeliveryAreas } from '@shared/ui/shop_shipping'
 import { client } from '~/client'
 import { useApiMutation } from '~/hooks/use_api_mutation'
 import { PENDING_BUTTON } from '~/lib/forms'
@@ -14,6 +13,7 @@ import { EmptyState } from '~/components/common/empty_state'
 import { ProblemAlert } from '~/components/forms/problem_alert'
 import { RateLimitNotice } from '~/components/forms/rate_limit_notice'
 import { PickupAddressForm, type PickupAddress } from '~/components/seller/pickup_address_form'
+import type { Place } from '~/components/forms/location_cascade'
 
 /*
  * The pickup addresses of `/seller/{shopSlug}/shipping` (docs/08 §2.5: "the
@@ -56,11 +56,12 @@ const stale = (problem: Problem) =>
 
 export function PickupAddresses({
   addresses,
-  areas,
+  provinces,
   slug,
 }: {
   addresses: PickupAddress[]
-  areas: DeliveryAreas
+  // What `listProvinces` answers, the pickup form's first step.
+  provinces: Place[]
   slug: string
 }) {
   const mutation = useApiMutation()
@@ -161,7 +162,7 @@ export function PickupAddresses({
     const saved = mode.kind === 'edit' ? mode.address : null
     return (
       <PickupAddressForm
-        areas={areas}
+        provinces={provinces}
         saved={saved}
         hasAddresses={addresses.length > 0}
         slug={slug}

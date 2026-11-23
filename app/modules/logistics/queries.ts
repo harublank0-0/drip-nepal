@@ -410,9 +410,14 @@ export async function placeNames(localLevelCodes: string[]): Promise<Map<string,
  * R1-S part 1c): the districts it delivers to, by code, and its rate for
  * each zone, the zones in their editor order (`delivery_zones.position`).
  * `configured` is the publish gate's "shipping is configured" condition
- * (AC-FR-CAT-005-2, AC-FR-SHOP-004-3) on these rows: at least one covered
- * district, and every covered district's zone with a rate, the same test as
- * `shippingConfigured`. `client` reads inside the caller's transaction.
+ * (AC-FR-CAT-005-2, AC-FR-SHOP-004-3) on these rows, the same test as
+ * `shippingConfigured`: at least one covered district the editor offers,
+ * and every such district's zone with a rate. A saved district that is no
+ * longer offered (it, its province or its zone made inactive, 04a §9
+ * "Changes") stays in `coverage` until the next coverage save, which must
+ * leave it out, and counts for neither half of the test: it prices nothing
+ * and the editor cannot show it. `client` reads inside the caller's
+ * transaction.
  */
 export type ShopRate = {
   zoneCode: string
@@ -428,12 +433,22 @@ export async function shopShipping(
   options: { client?: QueryClientContract } = {}
 ): Promise<ShopShippingView> {
   const client: QueryClientContract = options.client ?? db.connection()
-  const covered: { district_code: string; zone_code: string | null }[] = await client
-    .from('shop_delivery_coverage as c')
-    .leftJoin('delivery_zone_districts as dz', 'dz.district_code', 'c.district_code')
-    .where('c.shop_id', shopId)
-    .orderBy('c.district_code', 'asc')
-    .select('c.district_code', 'dz.zone_code')
+  // `zone_code` is null for a covered district the editor no longer offers.
+  const covered = await client.rawQuery<{
+    rows: { district_code: string; zone_code: string | null }[]
+  }>(
+    `SELECT c.district_code,
+            CASE WHEN d.is_active AND p.is_active AND z.is_active THEN dz.zone_code END
+              AS zone_code
+       FROM shop_delivery_coverage c
+       JOIN districts d ON d.code = c.district_code
+       JOIN provinces p ON p.code = d.province_code
+       LEFT JOIN delivery_zone_districts dz ON dz.district_code = c.district_code
+       LEFT JOIN delivery_zones z ON z.code = dz.zone_code
+      WHERE c.shop_id = :shop
+      ORDER BY c.district_code`,
+    { shop: shopId }
+  )
   const rates: {
     zone_code: string
     fee_minor: number
@@ -447,26 +462,52 @@ export async function shopShipping(
     .orderBy('z.code', 'asc')
     .select('r.zone_code', 'r.fee_minor', 'r.est_min_days', 'r.est_max_days')
   const rated = new Set(rates.map((rate) => rate.zone_code))
+  const offered = covered.rows.flatMap((row) => (row.zone_code === null ? [] : [row.zone_code]))
   return {
-    coverage: covered.map((row) => row.district_code),
+    coverage: covered.rows.map((row) => row.district_code),
     rates: rates.map((rate) => ({
       zoneCode: rate.zone_code,
       feeMinor: rate.fee_minor,
       estMinDays: rate.est_min_days,
       estMaxDays: rate.est_max_days,
     })),
-    configured:
-      covered.length > 0 &&
-      covered.every((row) => row.zone_code !== null && rated.has(row.zone_code)),
+    configured: offered.length > 0 && offered.every((zone) => rated.has(zone)),
   }
 }
 
 /*
+ * The zone of each of `districtCodes` that the shipping editor offers: an
+ * active district of an active province, in an active zone (the same rows
+ * as `deliveryAreas`). A code that is not offered is absent from the map.
+ * `replaceShopShipping` refuses such a code in a new coverage and leaves it
+ * out of the rate rule (04a §9.6).
+ */
+export async function offeredDistrictZones(
+  districtCodes: readonly string[],
+  options: { client?: QueryClientContract } = {}
+): Promise<Map<string, string>> {
+  if (districtCodes.length === 0) return new Map()
+  const client: QueryClientContract = options.client ?? db.connection()
+  const rows: { code: string; zone_code: string }[] = await client
+    .from('districts as d')
+    .join('provinces as p', 'p.code', 'd.province_code')
+    .join('delivery_zone_districts as dz', 'dz.district_code', 'd.code')
+    .join('delivery_zones as z', 'z.code', 'dz.zone_code')
+    .whereIn('d.code', [...districtCodes])
+    .where('d.is_active', true)
+    .where('p.is_active', true)
+    .where('z.is_active', true)
+    .select('d.code', 'dz.zone_code')
+  return new Map(rows.map((row) => [row.code, row.zone_code]))
+}
+
+/*
  * Whether a shop's shipping is configured (AC-FR-CAT-005-2,
- * AC-FR-SHOP-004-3): at least one covered district, and no covered district
- * whose zone has no rate for the shop. The overview's "before you can sell"
- * item reads it (docs/08 §2.5), and the publish gate of R1-S part 2 will.
- * One round trip on the two primary keys and
+ * AC-FR-SHOP-004-3): at least one covered district the editor offers, and
+ * no such district whose zone has no rate for the shop; a covered district
+ * no longer offered counts for neither half, as in `shopShipping`. The
+ * overview's "before you can sell" item reads it (docs/08 §2.5), and the
+ * publish gate of R1-S part 2 will. One round trip on the primary keys and
  * `delivery_zone_districts_district_key`.
  */
 export async function shippingConfigured(
@@ -475,14 +516,20 @@ export async function shippingConfigured(
 ): Promise<boolean> {
   const client: QueryClientContract = options.client ?? db.connection()
   const result = await client.rawQuery(
-    `SELECT EXISTS (SELECT 1 FROM shop_delivery_coverage WHERE shop_id = :shop)
+    `WITH offered AS (
+       SELECT dz.zone_code
+         FROM shop_delivery_coverage c
+         JOIN districts d ON d.code = c.district_code AND d.is_active
+         JOIN provinces p ON p.code = d.province_code AND p.is_active
+         JOIN delivery_zone_districts dz ON dz.district_code = c.district_code
+         JOIN delivery_zones z ON z.code = dz.zone_code AND z.is_active
+        WHERE c.shop_id = :shop)
+     SELECT EXISTS (SELECT 1 FROM offered)
             AND NOT EXISTS (
-              SELECT 1
-                FROM shop_delivery_coverage c
-                LEFT JOIN delivery_zone_districts dz ON dz.district_code = c.district_code
-                LEFT JOIN shop_shipping_rates r
-                       ON r.shop_id = c.shop_id AND r.zone_code = dz.zone_code
-               WHERE c.shop_id = :shop AND r.zone_code IS NULL) AS configured`,
+              SELECT 1 FROM offered o
+               WHERE NOT EXISTS (SELECT 1 FROM shop_shipping_rates r
+                                  WHERE r.shop_id = :shop AND r.zone_code = o.zone_code))
+              AS configured`,
     { shop: shopId }
   )
   return result.rows[0]?.configured === true
