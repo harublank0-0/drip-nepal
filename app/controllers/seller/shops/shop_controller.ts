@@ -1,7 +1,6 @@
 import type { HttpContext } from '@adonisjs/core/http'
-import { DomainError } from '#exceptions/domain_error'
 import { assertShopGate, shopGateAllows, shopMay } from '#modules/shops/permissions'
-import { hasDefaultPickupAddress, sellerShop } from '#modules/shops/queries'
+import { acceptedCurrentAgreement, hasDefaultPickupAddress } from '#modules/shops/queries'
 
 /*
  * The seller pages of docs/08 §2.5 built in R1-S part 1a: the overview,
@@ -21,7 +20,8 @@ export default class ShopController {
    * of the operation whose query feeds it and the shop passes that
    * operation's gate (docs/08 §2.5, 07 §4.5 "Page routes"):
    * - `seller_agreement`: the shop holds an agreement row for the current
-   *   version (`getSellerShop`, any member);
+   *   version (`getSellerShop`'s agreement status, any member), read alone,
+   *   so the page reads no profile column it does not show;
    * - `pickup_address`: a default pickup address exists (the pickup
    *   addresses of `getLogisticsSettings`: `shop.shipping.manage`, shop
    *   `active`).
@@ -31,10 +31,8 @@ export default class ShopController {
   async overview(ctx: HttpContext) {
     ctx.response.header('Cache-Control', 'private, no-store')
     assertShopGate(ctx.shop, 'member')
-    const shop = await sellerShop(ctx.shop.id)
-    if (!shop) throw new DomainError('NOT_FOUND')
     const checklist: { item: 'seller_agreement' | 'pickup_address'; done: boolean }[] = [
-      { item: 'seller_agreement', done: shop.agreement_accepted },
+      { item: 'seller_agreement', done: await acceptedCurrentAgreement(ctx.shop.id) },
     ]
     if (shopMay(ctx.shop.actor, 'shop.shipping.manage') && shopGateAllows(ctx.shop, 'shipping')) {
       checklist.push({ item: 'pickup_address', done: await hasDefaultPickupAddress(ctx.shop.id) })

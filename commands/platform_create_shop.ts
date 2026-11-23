@@ -8,6 +8,8 @@ import BootstrapOwnerShop, {
   ShopSlugTaken,
   type OwnerShopInput,
 } from '#modules/shops/actions/bootstrap_owner_shop'
+import { accountByEmail } from '#modules/identity/queries'
+import { ownsAnyShop } from '#modules/shops/queries'
 import { maskEmail } from '#shared/format/email'
 import {
   createOwnerShopValidator,
@@ -24,14 +26,19 @@ import {
  *   signs up (and, for R1-S, is made platform admin by
  *   `platform:create-admin`) first.
  * - `--slug`, `--name`, `--contact-email`, `--contact-phone`,
- *   `--business-type`, `--grievance-name` and `--return-policy` give the
- *   columns the shop needs (04a §6.1); one left out is asked for at a
- *   prompt. A `registered_business` also takes `--registration-number`,
+ *   `--business-type` and `--return-policy` give the columns the shop needs
+ *   (04a §6.1); one left out is asked for at a prompt. A
+ *   `registered_business` also takes `--registration-number`,
  *   `--registration-authority` and `--pan-vat-number`; `--vat-registered`
  *   needs the PAN/VAT number.
- * - The grievance contact's phone is Sensitive-personal and stored
- *   encrypted (07 §5.5), so it has no flag: it is always asked at a prompt
- *   and never reaches shell history or the process list.
+ * - The grievance contact's name and phone are personal values (04a §15.3;
+ *   the phone Sensitive-personal and stored encrypted, 07 §5.5), so they
+ *   have no flag: both are always asked at a prompt and never reach shell
+ *   history or the process list.
+ * - The owner's email and the slug are checked first, then whether the
+ *   owner exists, is `active` and owns no shop, all before any prompt, as
+ *   `platform:create-admin` refuses early (docs/09 §9.1); the action checks
+ *   the owner again under its locks.
  * - A prompt needs a terminal: without one the command exits 1 at once.
  *
  * The output names the owner's address masked and the run's ID, which the
@@ -94,9 +101,6 @@ export default class PlatformCreateShop extends BaseCommand {
   @flags.boolean({ description: 'The business is VAT-registered', flagName: 'vat-registered' })
   declare vatRegistered?: boolean
 
-  @flags.string({ description: 'Grievance contact name', flagName: 'grievance-name' })
-  declare grievanceName?: string
-
   @flags.string({ description: 'Return policy text', flagName: 'return-policy' })
   declare returnPolicy?: string
 
@@ -131,10 +135,24 @@ export default class PlatformCreateShop extends BaseCommand {
       this.exitCode = 1
       return null
     }
+    let ownerEmail: string
     try {
-      await ownerAndSlugValidator.validate({ owner_email: this.owner, slug: this.slug })
+      ;({ owner_email: ownerEmail } = await ownerAndSlugValidator.validate({
+        owner_email: this.owner,
+        slug: this.slug,
+      }))
     } catch (error) {
       this.#refuse(error)
+      return null
+    }
+    // Refuse before any prompt; the action checks again under its locks.
+    const owner = await accountByEmail(ownerEmail)
+    if (!owner || owner.status !== 'active') {
+      this.#ownerNotEligible(owner?.status ?? null)
+      return null
+    }
+    if (await ownsAnyShop(owner.userId)) {
+      this.#ownerHasShop()
       return null
     }
 
@@ -144,8 +162,8 @@ export default class PlatformCreateShop extends BaseCommand {
       ['contact_email', this.contactEmail, CONTACT_EMAIL_PROMPT],
       ['contact_phone', this.contactPhone, CONTACT_PHONE_PROMPT],
       ['business_type', this.businessType, BUSINESS_TYPE_PROMPT],
-      ['grievance_contact_name', this.grievanceName, GRIEVANCE_NAME_PROMPT],
       // Never a flag (the header): always asked.
+      ['grievance_contact_name', undefined, GRIEVANCE_NAME_PROMPT],
       ['grievance_contact_phone', undefined, GRIEVANCE_PHONE_PROMPT],
       ['return_policy_text', this.returnPolicy, RETURN_POLICY_PROMPT],
     ]
@@ -201,19 +219,30 @@ export default class PlatformCreateShop extends BaseCommand {
       )
     } catch (error) {
       if (error instanceof OwnerNotEligible) {
-        this.logger.error(
-          error.status === null
-            ? 'No account holds this e-mail; the owner signs up first'
-            : `The owner's account is ${error.status}; only an active account can own the shop`
-        )
+        this.#ownerNotEligible(error.status)
       } else if (error instanceof OwnerHasShop) {
-        this.logger.error('This account already owns a shop; nothing changed')
+        this.#ownerHasShop()
       } else if (error instanceof ShopSlugTaken) {
         this.logger.error('Another shop holds this slug; choose another')
+        this.exitCode = 1
       } else {
         throw error
       }
-      this.exitCode = 1
     }
+  }
+
+  // Null status: no account holds the email.
+  #ownerNotEligible(status: string | null) {
+    this.logger.error(
+      status === null
+        ? 'No account holds this e-mail; the owner signs up first'
+        : `The owner's account is ${status}; only an active account can own the shop`
+    )
+    this.exitCode = 1
+  }
+
+  #ownerHasShop() {
+    this.logger.error('This account already owns a shop; nothing changed')
+    this.exitCode = 1
   }
 }

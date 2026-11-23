@@ -1,4 +1,5 @@
 import { DomainError } from '#exceptions/domain_error'
+import { memberRoutesOpen } from '#shared/ui/shop_access'
 import type { SellerActor, SellerContext } from '#modules/shops/queries'
 
 /*
@@ -48,7 +49,8 @@ export function assertShopPermission(shop: SellerContext, permission: ShopPermis
  * - `member`, the routes that declare `shop.member` (`getSellerShop` and the
  *   `/seller/{shopSlug}` overview page; proposed, OD-48): open in `active`
  *   and in both suspension modes, to the owner only in `pending_review` and
- *   `rejected`, refused in `closed`;
+ *   `rejected`, refused in `closed` (`memberRoutesOpen`, which the seller
+ *   UI's links share);
  * - courier accounts like the payout account (active only);
  * - logistics settings and pickup addresses like the profile and shipping
  *   column (active only);
@@ -60,11 +62,7 @@ export type ShopGate = 'member' | 'courier_accounts' | 'shipping' | 'orders_proc
 export function shopGateAllows(shop: SellerContext, gate: ShopGate) {
   switch (gate) {
     case 'member':
-      return (
-        shop.status === 'active' ||
-        shop.status === 'suspended' ||
-        ((shop.status === 'pending_review' || shop.status === 'rejected') && shop.actor === 'owner')
-      )
+      return memberRoutesOpen(shop.status, shop.actor)
     case 'orders_process':
       return (
         shop.status === 'active' ||

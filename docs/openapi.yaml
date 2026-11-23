@@ -1187,7 +1187,8 @@ paths:
         there is no ID to change. The answer lists every member: the profile, the status, the
         two marketing consents as booleans (as `updateMe` takes them), the phone's last four
         digits, the staff role of an unrevoked `platform_staff` row (enrolled or not), and the
-        shops the user owns or is an `active` member of, with their place in each. Never the
+        shops the user owns or is an `active` member of, with their place in each (at most 20,
+        the first by name, A-63). Never the
         password hash, the security stamp, the TOTP secret, the encrypted phone or its blind
         index (07 §5.5, TM-06). Side effects: none. Charged to `api_user` (300 per minute per
         user, 06 §9.1), as every authenticated call without a limiter of its own is since M1 part
@@ -2084,11 +2085,10 @@ paths:
         `owner_user_id` is the caller, in every status, and those where the caller has an
         `active` `shop_memberships` row (a removed membership is left out), ordered by name;
         each with the caller's place in it, `owner` or the member's role. The same rows as
-        `getMe`'s `shops` and the `seller_shops` shared prop of the seller pages (03 §6.3); never
-        a shop ID or another member. Query: none; any parameter is 400
-        `INVALID_QUERY_PARAMETER` (06 §6.3). The list answers `{ "data": [...] }` without `meta`
-        or a cursor: 06 §6.2 "Bounded lists" names it as the one exception, because the shared
-        prop sends the same rows whole on every page. Side effects: none. Charged to `api_user`
+        `getMe`'s `shops` and the `seller_shops` shared prop (03 §6.3); never a shop ID or another
+        member. At most 20 rows, the first by name (A-63), so it is a bounded list (06 §6.2) and
+        answers `{ "data": [...] }` without `meta` or a cursor. Query: none; any parameter is 400
+        `INVALID_QUERY_PARAMETER` (06 §6.3). Side effects: none. Charged to `api_user`
         (06 §9.1); past it, 429. T-SHOP-008. Release R1·M2; built in R1-S part 1a.
       x-release: R1·M2
       security:
@@ -2148,8 +2148,9 @@ paths:
         Returns the profile, the status, `agreement` (the current seller agreement's `version`
         and `is_final`, and `accepted`, whether the shop holds a `shop_agreements` row for it,
         04a §6.4) and `version`, which the strong `ETag` repeats and `updateShopProfile` will take
-        as `If-Match` (06 §8). `business_identity` (registration number, registering authority,
-        PAN/VAT number) and `grievance_contact` (name and phone, decrypted by the shop profile
+        as `If-Match` (06 §8). `business_details` (the business details of 01 AC-FR-SHOP-013-2:
+        business type, registration number, registering authority, PAN/VAT number, VAT flag and
+        return policy) and `grievance_contact` (name and phone, decrypted by the shop profile
         transformer of the 07 §5.5 allowlist) are the owner's only: `null` for every other member
         (01 AC-FR-SHOP-013-4, T-SEC-034). The logo and banner join with FR-MED-003. Side effects:
         none. Charged to `api_user` (06 §9.1); past it, 429. T-SHOP-008. Release R1·M2; built in
@@ -2182,13 +2183,13 @@ paths:
                       description: null
                       contact_email: hello@example.com
                       contact_phone: '+97714123456'
-                      return_policy_text: Returns within 7 days, unworn and with tags.
-                      business_type: individual
-                      is_vat_registered: false
-                      business_identity:
+                      business_details:
+                        business_type: individual
                         registration_number: null
                         registration_authority: null
                         pan_vat_number: '123456789'
+                        is_vat_registered: false
+                        return_policy_text: Returns within 7 days, unworn and with tags.
                       grievance_contact:
                         name: Example Contact
                         phone: '+9779800000000'
@@ -2208,10 +2209,7 @@ paths:
                       description: null
                       contact_email: hello@example.com
                       contact_phone: '+97714123456'
-                      return_policy_text: Returns within 7 days, unworn and with tags.
-                      business_type: individual
-                      is_vat_registered: false
-                      business_identity: null
+                      business_details: null
                       grievance_contact: null
                       agreement:
                         version: '2026-11-23'
@@ -6724,6 +6722,7 @@ components:
               enum: [platform_admin, support_agent, catalog_moderator, finance_officer, null]
             shops:
               type: array
+              maxItems: 20
               items:
                 type: object
                 additionalProperties: false
@@ -6998,19 +6997,20 @@ components:
     MyShopList:
       type: object
       description: |
-        The 200 of `listMyShops`, by shop name; no `meta` or cursor (06 §6.2 "Bounded lists",
-        the exception it names).
+        The 200 of `listMyShops`, by shop name, at most 20 rows (A-63); a bounded list, so no
+        `meta` or cursor (06 §6.2 "Bounded lists").
       additionalProperties: false
       required: [data]
       properties:
         data:
           type: array
+          maxItems: 20
           items: { $ref: '#/components/schemas/MyShop' }
     SellerShop:
       type: object
       description: |
         A shop as `getSellerShop` answers it to its member; a closed schema, so a new member is a
-        contract change. `business_identity` and `grievance_contact` are the owner's only and
+        contract change. `business_details` and `grievance_contact` are the owner's only and
         `null` for every other member (01 AC-FR-SHOP-013-4).
       additionalProperties: false
       required:
@@ -7022,10 +7022,7 @@ components:
           description,
           contact_email,
           contact_phone,
-          return_policy_text,
-          business_type,
-          is_vat_registered,
-          business_identity,
+          business_details,
           grievance_contact,
           agreement,
           version,
@@ -7055,18 +7052,28 @@ components:
           type: string
           pattern: '^\+977(9[678][0-9]{8}|[0-9]{8})$'
           description: The public shop number in E.164, a mobile or a landline.
-        return_policy_text: { type: string, minLength: 1, maxLength: 5000 }
-        business_type: { type: string, enum: [individual, registered_business] }
-        is_vat_registered: { type: boolean }
-        business_identity:
+        business_details:
           type: [object, 'null']
-          description: The owner's only; `null` for every other member.
+          description: |
+            The business details of 01 AC-FR-SHOP-013-2, the owner's only; `null` for every other
+            member (AC-FR-SHOP-013-4).
           additionalProperties: false
-          required: [registration_number, registration_authority, pan_vat_number]
+          required:
+            [
+              business_type,
+              registration_number,
+              registration_authority,
+              pan_vat_number,
+              is_vat_registered,
+              return_policy_text,
+            ]
           properties:
+            business_type: { type: string, enum: [individual, registered_business] }
             registration_number: { type: [string, 'null'] }
             registration_authority: { type: [string, 'null'] }
             pan_vat_number: { type: [string, 'null'], pattern: '^[0-9]{1,20}$' }
+            is_vat_registered: { type: boolean }
+            return_policy_text: { type: string, minLength: 1, maxLength: 5000 }
         grievance_contact:
           type: [object, 'null']
           description: |
@@ -9591,3 +9598,8 @@ components:
 #     other member (01 AC-FR-SHOP-013-4); its 403 is the `shop.member` status gate of 07 §4.4.
 #     Both refuse any query parameter (400) and are charged to `api_user`. The logo and
 #     banner members join `SellerShop` with FR-MED-003.
+#     After the Fable review (round 2): `SellerShop` gathers every business detail of 01
+#     AC-FR-SHOP-013-2 (business type, the three identifiers, the VAT flag, the return policy)
+#     in `business_details`, owner-only like `grievance_contact`, as AC-FR-SHOP-013-4 asks;
+#     `MyShopList` and `getMe`'s `shops` hold at most 20 rows (A-63), so `listMyShops` is an
+#     ordinary bounded list.

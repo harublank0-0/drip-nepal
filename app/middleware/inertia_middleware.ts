@@ -11,15 +11,24 @@ import { currentShopJson, myShopJson } from '#transformers/seller/seller_context
 /*
  * The `seller_shops` rows of a signed-in user. Status pages render through
  * share() too, and a 500 page may report the database's own failure, so a
- * failed read leaves the prop null instead of failing that page as well;
- * the failure is logged by name, without the error's text.
+ * failed read leaves the prop null instead of failing that page as well.
+ * The failure is logged with the error's class and, for a database error,
+ * its SQLSTATE code, never its message, which can quote values.
  */
-async function sellerShopsOf(ctx: HttpContext, userId: string) {
+export async function sellerShopsOf(logger: HttpContext['logger'], userId: string) {
   try {
     const shops = await shopsOfUser(userId)
     return shops.map(myShopJson)
-  } catch {
-    ctx.logger.error({ event: 'inertia.seller_shops_failed' }, 'seller_shops could not be read')
+  } catch (error) {
+    const code = (error as { code?: unknown } | null)?.code
+    logger.error(
+      {
+        event: 'inertia.seller_shops_failed',
+        error_class: error instanceof Error ? error.constructor.name : typeof error,
+        sql_state: typeof code === 'string' ? code : null,
+      },
+      'seller_shops could not be read'
+    )
     return null
   }
 }
@@ -103,7 +112,7 @@ export default class InertiaMiddleware extends BaseInertiaMiddleware {
        * One small query per render, never a relation load (RF-44); null
        * for a guest, and when the read fails (`sellerShopsOf`).
        */
-      seller_shops: auth?.user ? await sellerShopsOf(ctx, auth.user.id) : null,
+      seller_shops: auth?.user ? await sellerShopsOf(ctx.logger, auth.user.id) : null,
       /*
        * On seller pages, the shop `seller_context` resolved, with the
        * caller's role and the permissions it holds (docs/09 §13.7), so the

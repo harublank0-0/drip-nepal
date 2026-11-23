@@ -15,8 +15,9 @@ import { CURRENT_SELLER_AGREEMENT } from '#modules/shops/domain/seller_agreement
  *   the profile, the status, the agreement status for the current version
  *   and `version`, repeated as a strong ETag.
  * - T-SEC-034, the table by role: the grievance contact, its phone decrypted,
- *   and the business identity reach the owner only; every other role gets
- *   `null` for both (AC-FR-SHOP-013-4).
+ *   and the business details of AC-FR-SHOP-013-2 (business type and
+ *   identifiers, VAT flag, return policy) reach the owner only; every other
+ *   role gets `null` for both (AC-FR-SHOP-013-4).
  * - T-SEC-001 case (a): another shop's slug answers the 404 of an unknown
  *   slug, with the same body.
  * - T-SEC-031, the `shop.member` rows of docs/07 §4.4: owner only while
@@ -98,13 +99,13 @@ test.group('T-SHOP-008 getSellerShop', () => {
         description: null,
         contact_email: shop.contactEmail,
         contact_phone: '+97714123456',
-        return_policy_text: 'Returns within 7 days, unworn and with tags.',
-        business_type: 'individual',
-        is_vat_registered: false,
-        business_identity: {
+        business_details: {
+          business_type: 'individual',
           registration_number: null,
           registration_authority: null,
           pan_vat_number: '123456789',
+          is_vat_registered: false,
+          return_policy_text: 'Returns within 7 days, unworn and with tags.',
         },
         grievance_contact: { name: GRIEVANCE.name, phone: GRIEVANCE.phone },
         agreement: {
@@ -117,7 +118,7 @@ test.group('T-SHOP-008 getSellerShop', () => {
     })
   })
 
-  test('T-SEC-034 a {role} gets no grievance contact and no business identity [AC-FR-SHOP-013-4]')
+  test('T-SEC-034 a {role} gets no grievance contact and no business details [AC-FR-SHOP-013-4]')
     .with([
       { role: 'manager' },
       { role: 'catalog_editor' },
@@ -130,10 +131,19 @@ test.group('T-SHOP-008 getSellerShop', () => {
       const response = await send(await signIn(memberId), 'GET', shopPath(shop.slug))
       assert.equal(response.status, 200)
       assert.isNull(response.body.data.grievance_contact)
-      assert.isNull(response.body.data.business_identity)
-      assert.notInclude(response.text, GRIEVANCE.name)
-      assert.notInclude(response.text, GRIEVANCE.phone)
-      assert.notInclude(response.text, '123456789')
+      assert.isNull(response.body.data.business_details)
+      for (const member of ['business_type', 'is_vat_registered', 'return_policy_text']) {
+        assert.notProperty(response.body.data, member)
+      }
+      for (const value of [
+        GRIEVANCE.name,
+        GRIEVANCE.phone,
+        '123456789',
+        'individual',
+        'Returns within',
+      ]) {
+        assert.notInclude(response.text, value)
+      }
       assert.equal(response.body.data.slug, shop.slug)
     })
 
@@ -153,6 +163,7 @@ test.group('T-SHOP-008 getSellerShop', () => {
       { status: 'pending_review' as const, mode: null, actor: 'owner', expected: 200 },
       { status: 'rejected' as const, mode: null, actor: 'owner', expected: 200 },
       { status: 'pending_review' as const, mode: null, actor: 'manager', expected: 403 },
+      { status: 'rejected' as const, mode: null, actor: 'viewer', expected: 403 },
       {
         status: 'suspended' as const,
         mode: 'fulfill_existing' as const,

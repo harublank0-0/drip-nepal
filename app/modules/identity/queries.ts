@@ -166,6 +166,16 @@ export async function accountExistsWithEmail(email: string) {
 }
 
 /*
+ * The same account read without a lock, for `platform:create-shop` to
+ * refuse before it asks anything (docs/09 §9.8); its action reads it again
+ * with `lockAccountByEmail`. Null when no account holds the email.
+ */
+export async function accountByEmail(email: string): Promise<NamedAccount | null> {
+  const row = await db.from('users').where('email', email).select('id', 'status').first()
+  return row ? { userId: row.id, status: row.status } : null
+}
+
+/*
  * The account an operator names by email (already normalised by the
  * account email rule) for `platform:create-shop` (docs/09 §9.8): its ID and
  * status, read inside the caller's transaction with the row locked

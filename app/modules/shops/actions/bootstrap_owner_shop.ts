@@ -1,3 +1,4 @@
+import { InvariantViolation } from '#exceptions/programming_errors'
 import { recordAudit } from '#modules/audit/actions/record_audit'
 import { lockAccountByEmail } from '#modules/identity/queries'
 import { encryptField } from '#modules/platform/crypto/field_encrypter'
@@ -24,7 +25,8 @@ import { CURRENT_SELLER_AGREEMENT } from '#modules/shops/domain/seller_agreement
  *    seller agreement version, a draft while OD-04, OD-05 and OD-11 are
  *    open (04a §6.4); `ip_hash` is `HOST_IP_HASH` and `request_id` the
  *    run's ID, because no client request exists;
- * 5. the shop becomes `active` by compare-and-set on `pending_review`, with
+ * 5. the shop becomes `active` by compare-and-set on `pending_review`, which
+ *    must change exactly one row (else the transaction rolls back), with
  *    `approved_at` and `approved_by` the owner: nobody reviewed it, and the
  *    `shops_require_agreement` trigger (INV-18) finds the row of step 4;
  * 6. one `shop.bootstrap` audit row by the system (proposed), with the run's
@@ -150,7 +152,7 @@ export default class BootstrapOwnerShop {
         ip_hash: HOST_IP_HASH,
         request_id: input.runId,
       })
-      await trx
+      const activated = await trx
         .from('shops')
         .where({ id: shopId, status: 'pending_review' })
         .update({
@@ -158,6 +160,11 @@ export default class BootstrapOwnerShop {
           approved_at: trx.knexRawQuery('now()'),
           approved_by: owner.userId,
         })
+        .returning('id')
+      // The row was inserted above in this transaction; anything else is a bug, and rolls back.
+      if (activated.length !== 1) {
+        throw new InvariantViolation('the owner shop did not move from pending_review to active')
+      }
 
       await recordAudit(trx, {
         actorType: 'system',

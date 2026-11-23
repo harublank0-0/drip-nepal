@@ -4,6 +4,7 @@ import { signIn } from '#tests/support/courier_http'
 import { insertEncryptedPickupAddress } from '#tests/support/courier'
 import { insertLocation } from '#tests/support/schema_rows'
 import { testBrowser, type Browser } from '#tests/support/browser'
+import { sellerShopsOf } from '#middleware/inertia_middleware'
 import { addMember, createOwnerShop, GRIEVANCE, setShopStatus } from '#tests/support/shops'
 
 /*
@@ -12,9 +13,12 @@ import { addMember, createOwnerShop, GRIEVANCE, setShopStatus } from '#tests/sup
  * with it (the sidebar, the switcher's menu, focus) is checked in a browser.
  * - T-UI-039 (new): the overview opens for the owner and every active role,
  *   rendered in the browser (no server markup), never stored (`private,
- *   no-store`); a guest is sent to `/login` with the page as `return_to`; a
- *   closed shop's overview is refused (403); the public header links "Your
- *   shop" for a member of a shop that is not closed, and for nobody else.
+ *   no-store`); a guest is sent to `/login` with the page as `return_to`;
+ *   the `shop.member` gate refuses a `closed` shop and a non-owner of a
+ *   `pending_review` or `rejected` one (403); the public header links "Your
+ *   shop" only to a shop whose overview opens for the user, and for nobody
+ *   else; a failed `seller_shops` read leaves the prop null and is logged
+ *   without the error's text.
  * - T-SEC-001 case (a): a shop the caller is not in, by its slug, is the 404
  *   page of an unknown slug, and so is a removed member's shop.
  * - T-SEC-036: the overview sends the shared props and `checklist`; the
@@ -128,12 +132,20 @@ test.group('T-UI-039 the seller overview', () => {
     assert.equal(location.searchParams.get('return_to'), `/seller/${shop.slug}`)
   })
 
-  test('T-UI-039 a closed shop’s overview is refused with 403', async ({ assert }) => {
-    const shop = await createOwnerShop()
-    await setShopStatus(shop.shopId, 'closed')
-    const { status } = await htmlPage(await signIn(shop.ownerId), `/seller/${shop.slug}`)
-    assert.equal(status, 403)
-  })
+  test('T-UI-039 the overview follows the shop.member gate: {status} for the {actor}')
+    .with([
+      { status: 'closed' as const, actor: 'owner', expected: 403 },
+      { status: 'pending_review' as const, actor: 'owner', expected: 200 },
+      { status: 'pending_review' as const, actor: 'manager', expected: 403 },
+      { status: 'rejected' as const, actor: 'viewer', expected: 403 },
+    ])
+    .run(async ({ assert }, { status, actor, expected }) => {
+      const shop = await createOwnerShop()
+      const userId = actor === 'owner' ? shop.ownerId : await addMember(shop.shopId, actor)
+      await setShopStatus(shop.shopId, status)
+      const page = await htmlPage(await signIn(userId), `/seller/${shop.slug}`)
+      assert.equal(page.status, expected)
+    })
 
   test('T-UI-039 the public header links "Your shop" for a member only', async ({ assert }) => {
     const shop = await createOwnerShop()
@@ -150,11 +162,34 @@ test.group('T-UI-039 the seller overview', () => {
     assert.notInclude(guestHome.html, 'href="/seller/')
   })
 
-  test('T-UI-039 a closed shop gets no "Your shop" link', async ({ assert }) => {
-    const shop = await createOwnerShop()
-    await setShopStatus(shop.shopId, 'closed')
-    const { html } = await htmlPage(await signIn(shop.ownerId), '/')
-    assert.notInclude(html, 'href="/seller/')
+  test('T-UI-039 "Your shop" links only a shop whose overview opens: {status} for the {actor}')
+    .with([
+      { status: 'closed' as const, actor: 'owner', linked: false },
+      { status: 'pending_review' as const, actor: 'owner', linked: true },
+      { status: 'pending_review' as const, actor: 'manager', linked: false },
+      { status: 'rejected' as const, actor: 'viewer', linked: false },
+    ])
+    .run(async ({ assert }, { status, actor, linked }) => {
+      const shop = await createOwnerShop()
+      const userId = actor === 'owner' ? shop.ownerId : await addMember(shop.shopId, actor)
+      await setShopStatus(shop.shopId, status)
+      const { html } = await htmlPage(await signIn(userId), '/')
+      if (linked) assert.include(html, `href="/seller/${shop.slug}"`)
+      else assert.notInclude(html, 'href="/seller/')
+    })
+
+  test('T-UI-039 a failed seller_shops read leaves the prop null instead of failing the page', async ({
+    assert,
+  }) => {
+    const logged: Record<string, unknown>[] = []
+    const logger = {
+      error: (fields: Record<string, unknown>) => logged.push(fields),
+    } as unknown as Parameters<typeof sellerShopsOf>[0]
+    // Not a UUID, so PostgreSQL refuses the query (22P02): the read fails as a broken database would.
+    assert.isNull(await sellerShopsOf(logger, 'not-a-uuid'))
+    assert.deepEqual(logged, [
+      { event: 'inertia.seller_shops_failed', error_class: 'DatabaseError', sql_state: '22P02' },
+    ])
   })
 })
 

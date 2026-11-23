@@ -98,9 +98,13 @@ export type UserShop = { slug: string; name: string; status: string; role: Selle
  * user's own `getMe` (docs/06 §13.3, "owned and member shops"),
  * `listMyShops` (§13.5) and the `seller_shops` shared prop (docs/03 §6.3):
  * each shop's slug, name and status, and the user's place in it, by name.
- * Shop IDs and other members are never part of it. One round trip on
+ * Shop IDs and other members are never part of it. At most
+ * `MY_SHOPS_LIMIT` rows, the first by name, so the list is bounded
+ * (06 §6.2 "Bounded lists") on every page that sends it. One round trip on
  * `shops_owner_idx` and `shop_memberships_user_active_idx`.
  */
+export const MY_SHOPS_LIMIT = 20 // [Assumption A-63]
+
 export async function shopsOfUser(userId: string): Promise<UserShop[]> {
   const result = await db.rawQuery(
     `SELECT s.slug, s.name, s.status, 'owner' AS role
@@ -111,8 +115,9 @@ export async function shopsOfUser(userId: string): Promise<UserShop[]> {
        FROM shop_memberships m
        JOIN shops s ON s.id = m.shop_id
       WHERE m.user_id = :user AND m.status = 'active'
-     ORDER BY name, slug`,
-    { user: userId }
+     ORDER BY name, slug
+     LIMIT :limit`,
+    { user: userId, limit: MY_SHOPS_LIMIT }
   )
   return (result.rows as UserShop[]).map((row) => ({
     slug: row.slug,
@@ -188,5 +193,29 @@ export async function hasDefaultPickupAddress(shopId: string) {
     .whereNull('archived_at')
     .select('id')
     .first()
+  return row !== null
+}
+
+/*
+ * Whether the shop holds an agreement row for the current seller agreement
+ * version (docs/04a §6.4): the overview's "before you can sell" item, read
+ * alone so the page reads no profile column it does not show.
+ */
+export async function acceptedCurrentAgreement(shopId: string) {
+  const row = await db
+    .from('shop_agreements')
+    .where({ shop_id: shopId, agreement_version: CURRENT_SELLER_AGREEMENT.version })
+    .select('id')
+    .first()
+  return row !== null
+}
+
+/*
+ * Whether a user owns a shop in any status, for `platform:create-shop` to
+ * refuse before it asks anything (docs/09 §9.8). Its action checks again
+ * under its locks.
+ */
+export async function ownsAnyShop(userId: string) {
+  const row = await db.from('shops').where('owner_user_id', userId).select('id').first()
   return row !== null
 }

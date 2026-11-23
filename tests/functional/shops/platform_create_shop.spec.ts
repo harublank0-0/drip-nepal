@@ -3,6 +3,7 @@ import app from '@adonisjs/core/services/app'
 import db from '@adonisjs/lucid/services/db'
 import PlatformCreateShop, {
   BUSINESS_TYPE_PROMPT,
+  GRIEVANCE_NAME_PROMPT,
   GRIEVANCE_PHONE_PROMPT,
   RETURN_POLICY_PROMPT,
 } from '../../../commands/platform_create_shop.js'
@@ -23,7 +24,8 @@ import { createOwnerShop } from '#tests/support/shops'
  *   or inactive owner, an owner who already owns a shop (a second run), a
  *   slug another shop holds or held, a reserved or malformed slug, a
  *   registered business without its identifiers, and a missing value it
- *   cannot ask for without a terminal; the grievance phone has no flag.
+ *   cannot ask for without a terminal; the owner checks come before any
+ *   prompt; the grievance name and phone have no flag.
  *   The concurrent case is in tests/concurrency/shops/platform_create_shop.spec.ts.
  * - T-SEC-102: the audit row's `changes` holds no fixture personal value.
  *
@@ -31,6 +33,7 @@ import { createOwnerShop } from '#tests/support/shops'
  * command's transaction is rolled back afterwards.
  */
 
+const GRIEVANCE_NAME = 'Synthetic Grievance Officer'
 const GRIEVANCE_PHONE = '9800000042'
 
 type Answers = (command: PlatformCreateShop) => void
@@ -45,7 +48,6 @@ function flagsFor(ownerEmail: string, overrides: Record<string, string | null> =
     'contact-email': `Shop.Contact.${sequence}@Example.com`,
     'contact-phone': '01-4123456',
     'business-type': 'individual',
-    'grievance-name': 'Synthetic Grievance Officer',
     'return-policy': 'Returns within 7 days, unworn and with tags.',
     ...overrides,
   }
@@ -54,12 +56,15 @@ function flagsFor(ownerEmail: string, overrides: Record<string, string | null> =
     .map(([flag, value]) => `--${flag}=${value}`)
 }
 
-// The grievance phone is always asked; tests answer it unless they say otherwise.
-const answerPhone: Answers = (command) => {
-  command.prompt.trap(GRIEVANCE_PHONE_PROMPT).replyWith(GRIEVANCE_PHONE)
-}
+// The grievance name and phone are always asked; tests answer them unless they say otherwise.
+const answerGrievance =
+  (name = GRIEVANCE_NAME): Answers =>
+  (command) => {
+    command.prompt.trap(GRIEVANCE_NAME_PROMPT).replyWith(name)
+    command.prompt.trap(GRIEVANCE_PHONE_PROMPT).replyWith(GRIEVANCE_PHONE)
+  }
 
-async function createShop(argv: string[], answers: Answers | null = answerPhone) {
+async function createShop(argv: string[], answers: Answers | null = answerGrievance()) {
   const ace = await app.container.make('ace')
   ace.ui.switchMode('raw')
   const command = await ace.create(PlatformCreateShop, argv)
@@ -112,7 +117,7 @@ test.group('T-SHOP-007 platform:create-shop', () => {
     assert.equal(shop.contact_phone_e164, '+97714123456')
     assert.equal(shop.business_type, 'individual')
     assert.isFalse(shop.is_vat_registered)
-    assert.equal(shop.grievance_contact_name, 'Synthetic Grievance Officer')
+    assert.equal(shop.grievance_contact_name, GRIEVANCE_NAME)
     assert.notInclude(shop.grievance_contact_phone_enc, GRIEVANCE_PHONE)
     assert.equal(
       decryptField(shop.grievance_contact_phone_enc, 'shops.grievance_contact_phone_enc'),
@@ -166,8 +171,8 @@ test.group('T-SHOP-007 platform:create-shop', () => {
 
   test('T-SEC-102 the shop.bootstrap row holds no fixture personal value', async ({ assert }) => {
     const owner = await activeOwner()
-    const argv = flagsFor(owner.email, { 'grievance-name': 'Maya Fixture Gurung' })
-    const command = await createShop(argv)
+    const argv = flagsFor(owner.email)
+    const command = await createShop(argv, answerGrievance('Maya Fixture Gurung'))
     command.assertSucceeded()
     const shop = await db.from('shops').where('slug', slugOf(argv)).firstOrFail()
     const audit = await db.from('audit_logs').where('shop_id', shop.id).firstOrFail()
@@ -202,7 +207,7 @@ test.group('T-SHOP-007 platform:create-shop', () => {
     const owner = await activeOwner()
     const argv = flagsFor(owner.email, { 'business-type': null, 'return-policy': null })
     const command = await createShop(argv, (cmd) => {
-      answerPhone(cmd)
+      answerGrievance()(cmd)
       cmd.prompt.trap(BUSINESS_TYPE_PROMPT).replyWith('individual')
       cmd.prompt.trap(RETURN_POLICY_PROMPT).replyWith('Exchanges within 7 days.')
     })
@@ -219,7 +224,8 @@ test.group('T-SHOP-007 platform:create-shop', () => {
     first.assertSucceeded()
     const before = await counts()
 
-    const second = await createShop(flagsFor(owner.email))
+    // Refused before any prompt: none is answered.
+    const second = await createShop(flagsFor(owner.email), null)
     second.assertFailed()
     assert.include(logsOf(second).join('\n'), 'already owns a shop; nothing changed')
     assert.deepEqual(await counts(), before)
@@ -236,7 +242,8 @@ test.group('T-SHOP-007 platform:create-shop', () => {
       const user = state ? await UserFactory.apply(state).create() : null
       const email = user ? user.email : `nobody-${Date.now()}@example.com`
       const before = await counts()
-      const command = await createShop(flagsFor(email))
+      // Refused before any prompt: none is answered.
+      const command = await createShop(flagsFor(email), null)
       command.assertFailed()
       assert.match(logsOf(command).join('\n'), state ? new RegExp(state) : /signs up first/)
       assert.deepEqual(await counts(), before)
@@ -305,12 +312,12 @@ test.group('T-SHOP-007 platform:create-shop', () => {
     command.assertFailed()
     assert.include(
       logsOf(command).join('\n'),
-      `"${GRIEVANCE_PHONE_PROMPT}" needs an interactive terminal`
+      `"${GRIEVANCE_NAME_PROMPT}" needs an interactive terminal`
     )
     assert.deepEqual(await counts(), before)
   })
 
-  test('T-SHOP-007 the grievance phone has no flag, so it never reaches shell history', ({
+  test('T-SHOP-007 the grievance name and phone have no flag, so they never reach shell history', ({
     assert,
   }) => {
     const names = PlatformCreateShop.flags.map((flag) => flag.flagName)
@@ -325,7 +332,6 @@ test.group('T-SHOP-007 platform:create-shop', () => {
       'registration-authority',
       'pan-vat-number',
       'vat-registered',
-      'grievance-name',
       'return-policy',
     ])
     assert.isEmpty(PlatformCreateShop.args)

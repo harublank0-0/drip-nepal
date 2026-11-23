@@ -4,6 +4,7 @@ import db from '@adonisjs/lucid/services/db'
 import { UserFactory } from '#database/factories/user_factory'
 import { MIGRATOR_CONNECTION } from '#tests/support/database'
 import PlatformCreateShop, {
+  GRIEVANCE_NAME_PROMPT,
   GRIEVANCE_PHONE_PROMPT,
 } from '../../../commands/platform_create_shop.js'
 
@@ -63,13 +64,13 @@ test.group('T-SHOP-007 platform:create-shop under concurrency', (group) => {
           `--contact-email=race-${suffix}-${stamp}@example.com`,
           '--contact-phone=9800000001',
           '--business-type=individual',
-          '--grievance-name=Synthetic Grievance Officer',
           '--return-policy=Returns within 7 days.',
         ])
       )
     )
     for (const run of runs) {
       run.interactiveTerminal = false
+      run.prompt.trap(GRIEVANCE_NAME_PROMPT).replyWith('Synthetic Grievance Officer')
       run.prompt.trap(GRIEVANCE_PHONE_PROMPT).replyWith('9800000042')
     }
     await Promise.all(runs.map((run) => run.exec()))
