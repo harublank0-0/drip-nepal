@@ -1,6 +1,6 @@
 import { test } from '@japa/runner'
 import { UserFactory } from '#database/factories/user_factory'
-import { signIn } from '#tests/support/courier_http'
+import { send, signIn } from '#tests/support/courier_http'
 import { insertEncryptedPickupAddress } from '#tests/support/courier'
 import { insertLocation } from '#tests/support/schema_rows'
 import { testBrowser, type Browser } from '#tests/support/browser'
@@ -28,7 +28,15 @@ import { addMember, createOwnerShop, GRIEVANCE, setShopStatus } from '#tests/sup
  * - T-SEC-030, a gated page prop per role: the pickup address item is sent
  *   only to roles with `shop.shipping.manage`, and the permissions are the
  *   docs/07 §4.3 map's for the role.
- * - T-SEC-043: the overview renders with `encryptHistory`.
+ * - T-SEC-043: the overview and the settings page render with
+ *   `encryptHistory`.
+ * - T-UI-040 (new, R1-S part 1b): `/seller/{shopSlug}/settings` opens for
+ *   the owner and every active role, rendered in the browser and never
+ *   stored; a guest is sent to `/login`; the `shop.member` gate refuses a
+ *   `closed` shop and a non-owner of a `pending_review` one. Its prop
+ *   `shop` is `getSellerShop`'s answer for the member: the business
+ *   details and the grievance contact for the owner only (T-SEC-036,
+ *   T-SEC-034); another shop's settings are the 404 page (T-SEC-001).
  */
 
 const SHARED_PROPS = [
@@ -319,5 +327,118 @@ test.group('T-SEC-036 the seller overview props', () => {
             ]
           : [{ item: 'seller_agreement', done: true }]
       )
+    })
+})
+
+test.group('T-UI-040 the seller settings page', () => {
+  const settingsPath = (slug: string) => `/seller/${slug}/settings`
+
+  test('T-UI-040 the settings page opens for the owner, rendered in the browser and never stored', async ({
+    assert,
+  }) => {
+    const shop = await createOwnerShop()
+    const browser = await signIn(shop.ownerId)
+    const { status, headers, html, page } = await htmlPage(browser, settingsPath(shop.slug))
+    assert.equal(status, 200)
+    assert.equal(page?.component, 'seller/settings')
+    assert.equal(headers.get('cache-control'), 'private, no-store')
+    // Seller pages render in the browser (config/inertia.ts): no server markup.
+    assert.notInclude(html, 'Save settings')
+    assert.isTrue(page?.encryptHistory, 'T-SEC-043')
+  })
+
+  test('T-UI-040 every active role opens the settings page: {role}')
+    .with([
+      { role: 'manager' },
+      { role: 'catalog_editor' },
+      { role: 'order_fulfiller' },
+      { role: 'viewer' },
+    ])
+    .run(async ({ assert }, { role }) => {
+      const shop = await createOwnerShop()
+      const memberId = await addMember(shop.shopId, role)
+      const { status, page } = await htmlPage(await signIn(memberId), settingsPath(shop.slug))
+      assert.equal(status, 200)
+      assert.equal(page?.component, 'seller/settings')
+    })
+
+  test('T-UI-040 a guest is sent to /login with the settings page as return_to', async ({
+    assert,
+  }) => {
+    const shop = await createOwnerShop()
+    const response = await testBrowser().request(settingsPath(shop.slug), {
+      headers: { Accept: 'text/html' },
+    })
+    await response.arrayBuffer()
+    assert.equal(response.status, 302)
+    const location = new URL(response.headers.get('location') ?? '', 'http://localhost')
+    assert.equal(location.pathname, '/login')
+    assert.equal(location.searchParams.get('return_to'), settingsPath(shop.slug))
+  })
+
+  test('T-UI-040 the settings page follows the shop.member gate: {status} for the {actor}')
+    .with([
+      { status: 'closed' as const, actor: 'owner', expected: 403 },
+      { status: 'pending_review' as const, actor: 'owner', expected: 200 },
+      { status: 'pending_review' as const, actor: 'manager', expected: 403 },
+      { status: 'suspended' as const, actor: 'owner', expected: 200 },
+    ])
+    .run(async ({ assert }, { status, actor, expected }) => {
+      const shop = await createOwnerShop()
+      const userId = actor === 'owner' ? shop.ownerId : await addMember(shop.shopId, actor)
+      await setShopStatus(shop.shopId, status)
+      const page = await htmlPage(await signIn(userId), settingsPath(shop.slug))
+      assert.equal(page.status, expected)
+    })
+
+  test('T-SEC-001 another shop’s settings page is the 404 page of an unknown slug', async ({
+    assert,
+  }) => {
+    const mine = await createOwnerShop()
+    const theirs = await createOwnerShop()
+    const browser = await signIn(mine.ownerId)
+    const unknown = await browser.request(settingsPath('no-such-shop-anywhere'), {
+      headers: { Accept: 'text/html' },
+    })
+    assert.equal(unknown.status, 404)
+    const expected = await pageText(unknown, 'no-such-shop-anywhere')
+    const other = await browser.request(settingsPath(theirs.slug), {
+      headers: { Accept: 'text/html' },
+    })
+    assert.equal(other.status, 404)
+    assert.equal(await pageText(other, theirs.slug), expected)
+  })
+
+  test('T-SEC-036 the owner’s settings page sends the shared props and the shop as getSellerShop answers it', async ({
+    assert,
+  }) => {
+    const shop = await createOwnerShop({ name: 'Settings Pasal' })
+    const browser = await signIn(shop.ownerId)
+    const props = await pageProps(browser, settingsPath(shop.slug))
+    assert.sameMembers(Object.keys(props), [...SHARED_PROPS, 'shop'])
+    const read = await send(browser, 'GET', `/api/v1/seller/shops/${shop.slug}`)
+    assert.deepEqual(props.shop, read.body.data)
+    const owned = props.shop as { grievance_contact: { name: string; phone: string } }
+    // The owner reads the grievance phone decrypted (07 §5.5, T-SEC-034).
+    assert.deepEqual(owned.grievance_contact, { name: GRIEVANCE.name, phone: GRIEVANCE.phone })
+    assert.notInclude(JSON.stringify(props), '_enc')
+  })
+
+  test(
+    'T-SEC-036 a {role}’s settings page holds no business details or grievance contact [AC-FR-SHOP-013-4]'
+  )
+    .with([{ role: 'manager' }, { role: 'viewer' }])
+    .run(async ({ assert }, { role }) => {
+      const shop = await createOwnerShop()
+      const memberId = await addMember(shop.shopId, role)
+      const props = await pageProps(await signIn(memberId), settingsPath(shop.slug))
+      assert.sameMembers(Object.keys(props), [...SHARED_PROPS, 'shop'])
+      const seen = props.shop as Record<string, unknown>
+      assert.isNull(seen.business_details)
+      assert.isNull(seen.grievance_contact)
+      const written = JSON.stringify(props)
+      for (const secret of [GRIEVANCE.name, GRIEVANCE.phone, '123456789', 'Returns within']) {
+        assert.notInclude(written, secret)
+      }
     })
 })

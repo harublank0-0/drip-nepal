@@ -1,5 +1,5 @@
 import { DomainError } from '#exceptions/domain_error'
-import { memberRoutesOpen } from '#shared/ui/shop_access'
+import { memberRoutesOpen, profileEditable } from '#shared/ui/shop_access'
 import type { SellerActor, SellerContext } from '#modules/shops/queries'
 
 /*
@@ -45,24 +45,39 @@ export function assertShopPermission(shop: SellerContext, permission: ShopPermis
 }
 
 /*
+ * An owner-only part of an operation that a permission slug does not name
+ * (docs/07 §4.3): a member who is not the owner gets 403 `FORBIDDEN` with
+ * `detail` saying what only the owner may do.
+ */
+export function assertShopOwner(shop: SellerContext, detail: string) {
+  if (shop.actor !== 'owner') throw new DomainError('FORBIDDEN', { detail })
+}
+
+/*
  * The 07 §4.4 columns the built operations follow:
  * - `member`, the routes that declare `shop.member` (`getSellerShop` and the
- *   `/seller/{shopSlug}` overview page; proposed, OD-48): open in `active`
- *   and in both suspension modes, to the owner only in `pending_review` and
- *   `rejected`, refused in `closed` (`memberRoutesOpen`, which the seller
- *   UI's links share);
+ *   `/seller/{shopSlug}` overview and settings pages; proposed, OD-48): open
+ *   in `active` and in both suspension modes, to the owner only in
+ *   `pending_review` and `rejected`, refused in `closed` (`memberRoutesOpen`,
+ *   which the seller UI's links share);
+ * - `profile`, the "profile, shipping" column for `updateShopProfile`: open
+ *   in `active`, to the owner only in `pending_review` and `rejected`,
+ *   refused while `suspended` or `closed` (`profileEditable`, which the
+ *   settings page shares; R1-S part 1b);
  * - courier accounts like the payout account (active only);
  * - logistics settings and pickup addresses like the profile and shipping
  *   column (active only);
  * - courier booking like orders process (active, or suspended in
  *   `fulfill_existing` mode).
  */
-export type ShopGate = 'member' | 'courier_accounts' | 'shipping' | 'orders_process'
+export type ShopGate = 'member' | 'profile' | 'courier_accounts' | 'shipping' | 'orders_process'
 
 export function shopGateAllows(shop: SellerContext, gate: ShopGate) {
   switch (gate) {
     case 'member':
       return memberRoutesOpen(shop.status, shop.actor)
+    case 'profile':
+      return profileEditable(shop.status, shop.actor)
     case 'orders_process':
       return (
         shop.status === 'active' ||

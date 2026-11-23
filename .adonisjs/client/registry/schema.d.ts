@@ -307,6 +307,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/seller/shops/shops_controller').default['getSellerShop']>>>
     }
   }
+  'updateShopProfile': {
+    methods: ["PATCH"]
+    pattern: '/api/v1/seller/shops/:shopSlug'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/shops/update_shop_profile').updateShopProfileValidator)>>
+      paramsTuple: [ParamValue]
+      params: { shopSlug: ParamValue }
+      query: ExtractQuery<InferInput<(typeof import('#validators/shops/update_shop_profile').updateShopProfileValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/api/v1/seller/shops/shops_controller').default['updateShopProfile']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/seller/shops/shops_controller').default['updateShopProfile']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
   'getLogisticsSettings': {
     methods: ["GET","HEAD"]
     pattern: '/api/v1/seller/shops/:shopSlug/logistics'
@@ -785,6 +797,18 @@ export interface Registry {
       query: {}
       response: ExtractResponse<Awaited<ReturnType<import('#controllers/seller/shops/shop_controller').default['overview']>>>
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/seller/shops/shop_controller').default['overview']>>>
+    }
+  }
+  'seller.settings': {
+    methods: ["GET","HEAD"]
+    pattern: '/seller/:shopSlug/settings'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { shopSlug: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/seller/shops/shop_controller').default['settings']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/seller/shops/shop_controller').default['settings']>>>
     }
   }
   'admin.logistics': {

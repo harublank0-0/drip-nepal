@@ -1,4 +1,5 @@
 import db from '@adonisjs/lucid/services/db'
+import type { QueryClientContract } from '@adonisjs/lucid/types/database'
 import type { ShopMemberRole } from '#modules/shops/domain/shop_member_role'
 import { hasShopSlugShape } from '#modules/shops/domain/shop_slug'
 import { CURRENT_SELLER_AGREEMENT } from '#modules/shops/domain/seller_agreements'
@@ -158,8 +159,13 @@ export type SellerShopRow = {
   agreement_accepted: boolean
 }
 
-export async function sellerShop(shopId: string): Promise<SellerShopRow | null> {
-  const result = await db.rawQuery(
+export async function sellerShop(
+  shopId: string,
+  options: { client?: QueryClientContract } = {}
+): Promise<SellerShopRow | null> {
+  // Inside `updateShopProfile`'s transaction, so the answer is the row it has locked.
+  const client: QueryClientContract = options.client ?? db.connection()
+  const result = await client.rawQuery(
     `SELECT s.id, s.slug, s.name, s.status, s.suspension_mode, s.description,
             s.contact_email, s.contact_phone_e164, s.return_policy_text, s.business_type,
             s.business_registration_number, s.business_registration_authority,

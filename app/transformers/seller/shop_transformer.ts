@@ -3,7 +3,9 @@ import type { SellerActor, SellerShopRow } from '#modules/shops/queries'
 
 /*
  * The shop profile for its own members, as `getSellerShop` answers it
- * (docs/06 §13.5): the public profile (name, description, contact), the
+ * (docs/06 §13.5), and with it `updateShopProfile`'s answer and 412
+ * `current` and the `/seller/{shopSlug}/settings` page's `shop` prop (R1-S
+ * part 1b): the public profile (name, description, contact), the
  * status and `suspension_mode`, whether the shop has accepted the current
  * seller agreement version (04a §6.4), and `version`, which the ETag
  * repeats. The business details of 01 AC-FR-SHOP-013-2 (business type,

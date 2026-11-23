@@ -6,7 +6,7 @@ import type { BusinessType } from '#modules/shops/domain/business_type'
 import { CURRENT_SELLER_AGREEMENT } from '#modules/shops/domain/seller_agreements'
 import type { ShopStatus } from '#modules/shops/domain/shop_status'
 import { UserFactory } from '#database/factories/user_factory'
-import { placeholderCiphertext } from '#database/factories/placeholder_ciphertext'
+import { encryptField } from '#modules/platform/crypto/field_encrypter'
 
 /*
  * Shops (docs/04a §6.1) for tests and development seeders (docs/04 §20.3).
@@ -45,7 +45,12 @@ export const ShopFactory = factory
       returnPolicyText: 'Returns within 7 days, unworn and with tags.',
       businessType: businessType('individual'),
       grievanceContactName: faker.person.fullName().slice(0, 100),
-      grievanceContactPhoneEnc: placeholderCiphertext(),
+      // Encrypted like the real writers do (bootstrap_owner_shop.ts, update_shop_profile.ts),
+      // so the owner's settings page can decrypt it in development too.
+      grievanceContactPhoneEnc: encryptField(
+        `+97798${faker.string.numeric(8)}`,
+        'shops.grievance_contact_phone_enc'
+      ),
     }
   })
   .state('active', (shop) => {

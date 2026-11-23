@@ -11,12 +11,13 @@ const ShopController = () => import('#controllers/seller/shops/shop_controller')
  * guest is sent to `/login` with the page as `return_to` (docs/09 §5.4),
  * and a caller who is not the shop's owner or an active member gets the
  * 404 page of an unknown slug (T-SEC-001). R1-S part 1a builds the
- * overview; 1b adds `/settings` and 1c `/shipping`. Page routes keep
+ * overview and 1b `/settings`; 1c adds `/shipping`. Page routes keep
  * dotted names (docs/09 §4.3).
  */
 router
   .group(() => {
     router.get('/', [ShopController, 'overview']).as('overview')
+    router.get('/settings', [ShopController, 'settings']).as('settings')
   })
   .prefix('/seller/:shopSlug')
   .as('seller')

@@ -17,12 +17,16 @@ import { can, type CurrentShop, type ShopPermission } from '~/lib/permissions'
  * The seller navigation (docs/08 §2.5, §2.7): only pages that exist, each
  * shown when the member's role holds the permission its page needs (null
  * for a page any member may open, `shop.member`). The UI hides; the server
- * decides (docs/08 §11.6). R1-S part 1a builds the overview; Settings (1b)
- * and Shipping (1c) join with their pages. Links come from route names
- * through the typed client (docs/08 §2.1), with the shop's current slug.
+ * decides (docs/08 §11.6). R1-S part 1a builds the overview and 1b
+ * Settings, shown to the roles that may edit the profile
+ * (`shop.profile.manage`): the page itself opens for any member, read-only
+ * without the permission, because it reads `getSellerShop` (07 §4.5 "Page
+ * routes"), but a link to a form one cannot save is noise. Shipping (1c)
+ * joins with its page. Links come from route names through the typed client
+ * (docs/08 §2.1), with the shop's current slug.
  */
 type NavItem = {
-  route: 'seller.overview'
+  route: 'seller.overview' | 'seller.settings'
   component: string
   label: Parameters<typeof t>[0]
   permission: ShopPermission | null
@@ -34,6 +38,12 @@ const ITEMS: NavItem[] = [
     component: 'seller/overview',
     label: 'seller.nav.overview',
     permission: null,
+  },
+  {
+    route: 'seller.settings',
+    component: 'seller/settings',
+    label: 'seller.nav.settings',
+    permission: 'shop.profile.manage',
   },
 ]
 

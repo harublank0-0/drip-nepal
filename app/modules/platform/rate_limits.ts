@@ -62,6 +62,9 @@ export const RATE_LIMITS = {
   // updateMe, per user, on every call (proposed): a consent change writes an insert-only audit
   // row kept 7 years, so this bounds the rows one account can add.
   profile_update: { prefix: 'profile:user', requests: 20, duration: '1 hour' },
+  // updateShopProfile, per user, on every call (proposed, R1-S part 1b): each change writes a
+  // `shop.profile_update` audit row, insert-only and kept 7 years, as `profile_update` bounds.
+  shop_profile_update: { prefix: 'shop_profile:user', requests: 20, duration: '1 hour' },
   // Every other authenticated /api/v1 call, per user; admin calls use `api_staff` (06 §9.1).
   api_user: { prefix: 'api:user', requests: 300, duration: '1 minute' },
   api_staff: { prefix: 'admin:user', requests: 600, duration: '1 minute' },
@@ -151,6 +154,7 @@ export const OWN_LIMIT_OPERATIONS: ReadonlySet<string> = new Set([
   'revokeAllSessions',
   'requestAccountDeletion',
   'updateMe',
+  'updateShopProfile',
   'startTotpEnrollment',
   'confirmTotpEnrollment',
   'verifyMfaChallenge',

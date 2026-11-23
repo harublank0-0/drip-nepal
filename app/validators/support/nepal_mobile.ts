@@ -29,8 +29,8 @@ export const nepalMobile = () =>
  * mobile or an eight-digit landline, with the same prefixes and
  * separators, handed on in E.164 (`toNepalShopPhoneE164`). Anything else
  * answers 422 on the field with the item code `nepal_phone`.
- * `platform:create-shop` uses it for the shop's contact and grievance
- * numbers; the profile form joins in R1-S part 1b.
+ * `platform:create-shop` and `updateShopProfile` (R1-S part 1b) use it for
+ * the shop's contact and grievance numbers.
  */
 const nepalShopPhoneRule = vine.createRule((value, _options, field) => {
   if (typeof value !== 'string') return
