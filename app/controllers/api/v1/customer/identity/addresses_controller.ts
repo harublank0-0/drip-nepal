@@ -21,7 +21,9 @@ import {
  * §4.4: `/account` self-service). Every address is looked up with the
  * caller's ID in the query, so another user's or an archived address
  * answers 404 exactly like a missing one (T-SEC-006, 07 §4.6). The writes
- * refuse unknown members, validate, then call the identity action with the
+ * refuse any query parameter (the validator reads the body and the query
+ * merged, so a member could otherwise arrive in the query, 06 §6.3) and
+ * unknown members, validate, then call the identity action with the
  * stamp the account check has just compared (docs/07 §3.3). Each operation
  * is charged to `api_user` (06 §9.1). Routes in
  * start/routes/api_v1/customer.ts, named by their operationIds.
@@ -44,6 +46,7 @@ export default class AddressesController {
   }
 
   async createAddress(ctx: HttpContext) {
+    closedQuery(ctx, [])
     assertKnownMembers(ctx.request.body(), ADDRESS_MEMBERS)
     assertNotNull(ctx.request.body(), ['is_default'])
     const input = await ctx.request.validateUsing(createAddressValidator)
@@ -67,6 +70,7 @@ export default class AddressesController {
   }
 
   async updateAddress(ctx: HttpContext) {
+    closedQuery(ctx, [])
     assertKnownMembers(ctx.request.body(), ADDRESS_MEMBERS)
     assertNotNull(ctx.request.body(), ADDRESS_NOT_NULL_MEMBERS)
     const input = await ctx.request.validateUsing(updateAddressValidator)
@@ -91,6 +95,7 @@ export default class AddressesController {
   }
 
   async deleteAddress(ctx: HttpContext) {
+    closedQuery(ctx, [])
     assertKnownMembers(ctx.request.body(), [])
     const user = ctx.auth.getUserOrFail()
     await deleteAddress(user.id, ctx.params.addressId, { sessionStamp: user.securityStamp })

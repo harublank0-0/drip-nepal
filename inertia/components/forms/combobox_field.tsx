@@ -23,7 +23,11 @@ import {
  * typed that is not an option (AC-FR-IAM-012-1).
  *
  * The button carries the label's id, the help text and the errors in
- * `aria-describedby`. While `disabled`, `placeholder` says why (choose the
+ * `aria-describedby`, `aria-expanded`, and `aria-controls` pointing at the
+ * popover, whose `id` it sets (Radix spreads it over its own). cmdk names
+ * the list with `label` and sets the list's `id` and `aria-label` after
+ * its own props, so those two passed to `CommandList` would never reach
+ * the page. While `disabled`, `placeholder` says why (choose the
  * district first). Items filter on their name and their code.
  */
 export function ComboboxField({
@@ -52,7 +56,7 @@ export function ComboboxField({
   disabled?: boolean
 }) {
   const [open, setOpen] = useState(false)
-  const listId = useId()
+  const contentId = useId()
   const messages = errors.filter((error): error is string => typeof error === 'string')
   const chosen = options.find((option) => option.value === value)
   const describedBy = [
@@ -72,7 +76,7 @@ export function ComboboxField({
             variant="outline"
             role="combobox"
             aria-expanded={open}
-            aria-controls={open ? listId : undefined}
+            aria-controls={open ? contentId : undefined}
             aria-invalid={messages.length > 0 || undefined}
             aria-describedby={describedBy || undefined}
             disabled={disabled}
@@ -87,12 +91,13 @@ export function ComboboxField({
         {/* No animation: closing unmounts it at once, so a list opened next (the ward) cannot
             leave this layer stuck mid-animation, still catching outside clicks. */}
         <PopoverContent
+          id={contentId}
           align="start"
           className="w-(--radix-popover-trigger-width) p-0 animate-none!"
         >
           <Command>
             <CommandInput aria-label={searchLabel} placeholder={searchLabel} />
-            <CommandList id={listId} aria-label={label}>
+            <CommandList label={label}>
               <CommandEmpty>{emptyText}</CommandEmpty>
               <CommandGroup>
                 {options.map((option) => (

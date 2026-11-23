@@ -1142,3 +1142,38 @@ test.group('T-IAM-009 who may use the address book', (group) => {
     assert.deepEqual(await rowOf(address.id), before)
   })
 })
+
+test.group('T-IAM-009 query parameters on the address operations', (group) => {
+  group.each.teardown(forgetMade)
+
+  /*
+   * No address operation takes a query parameter (06 §6.3). The validator
+   * reads the body and the query merged, so without this refusal a member
+   * such as `label` could arrive in the query string of a write.
+   */
+  test(
+    'T-IAM-009 {operation} with a query parameter answers 400 INVALID_QUERY_PARAMETER and changes nothing'
+  )
+    .with([
+      { operation: 'listAddresses' },
+      { operation: 'createAddress' },
+      { operation: 'updateAddress' },
+      { operation: 'deleteAddress' },
+    ])
+    .run(async ({ assert }, { operation }) => {
+      const { user, client } = await signedIn()
+      const address = await created(client, { label: 'Home' })
+      const before = await rowsOf(user.id)
+      const query = '?label=From%20the%20query'
+      let response
+      if (operation === 'listAddresses') response = await getJson(client, `${ADDRESSES}${query}`)
+      else if (operation === 'createAddress') {
+        response = await postJson(client, `${ADDRESSES}${query}`, addressBody())
+      } else if (operation === 'updateAddress') {
+        response = await patchJson(client, `${addressPath(address.id)}${query}`, {})
+      } else response = await deleteJson(client, `${addressPath(address.id)}${query}`)
+      assert.equal(response.status, 400, response.text)
+      assert.equal(response.body.code, 'INVALID_QUERY_PARAMETER')
+      assert.deepEqual(await rowsOf(user.id), before)
+    })
+})

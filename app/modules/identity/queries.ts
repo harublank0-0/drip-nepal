@@ -320,13 +320,14 @@ export async function platformAdminExists() {
  * so another user's or an archived address is simply not found (T-SEC-006).
  * The default first, then the oldest first, the order of
  * `user_addresses_user_active_idx`. The encrypted members stay ciphertext:
- * only the address transformer decrypts them (07 §5.5, T-SEC-034).
+ * only the address transformer decrypts them (07 §5.5, T-SEC-034). The
+ * phone's ciphertext is not selected at all: an address is shown with the
+ * last four digits only (AC-FR-IAM-012-5).
  */
 export type AddressRow = {
   id: string
   label: string | null
   recipient_name_enc: string
-  recipient_phone_enc: string
   recipient_phone_last4: string
   province_code: string
   district_code: string
@@ -342,7 +343,6 @@ const ADDRESS_COLUMNS = [
   'id',
   'label',
   'recipient_name_enc',
-  'recipient_phone_enc',
   'recipient_phone_last4',
   'province_code',
   'district_code',

@@ -1774,6 +1774,8 @@ paths:
       summary: Add an address to the signed-in user's address book
       description: |
         Actor: a signed-in user (`auth`), `pending_verification` included; a guest gets 401.
+        Query: none; any parameter is 400 `INVALID_QUERY_PARAMETER` (06 §6.3), because the
+        validator reads the body and the query merged.
         Scope: the address is the caller's; no user ID is taken.
         Input: the members of `CreateAddressRequest` only; any other member, `user_id`,
         `postal_code` or `archived_at` included, is 422 `unknown_field` and nothing is written
@@ -1850,6 +1852,14 @@ paths:
                       street_landmark: null
                       postal_code: '3060804'
                       is_default: true
+        '400':
+          description: A query parameter; the operation takes none, and one `invalid` item names it.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem400' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
@@ -1908,7 +1918,10 @@ paths:
       tags: [Me]
       summary: Edit one of the signed-in user's addresses or make it the default
       description: |
-        Actor: a signed-in user (`auth`), `pending_verification` included; a guest gets 401.
+        Actor: a signed-in user (`auth`), `pending_verification` included; a guest gets 401,
+        except with an `{addressId}` that is not a UUID, which matches no route and is 404 first.
+        Query: none; any parameter is 400 `INVALID_QUERY_PARAMETER` (06 §6.3), because the
+        validator reads the body and the query merged.
         Scope: `{addressId}` is looked up with the caller's ID and `archived_at IS NULL` in the
         query, so another user's, an archived or a missing address is 404 with the same body, and
         so is a value that is not a UUID (T-SEC-006, 07 §4.6).
@@ -1976,6 +1989,14 @@ paths:
                       street_landmark: null
                       postal_code: '3060810'
                       is_default: true
+        '400':
+          description: A query parameter; the operation takes none, and one `invalid` item names it.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem400' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -2012,7 +2033,10 @@ paths:
       tags: [Me]
       summary: Remove one of the signed-in user's addresses (archive it)
       description: |
-        Actor: a signed-in user (`auth`), `pending_verification` included; a guest gets 401.
+        Actor: a signed-in user (`auth`), `pending_verification` included; a guest gets 401,
+        except with an `{addressId}` that is not a UUID, which matches no route and is 404 first.
+        Query: none; any parameter is 400 `INVALID_QUERY_PARAMETER` (06 §6.3), because the
+        validator reads the body and the query merged.
         Scope: as `updateAddress`; another user's, an archived, a missing or a non-UUID address
         is 404 with the same body (T-SEC-006). Input: no body members; any member is 422
         `unknown_field`.
@@ -2035,6 +2059,14 @@ paths:
           headers:
             X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
             Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+        '400':
+          description: A query parameter; the operation takes none, and one `invalid` item names it.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem400' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }

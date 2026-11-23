@@ -346,15 +346,24 @@ export function AddressForm({
   const districts = useCascade(provinceCode, districtsOf)
   const localLevels = useCascade(districtCode, localLevelsOf)
 
+  /*
+   * On edit the saved place shows on its buttons at once, while its lists
+   * load. A saved unit the reference data has since made inactive stays the
+   * current value, marked as no longer offered, and the ward stays disabled
+   * until a current local level is chosen: any place change re-checks the
+   * whole chain as active (06 note 61 (c)), so a ward alone could not be
+   * saved there.
+   */
+  const savedProvince = saved ? { code: saved.province_code, name: saved.province_name } : null
   const savedDistrict =
     saved && provinceCode === saved.province_code
       ? { code: saved.district_code, name: saved.district_name }
       : null
   const savedLocalLevel =
     saved && districtCode === saved.district_code
-      ? { code: saved.local_level_code, name: saved.local_level_name, ward_count: saved.ward_no }
+      ? { code: saved.local_level_code, name: saved.local_level_name, ward_count: 0 }
       : null
-  // On edit the saved place shows on its button at once, while its list loads.
+  const provinceItems = withSaved(provinces, savedProvince)
   const districtItems = withSaved(
     districts.state.status === 'ready' ? districts.state.items : [],
     savedDistrict
@@ -363,8 +372,20 @@ export function AddressForm({
     localLevels.state.status === 'ready' ? localLevels.state.items : [],
     savedLocalLevel
   )
-  const wardCount = localLevelItems.find((item) => item.code === localLevelCode)?.ward_count ?? 0
-  const wards = Array.from({ length: wardCount }, (_, index) => String(index + 1))
+  // The chosen local level as the reference data offers it now; undefined while loading or retired.
+  const offeredLocalLevel =
+    localLevels.state.status === 'ready'
+      ? localLevels.state.items.find((item) => item.code === localLevelCode)
+      : undefined
+  const keepsSavedLocalLevel = saved !== null && localLevelCode === saved.local_level_code
+  const retired = keepsSavedLocalLevel && localLevels.state.status === 'ready' && !offeredLocalLevel
+  let wards: string[] = []
+  if (offeredLocalLevel) {
+    wards = Array.from({ length: offeredLocalLevel.ward_count }, (_, index) => String(index + 1))
+  } else if (keepsSavedLocalLevel) {
+    // Shown, not choosable, while the list loads or once the unit is retired.
+    wards = [String(saved.ward_no)]
+  }
 
   // Choosing a place clears every choice after it.
   function clearAfter(field: (typeof PLACE_FIELDS)[number]) {
@@ -485,7 +506,7 @@ export function AddressForm({
               id="address-province"
               label={t('account.addresses.form.province')}
               value={field.state.value}
-              options={provinces.map((province) => ({
+              options={provinceItems.map((province) => ({
                 value: province.code,
                 label: province.name,
               }))}
@@ -545,7 +566,11 @@ export function AddressForm({
               <ComboboxField
                 id="address-local-level"
                 label={t('account.addresses.form.local_level')}
-                description={t('account.addresses.form.local_level_help')}
+                description={
+                  retired
+                    ? t('account.addresses.form.local_level_retired')
+                    : t('account.addresses.form.local_level_help')
+                }
                 value={field.state.value}
                 options={localLevelItems.map((localLevel) => ({
                   value: localLevel.code,
@@ -587,7 +612,7 @@ export function AddressForm({
                   ? t('account.addresses.form.ward_waiting')
                   : t('account.addresses.form.ward_placeholder')
               }
-              disabled={wards.length === 0}
+              disabled={!offeredLocalLevel}
               triggerClassName={TALL}
               errors={field.state.meta.errors}
               onChange={(value) => changeAndRecheck(field, value)}

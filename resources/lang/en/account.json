@@ -107,6 +107,7 @@
   "addresses.form.district_rule": "Choose a district.",
   "addresses.form.local_level": "Local level",
   "addresses.form.local_level_help": "Your metropolitan city, sub-metropolitan city, municipality or rural municipality.",
+  "addresses.form.local_level_retired": "This local level is no longer offered. Your address keeps it until you choose another one, which also lets you change the ward.",
   "addresses.form.local_level_placeholder": "Choose a local level",
   "addresses.form.local_level_waiting": "Choose a district first",
   "addresses.form.local_level_search": "Search local levels",

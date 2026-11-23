@@ -137,7 +137,8 @@ export function rateLimiter(name: RateLimitName) {
  * table's "every other authenticated call"), and `logOut`, which always
  * goes through: refusing it would keep a session alive that its holder is
  * ending (M1 part 6a). The API limits middleware reads it by route name,
- * which is the operationId (docs/09 §4.3).
+ * which is the operationId (docs/09 §4.3). The per-network public reads are
+ * in `IP_LIMIT_OPERATIONS` below, which the middleware checks first.
  */
 export const OWN_LIMIT_OPERATIONS: ReadonlySet<string> = new Set([
   'logIn',
@@ -162,9 +163,6 @@ export const OWN_LIMIT_OPERATIONS: ReadonlySet<string> = new Set([
   'createMediaUpload',
   'receiveCourierCallback',
   'receivePaymentWebhook',
-  'listProvinces',
-  'listDistricts',
-  'listLocalLevels',
 ])
 
 /*
