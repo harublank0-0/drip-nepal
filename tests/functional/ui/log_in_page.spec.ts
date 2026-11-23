@@ -63,7 +63,7 @@ test.group('T-UI-036 /login', () => {
     assert.include(html, 'href="/signup"')
     // Remember-me is off in R1 (docs/07 §3.5).
     assert.notMatch(html, /role="checkbox"|type="checkbox"/)
-    assert.notInclude(html, 'Your account is suspended')
+    assert.notInclude(html, 'Your account is suspended or closed')
   })
 
   test('T-UI-036 /login passes return_to on, unchanged, to the sign-up link', async ({
@@ -103,7 +103,7 @@ test.group('T-UI-036 /login', () => {
 
     const { page, html } = await htmlPage(browser, '/login')
     assert.equal(page?.props.notice, 'account_suspended')
-    assert.include(html, 'Your account is suspended')
+    assert.include(html, 'Your account is suspended or closed')
     // The flash is read once: the next visit is a plain sign-in page.
     const again = await htmlPage(browser, '/login')
     assert.isNull(again.page?.props.notice)

@@ -39,8 +39,13 @@ export default class MeController {
   // updateMe: 200 with the account after the change.
   async updateMe(ctx: HttpContext) {
     assertKnownMembers(ctx.request.body(), UPDATE_ME_MEMBERS)
-    // `full_name` may be left out, never blanked; `phone: null` removes the number.
-    assertNotNull(ctx.request.body(), ['full_name'])
+    // The name and the consents may be left out, never sent as null or `""`;
+    // `phone: null` (or `""`, which the body parser makes null) removes the number.
+    assertNotNull(ctx.request.body(), [
+      'full_name',
+      'marketing_email_consent',
+      'marketing_sms_consent',
+    ])
     const input = await ctx.request.validateUsing(updateMeValidator)
     const user = ctx.auth.getUserOrFail()
     await updateMe(
@@ -64,11 +69,7 @@ export default class MeController {
     const user = ctx.auth.getUserOrFail()
     const result = await requestAccountDeletion(
       user.id,
-      {
-        password: input.password,
-        reason: input.reason ?? null,
-        sessionStamp: user.securityStamp,
-      },
+      { password: input.password, sessionStamp: user.securityStamp },
       { requestId: ctx.request.id() ?? null, ipHash: auditIpHash(ctx.request.ip()) }
     )
     await endSession(ctx)

@@ -2,9 +2,11 @@
   identity.deletion_requested, the HTML part (docs/09 §11.2): the "deletion
   request received" notice of requestAccountDeletion (01 AC-FR-IAM-009-1,
   AC-FR-NOT-001-1). The account is closed and every session has ended, so it
-  carries no token and no reset link, only a link to the privacy notice,
-  which says how deletion works and whose page shows the support contact.
-  Every value is printed escaped. Values: `t`, `link`.
+  carries no token and no reset link. It prints the support contact the
+  operator configured, for a holder who did not ask or wants the account
+  back; with none configured it leaves that sentence out. The link is the
+  privacy notice. Every value is printed escaped. Values: `t`, `link`, and
+  `support_email` and `support_phone` when configured.
 --}}
 @component('emails/layouts/html', {
   t: t,
@@ -13,8 +15,33 @@
   <p style="margin: 0 0 16px;">{{ t('emails.identity.deletion_requested.intro') }}</p>
   <p style="margin: 0 0 16px;">{{ t('emails.identity.deletion_requested.closed') }}</p>
   <p style="margin: 0 0 16px;">{{ t('emails.identity.deletion_requested.next') }}</p>
-  <p style="margin: 0 0 16px;">{{ t('emails.identity.deletion_requested.not_yours') }}</p>
-  <p style="margin: 0 0 16px;">
+  @if(support_email || support_phone)
+    <p style="margin: 0 0 8px;">{{ t('emails.identity.deletion_requested.not_yours') }}</p>
+    @if(support_email)
+      <p style="margin: 0 0 8px;">
+        {{
+          t('emails.identity.deletion_requested.contact_email', {
+            email: support_email,
+          })
+        }}
+      </p>
+    @end
+    @if(support_phone)
+      <p style="margin: 0 0 8px;">
+        {{
+          t('emails.identity.deletion_requested.contact_phone', {
+            phone: support_phone,
+          })
+        }}
+      </p>
+    @end
+  @else
+    <p style="margin: 0 0 16px;">
+      {{ t('emails.identity.deletion_requested.not_yours_no_contact') }}
+    </p>
+  @end
+
+  <p style="margin: 16px 0;">
     <a
       href="{{ link }}"
       style="display: inline-block; padding: 12px 20px; border-radius: 6px; background-color: #18181b; color: #ffffff; font-weight: bold; text-decoration: none;"

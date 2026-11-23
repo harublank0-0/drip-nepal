@@ -59,6 +59,12 @@ export const RATE_LIMITS = {
   password_change: { prefix: 'pwchange:user', requests: 5, duration: '1 hour' },
   // revokeAllSessions, per user, on every call (proposed): bounds the emails.
   revoke_all: { prefix: 'revoke_all:user', requests: 5, duration: '1 hour' },
+  // updateMe, per user, on every call (proposed): a consent change writes an insert-only audit
+  // row kept 7 years, so this bounds the rows one account can add.
+  profile_update: { prefix: 'profile:user', requests: 20, duration: '1 hour' },
+  // Every other authenticated /api/v1 call, per user; admin calls use `api_staff` (06 §9.1).
+  api_user: { prefix: 'api:user', requests: 300, duration: '1 minute' },
+  api_staff: { prefix: 'admin:user', requests: 600, duration: '1 minute' },
   // Courier callbacks (docs/06 §9.1, M6): per client network before the token, then per account.
   webhook_ip: { prefix: 'webhook:ip', requests: 600, duration: '1 minute' },
   courier_callback: { prefix: 'courier_callback', requests: 120, duration: '1 minute' },
@@ -121,3 +127,36 @@ export function rateLimiter(name: RateLimitName) {
   const { requests, duration, blockDuration } = limit
   return limiter.use(blockDuration ? { requests, duration, blockDuration } : { requests, duration })
 }
+
+/*
+ * The operations of docs/06 §9.1 that a row of their own names, built or
+ * not, so `api_user` and `api_staff` never charge them a second time (the
+ * table's "every other authenticated call"), and `logOut`, which always
+ * goes through: refusing it would keep a session alive that its holder is
+ * ending (M1 part 6a). The API limits middleware reads it by route name,
+ * which is the operationId (docs/09 §4.3).
+ */
+export const OWN_LIMIT_OPERATIONS: ReadonlySet<string> = new Set([
+  'logIn',
+  'logOut',
+  'signUp',
+  'resendEmailVerification',
+  'requestPasswordReset',
+  'resetPassword',
+  'changePassword',
+  'revokeAllSessions',
+  'requestAccountDeletion',
+  'updateMe',
+  'startTotpEnrollment',
+  'confirmTotpEnrollment',
+  'verifyMfaChallenge',
+  'replacePayoutAccount',
+  'createShopCourierAccount',
+  'rekeyShopCourierAccount',
+  'disableShopCourierAccount',
+  'placeOrder',
+  'addCartItem',
+  'createMediaUpload',
+  'receiveCourierCallback',
+  'receivePaymentWebhook',
+])

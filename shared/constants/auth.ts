@@ -17,3 +17,12 @@ export const INVALID_CREDENTIALS_DETAIL = 'Invalid email or password.'
 export const TOTP_CODE_PATTERN = /^\d{6}$/
 
 export const totpInput = (value: string) => value.replace(/[\s-]/g, '')
+
+/*
+ * The `detail` of 403 `ACCOUNT_SUSPENDED` (docs/06 §5.2), which a
+ * `suspended`, `deactivated` or `anonymized` account gets (01
+ * AC-FR-IAM-003-4, docs/07 §3.3 row 1). One wording for all of them: since
+ * M1 part 6a a user can close their own account, and someone returning to
+ * reopen it is not "suspended".
+ */
+export const ACCOUNT_SUSPENDED_DETAIL = 'This account is suspended or closed.'

@@ -41,11 +41,7 @@ async function account(label: string) {
 const context = { requestId: null, ipHash: null }
 
 function ask(user: { id: string; securityStamp: string }, password = FACTORY_PASSWORD) {
-  return requestAccountDeletion(
-    user.id,
-    { password, reason: null, sessionStamp: user.securityStamp },
-    context
-  )
+  return requestAccountDeletion(user.id, { password, sessionStamp: user.securityStamp }, context)
 }
 
 async function refusal(call: () => Promise<unknown>) {

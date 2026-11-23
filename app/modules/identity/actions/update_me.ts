@@ -1,8 +1,10 @@
 import { DomainError } from '#exceptions/domain_error'
+import { ACCOUNT_SUSPENDED_DETAIL } from '#shared/constants/auth'
 import { recordAudit } from '#modules/audit/actions/record_audit'
 import { SIGNED_IN_STATUSES, maySignIn } from '#modules/identity/domain/user_status'
 import { encryptedPhone } from '#modules/identity/internal/phone'
 import { selfActor } from '#modules/identity/internal/self_actor'
+import { rateLimitKey, rateLimiter } from '#modules/platform/rate_limits'
 import { withTx } from '#modules/platform/tx'
 
 /*
@@ -14,7 +16,12 @@ import { withTx } from '#modules/platform/tx'
  * - `fullName`: already NFC and within 1–100 code points (the validator).
  * - `phoneE164`: a Nepali mobile in E.164, encrypted with its blind index
  *   and last four digits (docs/04 §2.9, `encryptedPhone`), before the
- *   transaction; null removes the number, all three columns together.
+ *   transaction; null removes the number, all three columns together. Either
+ *   way `phone_verified_at` is cleared with them: a verification belongs to
+ *   the number it checked (always null in R1; phone OTP is R2, FR-IAM-010),
+ *   and a changed number left "verified" would meet
+ *   `users_verified_phone_key`. The JSON body parser reads `""` as null, so
+ *   an empty `phone` removes the number too.
  * - The two marketing consents (AC-FR-IAM-013-1): `true` sets the opt-in
  *   time only where none is held, so a repeated `true` keeps the first
  *   time; `false` clears a held one at once (07 §5.3: withdrawal takes
@@ -24,6 +31,13 @@ import { withTx } from '#modules/platform/tx'
  *   a request that changes no consent writes none. The name and the phone
  *   write no audit row: 06 §13.3 audits the consents only, and the row
  *   would hold no value of either.
+ *
+ * First the `profile_update` limiter (20 per hour per user, proposed,
+ * docs/06 §9.1) takes a point on every call: each consent change adds an
+ * audit row to the insert-only `audit_logs`, kept 7 years, so this bounds
+ * what one account can add. Past it, 429 `RATE_LIMITED` and nothing is
+ * written. `updateMe` has this row of its own, so `api_user` does not
+ * charge it.
  *
  * In one transaction the row is locked `FOR NO KEY UPDATE` and read; the
  * write is a compare-and-set on what that read and the account check saw:
@@ -62,7 +76,7 @@ type LockedUser = {
 
 function staleSession(status: string | undefined) {
   if (status !== undefined && !maySignIn(status)) {
-    return new DomainError('ACCOUNT_SUSPENDED', { detail: 'Your account is suspended.' })
+    return new DomainError('ACCOUNT_SUSPENDED', { detail: ACCOUNT_SUSPENDED_DETAIL })
   }
   return new DomainError('UNAUTHENTICATED', { detail: 'Please log in to continue.' })
 }
@@ -72,6 +86,7 @@ export async function updateMe(
   command: UpdateMeCommand,
   context: UpdateMeContext
 ): Promise<void> {
+  await rateLimiter('profile_update').consume(rateLimitKey('profile_update', userId))
   const phone = command.phoneE164 === undefined ? null : encryptedPhone(command.phoneE164)
 
   await withTx(async (trx) => {
@@ -92,6 +107,7 @@ export async function updateMe(
       values.phone_enc = phone.enc
       values.phone_hash = phone.hash
       values.phone_last4 = phone.last4
+      values.phone_verified_at = null
     }
     const granted: string[] = []
     const withdrawn: string[] = []

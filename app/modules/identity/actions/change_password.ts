@@ -1,5 +1,6 @@
 import hash from '@adonisjs/core/services/hash'
 import { DomainError } from '#exceptions/domain_error'
+import { ACCOUNT_SUSPENDED_DETAIL } from '#shared/constants/auth'
 import { recordAudit } from '#modules/audit/actions/record_audit'
 import { SIGNED_IN_STATUSES, maySignIn } from '#modules/identity/domain/user_status'
 import {
@@ -122,7 +123,7 @@ export async function changePassword(
     if (!row) {
       const current = await trx.from('users').where('id', userId).select('status').first()
       if (current && !maySignIn(current.status)) {
-        throw new DomainError('ACCOUNT_SUSPENDED', { detail: 'Your account is suspended.' })
+        throw new DomainError('ACCOUNT_SUSPENDED', { detail: ACCOUNT_SUSPENDED_DETAIL })
       }
       throw new DomainError('UNAUTHENTICATED', { detail: 'Please log in to continue.' })
     }

@@ -4,6 +4,7 @@ import logger from '@adonisjs/core/services/logger'
 import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
 import { appUrl } from '#config/app'
 import { hmacKeys } from '#config/crypto'
+import { support } from '#config/storefront'
 import { InvariantViolation } from '#exceptions/programming_errors'
 import {
   accountEmail,
@@ -17,7 +18,7 @@ import type { JobEnvelope, JobPayloads } from '#modules/platform/jobs'
 import { EmailNotSent, EmailSender, type EmailSent } from '#modules/platform/ports/email_sender'
 import { jobTx } from '#modules/platform/tx'
 import { isEmailTemplate, type EmailTemplate } from '#modules/notifications/domain/email_templates'
-import { renderEmail } from '#modules/notifications/internal/render_email'
+import { renderEmail, type EmailValues } from '#modules/notifications/internal/render_email'
 import { isAccountNotice } from '#modules/notifications/jobs/dispatch'
 
 /*
@@ -77,9 +78,9 @@ const TOKEN_PAGES: Record<UserTokenPurpose, string> = {
  * already exists", and the reset request for "your password was changed",
  * "sessions revoked" and "two-step verification turned on", for a holder
  * who did not make the change. "Deletion request received" links the
- * privacy notice (`/legal/privacy`, 08 §2.2), which says how deletion
- * works: the account is closed, so a reset would do nothing, and its footer
- * carries the support contact.
+ * privacy notice (`/legal/privacy`, 08 §2.2): the account is closed, so a
+ * reset would do nothing; the email itself carries the support contact
+ * (`noticeValues`).
  */
 const NOTICE_PAGES: Partial<Record<EmailTemplate, string>> = {
   'identity.account_exists': '/login',
@@ -87,6 +88,22 @@ const NOTICE_PAGES: Partial<Record<EmailTemplate, string>> = {
   'identity.sessions_revoked': '/forgot-password',
   'identity.mfa_enabled': '/forgot-password',
   'identity.deletion_requested': '/legal/privacy',
+}
+
+/*
+ * What a notice prints beyond its link. "Deletion request received" prints
+ * the support contact the operator configured (`SUPPORT_EMAIL`,
+ * `SUPPORT_PHONE`, config/storefront.ts; none is a setting of docs/04a
+ * §15.1), because its holder can no longer sign in to ask; a contact that
+ * is not configured is left out, and with neither the template leaves out
+ * the sentence that asks the holder to contact support.
+ */
+function noticeValues(template: EmailTemplate): EmailValues {
+  if (template !== 'identity.deletion_requested') return {}
+  const values: EmailValues = {}
+  if (support.email) values.support_email = support.email
+  if (support.phone) values.support_phone = support.phone
+  return values
 }
 
 export type SendOutcome =
@@ -255,7 +272,10 @@ function accountSendable(
   if (!page) throw new InvariantViolation(`${template} is not an account notice`)
   if (!account?.reachable) return { reason: 'recipient_unreachable' }
   if (!sameAddress(account.email, row.to_address_hash)) return { reason: 'address_changed' }
-  return { to: account.email, values: { link: new URL(page, appUrl).toString() } }
+  return {
+    to: account.email,
+    values: { link: new URL(page, appUrl).toString(), ...noticeValues(template) },
+  }
 }
 
 function sendable(

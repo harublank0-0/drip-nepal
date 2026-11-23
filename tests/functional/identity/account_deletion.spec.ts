@@ -10,6 +10,7 @@ import { revokeSessions } from '#modules/identity/jobs/revoke_sessions'
 import type { JobEnvelope, JobPayloads } from '#modules/platform/jobs'
 import { dispatchNotification } from '#modules/notifications/jobs/dispatch'
 import { sendEmail } from '#modules/notifications/jobs/send_email'
+import { renderEmail } from '#modules/notifications/internal/render_email'
 import type { Browser } from '#tests/support/browser'
 import { signIn } from '#tests/support/courier_http'
 import { captureEmails } from '#tests/support/email'
@@ -38,10 +39,11 @@ import {
  *   `deactivated` with `deletion_requested_at` and a new stamp; this
  *   session ends in the same request; `identity.revoke_sessions` is sent at
  *   once; the "deletion request received" email and one
- *   `user.deletion_request` row with the transition and the masked reason;
+ *   `user.deletion_request` row with the transition and no free text;
  *   a `pending_verification` account may ask too; a wrong password answers
  *   422 on `password`, writes `auth.reauth_failed` and closes nothing; a
- *   missing password, a reason over 500 code points or an unknown member
+ *   missing password, a `reason` (no free text is taken) or another unknown
+ *   member
  *   answers 422 and charges nothing; the last active platform admin gets
  *   409 and nothing changes, while an admin with another active admin may
  *   ask; a guest gets 401; a stamp rotated or a suspension between the
@@ -49,10 +51,13 @@ import {
  * - T-SEC-010: another device of the closed account gets 403
  *   `ACCOUNT_SUSPENDED` while its session exists, and 401 once the job has
  *   deleted it.
- * - T-SEC-102: the audit row holds no name, email or phone; the reason's
- *   address and number are masked.
+ * - T-SEC-102: the audit row holds no name, email or phone, and no
+ *   `reason`.
  * - T-NOT-101: the deletion event dispatched three times gives one row and
  *   one email, which links the privacy notice and carries no token.
+ * - T-IAM-008, the email's words: it prints the support contact the
+ *   operator configured, and without one it leaves out the sentence that
+ *   asks the holder to contact support.
  * The concurrent cases (T-IAM-110 and the `reauth` limit) are in
  * tests/concurrency/identity/account_deletion.spec.ts.
  */
@@ -130,10 +135,7 @@ test.group('T-IAM-008 requestAccountDeletion', (group) => {
   }) => {
     const { user, acting } = await signedIn()
     const before = sessionIdOf(acting.browser)
-    const response = await ask(acting, {
-      password: FACTORY_PASSWORD,
-      reason: 'Moving abroad. Write to me at ram.thapa@example.com or 9841234567.',
-    })
+    const response = await ask(acting, { password: FACTORY_PASSWORD })
     assert.equal(response.status, 202, response.text)
     assert.deepEqual(response.body, { data: { status: 'deletion_requested' } })
 
@@ -165,22 +167,20 @@ test.group('T-IAM-008 requestAccountDeletion', (group) => {
       status: { from: 'active', to: 'deactivated' },
       changed: ['deletion_requested_at', 'security_stamp'],
     })
-    assert.include(audits[0].reason, 'Moving abroad.')
+    assert.isNull(audits[0].reason)
   })
 
-  test('T-SEC-102 the deletion row holds no name, email or phone; the reason is masked', async ({
+  test('T-SEC-102 the deletion row holds no name, email or phone, and no reason', async ({
     assert,
   }) => {
     const { user, acting } = await signedIn()
-    const response = await ask(acting, {
-      password: FACTORY_PASSWORD,
-      reason: 'Write to ram.thapa@example.com or +977 984-123-4567.',
-    })
+    const response = await ask(acting, { password: FACTORY_PASSWORD })
     assert.equal(response.status, 202, response.text)
     const [audit] = await auditRows('user.deletion_request', user.id)
+    assert.isNull(audit.reason)
     const written = JSON.stringify(audit)
     assert.isNotNull(user.fullName)
-    for (const value of [user.fullName!, user.email, 'ram.thapa@example.com', '984-123-4567']) {
+    for (const value of [user.fullName!, user.email]) {
       assert.notInclude(written, value)
     }
   })
@@ -211,7 +211,7 @@ test.group('T-IAM-008 requestAccountDeletion', (group) => {
     assert,
   }) => {
     const { user, acting } = await signedIn('pending_verification')
-    const response = await ask(acting, { password: FACTORY_PASSWORD, reason: null })
+    const response = await ask(acting, { password: FACTORY_PASSWORD })
     assert.equal(response.status, 202, response.text)
     const row = await userRow(user.id)
     assert.equal(row.status, 'deactivated')
@@ -249,9 +249,9 @@ test.group('T-IAM-008 requestAccountDeletion', (group) => {
         body: { password: 'p'.repeat(129) },
       },
       {
-        label: 'a reason over 500 code points',
+        label: 'a reason (no free text is taken)',
         field: 'reason',
-        body: { password: 'unchecked-password', reason: 'r'.repeat(501) },
+        body: { password: 'unchecked-password', reason: 'Moving abroad.' },
       },
       {
         label: 'an unknown member',
@@ -326,7 +326,7 @@ test.group('T-IAM-008 requestAccountDeletion', (group) => {
   }) => {
     const { user } = await signedIn()
     const context = { requestId: null, ipHash: null }
-    const command = { password: FACTORY_PASSWORD, reason: null }
+    const command = { password: FACTORY_PASSWORD }
 
     await db
       .from('users')
@@ -386,7 +386,7 @@ test.group('T-NOT-101 the deletion request email', (group) => {
     userIds.push(user.id)
     await requestAccountDeletion(
       user.id,
-      { password: FACTORY_PASSWORD, reason: null, sessionStamp: user.securityStamp },
+      { password: FACTORY_PASSWORD, sessionStamp: user.securityStamp },
       { requestId: null, ipHash: null }
     )
     const jobs = await queued<NoticeDispatch>('notifications.dispatch')
@@ -426,5 +426,28 @@ test.group('T-NOT-101 the deletion request email', (group) => {
     assert.equal(link.origin, new URL(appUrl).origin)
     assert.equal(link.pathname, '/legal/privacy')
     assert.notInclude(message.text, 'token=')
+  })
+})
+
+test.group('T-IAM-008 the deletion email and the support contact', () => {
+  test('T-IAM-008 the email prints the configured support contact, or leaves the contact sentence out', async ({
+    assert,
+  }) => {
+    const link = 'https://example.test/legal/privacy'
+    const withContact = await renderEmail('identity.deletion_requested', {
+      link,
+      support_email: 'help@example.test',
+      support_phone: '9801234567',
+    })
+    assert.include(withContact.text, 'contact DripNepal support')
+    assert.include(withContact.text, 'Email: help@example.test')
+    assert.include(withContact.text, 'Phone: 9801234567')
+    assert.include(withContact.html, 'help@example.test')
+    assert.include(withContact.text, 'Read the privacy notice')
+
+    const withoutContact = await renderEmail('identity.deletion_requested', { link })
+    assert.notInclude(withoutContact.text, 'contact DripNepal support')
+    assert.notInclude(withoutContact.text, 'Email:')
+    assert.include(withoutContact.text, "If you didn't ask for this")
   })
 })

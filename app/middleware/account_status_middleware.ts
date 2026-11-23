@@ -1,6 +1,7 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import type { NextFn } from '@adonisjs/core/types/http'
 import { DomainError } from '#exceptions/domain_error'
+import { ACCOUNT_SUSPENDED_DETAIL } from '#shared/constants/auth'
 import {
   endSession,
   endSessionAsGuest,
@@ -53,7 +54,7 @@ export default class AccountStatusMiddleware {
     }
     await endSession(ctx)
     if (standing === 'suspended') {
-      throw new DomainError('ACCOUNT_SUSPENDED', { detail: 'Your account is suspended.' })
+      throw new DomainError('ACCOUNT_SUSPENDED', { detail: ACCOUNT_SUSPENDED_DETAIL })
     }
     throw new DomainError('UNAUTHENTICATED', { detail: 'Please log in to continue.' })
   }

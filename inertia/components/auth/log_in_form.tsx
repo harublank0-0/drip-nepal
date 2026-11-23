@@ -284,7 +284,10 @@ export function LogInForm({
  * The suspension notice (docs/06 §5.2 `ACCOUNT_SUSPENDED`: "Show the
  * suspension notice and support contact"), with the support contact the
  * operator configured, as the footer's help link has it; without one, the
- * text alone.
+ * text alone. Its words fit a suspended and a closed account alike (01
+ * AC-FR-IAM-003-4 gives both the same 403; M1 part 6a), so a user who
+ * closed the account and comes back to reopen it is not told it is
+ * suspended.
  */
 function SuspendedNotice() {
   const { support } = usePage<Data.SharedProps>().props

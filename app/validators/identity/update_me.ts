@@ -14,7 +14,13 @@ import { nfcText } from '#validators/support/nfc_text'
  *   points, as at sign-up (`nfcText`); never null, because only an
  *   anonymised row may lack a name (`users_identity_required_check`).
  * - `phone`: a Nepali mobile number, handed on in E.164 (`nepalMobile`), or
- *   null to remove the number.
+ *   null to remove the number. The JSON body parser turns `""` into null
+ *   (`convertEmptyStringsToNull`), so an empty string removes it too; the
+ *   two cannot be told apart once parsed.
+ *
+ * `full_name` and the consents may be left out but never sent as null (or
+ * `""`): VineJS's `optional()` reads null as missing (vine 4.4), so the
+ * controller refuses them first with `assertNotNull`, 422 `required`.
  * - `marketing_email_consent`, `marketing_sms_consent`: strict booleans
  *   (AC-FR-IAM-013-1); `"on"` or `1` answer `boolean`.
  */

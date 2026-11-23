@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
 import { DomainError } from '#exceptions/domain_error'
+import { ACCOUNT_SUSPENDED_DETAIL } from '#shared/constants/auth'
 import { InvariantViolation } from '#exceptions/programming_errors'
 import { recordAudit } from '#modules/audit/actions/record_audit'
 import { maySignIn } from '#modules/identity/domain/user_status'
@@ -45,10 +46,11 @@ import { withTx } from '#modules/platform/tx'
  *    `user.deletion_requested`) is queued; it needs no limiter of its own,
  *    because the request succeeds once per deactivation and the session it
  *    came from ends with it. One `user.deletion_request` audit row
- *    (proposed, docs/04a §15.3) records the transition and the requester's
- *    `reason`, which the writer masks for email addresses and mobile
- *    numbers. The live tokens stay: no operation redeems one for an account
- *    that may not sign in (07 §3.8).
+ *    (proposed, docs/04a §15.3) records the transition. No free text is
+ *    taken or kept: an audit row is insert-only and outlives anonymisation,
+ *    so a reason typed by the requester could never be removed (04 §19.2).
+ *    The live tokens stay: no operation redeems one for an account that may
+ *    not sign in (07 §3.8).
  *
  * The request appears in the admin deletion queue by its status and
  * `deletion_requested_at` (`users_deletion_queue_idx`; the admin pages,
@@ -57,8 +59,6 @@ import { withTx } from '#modules/platform/tx'
 
 export type RequestAccountDeletionCommand = {
   password: string
-  // NFC and trimmed by the validator; null or empty when the requester gave none.
-  reason: string | null
   // The `security_stamp` the acting session holds, which the account check has just compared.
   sessionStamp: string
 }
@@ -80,7 +80,7 @@ function wrongPassword() {
 
 function staleSession(status: string | undefined) {
   if (status !== undefined && !maySignIn(status)) {
-    return new DomainError('ACCOUNT_SUSPENDED', { detail: 'Your account is suspended.' })
+    return new DomainError('ACCOUNT_SUSPENDED', { detail: ACCOUNT_SUSPENDED_DETAIL })
   }
   return new DomainError('UNAUTHENTICATED', { detail: 'Please log in to continue.' })
 }
@@ -152,7 +152,6 @@ export async function requestAccountDeletion(
   })
   if (!checked.ok) throw wrongPassword()
   const verifiedHash = checked.passwordHash
-  const reason = command.reason?.trim() ? command.reason.trim() : null
 
   await withTx(async (trx) => {
     await assertNotLastActiveAdmin(trx, userId)
@@ -204,7 +203,6 @@ export async function requestAccountDeletion(
         status: { from, to: 'deactivated' },
         changed: ['deletion_requested_at', 'security_stamp'],
       },
-      reason,
     })
   })
 

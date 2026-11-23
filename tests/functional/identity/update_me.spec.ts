@@ -6,7 +6,15 @@ import { updateMe } from '#modules/identity/actions/update_me'
 import { phoneBlindIndex } from '#modules/platform/crypto/blind_index'
 import { decryptField } from '#modules/platform/crypto/field_decrypter'
 import { signIn } from '#tests/support/courier_http'
-import { ME_PATH, getJson, guest, patchJson, randomIPv4, type Guest } from '#tests/support/identity'
+import {
+  ME_PATH,
+  forgetKeys,
+  getJson,
+  guest,
+  patchJson,
+  randomIPv4,
+  type Guest,
+} from '#tests/support/identity'
 
 /*
  * `updateMe` over HTTP and through the action (docs/06 §13.3; 01
@@ -14,13 +22,16 @@ import { ME_PATH, getJson, guest, patchJson, randomIPv4, type Guest } from '#tes
  * started with the test sign-in route (`startSession`, as `logIn` does).
  * - T-IAM-007: a name, a mobile number and the consents answer 200 with
  *   the account as `getMe` has it; the name is kept trimmed and in NFC; an
- *   absent member keeps its column; `phone: null` removes the number; a
- *   granted consent keeps its first time when sent again; each grant or
+ *   absent member keeps its column; `phone: null` removes the number, and
+ *   so does `""`, which the body parser reads as null; a changed or removed
+ *   number clears `phone_verified_at`; a granted consent keeps its first
+ *   time when sent again; each grant or
  *   withdrawal writes one `user.consent_change` row with the source
  *   `account_page` and the columns by name, and a request that changes no
  *   consent writes none; a `pending_verification` user may edit; a name or
- *   mobile out of rule and a consent that is not a boolean answer 422 and
- *   write nothing; a guest gets 401; a stamp rotated or a suspension
+ *   mobile out of rule, a consent that is not a boolean, and a null or
+ *   empty name or consent answer 422 and write nothing; a guest gets 401; a
+ *   stamp rotated or a suspension
  *   between the account check and the write answers 401 or 403 and writes
  *   nothing.
  * - T-IAM-103: after `updateMe` the row holds the phone only as ciphertext,
@@ -28,6 +39,10 @@ import { ME_PATH, getJson, guest, patchJson, randomIPv4, type Guest } from '#tes
  * - T-SEC-003: `email`, `status`, `security_stamp`, a password, a role or
  *   an encrypted column answer 422 `unknown_field` and change nothing.
  * - T-SEC-102: the consent row holds no name, email or phone.
+ * Each call charges the user's `profile_update` key, which the limiter
+ * store commits on its own connection, so each test deletes the keys of the
+ * users it made (docs/10 §3.3); the limit itself is in
+ * tests/concurrency/identity/account_deletion.spec.ts (T-SEC-011).
  */
 
 const userRow = (userId: string) => db.from('users').where('id', userId).firstOrFail()
@@ -37,14 +52,24 @@ const consentRows = (userId: string) =>
 const problemFields = (body: { errors?: { field: string; code: string }[] }) =>
   (body.errors ?? []).map((item) => [item.field, item.code])
 
+// The users this file signed in, whose `profile_update` keys each test deletes.
+const made: string[] = []
+
+async function forgetMade() {
+  for (const id of made.splice(0)) await forgetKeys('profile_update', id)
+}
+
 async function signedIn(state?: 'pending_verification') {
   const user = state ? await UserFactory.apply(state).create() : await UserFactory.create()
   await user.refresh()
+  made.push(user.id)
   const client: Guest = { browser: await signIn(user.id), ip: randomIPv4() }
   return { user, client }
 }
 
-test.group('T-IAM-007 updateMe', () => {
+test.group('T-IAM-007 updateMe', (group) => {
+  group.each.teardown(forgetMade)
+
   test('T-IAM-007 a name, a mobile number and the consents answer 200 with the account as getMe has it [AC-FR-IAM-013-1, AC-J04-05]', async ({
     assert,
   }) => {
@@ -119,6 +144,50 @@ test.group('T-IAM-007 updateMe', () => {
     assert.isNull(row.phone_enc)
     assert.isNull(row.phone_hash)
     assert.isNull(row.phone_last4)
+  })
+
+  test('T-IAM-007 an empty phone, which the body parser reads as null, removes the number too', async ({
+    assert,
+  }) => {
+    const { user, client } = await signedIn()
+    await patchJson(client, ME_PATH, { phone: '9851234567' })
+    const response = await patchJson(client, ME_PATH, { phone: '' })
+    assert.equal(response.status, 200, response.text)
+    assert.isNull(response.body.data.phone_last4)
+    const row = await userRow(user.id)
+    assert.isNull(row.phone_enc)
+    assert.isNull(row.phone_last4)
+  })
+
+  test('T-IAM-007 a changed or removed number clears phone_verified_at [FR-IAM-010]', async ({
+    assert,
+  }) => {
+    const { user, client } = await signedIn()
+    await patchJson(client, ME_PATH, { phone: '9851234567' })
+    const verify = () =>
+      db
+        .from('users')
+        .where('id', user.id)
+        .update({ phone_verified_at: db.raw('now()') })
+
+    await verify()
+    const changed = await patchJson(client, ME_PATH, { phone: '9861234567' })
+    assert.equal(changed.status, 200, changed.text)
+    const afterChange = await userRow(user.id)
+    assert.isNull(afterChange.phone_verified_at)
+
+    await verify()
+    const removed = await patchJson(client, ME_PATH, { phone: null })
+    assert.equal(removed.status, 200, removed.text)
+    const afterRemoval = await userRow(user.id)
+    assert.isNull(afterRemoval.phone_verified_at)
+
+    // A request that leaves the phone alone leaves its verification alone.
+    await patchJson(client, ME_PATH, { phone: '9861234567' })
+    await verify()
+    await patchJson(client, ME_PATH, { full_name: 'Kept Verified' })
+    const untouched = await userRow(user.id)
+    assert.instanceOf(untouched.phone_verified_at, Date)
   })
 
   test('T-IAM-007 a consent sent again keeps its first time; each grant and withdrawal writes one row by name [AC-FR-IAM-013-4]', async ({
@@ -213,6 +282,17 @@ test.group('T-IAM-007 updateMe', () => {
         body: { full_name: 'a'.repeat(101) },
       },
       { label: 'a null name', field: 'full_name', body: { full_name: null } },
+      { label: 'an empty name, read as null', field: 'full_name', body: { full_name: '' } },
+      {
+        label: 'a null email consent',
+        field: 'marketing_email_consent',
+        body: { marketing_email_consent: null },
+      },
+      {
+        label: 'a null SMS consent',
+        field: 'marketing_sms_consent',
+        body: { marketing_sms_consent: null },
+      },
       { label: 'an IoT number', field: 'phone', body: { phone: '9012345678' } },
       { label: 'a landline', field: 'phone', body: { phone: '014123456' } },
       {
@@ -224,7 +304,7 @@ test.group('T-IAM-007 updateMe', () => {
     .run(async ({ assert }, { field, body }) => {
       const { user, client } = await signedIn()
       const before = await userRow(user.id)
-      const response = await patchJson(client, ME_PATH, { ...body, marketing_sms_consent: true })
+      const response = await patchJson(client, ME_PATH, { marketing_sms_consent: true, ...body })
       assert.equal(response.status, 422, response.text)
       assert.deepEqual(
         problemFields(response.body).map(([name]) => name),
@@ -275,7 +355,9 @@ test.group('T-IAM-007 updateMe', () => {
   })
 })
 
-test.group('T-IAM-103 the phone written by updateMe', () => {
+test.group('T-IAM-103 the phone written by updateMe', (group) => {
+  group.each.teardown(forgetMade)
+
   test('T-IAM-103 after updateMe the users row holds the phone only as ciphertext, blind index and last four digits', async ({
     assert,
   }) => {
@@ -300,7 +382,9 @@ test.group('T-IAM-103 the phone written by updateMe', () => {
   })
 })
 
-test.group('T-SEC-003 server-owned fields on updateMe', () => {
+test.group('T-SEC-003 server-owned fields on updateMe', (group) => {
+  group.each.teardown(forgetMade)
+
   test(
     'T-SEC-003 updateMe with {member} is refused with 422 unknown_field and changes nothing [RF-36]'
   )

@@ -14,16 +14,16 @@ import { ConfirmDialog } from '~/components/common/confirm_dialog'
 import { ErrorSummary } from '~/components/forms/error_summary'
 import { PasswordField } from '~/components/forms/password_field'
 import { ProblemAlert } from '~/components/forms/problem_alert'
-import { TextareaField } from '~/components/forms/textarea_field'
 
 /*
  * The deletion request on `/account/security` (`requestAccountDeletion`,
  * docs/06 §13.3; 01 FR-IAM-009, AC-FR-IAM-009-1; docs/08 §2.4, §7.3). A
  * destructive tier-1 `ConfirmDialog` states the consequence; the password
- * the server requires, and the optional reason, are fields inside it (08
- * §7.3 rule 3), so the password re-entry is the friction that type-to-confirm
- * gives elsewhere. The reason is kept with the audit record of the request,
- * so its help text asks for no contact data (08 §7.1 "Permanent notes").
+ * the server requires is the one field inside it (08 §7.3 rule 3), so the
+ * password re-entry is the friction that type-to-confirm gives elsewhere.
+ * It asks for no reason: the request's only record is an insert-only audit
+ * row that outlives anonymisation, so it keeps no free text (docs/04
+ * §19.2).
  *
  * On the 202 the account is closed and the server has ended this session
  * too: the client clears Inertia's history, as a sign-out does (docs/07
@@ -35,13 +35,10 @@ import { TextareaField } from '~/components/forms/textarea_field'
  */
 type Body = Route.Body<'requestAccountDeletion'>
 
-const FIELDS = [
-  { name: 'password', id: 'delete-password' },
-  { name: 'reason', id: 'delete-reason' },
-] as const
+const FIELDS = [{ name: 'password', id: 'delete-password' }] as const
 const KNOWN = new Set<string>(FIELDS.map((field) => field.name))
 
-const { password, deletionReason } = ACCOUNT_LIMITS
+const { password } = ACCOUNT_LIMITS
 
 export function DeleteAccount() {
   const mutation = useApiMutation()
@@ -51,7 +48,7 @@ export function DeleteAccount() {
   const [offline, setOffline] = useState(false)
 
   const form = useForm({
-    defaultValues: { password: '', reason: '' },
+    defaultValues: { password: '' },
     canSubmitWhenInvalid: true,
     onSubmitInvalid: ({ formApi }) => {
       setProblem(null)
@@ -62,8 +59,7 @@ export function DeleteAccount() {
       setProblem(null)
       setOffline(false)
       report.clear()
-      const reason = value.reason.trim()
-      const body: Body = { password: value.password, reason: reason === '' ? null : reason }
+      const body: Body = { password: value.password }
       const outcome = await mutation.run(() =>
         client.request('requestAccountDeletion', { body, timeout: 30_000 })
       )
@@ -132,28 +128,6 @@ export function DeleteAccount() {
               label={t('account.delete.password')}
               autoComplete="current-password"
               value={field.state.value}
-              errors={field.state.meta.errors}
-              onChange={(value) => changeAndRecheck(field, value)}
-              onBlur={field.handleBlur}
-            />
-          )}
-        </form.Field>
-        <form.Field
-          name="reason"
-          validators={{
-            onBlur: ({ value }) =>
-              [...value.trim().normalize('NFC')].length > deletionReason.max
-                ? t('account.delete.reason_rule', { max: deletionReason.max })
-                : undefined,
-          }}
-        >
-          {(field) => (
-            <TextareaField
-              id="delete-reason"
-              label={t('account.delete.reason')}
-              description={t('account.delete.reason_help')}
-              value={field.state.value}
-              maxLength={deletionReason.max}
               errors={field.state.meta.errors}
               onChange={(value) => changeAndRecheck(field, value)}
               onBlur={field.handleBlur}

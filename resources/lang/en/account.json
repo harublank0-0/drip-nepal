@@ -56,9 +56,7 @@
   "delete.consequence": "Your account closes now and you are signed out everywhere. Order and payment records are kept for as long as business records must be kept.",
   "delete.password": "Your password",
   "delete.password_rule": "Enter your password.",
-  "delete.reason": "Why are you leaving? (optional)",
-  "delete.reason_help": "Kept with the record of your request. Do not enter phone numbers, email addresses or postal addresses.",
-  "delete.reason_rule": "Use at most {max} characters.",
   "delete.confirm": "Delete my account",
-  "delete.pending": "Deleting…"
+  "delete.pending": "Deleting…",
+  "profile.unchanged": "There are no changes to save."
 }

@@ -33,6 +33,14 @@ import { RateLimitNotice } from '~/components/forms/rate_limit_notice'
  * sends `phone: null` on its own. The consent boxes start as saved; an
  * unticked box withdraws that consent at once (07 §5.3).
  *
+ * Save sends only the members that differ from what the page was given
+ * (`account`), and nothing when none does, so a tab opened before a consent
+ * was withdrawn elsewhere does not grant it again when the user edits only
+ * the name (`updateMe` takes no `If-Match`: `users` has no version). Save
+ * and "Remove my number" share one request in flight (`useApiMutation`
+ * refuses a second), so they never run together, and one `RATE_LIMITED`
+ * wait (`profile_update`, 20 an hour) disables both.
+ *
  * The form pattern of docs/08 §7.1: client rules mirror the server's
  * (shared/constants/limits.ts, shared/format/phone.ts) and run on blur and
  * submit; a 422 lands on its fields; any other problem shows above the
@@ -68,10 +76,33 @@ const KNOWN = new Set<string>(FIELDS.map((field) => field.name))
 
 const { fullName, phoneInput } = ACCOUNT_LIMITS
 const RATE_LIMIT_ID = 'profile-rate-limit'
-const REMOVE_RATE_LIMIT_ID = 'profile-remove-rate-limit'
 
 // Code points after NFC, as `users_full_name_check` counts them (docs/04 §2.8).
 const nameLength = (value: string) => [...value.trim().normalize('NFC')].length
+
+// The status line after each outcome.
+const DONE_MESSAGES = {
+  saved: 'account.profile.saved',
+  phone_removed: 'account.profile.phone_removed',
+  unchanged: 'account.profile.unchanged',
+} as const
+
+// The members of `value` that differ from the saved account; the phone only when one was typed.
+function changedMembers(value: Values, account: Account): Body {
+  const body: Body = {}
+  const name = value.full_name.trim()
+  if (name !== (account.full_name ?? '')) body.full_name = name
+  const phone = value.phone.trim()
+  // E.164 when the shared rule reads it; anything else goes as typed, for the server to refuse.
+  if (phone !== '') body.phone = toNepalMobileE164(phone) ?? phone
+  if (value.marketing_email_consent !== account.marketing_email_consent) {
+    body.marketing_email_consent = value.marketing_email_consent
+  }
+  if (value.marketing_sms_consent !== account.marketing_sms_consent) {
+    body.marketing_sms_consent = value.marketing_sms_consent
+  }
+  return body
+}
 
 function phoneError(value: string) {
   if (value.trim() === '') return undefined
@@ -82,11 +113,12 @@ function phoneError(value: string) {
 
 export function ProfileForm({ account }: { account: Account }) {
   const mutation = useApiMutation()
-  const removal = useApiMutation()
   const report = useErrorReport(FIELDS)
   const [problem, setProblem] = useState<Problem | null>(null)
   const [offline, setOffline] = useState(false)
-  const [done, setDone] = useState<'saved' | 'phone_removed' | null>(null)
+  const [done, setDone] = useState<'saved' | 'phone_removed' | 'unchanged' | null>(null)
+  // Which button's request is in flight, for its pending label.
+  const [running, setRunning] = useState<'save' | 'remove' | null>(null)
 
   function resetMessages() {
     setProblem(null)
@@ -108,19 +140,19 @@ export function ProfileForm({ account }: { account: Account }) {
       report.failed(formApi)
     },
     onSubmit: async ({ value, formApi }) => {
+      if (mutation.pending) return
       resetMessages()
       report.clear()
-      const phone = value.phone.trim()
-      const body: Body = {
-        full_name: value.full_name.trim(),
-        marketing_email_consent: value.marketing_email_consent,
-        marketing_sms_consent: value.marketing_sms_consent,
-        // E.164 when the shared rule reads it; anything else goes as typed, for the server to refuse.
-        ...(phone === '' ? {} : { phone: toNepalMobileE164(phone) ?? phone }),
+      const body = changedMembers(value, account)
+      if (Object.keys(body).length === 0) {
+        setDone('unchanged')
+        return
       }
+      setRunning('save')
       const outcome = await mutation.run(() =>
         client.request('updateMe', { body, timeout: 30_000 })
       )
+      setRunning(null)
       if (!outcome) return
       if (outcome.ok) {
         formApi.setFieldValue('phone', '')
@@ -143,11 +175,14 @@ export function ProfileForm({ account }: { account: Account }) {
   })
 
   async function removePhone() {
+    if (mutation.pending) return
     resetMessages()
     report.clear()
-    const outcome = await removal.run(() =>
+    setRunning('remove')
+    const outcome = await mutation.run(() =>
       client.request('updateMe', { body: { phone: null }, timeout: 30_000 })
     )
+    setRunning(null)
     if (!outcome) return
     if (outcome.ok) {
       setDone('phone_removed')
@@ -163,7 +198,6 @@ export function ProfileForm({ account }: { account: Account }) {
   }
 
   const blocked = mutation.pending || mutation.retryIn > 0
-  const removeBlocked = removal.pending || removal.retryIn > 0
 
   return (
     <section aria-labelledby="profile-heading" className="space-y-4">
@@ -254,14 +288,12 @@ export function ProfileForm({ account }: { account: Account }) {
         </FieldSet>
         {done && (
           <Alert role="status">
-            <AlertDescription>
-              {done === 'saved' ? t('account.profile.saved') : t('account.profile.phone_removed')}
-            </AlertDescription>
+            <AlertDescription>{t(DONE_MESSAGES[done])}</AlertDescription>
           </Alert>
         )}
         <ProblemAlert problem={problem} offline={offline} />
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
-          <div className="space-y-2">
+        <div className="space-y-2">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
             {/* aria-disabled, not disabled, while busy: it keeps focus (08 §7.1). */}
             <Button
               type="submit"
@@ -269,29 +301,27 @@ export function ProfileForm({ account }: { account: Account }) {
               aria-disabled={blocked || undefined}
               aria-describedby={mutation.retryIn > 0 ? RATE_LIMIT_ID : undefined}
             >
-              {mutation.pending ? t('account.profile.submitting') : t('account.profile.submit')}
+              {running === 'save' ? t('account.profile.submitting') : t('account.profile.submit')}
             </Button>
-            <RateLimitNotice id={RATE_LIMIT_ID} seconds={mutation.retryIn} />
-          </div>
-          {account.phone_last4 && (
-            <div className="space-y-2">
+            {account.phone_last4 && (
               <Button
                 type="button"
                 variant="outline"
                 className={`h-11 w-full text-base sm:w-auto ${PENDING_BUTTON}`}
-                aria-disabled={removeBlocked || undefined}
-                aria-describedby={removal.retryIn > 0 ? REMOVE_RATE_LIMIT_ID : undefined}
+                aria-disabled={blocked || undefined}
+                aria-describedby={mutation.retryIn > 0 ? RATE_LIMIT_ID : undefined}
                 onClick={() => {
-                  if (!removeBlocked) void removePhone()
+                  if (!blocked) void removePhone()
                 }}
               >
-                {removal.pending
+                {running === 'remove'
                   ? t('account.profile.removing_phone')
                   : t('account.profile.remove_phone')}
               </Button>
-              <RateLimitNotice id={REMOVE_RATE_LIMIT_ID} seconds={removal.retryIn} />
-            </div>
-          )}
+            )}
+          </div>
+          {/* One wait for both buttons: they share one limiter and one request in flight. */}
+          <RateLimitNotice id={RATE_LIMIT_ID} seconds={mutation.retryIn} />
         </div>
       </form>
     </section>
