@@ -775,10 +775,12 @@ paths:
         else 422 before any limiter.
         Order (07 §3.9, 06 §9.1): the `mfa_user` (per account, whatever the session or IP) and
         `mfa` (per account and client network) limiters each take a point before the check; a
-        wrong code keeps both and a right one deletes both. More than 5 wrong codes in 5
-        minutes block the account's TOTP checks for 15 minutes (OD-50): 429 `RATE_LIMITED`
-        with `Retry-After`, a right code included; the attempt that starts the block writes
-        one `auth.mfa_locked` audit row (proposed) and raises the `mfa_lockout` alert (11 §9.7).
+        wrong code keeps both and a right one deletes both; an attempt that fails for another
+        reason (a secret that does not decrypt) gives both back. After 5 wrong codes in 5
+        minutes the next attempt is refused unchecked, whether its code is right or wrong, and
+        the account's TOTP checks are blocked for 15 minutes (OD-50): 429 `RATE_LIMITED` with
+        `Retry-After`; the attempt that starts the block writes one `auth.mfa_locked` audit row
+        (proposed) and raises the `mfa_lockout` alert (11 §9.7).
         The code (RFC 6238, 6 digits, 30-second step, one step either side) must be later
         than `mfa_last_used_step`; a wrong, older or replayed code is 422 `code_incorrect` on
         `code` with one `auth.mfa_failed` row (proposed). A right code records its step by a
@@ -1190,7 +1192,9 @@ paths:
         account is left unconsumed. Then the current password through the `reauth` limiter
         (06 §9.1): both keys take their point before the hash; past 5 wrong passwords in 15
         minutes, 429 without hashing; a wrong password keeps the points, writes
-        `auth.reauth_failed` and is 422 `password_incorrect` on `password`.
+        `auth.reauth_failed` and is 422 `password_incorrect` on `password`. A right password
+        takes a point of the `totp_start` limiter (5 per hour per user, proposed, 06 §9.1);
+        past it, 429 with nothing written.
         Side effects, in one transaction: a new 160-bit secret, sealed with the field
         encryption of 04 §2.9, is stored in `mfa_totp_secret_enc` by a compare-and-set on what
         the checks read (no TOTP yet, the password just verified; a miss is 409), with
@@ -8260,3 +8264,6 @@ components:
 #     `CONFLICT` to the wrong enrolment state before any limiter. The bodies follow 06 §3.4's
 #     envelope. `logIn`'s `redirect_to` is `/mfa` for active staff, with the checked
 #     destination as its `return_to` (note 37's `return_to`/`redirect_to` item).
+#     After the Fable review (2026-11-23): `verifyMfaChallenge` states the lock exactly (the
+#     attempt after 5 wrong codes is refused unchecked, right or wrong) and the refund of an
+#     attempt that fails on a data fault; `startTotpEnrollment` names the `totp_start` 429.

@@ -13,7 +13,8 @@ import { matchTotp } from '#modules/identity/domain/totp'
  * A stored value that does not decrypt (a lost key, the development
  * seeder's placeholder enrolment, docs/07 §3.13) throws the decrypter's
  * `InvariantViolation`: a data fault, answered 500 and reported, never
- * counted as a wrong code.
+ * counted as a wrong code (`throttledTotpCheck` gives its limiter points
+ * back).
  */
 const AAD = 'users.mfa_totp_secret_enc'
 

@@ -21,8 +21,9 @@ import { t } from '~/lib/i18n'
  *   if (!outcome.ok && 'problem' in outcome && stepUp.refused(outcome.problem)) return
  *
  * `verifyMfaChallenge` answers: a wrong or replayed code is the field's
- * error, and the field takes focus again; `RATE_LIMITED` (5 wrong codes in
- * 5 minutes lock the account's codes for 15 minutes, OD-50) is this hook's
+ * error, and the field takes focus again; `RATE_LIMITED` (after 5 wrong
+ * codes in 5 minutes the next attempt is refused unchecked, right or wrong,
+ * and the account's codes are blocked for 15 minutes, OD-50) is this hook's
  * `retryIn`, which the dialog shows next to its confirm button; anything
  * else is `problem`, shown with its reference. `UNAUTHENTICATED` visits the
  * sign-in page, as every action's does (`useApiMutation`). The challenge

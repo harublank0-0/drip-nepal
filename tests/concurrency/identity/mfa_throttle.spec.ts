@@ -9,11 +9,14 @@ import { JOB_SCHEMA } from '#modules/platform/jobs'
 import { withTx } from '#modules/platform/tx'
 import { MIGRATOR_CONNECTION } from '#tests/support/database'
 import { FACTORY_PASSWORD } from '#database/factories/user_factory'
+import { placeholderCiphertext } from '#database/factories/placeholder_ciphertext'
+import { rateLimitKey, rateLimiter } from '#modules/platform/rate_limits'
 import { signIn } from '#tests/support/courier_http'
 import {
   MFA_CHALLENGE_PATH,
   codeAt,
   enrolledStaff,
+  forgetKeys,
   forgetMfa,
   forgetReauth,
   postJson,
@@ -36,7 +39,14 @@ import { captureLogs } from '#tests/support/logs'
  *   client networks; a right code from any session is then refused with
  *   429 and `Retry-After`; one `auth.mfa_locked` row and one `mfa_lockout`
  *   alert (AC-FR-IAM-007-4, OD-50).
+ * - T-SEC-011: after 5 wrong codes, a right sixth code is refused unchecked
+ *   with 429, starts the block and writes one `auth.mfa_locked` row
+ *   (07 §3.9, as built; 01 note 35).
  * - T-SEC-011: 20 wrong codes sent at once reach the check at most 5 times.
+ * - T-SEC-011: attempts that fail on a secret that does not decrypt give
+ *   their points back, so they never lock the account.
+ * - T-SEC-011: the 6th successful `startTotpEnrollment` in an hour gets 429
+ *   and writes nothing (`totp_start`, proposed).
  * - T-SEC-011: the per-source `mfa` limiter refuses the 6th code in a
  *   minute from one network once a right code elsewhere has cleared the
  *   account's count.
@@ -59,7 +69,8 @@ const context = (ip: string) => ({ ip, requestId: null, ipHash: null })
 async function outcomeOf(call: () => Promise<unknown>) {
   return call().then(
     () => 'ok',
-    (error: { problemCode?: string; code?: string }) => error.problemCode ?? error.code ?? 'error'
+    (error: { problemCode?: string; code?: string; name?: string }) =>
+      error.problemCode ?? error.code ?? error.name ?? 'error'
   )
 }
 
@@ -107,6 +118,7 @@ test.group('T-SEC-011 TOTP throttling', (group) => {
       for (const { userId, ips } of forget) {
         await forgetMfa(userId, ...ips)
         await forgetReauth(userId)
+        await forgetKeys('totp_start', userId)
       }
       await cleanUp()
     }
@@ -147,6 +159,86 @@ test.group('T-SEC-011 TOTP throttling', (group) => {
     const alerts = lines.filter((line) => line.fields.alert === 'mfa_lockout')
     assert.lengthOf(alerts, 1)
     assert.equal(alerts[0].fields.user_id, user.id)
+  })
+
+  test('T-SEC-011 after 5 wrong codes a right sixth code is refused unchecked with 429, starts the block and writes one auth.mfa_locked row [AC-FR-IAM-007-4]', async ({
+    assert,
+  }) => {
+    const { user, secret } = await enrolledStaff('platform_admin', newEmail('right-sixth'))
+    const [first, second] = [randomIPv4(), randomIPv4()]
+    forget.push({ userId: user.id, ips: [first, second] })
+    const bad = wrongCode(secret)
+
+    for (let n = 0; n < 5; n++) {
+      assert.equal(
+        await outcomeOf(() => verifyMfaChallenge(user.id, bad, context(first))),
+        'VALIDATION_FAILED'
+      )
+    }
+    assert.equal(
+      await outcomeOf(() => verifyMfaChallenge(user.id, codeAt(secret), context(second))),
+      'E_TOO_MANY_REQUESTS'
+    )
+    // Refused before the check: no step was recorded, and the block holds for the next one too.
+    const row = await db.from('users').where('id', user.id).firstOrFail()
+    assert.isNull(row.mfa_last_used_step)
+    assert.equal(await auditCount('auth.mfa_locked', user.id), 1)
+    assert.equal(
+      await outcomeOf(() => verifyMfaChallenge(user.id, codeAt(secret, 1), context(second))),
+      'E_TOO_MANY_REQUESTS'
+    )
+    assert.equal(await auditCount('auth.mfa_locked', user.id), 1)
+    assert.equal(await auditCount('auth.mfa_verify', user.id), 0)
+  })
+
+  test('T-SEC-011 attempts that fail on a secret that does not decrypt give their points back and never lock the account', async ({
+    assert,
+  }) => {
+    const user = await staffWithoutTotp('platform_admin', newEmail('fault'))
+    await db
+      .from('users')
+      .where('id', user.id)
+      .update({ mfa_enabled_at: db.raw('now()'), mfa_totp_secret_enc: placeholderCiphertext() })
+    const ip = randomIPv4()
+    forget.push({ userId: user.id, ips: [ip] })
+
+    const outcomes: string[] = []
+    for (let n = 0; n < 7; n++) {
+      outcomes.push(await outcomeOf(() => verifyMfaChallenge(user.id, '123456', context(ip))))
+    }
+    assert.deepEqual(
+      outcomes,
+      Array.from({ length: 7 }, () => 'InvariantViolation')
+    )
+    const point = await rateLimiter('mfa_user').get(rateLimitKey('mfa_user', user.id))
+    assert.equal(point?.consumed ?? 0, 0)
+    assert.equal(await auditCount('auth.mfa_failed', user.id), 0)
+    assert.equal(await auditCount('auth.mfa_locked', user.id), 0)
+  })
+
+  test('T-SEC-011 the 6th successful startTotpEnrollment in an hour gets 429 and writes nothing', async ({
+    assert,
+  }) => {
+    const user = await staffWithoutTotp('platform_admin', newEmail('starts'))
+    const issued = await withTx((trx) => issueUserToken(trx, user.id, 'mfa_enrollment'))
+    const token = await rawTokenOf(issued.id, 'mfa_enrollment')
+    forget.push({ userId: user.id, ips: [] })
+    const start = () =>
+      startTotpEnrollment(
+        user.id,
+        { token, password: FACTORY_PASSWORD },
+        { requestId: null, ipHash: null }
+      )
+
+    for (let n = 0; n < 5; n++) assert.equal(await outcomeOf(start), 'ok')
+    const before = await db.from('users').where('id', user.id).firstOrFail()
+    assert.equal(await outcomeOf(start), 'E_TOO_MANY_REQUESTS')
+    const after = await db.from('users').where('id', user.id).firstOrFail()
+    assert.equal(after.mfa_totp_secret_enc, before.mfa_totp_secret_enc)
+    assert.equal(await auditCount('auth.mfa_enrollment_start', user.id), 5)
+    // A right password gave its reauth points back: the refusal is totp_start's.
+    const reauth = await rateLimiter('reauth_user').get(rateLimitKey('reauth_user', user.id))
+    assert.equal(reauth?.consumed ?? 0, 0)
   })
 
   test('T-SEC-011 20 wrong codes sent at once reach the check at most 5 times, and the lock is recorded once', async ({

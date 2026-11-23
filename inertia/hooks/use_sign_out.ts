@@ -16,6 +16,11 @@ import { t } from '~/lib/i18n'
  * `sessionStorage` (docs/08 §7.1) are removed here, before the visit, once
  * a form keeps one (checkout, M5).
  *
+ * `afterSignOut` replaces the visit to `/login` for a page that stays where
+ * it is: `/mfa` reloads its props in place, so the enrolment token it holds
+ * in memory survives a sign-out from another account (M1 part 5). The
+ * history is cleared either way.
+ *
  * Any other failure keeps the user signed in and says so in a toast, with
  * the reference support asks for (08 §8.3); `retryIn` is the `RATE_LIMITED`
  * wait of `useApiMutation`, which callers show next to the button.
@@ -23,7 +28,7 @@ import { t } from '~/lib/i18n'
 // The account check of docs/07 §3.3 answers these after ending the session itself.
 const ENDED: ReadonlySet<string> = new Set(['UNAUTHENTICATED', 'ACCOUNT_SUSPENDED'])
 
-export function useSignOut() {
+export function useSignOut({ afterSignOut }: { afterSignOut?: () => void } = {}) {
   const mutation = useApiMutation({ signInOnUnauthenticated: false })
 
   async function signOut() {
@@ -32,7 +37,8 @@ export function useSignOut() {
     // Signed out now, or already: the account check ended the session first (401 or 403).
     if (outcome.ok || ('problem' in outcome && ENDED.has(outcome.problem.code))) {
       router.clearHistory()
-      router.visit(urlFor('login'), { replace: true })
+      if (afterSignOut) afterSignOut()
+      else router.visit(urlFor('login'), { replace: true })
       return
     }
     if ('offline' in outcome) {

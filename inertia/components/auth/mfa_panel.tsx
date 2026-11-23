@@ -28,7 +28,8 @@ import { LogInForm } from '~/components/auth/log_in_form'
  *   after it succeeds the page reloads its props in place instead of
  *   following `redirect_to`, so the enrolment token stays in memory.
  * - `not_staff`: signed in with an account that is not active staff; it
- *   says so and offers sign-out.
+ *   says so and offers sign-out, after which the page reloads in place and
+ *   shows the sign-in form, the enrolment token still in memory.
  * - `enrol`: staff without TOTP. With the emailed token: the current
  *   password (`startTotpEnrollment`), then the setup key and an
  *   `otpauth://` link that opens the authenticator app on a phone, then the
@@ -48,10 +49,11 @@ import { LogInForm } from '~/components/auth/log_in_form'
  * stays. The token never reaches a `return_to` or another page (07 §3.8).
  *
  * Every code field is one input with `autocomplete="one-time-code"` that
- * accepts paste (SC 3.3.8). `RATE_LIMITED` (the `reauth` limiter on the
- * password; on codes, 5 wrong ones in 5 minutes lock the account's codes
- * for 15 minutes, OD-50) shows the wait next to the button, which stays
- * disabled until it ends. A 401, 403 or 409 means the session or the
+ * accepts paste (SC 3.3.8). `RATE_LIMITED` shows the wait next to the
+ * button, which stays disabled until it ends: on the password, the `reauth`
+ * limiter or the `totp_start` limit on repeated starts; on codes, after 5
+ * wrong codes in 5 minutes the next attempt is refused unchecked, right or
+ * wrong, and the account's codes are blocked for 15 minutes (OD-50). A 401, 403 or 409 means the session or the
  * account changed (signed out elsewhere, not staff, already enrolled), so
  * the page reloads its props and shows the state that fits.
  */
@@ -159,7 +161,8 @@ function NotStaff() {
         {t('auth.mfa.not_staff.body', { email: user?.email ?? '' })}
       </p>
       <div className="flex flex-wrap items-center gap-4">
-        <SignOutButton />
+        {/* Signing out reloads this page in place, so an enrolment token in memory stays. */}
+        <SignOutButton afterSignOut={reloadState} />
         <a className="text-link text-sm underline underline-offset-4" href="/">
           {t('auth.mfa.not_staff.home')}
         </a>

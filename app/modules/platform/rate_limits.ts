@@ -39,8 +39,12 @@ export const RATE_LIMITS = {
     duration: '5 minutes',
     blockDuration: '15 minutes',
   },
-  // The per-source second layer behind `mfa_user` (proposed).
+  // The per-source second layer behind `mfa_user` (proposed); it can refuse only after a
+  // right code elsewhere cleared the account's key, since `mfa_user` crosses first otherwise.
   mfa: { prefix: 'mfa:user_ip', requests: 5, duration: '1 minute' },
+  // startTotpEnrollment, per user, on each right password (proposed): `reauth` gives a right
+  // password's points back, so this bounds the hashes and audit rows of repeated starts.
+  totp_start: { prefix: 'totp_start:user', requests: 5, duration: '1 hour' },
   // signUp, per client network; charged on every valid request, known email or not (RF-38).
   signup_ip: { prefix: 'signup:ip', requests: 5, duration: '1 hour' },
   // resendEmailVerification, per user (AC-FR-IAM-002-3).

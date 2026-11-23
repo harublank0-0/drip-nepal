@@ -11,6 +11,7 @@ import {
 import { reauthenticate } from '#modules/identity/internal/reauth'
 import { selfActor } from '#modules/identity/internal/self_actor'
 import { sealTotpSecret } from '#modules/identity/internal/totp_secret'
+import { rateLimitKey, rateLimiter } from '#modules/platform/rate_limits'
 import { withTx } from '#modules/platform/tx'
 
 /*
@@ -31,8 +32,13 @@ import { withTx } from '#modules/platform/tx'
  *    passwords in 15 minutes the answer is 429 without hashing; a wrong
  *    password keeps the points, writes `auth.reauth_failed` and answers
  *    422 on `password`; the 10th in 24 h signs every device out.
- * 3. A new 160-bit secret is sealed (`mfa_totp_secret_enc`, docs/04 §2.9)
- *    and stored by a compare-and-set on what the checks read: still active,
+ * 3. A right password takes a point of the `totp_start` limiter (5 per
+ *    hour per user, proposed, docs/06 §9.1) before anything is written,
+ *    because `reauth` gives a right password's points back and each start
+ *    costs a hash and an audit row; past it, 429 `RATE_LIMITED` with
+ *    nothing written. Then a new 160-bit secret is sealed
+ *    (`mfa_totp_secret_enc`, docs/04 §2.9) and stored by a compare-and-set
+ *    on what the checks read: still active,
  *    still without TOTP and still the password just verified, so a password
  *    change or a confirmation that committed meanwhile wins. In the same
  *    transaction, after the user's row is locked by that update, the token
@@ -78,6 +84,8 @@ export async function startTotpEnrollment(
     ipHash: context.ipHash,
   })
   if (!checked.ok) throw passwordIncorrect()
+  // A right password gives its `reauth` points back; this bounds repeated starts (step 3).
+  await rateLimiter('totp_start').consume(rateLimitKey('totp_start', userId))
 
   const secret = generateTotpSecret()
   const sealed = sealTotpSecret(secret)
