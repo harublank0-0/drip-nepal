@@ -92,6 +92,7 @@ export function ComboboxField({
             leave this layer stuck mid-animation, still catching outside clicks. */}
         <PopoverContent
           id={contentId}
+          aria-label={label}
           align="start"
           className="w-(--radix-popover-trigger-width) p-0 animate-none!"
         >

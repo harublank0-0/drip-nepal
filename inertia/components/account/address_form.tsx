@@ -589,6 +589,11 @@ export function AddressForm({
                   if (value === field.state.value) return
                   changeAndRecheck(field, value)
                   clearAfter('local_level_code')
+                  // Back on the saved local level, its saved ward comes back too: a retired
+                  // unit's ward cannot be chosen again, and the place is then unchanged.
+                  if (saved && value === saved.local_level_code) {
+                    form.setFieldValue('ward_no', String(saved.ward_no))
+                  }
                 }}
               />
               <LoadFailed state={localLevels.state} onRetry={localLevels.retry} />
