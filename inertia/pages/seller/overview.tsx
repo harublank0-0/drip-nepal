@@ -11,9 +11,10 @@ import { StatusBadge } from '~/components/common/status_badge'
  * what its suspension mode still allows (08 §7.5). Then "Before you can
  * sell": the `checklist` prop, the items the server could read from real
  * state for this member (shop_controller.ts), each marked done or not by
- * text, with the icon only reinforcing it (SC 1.4.1). The profile, shipping
- * zones and products join the list with R1-S parts 1b, 1c and 2; the
- * balance and order counts with the milestones that build them.
+ * text, with the icon only reinforcing it (SC 1.4.1). The profile adds no
+ * item (it cannot be incomplete, docs/08 note 87); shipping zones and
+ * products join the list with R1-S parts 1c and 2, the balance and order
+ * counts with the milestones that build them.
  */
 type ChecklistItem = { item: 'seller_agreement' | 'pickup_address'; done: boolean }
 

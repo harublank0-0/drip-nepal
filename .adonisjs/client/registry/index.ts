@@ -156,6 +156,12 @@ const routes = {
     tokens: [{"old":"/api/v1/seller/shops/:shopSlug","type":0,"val":"api","end":""},{"old":"/api/v1/seller/shops/:shopSlug","type":0,"val":"v1","end":""},{"old":"/api/v1/seller/shops/:shopSlug","type":0,"val":"seller","end":""},{"old":"/api/v1/seller/shops/:shopSlug","type":0,"val":"shops","end":""},{"old":"/api/v1/seller/shops/:shopSlug","type":1,"val":"shopSlug","end":""}],
     types: placeholder as Registry['getSellerShop']['types'],
   },
+  'updateShopProfile': {
+    methods: ["PATCH"],
+    pattern: '/api/v1/seller/shops/:shopSlug',
+    tokens: [{"old":"/api/v1/seller/shops/:shopSlug","type":0,"val":"api","end":""},{"old":"/api/v1/seller/shops/:shopSlug","type":0,"val":"v1","end":""},{"old":"/api/v1/seller/shops/:shopSlug","type":0,"val":"seller","end":""},{"old":"/api/v1/seller/shops/:shopSlug","type":0,"val":"shops","end":""},{"old":"/api/v1/seller/shops/:shopSlug","type":1,"val":"shopSlug","end":""}],
+    types: placeholder as Registry['updateShopProfile']['types'],
+  },
   'getLogisticsSettings': {
     methods: ["GET","HEAD"],
     pattern: '/api/v1/seller/shops/:shopSlug/logistics',
@@ -395,6 +401,12 @@ const routes = {
     pattern: '/seller/:shopSlug',
     tokens: [{"old":"/seller/:shopSlug","type":0,"val":"seller","end":""},{"old":"/seller/:shopSlug","type":1,"val":"shopSlug","end":""}],
     types: placeholder as Registry['seller.overview']['types'],
+  },
+  'seller.settings': {
+    methods: ["GET","HEAD"],
+    pattern: '/seller/:shopSlug/settings',
+    tokens: [{"old":"/seller/:shopSlug/settings","type":0,"val":"seller","end":""},{"old":"/seller/:shopSlug/settings","type":1,"val":"shopSlug","end":""},{"old":"/seller/:shopSlug/settings","type":0,"val":"settings","end":""}],
+    types: placeholder as Registry['seller.settings']['types'],
   },
   'admin.logistics': {
     methods: ["GET","HEAD"],

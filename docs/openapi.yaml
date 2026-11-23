@@ -145,7 +145,6 @@ x-pending-operations:
   - getMySupportCase
   - replyToMySupportCase
   # Seller (06 §13.5)
-  - updateShopProfile
   - getShopShipping
   - replaceShopShipping
   - listMembers
@@ -2147,8 +2146,8 @@ paths:
         `INVALID_QUERY_PARAMETER` (06 §6.3).
         Returns the profile, the status, `agreement` (the current seller agreement's `version`
         and `is_final`, and `accepted`, whether the shop holds a `shop_agreements` row for it,
-        04a §6.4) and `version`, which the strong `ETag` repeats and `updateShopProfile` will take
-        as `If-Match` (06 §8). `business_details` (the business details of 01 AC-FR-SHOP-013-2:
+        04a §6.4) and `version`, which the strong `ETag` repeats and `updateShopProfile` takes as
+        `If-Match` (06 §8). `business_details` (the business details of 01 AC-FR-SHOP-013-2:
         business type, registration number, registering authority, PAN/VAT number, VAT flag and
         return policy) and `grievance_contact` (name and phone, decrypted by the shop profile
         transformer of the 07 §5.5 allowlist) are the owner's only: `null` for every other member
@@ -2227,6 +2226,153 @@ paths:
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/Internal' }
+    patch:
+      operationId: updateShopProfile
+      tags: [Seller]
+      summary: Edit the shop's profile, business details and grievance contact
+      description: |
+        Actor: `shop.profile.manage` (07 §4.5). The business details of 01 AC-FR-SHOP-013-2
+        (`business_type`, `registration_number`, `registration_authority`, `pan_vat_number`,
+        `is_vat_registered`, `return_policy_text`) and the grievance contact
+        (`grievance_contact_name`, `grievance_contact_phone`) are owner-only writes, because only
+        the owner sees them (AC-FR-SHOP-013-4; decided 2026-11-23, 06 note 64): a member who is
+        not the owner gets 403 `FORBIDDEN` for any of them. Status gate, the "profile, shipping"
+        column of 07 §4.4: open while `active`, to the owner only while `pending_review` or
+        `rejected`, refused while `suspended` or `closed` (403 `SHOP_NOT_ACTIVE` with
+        `shop_status` and `suspension_mode`). Scope: the shop comes from `{shopSlug}` only;
+        another shop's slug answers the 404 of an unknown one (T-SEC-001). Query: none; any
+        parameter is 400 `INVALID_QUERY_PARAMETER` (06 §6.3).
+        Input: each member optional; an absent member keeps its column. `description`,
+        `registration_number`, `registration_authority` and `pan_vat_number` may be `null`
+        (or `""`, which the JSON body parser reads as `null`, or a value of spaces), which
+        clears them; any other member sent as `null` is 422 `required`. Any member not listed (`name`, `slug`,
+        `status`, `commission_rate_bp`, `version`, an encrypted column, the logo and banner
+        media IDs until FR-MED-003, the addresses and the categories) is 422 `unknown_field`
+        (T-SEC-003). Rules (04a §6.1, as `platform:create-shop`): the two numbers a Nepali
+        mobile or landline, stored in E.164 (AC-FR-SHOP-001-3); the contact email by the
+        account email rule, lower-cased; lengths in code points after NFC; the PAN/VAT number
+        9 digits (VX-05). On the result, the saved values with the changes laid over them, a
+        `registered_business` needs its registration number, registering authority and
+        PAN/VAT number, and a VAT-registered shop its PAN/VAT number: else 422 `required` on
+        the missing member. An individual's PAN/VAT number is neither required nor refused
+        while OD-16 and VX-05 are open.
+        Order: first the `shop_profile_update` limiter (20 per hour per user, proposed, 06 §9.1),
+        charged on every call by a signed-in user before any check, so a refused call takes a
+        point too and `api_user` does not charge it; then the permission, the status gate, the
+        members, the validator and `If-Match`.
+        Concurrency: ⟳ `If-Match` on `shops.version`, from `getSellerShop`'s `ETag`. Missing,
+        `*` or a list → 428; a stale version, a weak tag or any other value → 412
+        `VERSION_CONFLICT` with `current`, the shop as `getSellerShop` shows it to the caller
+        (06 §8). Not ⚷ (06 §7.7).
+        Side effects, in one transaction: the shop row locked `FOR NO KEY UPDATE` (05 §4.4
+        level 0) and the status gate checked again on it; the changed columns written with
+        `version + 1` by compare-and-set on the version and status; the grievance phone
+        encrypted (04 §2.9), with no blind index; one `shop.profile_update` audit row
+        (proposed) naming the changed columns, with the values of `business_type` and
+        `is_vat_registered` only (04a §15.3). A request that changes nothing writes nothing and
+        keeps the version. No listing refresh: the name is not a member. T-SHOP-009,
+        T-API-004, T-SEC-030, T-SEC-031. Release R1·M2; built in R1-S part 1b.
+      x-release: R1·M2
+      x-permission: shop.profile.manage
+      x-if-match: true
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateShopProfileRequest' }
+            examples:
+              publicProfile:
+                summary: A manager's edit of the public profile (placeholders)
+                value:
+                  description: Handmade dhaka and pashmina from Palpa.
+                  contact_phone: '01-4123456'
+              registeredBusiness:
+                summary: The owner registers the business and for VAT (placeholders)
+                value:
+                  business_type: registered_business
+                  registration_number: '12345/079/080'
+                  registration_authority: Office of the Company Registrar
+                  pan_vat_number: '600123456'
+                  is_vat_registered: true
+      responses:
+        '200':
+          description: Saved; the shop as `getSellerShop` shows it to the caller, with the new `ETag`.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+            ETag: { $ref: '#/components/headers/ETag' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SellerShopResponse' }
+              examples:
+                manager:
+                  summary: After the manager's edit above
+                  value:
+                    data:
+                      slug: thulo-pasal
+                      name: Thulo Pasal
+                      status: active
+                      suspension_mode: null
+                      description: Handmade dhaka and pashmina from Palpa.
+                      contact_email: hello@example.com
+                      contact_phone: '+97714123456'
+                      business_details: null
+                      grievance_contact: null
+                      agreement:
+                        version: '2026-11-23'
+                        is_final: false
+                        accepted: true
+                      version: 2
+        '400':
+          description: A query parameter; the operation takes none, and one `invalid` item names it.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem400' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422':
+          description: |
+            `VALIDATION_FAILED`: a member out of rule (`email`, `nepal_phone`, `min_length`,
+            `max_length`, `regex`, `enum`, `boolean`), a `null` where none is allowed or an
+            identifier a registered or VAT-registered business needs (`required`), or an
+            unknown member (`unknown_field`).
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem422' }
+              examples:
+                registeredWithoutIdentifiers:
+                  summary: An individual's shop switched to a registered business without its identifiers
+                  value:
+                    type: https://dripnepal.com/problems/validation-failed
+                    title: Validation failed
+                    status: 422
+                    detail: Some fields need attention.
+                    code: VALIDATION_FAILED
+                    request_id: 01929d01-0000-7000-8000-000000000426
+                    errors:
+                      - field: registration_number
+                        code: required
+                        message: A registered business needs its registration number.
+                      - field: registration_authority
+                        code: required
+                        message: A registered business needs its registering authority.
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/Internal' }
 
@@ -7100,11 +7246,79 @@ components:
         version: { type: integer, minimum: 1, description: '`shops.version`; the ETag repeats it.' }
     SellerShopResponse:
       type: object
-      description: The 200 of `getSellerShop`.
+      description: The 200 of `getSellerShop` and of `updateShopProfile`.
       additionalProperties: false
       required: [data]
       properties:
         data: { $ref: '#/components/schemas/SellerShop' }
+    UpdateShopProfileRequest:
+      type: object
+      description: |
+        The whole input of `updateShopProfile`, each member optional and named as `SellerShop`
+        names it; any other member is 422 `unknown_field`. The members from `return_policy_text`
+        on are the owner's only (403 `FORBIDDEN` from any other member). Only `description`,
+        `registration_number`, `registration_authority` and `pan_vat_number` may be `null`, `""`
+        or spaces (cleared); any other member sent as `null` or `""` is 422 `required`.
+      additionalProperties: false
+      properties:
+        description:
+          type: [string, 'null']
+          maxLength: 2000
+          description: |
+            Trimmed and normalised to NFC, then up to 2,000 code points; `null`, `""` or a value
+            of spaces clears it.
+        contact_email:
+          type: string
+          maxLength: 254
+          description: The public shop contact; the account email rule, lower-cased (04a §6.1).
+        contact_phone:
+          type: string
+          maxLength: 32
+          description: |
+            A Nepali mobile or landline (AC-FR-SHOP-001-3), with or without `+977`, `977` or a
+            leading `0`, spaces and hyphens; stored in E.164.
+        return_policy_text:
+          type: string
+          minLength: 1
+          maxLength: 5000
+          description: Owner only. 1 to 5,000 code points after NFC.
+        business_type:
+          type: string
+          enum: [individual, registered_business]
+          description: Owner only.
+        registration_number:
+          type: [string, 'null']
+          minLength: 1
+          maxLength: 50
+          description: |
+            Owner only. 1 to 50 code points after NFC; a value of spaces clears it like `""`.
+            Required on the result for a `registered_business`.
+        registration_authority:
+          type: [string, 'null']
+          minLength: 2
+          maxLength: 100
+          description: |
+            Owner only. 2 to 100 code points after NFC; a value of spaces clears it like `""`.
+            Required on the result for a `registered_business`.
+        pan_vat_number:
+          type: [string, 'null']
+          pattern: '^[0-9]{9}$'
+          description: |
+            Owner only. 9 digits while the IRD format is unconfirmed (VX-05); a value of spaces
+            clears it like `""`. Required on the result for a `registered_business` or a
+            VAT-registered shop.
+        is_vat_registered:
+          type: boolean
+          description: Owner only.
+        grievance_contact_name:
+          type: string
+          minLength: 2
+          maxLength: 100
+          description: Owner only. 2 to 100 code points after NFC.
+        grievance_contact_phone:
+          type: string
+          maxLength: 32
+          description: Owner only. A Nepali mobile or landline, stored in E.164 and encrypted (04 §2.9).
 
     # ---------- password reset and change, revokeAllSessions (06 §13.3; M1 part 4) ----------
     RequestPasswordResetRequest:
@@ -9603,3 +9817,20 @@ components:
 #     in `business_details`, owner-only like `grievance_contact`, as AC-FR-SHOP-013-4 asks;
 #     `MyShopList` and `getMe`'s `shops` hold at most 20 rows (A-63), so `listMyShops` is an
 #     ordinary bounded list.
+#
+# Added with the shop profile edit (2026-11-23, R1-S part 1b):
+# 54. `updateShopProfile` moves from `x-pending-operations` to `paths` as the `patch` of
+#     `/api/v1/seller/shops/{shopSlug}`, written from the code, with the new closed schema
+#     `UpdateShopProfileRequest`; its 200 reuses `SellerShopResponse` (06 note 64). It declares
+#     `x-permission: shop.profile.manage` and `x-if-match: true` (⟳ on `shops.version`, whose
+#     `ETag` `getSellerShop` sends). The members are flat and named as `SellerShop` names them;
+#     the business details and the grievance contact are owner-only writes (403 from any other
+#     member), and its 403 also carries the "profile, shipping" status gate of 07 §4.4. It is
+#     charged to the new `shop_profile_update` limiter (proposed, 06 §9.1), not `api_user`. The
+#     logo and banner media IDs, the addresses and the categories stay out of the schema until
+#     the parts that build them.
+#     After the Fable review (round 2): the limiter is charged first, in the API limits
+#     middleware, so a refused call takes a point; a value of spaces clears `description`,
+#     `registration_number`, `registration_authority` and `pan_vat_number` like `""`; the
+#     schema adds the validator's `minLength` to `registration_number` (1) and
+#     `registration_authority` (2).

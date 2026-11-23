@@ -29,6 +29,7 @@ export type ScannedRoutes = {
     'deleteAddress': { paramsTuple: [ParamValue]; params: {'addressId': ParamValue} }
     'listMyShops': { paramsTuple?: []; params?: {} }
     'getSellerShop': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
+    'updateShopProfile': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'getLogisticsSettings': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'replaceLogisticsSettings': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'createShopCourierAccount': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
@@ -69,6 +70,7 @@ export type ScannedRoutes = {
     'account.addresses': { paramsTuple?: []; params?: {} }
     'account.security': { paramsTuple?: []; params?: {} }
     'seller.overview': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
+    'seller.settings': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'admin.logistics': { paramsTuple?: []; params?: {} }
     'dev.design_system': { paramsTuple?: []; params?: {} }
     'dev.overlays': { paramsTuple?: []; params?: {} }
@@ -103,6 +105,7 @@ export type ScannedRoutes = {
     'account.addresses': { paramsTuple?: []; params?: {} }
     'account.security': { paramsTuple?: []; params?: {} }
     'seller.overview': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
+    'seller.settings': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'admin.logistics': { paramsTuple?: []; params?: {} }
     'dev.design_system': { paramsTuple?: []; params?: {} }
     'dev.overlays': { paramsTuple?: []; params?: {} }
@@ -135,6 +138,7 @@ export type ScannedRoutes = {
     'account.addresses': { paramsTuple?: []; params?: {} }
     'account.security': { paramsTuple?: []; params?: {} }
     'seller.overview': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
+    'seller.settings': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'admin.logistics': { paramsTuple?: []; params?: {} }
     'dev.design_system': { paramsTuple?: []; params?: {} }
     'dev.overlays': { paramsTuple?: []; params?: {} }
@@ -181,6 +185,7 @@ export type ScannedRoutes = {
   PATCH: {
     'updateMe': { paramsTuple?: []; params?: {} }
     'updateAddress': { paramsTuple: [ParamValue]; params: {'addressId': ParamValue} }
+    'updateShopProfile': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'updatePickupAddress': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'addressId': ParamValue} }
     'adminUpdateLogisticsBranch': { paramsTuple: [ParamValue]; params: {'branchId': ParamValue} }
   }

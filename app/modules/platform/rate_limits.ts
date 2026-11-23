@@ -62,6 +62,9 @@ export const RATE_LIMITS = {
   // updateMe, per user, on every call (proposed): a consent change writes an insert-only audit
   // row kept 7 years, so this bounds the rows one account can add.
   profile_update: { prefix: 'profile:user', requests: 20, duration: '1 hour' },
+  // updateShopProfile, per user, on every call before any check (proposed, R1-S part 1b): each
+  // change writes a `shop.profile_update` audit row, insert-only and kept 7 years.
+  shop_profile_update: { prefix: 'shop_profile:user', requests: 20, duration: '1 hour' },
   // Every other authenticated /api/v1 call, per user; admin calls use `api_staff` (06 §9.1).
   api_user: { prefix: 'api:user', requests: 300, duration: '1 minute' },
   api_staff: { prefix: 'admin:user', requests: 600, duration: '1 minute' },
@@ -151,6 +154,7 @@ export const OWN_LIMIT_OPERATIONS: ReadonlySet<string> = new Set([
   'revokeAllSessions',
   'requestAccountDeletion',
   'updateMe',
+  'updateShopProfile',
   'startTotpEnrollment',
   'confirmTotpEnrollment',
   'verifyMfaChallenge',
@@ -176,4 +180,16 @@ export const IP_LIMIT_OPERATIONS: ReadonlyMap<string, RateLimitName> = new Map([
   ['listProvinces', 'catalog_ip'],
   ['listDistricts', 'catalog_ip'],
   ['listLocalLevels', 'catalog_ip'],
+])
+
+/*
+ * The writes whose own per-user row of docs/06 §9.1 is charged by the API
+ * limits middleware, before the route's middleware and every check, so a
+ * refused call (403, 404, 422, 428) takes a point too and a loop of them
+ * meets 429 (R1-S part 1b review). Each is also in `OWN_LIMIT_OPERATIONS`,
+ * so `api_user` never charges it. `updateMe`'s `profile_update` is still
+ * taken inside its action, after the validator (a follow-up, 06 note 64).
+ */
+export const USER_LIMIT_OPERATIONS: ReadonlyMap<string, RateLimitName> = new Map([
+  ['updateShopProfile', 'shop_profile_update'],
 ])

@@ -11,6 +11,12 @@ import { randomBytes } from 'node:crypto'
  * exist yet, so factories fill the NOT NULL encrypted columns with this
  * placeholder and leave the nullable ones null. Replace each call with
  * `fieldCrypto.encrypt(...)` when E6 lands. Test and factory code only.
+ *
+ * E6 has landed (`encryptField`, app/modules/platform/crypto/field_encrypter.ts),
+ * and the shop factory now encrypts its grievance phone (R1-S part 1b, whose
+ * settings page decrypts it for the owner). The one caller left is the demo
+ * seeder's placeholder TOTP secret, which must stay undecryptable (docs/07
+ * §3.9, the TOTP enrolment stand-in).
  */
 export function placeholderCiphertext() {
   const part = (bytes: number) => randomBytes(bytes).toString('base64url')

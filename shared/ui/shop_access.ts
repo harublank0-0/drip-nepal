@@ -13,3 +13,17 @@ export function memberRoutesOpen(status: string, role: string) {
   if (status === 'active' || status === 'suspended') return true
   return (status === 'pending_review' || status === 'rejected') && role === 'owner'
 }
+
+/*
+ * Whether the shop's profile may be changed (`updateShopProfile`): the
+ * "profile, shipping" column of docs/07 §4.4. Open while the shop is
+ * `active`, to the owner only while it is `pending_review` or `rejected`,
+ * and never while it is `suspended` (either mode) or `closed`. The
+ * permission (`shop.profile.manage`) is checked besides. The server's gate
+ * (`shopGateAllows(shop, 'profile')`) and the settings page, which shows the
+ * form or the read-only profile, use this one rule (R1-S part 1b).
+ */
+export function profileEditable(status: string, role: string) {
+  if (status === 'active') return true
+  return (status === 'pending_review' || status === 'rejected') && role === 'owner'
+}

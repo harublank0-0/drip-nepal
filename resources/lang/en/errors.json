@@ -17,6 +17,7 @@
   "field.email": "Enter an email address, like name@example.com.",
   "field.reserved_domain": "This email address can't be used. Use another one.",
   "field.nepal_mobile": "Enter a 10-digit mobile number starting with 96, 97 or 98.",
+  "field.nepal_phone": "Enter a Nepali mobile number, or a landline with its area code, like 01-4123456.",
   "field.accepted": "Tick this box to continue.",
   "field.location_mismatch": "This local level is not in the chosen district and province. Choose them again.",
   "field.ward_out_of_range": "This local level has no ward with that number. Choose another ward.",

@@ -45,3 +45,17 @@ export function toNepalShopPhoneE164(input: string): string | null {
   const match = LANDLINE_INPUT.exec(input.trim().replaceAll(/[\s-]/g, ''))
   return match ? `+977${match[1]}` : null
 }
+
+/*
+ * A stored shop number as people write it in Nepal, for a form field that
+ * starts with the saved number (the settings page, R1-S part 1b): a mobile
+ * as its ten digits, `+9779841234567` → `9841234567`, and a landline with
+ * the trunk `0` before its area code, `+97714123456` → `014123456`. Both
+ * read back to the same E.164 through `toNepalShopPhoneE164`. Anything that
+ * is not a stored form is returned as given.
+ */
+export function nepalShopPhoneNational(e164: string): string {
+  if (!NEPAL_SHOP_PHONE_E164.test(e164)) return e164
+  const national = e164.slice('+977'.length)
+  return national.length === 8 ? `0${national}` : national
+}

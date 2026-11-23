@@ -14,9 +14,12 @@ import { t } from '~/lib/i18n'
  * `+977` or `977`, spaces and hyphens; the form checks it with the shared
  * rule of shared/format/phone.ts (`^9[678]\d{8}$` once the prefix is
  * dropped, AC-FR-IAM-001-5) and sends it in E.164. `type="tel"`,
- * `inputMode="tel"` and `autocomplete="tel-national"` (08 §6.5). The shop
- * contact variant, which also takes landlines (AC-FR-SHOP-001-3), comes
- * with M2. Help text and errors are joined in `aria-describedby`.
+ * `inputMode="tel"` and `autocomplete="tel-national"` (08 §6.5). The shop's
+ * numbers on the settings page (R1-S part 1b) also take landlines
+ * (AC-FR-SHOP-001-3), checked with `toNepalShopPhoneE164`, and pass
+ * `autoComplete="off"`: a shop's number is entered separately, never filled
+ * in from the user's own (AC-FR-SHOP-001-4). Help text and errors are
+ * joined in `aria-describedby`.
  */
 export function NepalPhoneInput({
   id,
@@ -26,6 +29,7 @@ export function NepalPhoneInput({
   onBlur,
   errors,
   description,
+  autoComplete = 'tel-national',
 }: {
   id: string
   label: string
@@ -34,6 +38,7 @@ export function NepalPhoneInput({
   onBlur: () => void
   errors: unknown[]
   description?: string
+  autoComplete?: 'tel-national' | 'off'
 }) {
   const messages = errors.filter((error): error is string => typeof error === 'string')
   const describedBy = [
@@ -55,7 +60,7 @@ export function NepalPhoneInput({
           name={id}
           type="tel"
           inputMode="tel"
-          autoComplete="tel-national"
+          autoComplete={autoComplete}
           value={value}
           aria-invalid={messages.length > 0 || undefined}
           aria-describedby={describedBy || undefined}
