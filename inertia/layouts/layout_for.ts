@@ -3,6 +3,7 @@ import RootLayout from '~/layouts/root_layout'
 import AccountLayout from '~/layouts/account_layout'
 import AdminLayout from '~/layouts/admin_layout'
 import AuthLayout from '~/layouts/auth_layout'
+import SellerLayout from '~/layouts/seller_layout'
 import StorefrontLayout from '~/layouts/storefront_layout'
 
 /*
@@ -11,12 +12,14 @@ import StorefrontLayout from '~/layouts/storefront_layout'
  * layout stays mounted across visits within the surface. Surfaces join as
  * they are built: admin since the courier pages (M6), auth and storefront
  * since the sign-up pages and the draft legal pages (M1 part 2b), account
- * since the profile and security pages (M1 part 6a).
+ * since the profile and security pages (M1 part 6a), seller since the
+ * overview (R1-S part 1a).
  */
 const SURFACE_LAYOUTS: [prefix: string, layout: ComponentType<{ children: ReactNode }>][] = [
   ['account/', AccountLayout],
   ['admin/', AdminLayout],
   ['auth/', AuthLayout],
+  ['seller/', SellerLayout],
   ['storefront/', StorefrontLayout],
 ]
 

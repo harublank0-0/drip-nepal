@@ -5,6 +5,24 @@ import { appUrl, support } from '#config/storefront'
 import { encryptsHistory } from '#config/inertia'
 import { parseTheme, THEME_COOKIE } from '#shared/ui/theme'
 import { staffPermissions } from '#modules/identity/staff'
+import { shopsOfUser } from '#modules/shops/queries'
+import { currentShopJson, myShopJson } from '#transformers/seller/seller_context_transformer'
+
+/*
+ * The `seller_shops` rows of a signed-in user. Status pages render through
+ * share() too, and a 500 page may report the database's own failure, so a
+ * failed read leaves the prop null instead of failing that page as well;
+ * the failure is logged by name, without the error's text.
+ */
+async function sellerShopsOf(ctx: HttpContext, userId: string) {
+  try {
+    const shops = await shopsOfUser(userId)
+    return shops.map(myShopJson)
+  } catch {
+    ctx.logger.error({ event: 'inertia.seller_shops_failed' }, 'seller_shops could not be read')
+    return null
+  }
+}
 
 export default class InertiaMiddleware extends BaseInertiaMiddleware {
   async share(ctx: HttpContext) {
@@ -16,7 +34,7 @@ export default class InertiaMiddleware extends BaseInertiaMiddleware {
      * In that case, we must always assume that HttpContext is not fully hydrated
      * with all the properties
      */
-    const { session, auth, staff } = ctx as Partial<HttpContext>
+    const { session, auth, staff, shop } = ctx as Partial<HttpContext>
 
     /*
      * The history backstop of docs/07 §3.11 (T-SEC-043): every page
@@ -78,6 +96,21 @@ export default class InertiaMiddleware extends BaseInertiaMiddleware {
        * before the page renders.
        */
       current_staff: staff ? { role: staff.role, permissions: staffPermissions(staff.role) } : null,
+      /*
+       * For a signed-in user, the shops they own or are an active member
+       * of (docs/03 §6.3; the rows of `listMyShops`): the seller layout's
+       * shop switcher and the public header's "Your shop" link read it.
+       * One small query per render, never a relation load (RF-44); null
+       * for a guest, and when the read fails (`sellerShopsOf`).
+       */
+      seller_shops: auth?.user ? await sellerShopsOf(ctx, auth.user.id) : null,
+      /*
+       * On seller pages, the shop `seller_context` resolved, with the
+       * caller's role and the permissions it holds (docs/09 §13.7), so the
+       * sidebar hides what the role cannot use; null elsewhere.
+       * `sellerContext` sets `ctx.shop` before the page renders.
+       */
+      current_shop: shop ? currentShopJson(shop) : null,
       // The reference support asks for (docs/08 §8.3).
       request_id: ctx.request.id() ?? null,
     }

@@ -3,6 +3,7 @@ import { test } from '@japa/runner'
 import app from '@adonisjs/core/services/app'
 import { STATUS_TONES, toneOf } from '#shared/ui/status_tones'
 import { LOGISTICS_ACCOUNT_STATUSES } from '#modules/logistics/domain/logistics_account_status'
+import { SHOP_STATUSES } from '#modules/shops/domain/shop_status'
 
 /*
  * T-UI-008, every status value has a label (docs/08 §7.5): for each entity
@@ -13,6 +14,7 @@ import { LOGISTICS_ACCOUNT_STATUSES } from '#modules/logistics/domain/logistics_
 
 const VOCABULARIES: Record<keyof typeof STATUS_TONES, readonly string[]> = {
   courier_account: LOGISTICS_ACCOUNT_STATUSES,
+  shop: SHOP_STATUSES,
 }
 
 async function labels() {

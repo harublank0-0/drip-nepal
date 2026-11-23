@@ -1,5 +1,5 @@
 import db from '@adonisjs/lucid/services/db'
-import type { QueryClientContract } from '@adonisjs/lucid/types/database'
+import type { QueryClientContract, TransactionClientContract } from '@adonisjs/lucid/types/database'
 import User from '#models/user'
 import { maySignIn } from '#modules/identity/domain/user_status'
 import type { UserTokenPurpose } from '#modules/identity/domain/user_token_purpose'
@@ -163,6 +163,29 @@ export async function ownAccount(userId: string): Promise<OwnAccount | null> {
 export async function accountExistsWithEmail(email: string) {
   const row = await db.from('users').where('email', email).select('id').first()
   return row !== null
+}
+
+/*
+ * The account an operator names by email (already normalised by the
+ * account email rule) for `platform:create-shop` (docs/09 §9.8): its ID and
+ * status, read inside the caller's transaction with the row locked
+ * `FOR NO KEY UPDATE`, the owner's row lock under which a shop is created
+ * for that owner (docs/04a §6.1, shop-count rule). Null when no account
+ * holds the email. A host-side command, so the answer reveals nothing to a
+ * client.
+ */
+export type NamedAccount = { userId: string; status: string }
+
+export async function lockAccountByEmail(
+  trx: TransactionClientContract,
+  email: string
+): Promise<NamedAccount | null> {
+  const result = await trx.rawQuery(
+    'SELECT id, status FROM users WHERE email = ? FOR NO KEY UPDATE',
+    [email]
+  )
+  const row = result.rows[0]
+  return row ? { userId: row.id, status: row.status } : null
 }
 
 /*

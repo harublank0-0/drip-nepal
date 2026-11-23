@@ -37,6 +37,11 @@ export const controllers = {
           Locations: () => import('#controllers/api/v1/public/logistics/locations_controller'),
         },
       },
+      seller: {
+        shops: {
+          Shops: () => import('#controllers/api/v1/seller/shops/shops_controller'),
+        },
+      },
     },
   },
   auth: {
@@ -53,6 +58,9 @@ export const controllers = {
   seller: {
     CourierBookings: () => import('#controllers/seller/courier_bookings_controller'),
     Logistics: () => import('#controllers/seller/logistics_controller'),
+    shops: {
+      Shop: () => import('#controllers/seller/shops/shop_controller'),
+    },
   },
   storefront: {
     identity: {

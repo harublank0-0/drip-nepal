@@ -144,6 +144,18 @@ const routes = {
     tokens: [{"old":"/api/v1/me/addresses/:addressId","type":0,"val":"api","end":""},{"old":"/api/v1/me/addresses/:addressId","type":0,"val":"v1","end":""},{"old":"/api/v1/me/addresses/:addressId","type":0,"val":"me","end":""},{"old":"/api/v1/me/addresses/:addressId","type":0,"val":"addresses","end":""},{"old":"/api/v1/me/addresses/:addressId","type":1,"val":"addressId","end":""}],
     types: placeholder as Registry['deleteAddress']['types'],
   },
+  'listMyShops': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/v1/seller/shops',
+    tokens: [{"old":"/api/v1/seller/shops","type":0,"val":"api","end":""},{"old":"/api/v1/seller/shops","type":0,"val":"v1","end":""},{"old":"/api/v1/seller/shops","type":0,"val":"seller","end":""},{"old":"/api/v1/seller/shops","type":0,"val":"shops","end":""}],
+    types: placeholder as Registry['listMyShops']['types'],
+  },
+  'getSellerShop': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/v1/seller/shops/:shopSlug',
+    tokens: [{"old":"/api/v1/seller/shops/:shopSlug","type":0,"val":"api","end":""},{"old":"/api/v1/seller/shops/:shopSlug","type":0,"val":"v1","end":""},{"old":"/api/v1/seller/shops/:shopSlug","type":0,"val":"seller","end":""},{"old":"/api/v1/seller/shops/:shopSlug","type":0,"val":"shops","end":""},{"old":"/api/v1/seller/shops/:shopSlug","type":1,"val":"shopSlug","end":""}],
+    types: placeholder as Registry['getSellerShop']['types'],
+  },
   'getLogisticsSettings': {
     methods: ["GET","HEAD"],
     pattern: '/api/v1/seller/shops/:shopSlug/logistics',
@@ -377,6 +389,12 @@ const routes = {
     pattern: '/account/security',
     tokens: [{"old":"/account/security","type":0,"val":"account","end":""},{"old":"/account/security","type":0,"val":"security","end":""}],
     types: placeholder as Registry['account.security']['types'],
+  },
+  'seller.overview': {
+    methods: ["GET","HEAD"],
+    pattern: '/seller/:shopSlug',
+    tokens: [{"old":"/seller/:shopSlug","type":0,"val":"seller","end":""},{"old":"/seller/:shopSlug","type":1,"val":"shopSlug","end":""}],
+    types: placeholder as Registry['seller.overview']['types'],
   },
   'admin.logistics': {
     methods: ["GET","HEAD"],

@@ -3,6 +3,7 @@ import { DateTime } from 'luxon'
 import factory from '@adonisjs/lucid/factories'
 import Shop from '#models/shop'
 import type { BusinessType } from '#modules/shops/domain/business_type'
+import { CURRENT_SELLER_AGREEMENT } from '#modules/shops/domain/seller_agreements'
 import type { ShopStatus } from '#modules/shops/domain/shop_status'
 import { UserFactory } from '#database/factories/user_factory'
 import { placeholderCiphertext } from '#database/factories/placeholder_ciphertext'
@@ -20,8 +21,8 @@ import { placeholderCiphertext } from '#database/factories/placeholder_ciphertex
  * factory exists yet.
  */
 
-/** A version in the `shop_agreements_version_check` format; agreement texts live in code (04a §6.4). */
-export const FACTORY_AGREEMENT_VERSION = '2026-01-01'
+/** The current seller agreement version of the registry (04a §6.4), as the owner's shop accepts it. */
+export const FACTORY_AGREEMENT_VERSION = CURRENT_SELLER_AGREEMENT.version
 
 const status = (value: ShopStatus) => value
 const businessType = (value: BusinessType) => value

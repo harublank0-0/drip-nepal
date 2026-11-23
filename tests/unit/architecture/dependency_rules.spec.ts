@@ -11,7 +11,9 @@ import { fixtureTree, runCommand } from '#tests/support/scripts'
  * architecture/model-ownership.json, so the fixtures use its model paths.
  * T-SEC-034, rule 9: only the docs/07 §5.5 allowlist imports the field
  * decrypter; the TOTP verifier may (M1 part 5), another identity file may
- * not.
+ * not; the customer address transformer may (M1 part 6b), and so may the
+ * shop profile transformer (R1-S part 1a), which decrypts the grievance
+ * phone for the owner.
  */
 
 const DEPCRUISE = join(process.cwd(), 'node_modules', '.bin', 'depcruise')
@@ -182,6 +184,26 @@ test.group('T-ARCH-001 module dependency rules (dependency-cruiser)', (group) =>
     try {
       assert.deepEqual(await cruise(tree.root), [
         'field-decrypter-allowlist: app/transformers/identity/account_transformer.ts → app/modules/platform/crypto/field_decrypter.ts',
+      ])
+    } finally {
+      await tree.cleanup()
+    }
+  })
+
+  test('T-SEC-034 the shop profile transformer may import the field decrypter; the seller context transformer may not', async ({
+    assert,
+  }) => {
+    const decrypter = {
+      'app/modules/platform/crypto/field_decrypter.ts': 'export const decryptField = 1\n',
+      'app/transformers/seller/shop_transformer.ts':
+        "import { decryptField } from '../../modules/platform/crypto/field_decrypter.js'\nexport const shop = decryptField\n",
+      'app/transformers/seller/seller_context_transformer.ts':
+        "import { decryptField } from '../../modules/platform/crypto/field_decrypter.js'\nexport const context = decryptField\n",
+    }
+    const tree = await fixtureTree({ ...BASE, ...decrypter })
+    try {
+      assert.deepEqual(await cruise(tree.root), [
+        'field-decrypter-allowlist: app/transformers/seller/seller_context_transformer.ts → app/modules/platform/crypto/field_decrypter.ts',
       ])
     } finally {
       await tree.cleanup()

@@ -27,3 +27,21 @@ export function toNepalMobileE164(input: string): string | null {
   const match = MOBILE_INPUT.exec(compact)
   return match ? `+977${match[1]}` : null
 }
+
+/*
+ * A shop's contact numbers (docs/04 §2.8, 01 AC-FR-SHOP-001-3): a mobile as
+ * above, or a landline, whose national number has eight digits (the area
+ * code without its leading `0`, then the subscriber number), so
+ * `01-4123456` and `+977 1 4123456` are both `+97714123456`. The stored
+ * form is that of `shops_contact_phone_check`.
+ */
+export const NEPAL_SHOP_PHONE_E164 = /^\+977(9[678]\d{8}|\d{8})$/
+
+const LANDLINE_INPUT = /^(?:\+?977|0)?(\d{8})$/
+
+export function toNepalShopPhoneE164(input: string): string | null {
+  const mobile = toNepalMobileE164(input)
+  if (mobile) return mobile
+  const match = LANDLINE_INPUT.exec(input.trim().replaceAll(/[\s-]/g, ''))
+  return match ? `+977${match[1]}` : null
+}

@@ -34,6 +34,8 @@ const SHARED_PROPS = [
   'theme',
   'user',
   'current_staff',
+  'seller_shops',
+  'current_shop',
   'request_id',
 ]
 
