@@ -13,6 +13,8 @@ import type IdentityAddressTransformer from '#transformers/identity/address_tran
 import type LegalDocumentTransformer from '#transformers/legal_document_transformer'
 import type LogisticsLocationTransformer from '#transformers/logistics/location_transformer'
 import type SellerLogisticsTransformer from '#transformers/seller/logistics_transformer'
+import type SellerSellerContextTransformer from '#transformers/seller/seller_context_transformer'
+import type SellerShopTransformer from '#transformers/seller/shop_transformer'
 import type InertiaMiddleware from '#middleware/inertia_middleware'
 
 export namespace Data {
@@ -48,6 +50,14 @@ export namespace Data {
     export type Logistics = InferData<SellerLogisticsTransformer>
     export namespace Logistics {
       export type Variants = InferVariants<SellerLogisticsTransformer>
+    }
+    export type SellerContext = InferData<SellerSellerContextTransformer>
+    export namespace SellerContext {
+      export type Variants = InferVariants<SellerSellerContextTransformer>
+    }
+    export type Shop = InferData<SellerShopTransformer>
+    export namespace Shop {
+      export type Variants = InferVariants<SellerShopTransformer>
     }
   }
   export type SharedProps = InferSharedProps<InertiaMiddleware>

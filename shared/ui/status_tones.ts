@@ -4,7 +4,8 @@
  * resources/lang/en/status.json under `<entity>.<state>`. T-UI-008 checks
  * each entity against its domain vocabulary and the catalog, so a new state
  * cannot ship without a label. Entities join with the pages that show them:
- * courier accounts since the admin courier pages (M6).
+ * courier accounts since the admin courier pages (M6), shops since the
+ * seller overview (R1-S part 1a).
  */
 export type Tone = 'neutral' | 'info' | 'warning' | 'success' | 'destructive'
 
@@ -15,6 +16,13 @@ export const STATUS_TONES = {
     invalid: 'destructive',
     suspended: 'destructive',
     disabled: 'neutral',
+  },
+  shop: {
+    pending_review: 'warning',
+    active: 'success',
+    rejected: 'destructive',
+    suspended: 'destructive',
+    closed: 'neutral',
   },
 } as const satisfies Record<string, Record<string, Tone>>
 

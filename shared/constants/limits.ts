@@ -42,3 +42,21 @@ export const COURIER_LIMITS = {
   token: { min: 8, max: 200, pattern: /^[\x21-\x7e]+$/ },
   reason: { min: 3, max: 500 },
 } as const
+
+// The shop fields of docs/04a §6.1 (`platform:create-shop`, docs/09 §9.8; the
+// profile form of R1-S part 1b): the bounds of `shops_name_check`,
+// `shops_slug_check`, `shops_return_policy_check`,
+// `shops_grievance_name_check` and `shops_description_check`, counted in code
+// points after NFC (docs/04 §2.8). The registration number and authority
+// have no CHECK, so these bounds are the only ones; `panVat` is the 9 digits
+// the validator requires while the IRD format is unconfirmed (VX-05).
+export const SHOP_LIMITS = {
+  name: { min: 2, max: 60 },
+  slug: { min: 3, max: 40 },
+  description: { max: 2000 },
+  returnPolicyText: { min: 1, max: 5000 },
+  grievanceContactName: { min: 2, max: 100 },
+  registrationNumber: { min: 1, max: 50 },
+  registrationAuthority: { min: 2, max: 100 },
+  panVat: { pattern: /^[0-9]{9}$/ },
+} as const

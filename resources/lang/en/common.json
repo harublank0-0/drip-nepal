@@ -27,6 +27,7 @@
   "account.signing_out": "Signing out…",
   "account.sign_out_failed": "We couldn't sign you out. Try again.",
   "account.link": "Your account",
+  "account.shop_link": "Your shop",
   "step_up.title": "Enter your authenticator code",
   "step_up.body": "Changes like this need a code from your authenticator app from the last 15 minutes. Enter the current code, then confirm again.",
   "step_up.code": "6-digit code",

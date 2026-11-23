@@ -3,5 +3,10 @@
   "courier_account.active": "Active",
   "courier_account.invalid": "Refused by courier",
   "courier_account.suspended": "Suspended",
-  "courier_account.disabled": "Disabled"
+  "courier_account.disabled": "Disabled",
+  "shop.pending_review": "In review",
+  "shop.active": "Active",
+  "shop.rejected": "Not approved",
+  "shop.suspended": "Suspended",
+  "shop.closed": "Closed"
 }

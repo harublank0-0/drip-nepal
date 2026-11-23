@@ -145,8 +145,6 @@ x-pending-operations:
   - getMySupportCase
   - replyToMySupportCase
   # Seller (06 §13.5)
-  - listMyShops
-  - getSellerShop
   - updateShopProfile
   - getShopShipping
   - replaceShopShipping
@@ -1189,7 +1187,8 @@ paths:
         there is no ID to change. The answer lists every member: the profile, the status, the
         two marketing consents as booleans (as `updateMe` takes them), the phone's last four
         digits, the staff role of an unrevoked `platform_staff` row (enrolled or not), and the
-        shops the user owns or is an `active` member of, with their place in each. Never the
+        shops the user owns or is an `active` member of, with their place in each (at most 20,
+        the first by name, A-63). Never the
         password hash, the security stamp, the TOTP secret, the encrypted phone or its blind
         index (07 §5.5, TM-06). Side effects: none. Charged to `api_user` (300 per minute per
         user, 06 §9.1), as every authenticated call without a limiter of its own is since M1 part
@@ -2072,6 +2071,162 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '422': { $ref: '#/components/responses/UnprocessableContent' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /api/v1/seller/shops:
+    get:
+      operationId: listMyShops
+      tags: [Seller]
+      summary: The shops the signed-in user owns or works in
+      description: |
+        Actor: a signed-in user (`auth`; the `session` requirement of 07 §4.5); a guest gets 401.
+        The one seller route outside `{shopSlug}`, so no `seller_context`. Scope: the shops whose
+        `owner_user_id` is the caller, in every status, and those where the caller has an
+        `active` `shop_memberships` row (a removed membership is left out), ordered by name;
+        each with the caller's place in it, `owner` or the member's role. The same rows as
+        `getMe`'s `shops` and the `seller_shops` shared prop (03 §6.3); never a shop ID or another
+        member. At most 20 rows, the first by name (A-63), so it is a bounded list (06 §6.2) and
+        answers `{ "data": [...] }` without `meta` or a cursor. Query: none; any parameter is 400
+        `INVALID_QUERY_PARAMETER` (06 §6.3). Side effects: none. Charged to `api_user`
+        (06 §9.1); past it, 429. T-SHOP-008. Release R1·M2; built in R1-S part 1a.
+      x-release: R1·M2
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: The caller's shops; an empty list when there are none.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MyShopList' }
+              examples:
+                ownerAndManager:
+                  summary: The owner of one shop who manages another (placeholders)
+                  value:
+                    data:
+                      - slug: alpha-pasal
+                        name: Alpha Pasal
+                        status: active
+                        role: manager
+                      - slug: thulo-pasal
+                        name: Thulo Pasal
+                        status: active
+                        role: owner
+        '400':
+          description: A query parameter; the list takes none, and one `invalid` item names it.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem400' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /api/v1/seller/shops/{shopSlug}:
+    parameters:
+      - $ref: '#/components/parameters/ShopSlug'
+    get:
+      operationId: getSellerShop
+      tags: [Seller]
+      summary: Read the shop's profile, status and agreement status
+      description: |
+        Actor: the owner or any active member (`shop.member`, 07 §4.5). Scope: the shop comes from
+        `{shopSlug}` only; another shop's slug, or one the caller is not in, answers the 404 of an
+        unknown slug (06 §4.4, T-SEC-001). Status gate, the `shop.member` rule of 07 §4.4
+        (proposed, OD-48): open in `active` and in both suspension modes, to the owner only while
+        `pending_review` or `rejected`, and refused in `closed`, with 403 `SHOP_NOT_ACTIVE` and
+        `shop_status` and `suspension_mode`. Query: none; any parameter is 400
+        `INVALID_QUERY_PARAMETER` (06 §6.3).
+        Returns the profile, the status, `agreement` (the current seller agreement's `version`
+        and `is_final`, and `accepted`, whether the shop holds a `shop_agreements` row for it,
+        04a §6.4) and `version`, which the strong `ETag` repeats and `updateShopProfile` will take
+        as `If-Match` (06 §8). `business_details` (the business details of 01 AC-FR-SHOP-013-2:
+        business type, registration number, registering authority, PAN/VAT number, VAT flag and
+        return policy) and `grievance_contact` (name and phone, decrypted by the shop profile
+        transformer of the 07 §5.5 allowlist) are the owner's only: `null` for every other member
+        (01 AC-FR-SHOP-013-4, T-SEC-034). The logo and banner join with FR-MED-003. Side effects:
+        none. Charged to `api_user` (06 §9.1); past it, 429. T-SHOP-008. Release R1·M2; built in
+        R1-S part 1a.
+      x-release: R1·M2
+      x-permission: shop.member
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: The shop as its member may see it.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+            ETag: { $ref: '#/components/headers/ETag' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SellerShopResponse' }
+              examples:
+                owner:
+                  summary: The owner's view of the owner's shop (placeholders)
+                  value:
+                    data:
+                      slug: thulo-pasal
+                      name: Thulo Pasal
+                      status: active
+                      suspension_mode: null
+                      description: null
+                      contact_email: hello@example.com
+                      contact_phone: '+97714123456'
+                      business_details:
+                        business_type: individual
+                        registration_number: null
+                        registration_authority: null
+                        pan_vat_number: '123456789'
+                        is_vat_registered: false
+                        return_policy_text: Returns within 7 days, unworn and with tags.
+                      grievance_contact:
+                        name: Example Contact
+                        phone: '+9779800000000'
+                      agreement:
+                        version: '2026-11-23'
+                        is_final: false
+                        accepted: true
+                      version: 1
+                member:
+                  summary: A manager's view of the same shop
+                  value:
+                    data:
+                      slug: thulo-pasal
+                      name: Thulo Pasal
+                      status: active
+                      suspension_mode: null
+                      description: null
+                      contact_email: hello@example.com
+                      contact_phone: '+97714123456'
+                      business_details: null
+                      grievance_contact: null
+                      agreement:
+                        version: '2026-11-23'
+                        is_final: false
+                        accepted: true
+                      version: 1
+        '400':
+          description: A query parameter; the operation takes none, and one `invalid` item names it.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem400' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/Internal' }
 
@@ -6567,6 +6722,7 @@ components:
               enum: [platform_admin, support_agent, catalog_moderator, finance_officer, null]
             shops:
               type: array
+              maxItems: 20
               items:
                 type: object
                 additionalProperties: false
@@ -6814,6 +6970,141 @@ components:
         area_tole: { type: string, minLength: 2, maxLength: 200 }
         street_landmark: { type: [string, 'null'], minLength: 1, maxLength: 200 }
         is_default: { type: boolean }
+
+    # ---------- the seller's shop reads (06 §13.5; R1-S part 1a) ----------
+    MyShop:
+      type: object
+      description: |
+        One shop the caller owns or is an `active` member of, with the caller's place in it
+        (`listMyShops`, the `seller_shops` shared prop). Never the shop's ID or another member.
+      additionalProperties: false
+      required: [slug, name, status, role]
+      properties:
+        slug:
+          {
+            type: string,
+            minLength: 3,
+            maxLength: 40,
+            pattern: '^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$',
+          }
+        name: { type: string, minLength: 2, maxLength: 60 }
+        status:
+          type: string
+          enum: [pending_review, active, rejected, suspended, closed]
+        role:
+          type: string
+          enum: [owner, manager, catalog_editor, order_fulfiller, viewer]
+    MyShopList:
+      type: object
+      description: |
+        The 200 of `listMyShops`, by shop name, at most 20 rows (A-63); a bounded list, so no
+        `meta` or cursor (06 §6.2 "Bounded lists").
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          type: array
+          maxItems: 20
+          items: { $ref: '#/components/schemas/MyShop' }
+    SellerShop:
+      type: object
+      description: |
+        A shop as `getSellerShop` answers it to its member; a closed schema, so a new member is a
+        contract change. `business_details` and `grievance_contact` are the owner's only and
+        `null` for every other member (01 AC-FR-SHOP-013-4).
+      additionalProperties: false
+      required:
+        [
+          slug,
+          name,
+          status,
+          suspension_mode,
+          description,
+          contact_email,
+          contact_phone,
+          business_details,
+          grievance_contact,
+          agreement,
+          version,
+        ]
+      properties:
+        slug:
+          {
+            type: string,
+            minLength: 3,
+            maxLength: 40,
+            pattern: '^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$',
+          }
+        name: { type: string, minLength: 2, maxLength: 60 }
+        status:
+          type: string
+          enum: [pending_review, active, rejected, suspended, closed]
+        suspension_mode:
+          type: [string, 'null']
+          enum: [fulfill_existing, frozen, null]
+          description: Set exactly when `status` is `suspended` (04a §6.1).
+        description: { type: [string, 'null'], maxLength: 2000 }
+        contact_email:
+          type: string
+          format: email
+          description: The public shop contact, lower-cased.
+        contact_phone:
+          type: string
+          pattern: '^\+977(9[678][0-9]{8}|[0-9]{8})$'
+          description: The public shop number in E.164, a mobile or a landline.
+        business_details:
+          type: [object, 'null']
+          description: |
+            The business details of 01 AC-FR-SHOP-013-2, the owner's only; `null` for every other
+            member (AC-FR-SHOP-013-4).
+          additionalProperties: false
+          required:
+            [
+              business_type,
+              registration_number,
+              registration_authority,
+              pan_vat_number,
+              is_vat_registered,
+              return_policy_text,
+            ]
+          properties:
+            business_type: { type: string, enum: [individual, registered_business] }
+            registration_number: { type: [string, 'null'] }
+            registration_authority: { type: [string, 'null'] }
+            pan_vat_number: { type: [string, 'null'], pattern: '^[0-9]{1,20}$' }
+            is_vat_registered: { type: boolean }
+            return_policy_text: { type: string, minLength: 1, maxLength: 5000 }
+        grievance_contact:
+          type: [object, 'null']
+          description: |
+            The seller's grievance contact (E-Commerce Act s16), the owner's only; `null` for
+            every other member, and after the retention redaction of a closed or rejected shop
+            (04 §19.3).
+          additionalProperties: false
+          required: [name, phone]
+          properties:
+            name: { type: string, minLength: 2, maxLength: 100 }
+            phone: { type: string, pattern: '^\+977[0-9]{8,10}$' }
+        agreement:
+          type: object
+          description: |
+            The current seller agreement version (04a §6.4) and whether the shop holds a
+            `shop_agreements` row for it. `is_final` is false while OD-04, OD-05 and OD-11 keep the
+            text a draft.
+          additionalProperties: false
+          required: [version, is_final, accepted]
+          properties:
+            version: { type: string, pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' }
+            is_final: { type: boolean }
+            accepted: { type: boolean }
+        version: { type: integer, minimum: 1, description: '`shops.version`; the ETag repeats it.' }
+    SellerShopResponse:
+      type: object
+      description: The 200 of `getSellerShop`.
+      additionalProperties: false
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/SellerShop' }
 
     # ---------- password reset and change, revokeAllSessions (06 §13.3; M1 part 4) ----------
     RequestPasswordResetRequest:
@@ -9294,3 +9585,21 @@ components:
 #     `default_required` are those of the pickup-address operations; `address_limit` (`field`
 #     `null`) is new and is described in the operations, since `ProblemErrorItem` names its
 #     codes by example only. The `AddressId` parameter stays the pickup address's.
+#
+# Added with the seller's shop reads (2026-11-23, R1-S part 1a):
+# 53. `listMyShops` and `getSellerShop` move from `x-pending-operations` to `paths`, written
+#     from the code, with the new schemas `MyShop`, `MyShopList`, `SellerShop` and
+#     `SellerShopResponse` (06 note 63). `listMyShops` keeps the cookie-only security of
+#     `getMe`, has no `{shopSlug}` and answers `{ "data": [...] }` by shop name without `meta`
+#     or a cursor, the exception 06 §6.2 "Bounded lists" names, because the `seller_shops`
+#     shared prop sends the same rows whole. `getSellerShop` declares `x-permission:
+#     shop.member`, answers a closed `SellerShop` with a strong `ETag` of `shops.version`, and
+#     gives `business_identity` and `grievance_contact` to the owner only, `null` to every
+#     other member (01 AC-FR-SHOP-013-4); its 403 is the `shop.member` status gate of 07 §4.4.
+#     Both refuse any query parameter (400) and are charged to `api_user`. The logo and
+#     banner members join `SellerShop` with FR-MED-003.
+#     After the Fable review (round 2): `SellerShop` gathers every business detail of 01
+#     AC-FR-SHOP-013-2 (business type, the three identifiers, the VAT flag, the return policy)
+#     in `business_details`, owner-only like `grievance_contact`, as AC-FR-SHOP-013-4 asks;
+#     `MyShopList` and `getMe`'s `shops` hold at most 20 rows (A-63), so `listMyShops` is an
+#     ordinary bounded list.

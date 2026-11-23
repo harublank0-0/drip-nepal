@@ -1,6 +1,7 @@
 import db from '@adonisjs/lucid/services/db'
 import type { ShopMemberRole } from '#modules/shops/domain/shop_member_role'
 import { hasShopSlugShape } from '#modules/shops/domain/shop_slug'
+import { CURRENT_SELLER_AGREEMENT } from '#modules/shops/domain/seller_agreements'
 
 /*
  * The shops module's reads for other layers (docs/09 §2.2: a module's
@@ -94,10 +95,16 @@ export type UserShop = { slug: string; name: string; status: string; role: Selle
 
 /*
  * The shops a user owns and those they are an `active` member of, for the
- * user's own `getMe` (docs/06 §13.3, "owned and member shops"): each
- * shop's slug, name and status, and the user's place in it, by name.
- * Shop IDs and other members are never part of it.
+ * user's own `getMe` (docs/06 §13.3, "owned and member shops"),
+ * `listMyShops` (§13.5) and the `seller_shops` shared prop (docs/03 §6.3):
+ * each shop's slug, name and status, and the user's place in it, by name.
+ * Shop IDs and other members are never part of it. At most
+ * `MY_SHOPS_LIMIT` rows, the first by name, so the list is bounded
+ * (06 §6.2 "Bounded lists") on every page that sends it. One round trip on
+ * `shops_owner_idx` and `shop_memberships_user_active_idx`.
  */
+export const MY_SHOPS_LIMIT = 20 // [Assumption A-63]
+
 export async function shopsOfUser(userId: string): Promise<UserShop[]> {
   const result = await db.rawQuery(
     `SELECT s.slug, s.name, s.status, 'owner' AS role
@@ -108,8 +115,9 @@ export async function shopsOfUser(userId: string): Promise<UserShop[]> {
        FROM shop_memberships m
        JOIN shops s ON s.id = m.shop_id
       WHERE m.user_id = :user AND m.status = 'active'
-     ORDER BY name, slug`,
-    { user: userId }
+     ORDER BY name, slug
+     LIMIT :limit`,
+    { user: userId, limit: MY_SHOPS_LIMIT }
   )
   return (result.rows as UserShop[]).map((row) => ({
     slug: row.slug,
@@ -117,4 +125,97 @@ export async function shopsOfUser(userId: string): Promise<UserShop[]> {
     status: row.status,
     role: row.role,
   }))
+}
+
+/*
+ * A shop as `getSellerShop` and the seller pages read it (docs/06 §13.5):
+ * the profile columns of docs/04a §6.1, the status, the `version` of its
+ * ETag, and whether the shop holds an agreement row for the current seller
+ * agreement version (04a §6.4). The grievance phone stays ciphertext: only
+ * the shop profile transformer decrypts it, for the owner (docs/07 §5.5,
+ * T-SEC-034). Null for a missing shop.
+ */
+export type SellerShopRow = {
+  id: string
+  slug: string
+  name: string
+  status: string
+  suspension_mode: string | null
+  description: string | null
+  contact_email: string
+  contact_phone_e164: string
+  return_policy_text: string
+  business_type: string
+  business_registration_number: string | null
+  business_registration_authority: string | null
+  pan_vat_number: string | null
+  is_vat_registered: boolean
+  grievance_contact_name: string | null
+  grievance_contact_phone_enc: string | null
+  version: number
+  agreement_version: string
+  agreement_is_final: boolean
+  agreement_accepted: boolean
+}
+
+export async function sellerShop(shopId: string): Promise<SellerShopRow | null> {
+  const result = await db.rawQuery(
+    `SELECT s.id, s.slug, s.name, s.status, s.suspension_mode, s.description,
+            s.contact_email, s.contact_phone_e164, s.return_policy_text, s.business_type,
+            s.business_registration_number, s.business_registration_authority,
+            s.pan_vat_number, s.is_vat_registered, s.grievance_contact_name,
+            s.grievance_contact_phone_enc, s.version,
+            EXISTS (SELECT 1 FROM shop_agreements a
+                     WHERE a.shop_id = s.id AND a.agreement_version = :agreement)
+              AS agreement_accepted
+       FROM shops s
+      WHERE s.id = :shop`,
+    { shop: shopId, agreement: CURRENT_SELLER_AGREEMENT.version }
+  )
+  const row = result.rows[0]
+  if (!row) return null
+  return {
+    ...row,
+    agreement_version: CURRENT_SELLER_AGREEMENT.version,
+    agreement_is_final: CURRENT_SELLER_AGREEMENT.isFinal,
+  } as SellerShopRow
+}
+
+/*
+ * Whether the shop has a default pickup address that is not archived
+ * (docs/04a §6.6), the address approval and courier booking need; for the
+ * overview's "before you can sell" list (docs/08 §2.5).
+ */
+export async function hasDefaultPickupAddress(shopId: string) {
+  const row = await db
+    .from('shop_addresses')
+    .where({ shop_id: shopId, purpose: 'pickup', is_default: true })
+    .whereNull('archived_at')
+    .select('id')
+    .first()
+  return row !== null
+}
+
+/*
+ * Whether the shop holds an agreement row for the current seller agreement
+ * version (docs/04a §6.4): the overview's "before you can sell" item, read
+ * alone so the page reads no profile column it does not show.
+ */
+export async function acceptedCurrentAgreement(shopId: string) {
+  const row = await db
+    .from('shop_agreements')
+    .where({ shop_id: shopId, agreement_version: CURRENT_SELLER_AGREEMENT.version })
+    .select('id')
+    .first()
+  return row !== null
+}
+
+/*
+ * Whether a user owns a shop in any status, for `platform:create-shop` to
+ * refuse before it asks anything (docs/09 §9.8). Its action checks again
+ * under its locks.
+ */
+export async function ownsAnyShop(userId: string) {
+  const row = await db.from('shops').where('owner_user_id', userId).select('id').first()
+  return row !== null
 }

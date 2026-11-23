@@ -283,6 +283,30 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/customer/identity/addresses_controller').default['deleteAddress']>>>
     }
   }
+  'listMyShops': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/seller/shops'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/api/v1/seller/shops/shops_controller').default['listMyShops']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/seller/shops/shops_controller').default['listMyShops']>>>
+    }
+  }
+  'getSellerShop': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/seller/shops/:shopSlug'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { shopSlug: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/api/v1/seller/shops/shops_controller').default['getSellerShop']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/seller/shops/shops_controller').default['getSellerShop']>>>
+    }
+  }
   'getLogisticsSettings': {
     methods: ["GET","HEAD"]
     pattern: '/api/v1/seller/shops/:shopSlug/logistics'
@@ -749,6 +773,18 @@ export interface Registry {
       query: {}
       response: ExtractResponse<Awaited<ReturnType<import('#controllers/account/identity/account_controller').default['security']>>>
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/account/identity/account_controller').default['security']>>>
+    }
+  }
+  'seller.overview': {
+    methods: ["GET","HEAD"]
+    pattern: '/seller/:shopSlug'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { shopSlug: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/seller/shops/shop_controller').default['overview']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/seller/shops/shop_controller').default['overview']>>>
     }
   }
   'admin.logistics': {

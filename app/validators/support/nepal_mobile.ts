@@ -1,6 +1,6 @@
 import vine from '@vinejs/vine'
 import { ACCOUNT_LIMITS } from '#shared/constants/limits'
-import { toNepalMobileE164 } from '#shared/format/phone'
+import { toNepalMobileE164, toNepalShopPhoneE164 } from '#shared/format/phone'
 
 /*
  * A Nepali mobile number field (docs/04 §2.8, docs/06 §3.5; 01
@@ -23,3 +23,24 @@ const nepalMobileRule = vine.createRule((value, _options, field) => {
 
 export const nepalMobile = () =>
   vine.string().trim().maxLength(ACCOUNT_LIMITS.phoneInput.max).use(nepalMobileRule())
+
+/*
+ * A shop contact number (docs/04 §2.8, 01 AC-FR-SHOP-001-3): a Nepali
+ * mobile or an eight-digit landline, with the same prefixes and
+ * separators, handed on in E.164 (`toNepalShopPhoneE164`). Anything else
+ * answers 422 on the field with the item code `nepal_phone`.
+ * `platform:create-shop` uses it for the shop's contact and grievance
+ * numbers; the profile form joins in R1-S part 1b.
+ */
+const nepalShopPhoneRule = vine.createRule((value, _options, field) => {
+  if (typeof value !== 'string') return
+  const e164 = toNepalShopPhoneE164(value)
+  if (!e164) {
+    field.report('The {{ field }} field must be a Nepali phone number', 'nepalPhone', field)
+    return
+  }
+  field.mutate(e164, field)
+})
+
+export const nepalShopPhone = () =>
+  vine.string().trim().maxLength(ACCOUNT_LIMITS.phoneInput.max).use(nepalShopPhoneRule())

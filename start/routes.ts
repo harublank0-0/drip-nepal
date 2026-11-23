@@ -42,6 +42,7 @@ await import('#start/routes/webhooks')
 await import('#start/routes/storefront')
 await import('#start/routes/auth')
 await import('#start/routes/account')
+await import('#start/routes/seller')
 await import('#start/routes/admin')
 
 // Development-only routes (RF-40): never in the production route list.

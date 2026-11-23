@@ -27,6 +27,8 @@ export type ScannedRoutes = {
     'createAddress': { paramsTuple?: []; params?: {} }
     'updateAddress': { paramsTuple: [ParamValue]; params: {'addressId': ParamValue} }
     'deleteAddress': { paramsTuple: [ParamValue]; params: {'addressId': ParamValue} }
+    'listMyShops': { paramsTuple?: []; params?: {} }
+    'getSellerShop': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'getLogisticsSettings': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'replaceLogisticsSettings': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'createShopCourierAccount': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
@@ -66,6 +68,7 @@ export type ScannedRoutes = {
     'account.overview': { paramsTuple?: []; params?: {} }
     'account.addresses': { paramsTuple?: []; params?: {} }
     'account.security': { paramsTuple?: []; params?: {} }
+    'seller.overview': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'admin.logistics': { paramsTuple?: []; params?: {} }
     'dev.design_system': { paramsTuple?: []; params?: {} }
     'dev.overlays': { paramsTuple?: []; params?: {} }
@@ -80,6 +83,8 @@ export type ScannedRoutes = {
     'listDistricts': { paramsTuple?: []; params?: {} }
     'listLocalLevels': { paramsTuple?: []; params?: {} }
     'listAddresses': { paramsTuple?: []; params?: {} }
+    'listMyShops': { paramsTuple?: []; params?: {} }
+    'getSellerShop': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'getLogisticsSettings': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'getCourierBookingOptions': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'shopOrderNumber': ParamValue} }
     'adminListLogisticsAccounts': { paramsTuple?: []; params?: {} }
@@ -97,6 +102,7 @@ export type ScannedRoutes = {
     'account.overview': { paramsTuple?: []; params?: {} }
     'account.addresses': { paramsTuple?: []; params?: {} }
     'account.security': { paramsTuple?: []; params?: {} }
+    'seller.overview': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'admin.logistics': { paramsTuple?: []; params?: {} }
     'dev.design_system': { paramsTuple?: []; params?: {} }
     'dev.overlays': { paramsTuple?: []; params?: {} }
@@ -109,6 +115,8 @@ export type ScannedRoutes = {
     'listDistricts': { paramsTuple?: []; params?: {} }
     'listLocalLevels': { paramsTuple?: []; params?: {} }
     'listAddresses': { paramsTuple?: []; params?: {} }
+    'listMyShops': { paramsTuple?: []; params?: {} }
+    'getSellerShop': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'getLogisticsSettings': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'getCourierBookingOptions': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'shopOrderNumber': ParamValue} }
     'adminListLogisticsAccounts': { paramsTuple?: []; params?: {} }
@@ -126,6 +134,7 @@ export type ScannedRoutes = {
     'account.overview': { paramsTuple?: []; params?: {} }
     'account.addresses': { paramsTuple?: []; params?: {} }
     'account.security': { paramsTuple?: []; params?: {} }
+    'seller.overview': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'admin.logistics': { paramsTuple?: []; params?: {} }
     'dev.design_system': { paramsTuple?: []; params?: {} }
     'dev.overlays': { paramsTuple?: []; params?: {} }

@@ -162,6 +162,8 @@ test.group('T-SEC-036 /admin/logistics props', () => {
       'theme',
       'user',
       'current_staff',
+      'seller_shops',
+      'current_shop',
       'request_id',
       'accounts',
     ])
