@@ -42,3 +42,20 @@ const codePointLength = vine.createRule<LengthOptions>((value, options, field) =
 
 export const nfcText = (limits: LengthOptions) =>
   vine.string().trim().use(toNfc()).use(codePointLength(limits))
+
+/*
+ * Optional text that a blank clears (docs/06 §3.5: strings are trimmed and an
+ * empty string becomes null): trimmed, then `""`, which is what a value of
+ * spaces leaves, becomes null, so `"   "` clears the column as `""` and
+ * `null` do instead of answering `min_length`; anything else is `nfcText`.
+ * Use it with `.nullable().optional()`. `updateShopProfile` uses it for the
+ * description and the registration number and authority, and `blankToNull`
+ * for the PAN/VAT number (R1-S part 1b review); the address book's optional
+ * members still refuse a blank.
+ */
+export const blankToNull = vine.createRule((value, _options, field) => {
+  if (value === '') field.mutate(null, field)
+})
+
+export const clearableNfcText = (limits: LengthOptions) =>
+  vine.string().trim().use(blankToNull()).use(toNfc()).use(codePointLength(limits))

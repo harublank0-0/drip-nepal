@@ -21,7 +21,9 @@ import {
  * query parameter (06 §6.3: any is 400 `INVALID_QUERY_PARAMETER`; the
  * validator reads the body and the query merged, so a member could
  * otherwise arrive in the query). The reads are charged to `api_user`
- * (06 §9.1); `updateShopProfile` to its own `shop_profile_update` row.
+ * (06 §9.1); `updateShopProfile` to its own `shop_profile_update` row, in
+ * the API limits middleware before any check here, so a refused call takes
+ * a point too.
  *
  * - `listMyShops` (`session`, outside `{shopSlug}` and `seller_context`,
  *   docs/07 §4.5): the shops the caller owns, in any status, and those they

@@ -3,6 +3,7 @@ import type { NextFn } from '@adonisjs/core/types/http'
 import {
   IP_LIMIT_OPERATIONS,
   OWN_LIMIT_OPERATIONS,
+  USER_LIMIT_OPERATIONS,
   clientNetwork,
   rateLimitKey,
   rateLimiter,
@@ -26,6 +27,11 @@ import {
  * client network (`clientNetwork`, docs/07 §3.6), whether a user is signed
  * in or not: they are open to guests, so a per-user key would not bound
  * them.
+ *
+ * The writes of `USER_LIMIT_OPERATIONS` (R1-S part 1b: `updateShopProfile`
+ * on `shop_profile_update`) take a point of their own row instead, keyed on
+ * the signed-in user, here and so before the route's middleware and every
+ * check, so a refused call is charged like an accepted one.
  */
 export default class ApiLimitsMiddleware {
   async handle(ctx: HttpContext, next: NextFn) {
@@ -37,6 +43,12 @@ export default class ApiLimitsMiddleware {
       return next()
     }
     const user = ctx.auth.user
+    const perUser = USER_LIMIT_OPERATIONS.get(operation)
+    if (perUser) {
+      // A guest is answered by the route's `auth`.
+      if (user) await rateLimiter(perUser).consume(rateLimitKey(perUser, String(user.id)))
+      return next()
+    }
     const path = ctx.request.url()
     if (
       user &&

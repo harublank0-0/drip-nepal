@@ -3,7 +3,6 @@ import { InvariantViolation } from '#exceptions/programming_errors'
 import { recordAudit } from '#modules/audit/actions/record_audit'
 import type { Actor } from '#modules/platform/actor'
 import { encryptField } from '#modules/platform/crypto/field_encrypter'
-import { rateLimitKey, rateLimiter } from '#modules/platform/rate_limits'
 import { withTx } from '#modules/platform/tx'
 import type { BusinessType } from '#modules/shops/domain/business_type'
 import { shopGateAllows } from '#modules/shops/permissions'
@@ -20,12 +19,12 @@ import { sellerShop, type SellerContext, type SellerShopRow } from '#modules/sho
  * description may be null, which clears it; so may the registration number,
  * the registering authority and the PAN/VAT number, within the rules below.
  *
- * First the `shop_profile_update` limiter (20 per hour per user, proposed,
- * docs/06 §9.1) takes a point: each change writes an audit row to the
- * insert-only `audit_logs`, kept 7 years. Past it, 429 `RATE_LIMITED` and
- * nothing is written. The grievance phone is encrypted before the
- * transaction (AAD `shops.grievance_contact_phone_enc`, docs/04 §2.9); it
- * has no blind index (04a §6.1).
+ * The `shop_profile_update` limiter (20 per hour per user, proposed,
+ * docs/06 §9.1) has already taken its point in the API limits middleware,
+ * before every check, because each change writes an audit row to the
+ * insert-only `audit_logs`, kept 7 years. The grievance phone is encrypted
+ * before the transaction (AAD `shops.grievance_contact_phone_enc`, docs/04
+ * §2.9); it has no blind index (04a §6.1).
  *
  * In one transaction:
  * 1. The shop row is locked `FOR NO KEY UPDATE` (level 0 of docs/05 §4.4)
@@ -158,9 +157,6 @@ export async function updateShopProfile<T extends Record<string, unknown>>(
   const { shop, changes } = command
   const { actor } = context
   if (!actor.userId) throw new InvariantViolation('updateShopProfile needs the acting user')
-  await rateLimiter('shop_profile_update').consume(
-    rateLimitKey('shop_profile_update', actor.userId)
-  )
   const grievancePhoneEnc =
     changes.grievanceContactPhoneE164 === undefined
       ? null

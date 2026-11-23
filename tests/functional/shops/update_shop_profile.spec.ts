@@ -18,8 +18,9 @@ import { CURRENT_SELLER_AGREEMENT } from '#modules/shops/domain/seller_agreement
  *   the return policy and the grievance contact, and gets 200 with the shop
  *   as `getSellerShop` shows it and the next ETag; the grievance phone is
  *   stored encrypted; an absent member keeps its column, and a request that
- *   changes nothing writes nothing and keeps the version; null clears the
- *   description; the business rules of 04a §6.1 on the result (a
+ *   changes nothing writes nothing and keeps the version; null, "" or a
+ *   value of spaces clears the description, the identifiers and the PAN;
+ *   the business rules of 04a §6.1 on the result (a
  *   registered business needs its identifiers, a VAT-registered shop its
  *   PAN, an individual's PAN may be removed while OD-16 is open); a member
  *   out of rule answers 422 on it; one `shop.profile_update` audit row names
@@ -41,10 +42,11 @@ import { CURRENT_SELLER_AGREEMENT } from '#modules/shops/domain/seller_agreement
  * - T-SEC-031: the "profile, shipping" status gate, over HTTP and against a
  *   suspension that commits after `seller_context` read the shop.
  * - T-SEC-102: the audit row holds none of the fixture personal values.
- * Each call charges the user's `shop_profile_update` key, which the limiter
- * store commits on its own connection, so each test deletes the keys of the
- * users it signed in (docs/10 §3.3); the limit itself is in
- * tests/concurrency/shops/update_shop_profile.spec.ts (T-SEC-011).
+ * Each call, accepted or refused, charges the user's `shop_profile_update`
+ * key, which the limiter store commits on its own connection, so each test
+ * deletes the keys of the users it signed in (docs/10 §3.3); the limit
+ * itself is in tests/concurrency/shops/update_shop_profile.spec.ts
+ * (T-SEC-011).
  */
 
 const shopPath = (slug: string) => `/api/v1/seller/shops/${slug}`
@@ -171,6 +173,49 @@ test.group('T-SHOP-009 updateShopProfile', (group) => {
     await patch(browser, shop.slug, { description: 'Again.' }, '"3"')
     const nulled = await patch(browser, shop.slug, { description: null }, '"4"')
     assert.isNull(nulled.body.data.description)
+  })
+
+  test('T-SHOP-009 a value of spaces clears the description, the identifiers and the PAN as "" does', async ({
+    assert,
+  }) => {
+    const { shop, browser } = await shopFor()
+    await patch(browser, shop.slug, { description: 'Something.' })
+    const blanked = await patch(
+      browser,
+      shop.slug,
+      { description: '   ', pan_vat_number: '  ' },
+      '"2"'
+    )
+    assert.equal(blanked.status, 200, blanked.text)
+    assert.isNull(blanked.body.data.description)
+    assert.isNull(blanked.body.data.business_details.pan_vat_number)
+
+    const registered = await patch(
+      browser,
+      shop.slug,
+      {
+        business_type: 'registered_business',
+        registration_number: '12345/079/080',
+        registration_authority: 'Office of the Company Registrar',
+        pan_vat_number: '600123456',
+      },
+      '"3"'
+    )
+    assert.equal(registered.status, 200, registered.text)
+    // A registered business still needs its number: spaces clear it, and the rule refuses that.
+    const cleared = await patch(browser, shop.slug, { registration_number: '   ' }, '"4"')
+    assert.equal(cleared.status, 422, cleared.text)
+    assert.deepEqual(problemFields(cleared.body), [['registration_number', 'required']])
+
+    const individual = await patch(
+      browser,
+      shop.slug,
+      { business_type: 'individual', registration_number: '   ', registration_authority: ' ' },
+      '"4"'
+    )
+    assert.equal(individual.status, 200, individual.text)
+    assert.isNull(individual.body.data.business_details.registration_number)
+    assert.isNull(individual.body.data.business_details.registration_authority)
   })
 
   test('T-SHOP-009 the business rules on the result: {label} [AC-FR-SHOP-013-2]')

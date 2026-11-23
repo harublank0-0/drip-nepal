@@ -2246,8 +2246,8 @@ paths:
         parameter is 400 `INVALID_QUERY_PARAMETER` (06 §6.3).
         Input: each member optional; an absent member keeps its column. `description`,
         `registration_number`, `registration_authority` and `pan_vat_number` may be `null`
-        (or `""`, which the JSON body parser reads as `null`), which clears them; any other
-        member sent as `null` is 422 `required`. Any member not listed (`name`, `slug`,
+        (or `""`, which the JSON body parser reads as `null`, or a value of spaces), which
+        clears them; any other member sent as `null` is 422 `required`. Any member not listed (`name`, `slug`,
         `status`, `commission_rate_bp`, `version`, an encrypted column, the logo and banner
         media IDs until FR-MED-003, the addresses and the categories) is 422 `unknown_field`
         (T-SEC-003). Rules (04a §6.1, as `platform:create-shop`): the two numbers a Nepali
@@ -2258,9 +2258,10 @@ paths:
         PAN/VAT number, and a VAT-registered shop its PAN/VAT number: else 422 `required` on
         the missing member. An individual's PAN/VAT number is neither required nor refused
         while OD-16 and VX-05 are open.
-        Order: the permission, the status gate, the members, the validator, `If-Match`; then
-        the `shop_profile_update` limiter (20 per hour per user, proposed, 06 §9.1), which has
-        this row of its own, so `api_user` does not charge it.
+        Order: first the `shop_profile_update` limiter (20 per hour per user, proposed, 06 §9.1),
+        charged on every call by a signed-in user before any check, so a refused call takes a
+        point too and `api_user` does not charge it; then the permission, the status gate, the
+        members, the validator and `If-Match`.
         Concurrency: ⟳ `If-Match` on `shops.version`, from `getSellerShop`'s `ETag`. Missing,
         `*` or a list → 428; a stale version, a weak tag or any other value → 412
         `VERSION_CONFLICT` with `current`, the shop as `getSellerShop` shows it to the caller
@@ -7256,14 +7257,16 @@ components:
         The whole input of `updateShopProfile`, each member optional and named as `SellerShop`
         names it; any other member is 422 `unknown_field`. The members from `return_policy_text`
         on are the owner's only (403 `FORBIDDEN` from any other member). Only `description`,
-        `registration_number`, `registration_authority` and `pan_vat_number` may be `null` or
-        `""` (cleared); any other member sent so is 422 `required`.
+        `registration_number`, `registration_authority` and `pan_vat_number` may be `null`, `""`
+        or spaces (cleared); any other member sent as `null` or `""` is 422 `required`.
       additionalProperties: false
       properties:
         description:
           type: [string, 'null']
           maxLength: 2000
-          description: Trimmed and normalised to NFC, then up to 2,000 code points; `null` clears it.
+          description: |
+            Trimmed and normalised to NFC, then up to 2,000 code points; `null`, `""` or a value
+            of spaces clears it.
         contact_email:
           type: string
           maxLength: 254
@@ -7285,18 +7288,25 @@ components:
           description: Owner only.
         registration_number:
           type: [string, 'null']
+          minLength: 1
           maxLength: 50
-          description: Owner only. Required on the result for a `registered_business`.
+          description: |
+            Owner only. 1 to 50 code points after NFC; a value of spaces clears it like `""`.
+            Required on the result for a `registered_business`.
         registration_authority:
           type: [string, 'null']
+          minLength: 2
           maxLength: 100
-          description: Owner only. 2 to 100 code points; required on the result for a `registered_business`.
+          description: |
+            Owner only. 2 to 100 code points after NFC; a value of spaces clears it like `""`.
+            Required on the result for a `registered_business`.
         pan_vat_number:
           type: [string, 'null']
           pattern: '^[0-9]{9}$'
           description: |
-            Owner only. 9 digits while the IRD format is unconfirmed (VX-05); required on the
-            result for a `registered_business` or a VAT-registered shop.
+            Owner only. 9 digits while the IRD format is unconfirmed (VX-05); a value of spaces
+            clears it like `""`. Required on the result for a `registered_business` or a
+            VAT-registered shop.
         is_vat_registered:
           type: boolean
           description: Owner only.
@@ -9819,3 +9829,8 @@ components:
 #     charged to the new `shop_profile_update` limiter (proposed, 06 §9.1), not `api_user`. The
 #     logo and banner media IDs, the addresses and the categories stay out of the schema until
 #     the parts that build them.
+#     After the Fable review (round 2): the limiter is charged first, in the API limits
+#     middleware, so a refused call takes a point; a value of spaces clears `description`,
+#     `registration_number`, `registration_authority` and `pan_vat_number` like `""`; the
+#     schema adds the validator's `minLength` to `registration_number` (1) and
+#     `registration_authority` (2).

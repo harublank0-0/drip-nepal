@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useForm, useStore } from '@tanstack/react-form'
 import { router } from '@inertiajs/react'
 import type { Route } from '@tuyau/core/types'
@@ -42,22 +42,27 @@ import { RateLimitNotice } from '~/components/forms/rate_limit_notice'
  *   VAT-registered business needs it, and for an individual it is optional
  *   while OD-16 and VX-05 are open.
  *
- * Save sends only the members that differ from the shop the page was given
- * (`shop`), with `If-Match: "<version>"` from the same props, and nothing
- * when none does. After a save the props are read again (docs/09 §13.3
- * rule 3) and the form restarts from them, so its next save compares with
- * what is stored; the button stays busy until then. A 412
- * `VERSION_CONFLICT` keeps every value the user typed and lists the fields
- * whose saved value changed since the page was opened (`current`), with
- * "Keep my changes", which sends the same members on the new version, and
- * "Discard mine and reload" (docs/08 §7.1 "Concurrent edits"). Nothing is
+ * Save sends only the members that differ from the shop as last known
+ * (`base`: the page's `shop` prop, or the newer shop a save or a 412
+ * returned), with `If-Match: "<version>"` of the same, and nothing when none
+ * does. After a save the form restarts from the 200's shop, so a failed
+ * props reload cannot leave a stale version, and the props are read again
+ * (docs/09 §13.3 rule 3); the button stays busy until then. A 412
+ * `VERSION_CONFLICT` keeps every value the user typed, moves focus to a
+ * panel listing the fields whose saved value changed since the page was
+ * opened (`current`), and offers "Keep my changes", which sends the same
+ * members on the new version, and "Discard mine and reload", which restarts
+ * from `current` (docs/08 §7.1 "Concurrent edits"); when the panel closes,
+ * focus moves to the save button, never to the page (08 §9). Nothing is
  * overwritten silently: only the members the user changed are sent.
  *
  * The form pattern of docs/08 §7.1: client rules mirror the server's
  * (`SHOP_LIMITS`, shared/format/phone.ts) and run on blur and submit; a 422
- * lands on its fields; any other problem shows above the button with its
- * reference; a failed submit keeps every value. One request in flight and
- * one `RATE_LIMITED` wait (`shop_profile_update`, 20 an hour).
+ * lands on its fields, and one on a field the form does not show (an
+ * identifier of a business type not chosen here) in the error summary; any
+ * other problem shows above the button with its reference; a failed submit
+ * keeps every value. One request in flight and one `RATE_LIMITED` wait
+ * (`shop_profile_update`, 20 an hour).
  */
 export type SellerShop = {
   slug: string
@@ -112,6 +117,15 @@ const FIELDS = [
   { name: 'grievance_contact_phone', id: 'settings-grievance-phone' },
 ] as const
 const KNOWN = new Set<string>(FIELDS.map((field) => field.name))
+const OWNER_FIELDS = [
+  'business_type',
+  'registration_number',
+  'registration_authority',
+  'pan_vat_number',
+  'is_vat_registered',
+  'return_policy_text',
+] as const
+const GRIEVANCE_FIELDS = ['grievance_contact_name', 'grievance_contact_phone'] as const
 
 // Each field's label, also used to list what changed after a 412.
 const LABELS: Record<keyof Values, Parameters<typeof t>[0]> = {
@@ -244,6 +258,22 @@ function conflictShop(problem: Problem): SellerShop | null {
     : null
 }
 
+/*
+ * The fields the form shows for `value` and `shop`: a server error on any
+ * other field goes to the error summary, because its input, link target and
+ * focus target are not on the page.
+ */
+function shownFields(value: Values, shop: SellerShop) {
+  const shown = new Set(KNOWN)
+  if (!shop.business_details) for (const name of OWNER_FIELDS) shown.delete(name)
+  if (!shop.grievance_contact) for (const name of GRIEVANCE_FIELDS) shown.delete(name)
+  if (value.business_type !== 'registered_business') {
+    shown.delete('registration_number')
+    shown.delete('registration_authority')
+  }
+  return shown
+}
+
 // The status line after each outcome.
 const DONE_MESSAGES = {
   saved: 'seller.settings.saved',
@@ -258,8 +288,30 @@ export function ShopSettingsForm({ shop }: { shop: SellerShop }) {
   const [done, setDone] = useState<'saved' | 'unchanged' | null>(null)
   // The shop as saved now, after a 412; null otherwise.
   const [conflict, setConflict] = useState<SellerShop | null>(null)
+  // The shop a save returned or a discard adopted, until the props catch up with it.
+  const [latest, setLatest] = useState<SellerShop | null>(null)
   // While the props are read again after a save or a discard.
   const [reloading, setReloading] = useState(false)
+  const conflictRef = useRef<HTMLDivElement>(null)
+  const saveRef = useRef<HTMLButtonElement>(null)
+  const hadConflict = useRef(false)
+  // The newest shop known: the props, or what a save or discard returned before they caught up.
+  const base = latest && latest.version > shop.version ? latest : shop
+
+  /*
+   * A 412 replaces the save button with the conflict panel, and closing the
+   * panel brings the button back: focus follows, so it never falls to the
+   * page (docs/08 §7.1, §9). The panel is also a live alert.
+   */
+  useEffect(() => {
+    if (conflict) {
+      hadConflict.current = true
+      conflictRef.current?.focus()
+    } else if (hadConflict.current) {
+      hadConflict.current = false
+      saveRef.current?.focus()
+    }
+  }, [conflict])
 
   function resetMessages() {
     setProblem(null)
@@ -267,19 +319,29 @@ export function ShopSettingsForm({ shop }: { shop: SellerShop }) {
     setDone(null)
   }
 
-  // Reads the props again and restarts the form from the shop as now saved.
-  function reloadAndRestart(formApi: { reset: (values: Values) => void }) {
+  /*
+   * Restarts the form from `next`, the shop as now saved, then reads the
+   * props again. Should they bring a newer version (another save in
+   * between), the form restarts from them instead.
+   */
+  function restartFrom(formApi: { reset: (values: Values) => void }, next: SellerShop) {
+    setLatest(next)
     setConflict(null)
+    formApi.reset(valuesFrom(next))
     setReloading(true)
     router.reload({
       only: ['shop'],
-      onSuccess: (page) => formApi.reset(valuesFrom(page.props.shop as SellerShop)),
+      onSuccess: (page) => {
+        const fresh = page.props.shop as SellerShop
+        if (fresh.version !== next.version) formApi.reset(valuesFrom(fresh))
+      },
       onFinish: () => setReloading(false),
     })
   }
 
   const form = useForm({
-    defaultValues: valuesFrom(shop),
+    // From `base`, so a render before the props catch up never puts their older values back.
+    defaultValues: valuesFrom(base),
     // Submit re-runs every validator on the current values (docs/09 §13.5).
     canSubmitWhenInvalid: true,
     onSubmitInvalid: ({ formApi }) => {
@@ -290,15 +352,15 @@ export function ShopSettingsForm({ shop }: { shop: SellerShop }) {
       if (mutation.pending || reloading) return
       resetMessages()
       report.clear()
-      const body = changedMembers(value, shop)
+      const body = changedMembers(value, base)
       if (Object.keys(body).length === 0) {
-        // Nothing of the user's is left to keep after a 412: the page catches up instead.
-        if (conflict) reloadAndRestart(formApi)
+        // Nothing of the user's is left to keep after a 412: the form catches up instead.
+        if (conflict) restartFrom(formApi, conflict)
         else setDone('unchanged')
         return
       }
       // After a 412, "Keep my changes" sends the same members on the version now saved.
-      const version = conflict?.version ?? shop.version
+      const version = conflict?.version ?? base.version
       const outcome = await mutation.run(() =>
         client.request('updateShopProfile', {
           params: { shopSlug: shop.slug },
@@ -310,7 +372,7 @@ export function ShopSettingsForm({ shop }: { shop: SellerShop }) {
       if (!outcome) return
       if (outcome.ok) {
         setDone('saved')
-        reloadAndRestart(formApi)
+        restartFrom(formApi, outcome.data.data)
         return
       }
       if ('offline' in outcome) {
@@ -332,7 +394,7 @@ export function ShopSettingsForm({ shop }: { shop: SellerShop }) {
         return
       }
       if (found.errors?.length) {
-        report.failed(formApi, applyServerErrors(formApi, found, KNOWN))
+        report.failed(formApi, applyServerErrors(formApi, found, shownFields(value, base)))
       } else {
         setProblem(found)
       }
@@ -341,17 +403,17 @@ export function ShopSettingsForm({ shop }: { shop: SellerShop }) {
 
   const businessType = useStore(form.store, (state) => state.values.business_type)
   const vatRegistered = useStore(form.store, (state) => state.values.is_vat_registered)
-  const details = shop.business_details
-  const grievance = shop.grievance_contact
+  const details = base.business_details
+  const grievance = base.grievance_contact
   const blocked = mutation.pending || reloading || mutation.retryIn > 0
   const registered = businessType === 'registered_business'
   const panRequired = registered || vatRegistered
 
   function discardAndReload() {
-    if (mutation.pending || reloading) return
+    if (mutation.pending || reloading || !conflict) return
     resetMessages()
     report.clear()
-    reloadAndRestart(form)
+    restartFrom(form, conflict)
   }
 
   // A dependent field's message is checked again only once it shows one, as `changeAndRecheck` does.
@@ -361,7 +423,7 @@ export function ShopSettingsForm({ shop }: { shop: SellerShop }) {
     }
   }
 
-  const conflictFields = conflict ? changedFields(shop, conflict) : []
+  const conflictFields = conflict ? changedFields(base, conflict) : []
 
   return (
     <form
@@ -651,7 +713,7 @@ export function ShopSettingsForm({ shop }: { shop: SellerShop }) {
       {!details && <p className="text-muted-foreground">{t('seller.settings.owner_only_note')}</p>}
 
       {conflict && (
-        <Alert role="alert">
+        <Alert ref={conflictRef} tabIndex={-1} role="alert" className="outline-none">
           <AlertTitle>{t('seller.settings.conflict_title')}</AlertTitle>
           <AlertDescription>
             <p>{t('seller.settings.conflict_body')}</p>
@@ -698,6 +760,7 @@ export function ShopSettingsForm({ shop }: { shop: SellerShop }) {
         <div className="space-y-2">
           {/* aria-disabled, not disabled, while busy: it keeps focus (08 §7.1). */}
           <Button
+            ref={saveRef}
             type="submit"
             className={`h-11 w-full text-base sm:w-auto ${PENDING_BUTTON}`}
             aria-disabled={blocked || undefined}
