@@ -1,0 +1,28 @@
+{{--
+  identity.mfa_enabled, the HTML part (docs/09 §11.2): the notice to a staff
+  member that two-step verification was turned on for their account, sent
+  by confirmTotpEnrollment (docs/07 §3.9). It carries no token, only a link
+  to the reset request page, for a holder who did not do it. Every value is
+  printed escaped. Values: `t`, `link`.
+--}}
+@component('emails/layouts/html', {
+  t: t,
+  title: t('emails.identity.mfa_enabled.subject'),
+})
+  <p style="margin: 0 0 16px;">{{ t('emails.identity.mfa_enabled.intro') }}</p>
+  <p style="margin: 0 0 16px;">{{ t('emails.identity.mfa_enabled.yours') }}</p>
+  <p style="margin: 0 0 16px;">{{ t('emails.identity.mfa_enabled.not_yours') }}</p>
+  <p style="margin: 0 0 16px;">
+    <a
+      href="{{ link }}"
+      style="display: inline-block; padding: 12px 20px; border-radius: 6px; background-color: #18181b; color: #ffffff; font-weight: bold; text-decoration: none;"
+    >
+      {{ t('emails.identity.mfa_enabled.action') }}
+    </a>
+  </p>
+  <p style="margin: 0; color: #52525b; font-size: 14px; word-break: break-all;">
+    {{ t('emails.identity.mfa_enabled.link_hint') }}
+    <br />
+    {{ link }}
+  </p>
+@end

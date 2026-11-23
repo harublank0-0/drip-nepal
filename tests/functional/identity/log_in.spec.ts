@@ -35,7 +35,8 @@ import {
  *   the user and `redirect_to`, `last_login_at`, one `auth.login` row);
  *   the email is normalised; a suspended or deactivated user with the
  *   right password gets 403 and no session; a signed-in caller gets 409;
- *   field rules answer 422.
+ *   field rules answer 422; a staff member is sent to `/mfa`, with the
+ *   checked `return_to` passed on (M1 part 5).
  * - T-SEC-009: the session ID changes at sign-in and the new row is tagged
  *   and holds the stamp and the login times; `logOut` deletes the row and
  *   the old cookie is refused; staff A's MFA time never unlocks staff B,
@@ -207,15 +208,38 @@ test.group('T-IAM-003 logIn', (group) => {
     assert.equal(response.body.data.user.id, user.id)
   })
 
-  test('T-IAM-003 a staff member signs in as a staff actor, without MFA', async ({ assert }) => {
+  test('T-IAM-003 a staff member signs in as a staff actor, without MFA, and is sent to /mfa [AC-FR-IAM-007-1, 02 J-04 step 6]', async ({
+    assert,
+  }) => {
     const staff = await staffWithPassword('support_agent')
     const response = await logInAs(staff.email, FACTORY_PASSWORD)
     assert.equal(response.status, 200, response.text)
+    assert.equal(response.body.data.redirect_to, '/mfa')
     const [audit] = await auditRows('auth.login', staff.id)
     assert.include(audit, { actor_type: 'platform_staff', actor_role: 'platform:support_agent' })
     // No `mfa_verified_at`: the admin surface asks for the TOTP challenge (docs/07 §3.9).
     const [row] = await db.from('sessions').where('user_id', staff.id)
     assert.notProperty(sessionData(row), 'mfa_verified_at')
+  })
+
+  test('T-IAM-003 a staff member keeps the checked return_to through /mfa; a rejected one is dropped', async ({
+    assert,
+  }) => {
+    const staff = await staffWithPassword()
+    const kept = await logInAs(staff.email, FACTORY_PASSWORD, { return_to: '/admin/logistics' })
+    assert.equal(kept.status, 200, kept.text)
+    assert.equal(kept.body.data.redirect_to, '/mfa?return_to=%2Fadmin%2Flogistics')
+
+    const other = await guest()
+    emails.push(staff.email)
+    const dropped = await postJson(other, LOG_IN_PATH, {
+      email: staff.email,
+      password: FACTORY_PASSWORD,
+      return_to: 'https://evil.example/admin',
+    })
+    assert.equal(dropped.status, 200, dropped.text)
+    assert.equal(dropped.body.data.redirect_to, '/mfa')
+    await forgetLogin(staff.email, other.ip)
   })
 
   test(

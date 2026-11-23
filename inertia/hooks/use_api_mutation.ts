@@ -11,7 +11,8 @@ import { t } from '~/lib/i18n'
  * `UNAUTHENTICATED` visits the sign-in page and `MFA_REQUIRED` for enrolment
  * visits `/mfa`. A step-up refusal (`MFA_REQUIRED` with
  * `mfa: "verification_required"`) and every other problem go back to the
- * caller, whose dialog keeps its values and says what to do (08 §7.3 rule 5).
+ * caller: a dialog keeps its values and swaps in the TOTP field
+ * (`useStepUp`, 08 §7.3 rule 5).
  *
  * `RATE_LIMITED` (08 §8.3, AC-J00-04): the action is disabled until
  * `Retry-After` has passed. `run` refuses to send meanwhile (it returns

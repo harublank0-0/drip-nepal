@@ -38,5 +38,11 @@
   "identity.sessions_revoked.yours": "If that was you, there is nothing more to do: sign in again on your other devices.",
   "identity.sessions_revoked.not_yours": "If you didn't do this, someone may know your password or have a signed-in device. Set a new password now with the link below; that signs out every device.",
   "identity.sessions_revoked.action": "Reset your password",
-  "identity.sessions_revoked.link_hint": "If the button doesn't work, copy this link into your browser:"
+  "identity.sessions_revoked.link_hint": "If the button doesn't work, copy this link into your browser:",
+  "identity.mfa_enabled.subject": "Two-step verification is on for your DripNepal account",
+  "identity.mfa_enabled.intro": "Two-step verification was just turned on for your DripNepal staff account. From now on, signing in to the admin area asks for a code from your authenticator app.",
+  "identity.mfa_enabled.yours": "If that was you, there is nothing more to do.",
+  "identity.mfa_enabled.not_yours": "If you didn't do this, someone may know your password. Set a new password now with the link below, and tell the DripNepal platform team.",
+  "identity.mfa_enabled.action": "Reset your password",
+  "identity.mfa_enabled.link_hint": "If the button doesn't work, copy this link into your browser:"
 }

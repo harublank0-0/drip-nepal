@@ -10,7 +10,10 @@ import {
   type RateLimitName,
 } from '#modules/platform/rate_limits'
 import type { UserTokenPurpose } from '#modules/identity/domain/user_token_purpose'
+import { generateTotpSecret, totpCode, TOTP } from '#modules/identity/domain/totp'
+import { encryptField } from '#modules/platform/crypto/field_encrypter'
 import { JOB_SCHEMA } from '#modules/platform/jobs'
+import { UserFactory } from '#database/factories/user_factory'
 import { send } from '#tests/support/courier_http'
 import { testBrowser, type Browser } from '#tests/support/browser'
 import { queued } from '#tests/support/jobs'
@@ -263,4 +266,65 @@ export async function passwordChangedJobsFor(userId: string) {
 export async function sessionsRevokedJobsFor(userId: string) {
   const jobs = await dispatchJobsFor(userId)
   return jobs.filter((job) => job.data.event === 'user.sessions_revoked')
+}
+
+/*
+ * Helpers of the staff MFA tests (docs/06 §13.3; docs/07 §3.9; M1 part 5).
+ * `verifyMfaChallenge` and `confirmTotpEnrollment` charge `mfa_user` (per
+ * account) and `mfa` (per account and client network), and
+ * `startTotpEnrollment` the two `reauth` keys; the limiter store commits
+ * them on its own connection, so each test deletes the keys it made
+ * (docs/10 §3.3). Accounts come from `UserFactory`, whose password the
+ * sign-in and the enrolment check.
+ */
+export const MFA_CHALLENGE_PATH = '/api/v1/auth/mfa/challenge'
+export const TOTP_START_PATH = '/api/v1/me/mfa/totp'
+export const TOTP_CONFIRM_PATH = '/api/v1/me/mfa/totp/confirm'
+
+// An active staff member with a password that signs in and no TOTP yet; `email` for a cleanup prefix.
+export async function staffWithoutTotp(role = 'platform_admin', email?: string) {
+  const user = email ? await UserFactory.merge({ email }).create() : await UserFactory.create()
+  await user.refresh()
+  await db.table('platform_staff').insert({ user_id: user.id, role })
+  return user
+}
+
+/*
+ * An active staff member with TOTP enrolled under a real secret, sealed as
+ * `startTotpEnrollment` seals it, and the secret, so a test can make codes.
+ */
+export async function enrolledStaff(role = 'platform_admin', email?: string) {
+  const user = await staffWithoutTotp(role, email)
+  const secret = generateTotpSecret()
+  await db
+    .from('users')
+    .where('id', user.id)
+    .update({
+      mfa_enabled_at: db.raw('now()'),
+      mfa_totp_secret_enc: encryptField(secret, 'users.mfa_totp_secret_enc'),
+    })
+  return { user, secret }
+}
+
+/*
+ * The code of `secret` `steps` time steps from now. Tests use the current
+ * step or a later one, which stays inside the ±1 window if a step boundary
+ * passes before the check, and three steps back for a code that must fail.
+ */
+export const codeAt = (secret: string, steps = 0) =>
+  totpCode(secret, Date.now() + steps * TOTP.periodSeconds * 1000)
+
+// A six-digit string that is not the code of `secret` in any accepted step.
+export function wrongCode(secret: string) {
+  const accepted = new Set([-1, 0, 1, 2].map((steps) => codeAt(secret, steps)))
+  for (let n = 0; ; n++) {
+    const candidate = String(n).padStart(6, '0')
+    if (!accepted.has(candidate)) return candidate
+  }
+}
+
+// The `mfa_user` key of a user and the `mfa` key of the user and each client network.
+export async function forgetMfa(userId: string, ...ips: string[]) {
+  await forgetKeys('mfa_user', userId)
+  for (const ip of ips) await forgetKeys('mfa', userId, clientNetwork(ip))
 }

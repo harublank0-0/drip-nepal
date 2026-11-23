@@ -10,6 +10,7 @@ export interface ApiDefinition {
   signUp: typeof routes['signUp']
   logIn: typeof routes['logIn']
   logOut: typeof routes['logOut']
+  verifyMfaChallenge: typeof routes['verifyMfaChallenge']
   resendEmailVerification: typeof routes['resendEmailVerification']
   confirmEmail: typeof routes['confirmEmail']
   requestPasswordReset: typeof routes['requestPasswordReset']
@@ -17,6 +18,8 @@ export interface ApiDefinition {
   getMe: typeof routes['getMe']
   changePassword: typeof routes['changePassword']
   revokeAllSessions: typeof routes['revokeAllSessions']
+  startTotpEnrollment: typeof routes['startTotpEnrollment']
+  confirmTotpEnrollment: typeof routes['confirmTotpEnrollment']
   getLogisticsSettings: typeof routes['getLogisticsSettings']
   replaceLogisticsSettings: typeof routes['replaceLogisticsSettings']
   createShopCourierAccount: typeof routes['createShopCourierAccount']
@@ -53,6 +56,7 @@ export interface ApiDefinition {
   signup: typeof routes['signup']
   verifyEmail: typeof routes['verify_email']
   forgotPassword: typeof routes['forgot_password']
+  mfa: typeof routes['mfa']
   admin: {
     logistics: typeof routes['admin.logistics']
   }

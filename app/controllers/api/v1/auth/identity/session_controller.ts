@@ -18,7 +18,9 @@ import { LOG_IN_MEMBERS, logInValidator } from '#validators/identity/log_in'
  * sign-in's keys, call the guard's `login()` (a new session ID), put the
  * stamp and the login times and tag the new row (docs/07 §3.1, §3.2). The
  * answer's `redirect_to` is `return_to` checked by the helper of docs/07
- * TM-14, or `/`; the page navigates only to it.
+ * TM-14, or `/`; the page navigates only to it. Active staff are sent to
+ * `/mfa` first, with that path as its `return_to` (01 AC-FR-IAM-007-1, 02
+ * J-04 step 6; M1 part 5), where they enrol or enter their code.
  *
  * `logOut` runs behind `auth`: `endSession` logs out, untags, clears and
  * regenerates the session, so the old row is deleted and the old cookie
@@ -53,7 +55,14 @@ export default class SessionController {
     if (returnTo !== null && redirectTo === null) {
       ctx.logger.info({ return_to_length: returnTo.length }, 'auth.return_to_rejected')
     }
-    return { data: { user: sessionUserJson(result.user), redirect_to: redirectTo ?? '/' } }
+    const destination = redirectTo ?? '/'
+    // Staff go through the TOTP challenge or enrolment first, then on to the destination.
+    const redirect = !result.staff
+      ? destination
+      : destination === '/'
+        ? '/mfa'
+        : `/mfa?return_to=${encodeURIComponent(destination)}`
+    return { data: { user: sessionUserJson(result.user), redirect_to: redirect } }
   }
 
   // revokeAllSessions: 202; this session holds the new stamp, the others end when the job runs.

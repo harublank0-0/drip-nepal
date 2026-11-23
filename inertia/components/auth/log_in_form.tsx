@@ -52,6 +52,12 @@ import { RateLimitNotice } from '~/components/forms/rate_limit_notice'
  *
  * After a password reset (`passwordChanged`, 02 J-18 step 4) a notice above
  * the fields says the password was changed, until the first submit.
+ *
+ * `/mfa` signs a guest in with this form too (M1 part 5): with `onSignedIn`
+ * the form calls it instead of visiting `redirect_to`, so the page reloads
+ * its props in place and keeps the enrolment token it holds in memory; it
+ * hides the sign-up link there (`signUpLink={false}`), since staff accounts
+ * are not signed up for.
  */
 type Body = Route.Body<'logIn'>
 
@@ -88,9 +94,13 @@ function passwordError(value: string) {
 export function LogInForm({
   notice,
   passwordChanged = false,
+  onSignedIn,
+  signUpLink = true,
 }: {
   notice: 'account_suspended' | null
   passwordChanged?: boolean
+  onSignedIn?: () => void
+  signUpLink?: boolean
 }) {
   const mutation = useApiMutation({ signInOnUnauthenticated: false })
   const [changed, setChanged] = useState(passwordChanged)
@@ -132,7 +142,8 @@ export function LogInForm({
       const outcome = await mutation.run(() => client.request('logIn', { body, timeout: 30_000 }))
       if (!outcome) return
       if (outcome.ok) {
-        router.visit(outcome.data.data.redirect_to, { replace: true })
+        if (onSignedIn) onSignedIn()
+        else router.visit(outcome.data.data.redirect_to, { replace: true })
         return
       }
       if ('offline' in outcome) {
@@ -251,12 +262,14 @@ export function LogInForm({
         </Button>
         <RateLimitNotice id={RATE_LIMIT_ID} seconds={mutation.retryIn} />
       </div>
-      <p className="text-muted-foreground text-center text-sm">
-        {t('auth.login.no_account')}{' '}
-        <a className="text-link underline underline-offset-4" href={signUpHref(returnTo)}>
-          {t('auth.login.create_account')}
-        </a>
-      </p>
+      {signUpLink && (
+        <p className="text-muted-foreground text-center text-sm">
+          {t('auth.login.no_account')}{' '}
+          <a className="text-link underline underline-offset-4" href={signUpHref(returnTo)}>
+            {t('auth.login.create_account')}
+          </a>
+        </p>
+      )}
     </form>
   )
 }

@@ -132,10 +132,7 @@ x-pending-operations:
   - listLocalLevels
   - getCurrentSellerAgreement
   # Auth and self (06 §13.3)
-  - verifyMfaChallenge
   - updateMe
-  - startTotpEnrollment
-  - confirmTotpEnrollment
   - requestAccountDeletion
   # Customer (06 §13.4)
   - listAddresses
@@ -653,7 +650,9 @@ paths:
         admin surface then answers 401 `MFA_REQUIRED` until `verifyMfaChallenge` (06 §4.3).
         `redirect_to` is `return_to` when the helper of 07 TM-14 keeps it (a path on this site,
         not under `/api/`, at most 2,048 characters, without its fragment), else `/`
-        (T-SEC-017). Not ⚷ (06 §7.7).
+        (T-SEC-017). For an `active` account with an unrevoked `platform_staff` row it is `/mfa`,
+        with that path as its `return_to` unless it is `/`, because staff enrol or enter their
+        TOTP code next (AC-FR-IAM-007-1; M1 part 5). Not ⚷ (06 §7.7).
         T-IAM-003. Release R1·M1.
       x-release: R1·M1
       security:
@@ -761,6 +760,100 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '422': { $ref: '#/components/responses/UnprocessableContent' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /api/v1/auth/mfa/challenge:
+    post:
+      operationId: verifyMfaChallenge
+      tags: [Auth]
+      summary: Verify a staff member's TOTP code
+      description: |
+        Actor: a signed-in user (`auth`) with an unrevoked `platform_staff` row and an `active`
+        account; anyone else gets 403 `FORBIDDEN`, and staff without TOTP get 409 `CONFLICT`,
+        before any limiter is charged (07 §3.9). Input: `code` and an optional `return_to`
+        only; any other member is 422 `unknown_field`. `code` is six digits after trimming,
+        else 422 before any limiter.
+        Order (07 §3.9, 06 §9.1): the `mfa_user` (per account, whatever the session or IP) and
+        `mfa` (per account and client network) limiters each take a point before the check; a
+        wrong code keeps both and a right one deletes both. More than 5 wrong codes in 5
+        minutes block the account's TOTP checks for 15 minutes (OD-50): 429 `RATE_LIMITED`
+        with `Retry-After`, a right code included; the attempt that starts the block writes
+        one `auth.mfa_locked` audit row (proposed) and raises the `mfa_lockout` alert (11 §9.7).
+        The code (RFC 6238, 6 digits, 30-second step, one step either side) must be later
+        than `mfa_last_used_step`; a wrong, older or replayed code is 422 `code_incorrect` on
+        `code` with one `auth.mfa_failed` row (proposed). A right code records its step by a
+        compare-and-set, so of two requests carrying one code one passes (AC-FR-IAM-007-3),
+        and writes one `auth.mfa_verify` row (proposed).
+        Then the session: `mfa_verified_at` as `{ user_id, at }` and `admin_seen_at` are put,
+        and the session ID is rotated and re-tagged (07 §3.1, §3.2, §3.9, T-SEC-009); the
+        admin surface accepts the proof for 12 hours and the step-up for 15 minutes (06
+        §4.3). `redirect_to` is `return_to` when the helper of 07 TM-14 keeps it, else `/`
+        (T-SEC-017). A dialog's step-up calls it without `return_to` and then retries its
+        action with the same `Idempotency-Key` (08 §7.3 rule 5). Not ⚷ (06 §7.7).
+        T-SEC-008, T-SEC-011. Release R1·M1.
+      x-release: R1·M1
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VerifyMfaChallengeRequest' }
+            examples:
+              fromAdmin:
+                summary: The `/mfa` page after the admin surface sent the staff member there
+                value:
+                  code: '492039'
+                  return_to: /admin/logistics
+      responses:
+        '200':
+          description: Verified; the session continues under a new ID holding the MFA proof.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MfaChallengeResponse' }
+              examples:
+                verified:
+                  summary: Back to the admin page
+                  value: { data: { redirect_to: /admin/logistics } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: '`CONFLICT`: TOTP is not enrolled for this account; enrol first.'
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem409' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422':
+          description: |
+            `VALIDATION_FAILED`: a wrong, older or replayed code (`code_incorrect` on `code`), a
+            malformed code, or an unknown member (`unknown_field`).
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem422' }
+              examples:
+                wrong:
+                  summary: A wrong code
+                  value:
+                    type: https://dripnepal.com/problems/validation-failed
+                    title: Validation failed
+                    status: 422
+                    detail: That code didn't work. Enter the code your app shows now.
+                    code: VALIDATION_FAILED
+                    request_id: 01929d05-0000-7000-8000-000000000422
+                    errors:
+                      - field: code
+                        code: code_incorrect
+                        message: That code didn't work. Enter the code your app shows now.
+        '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/Internal' }
 
   /api/v1/auth/password-reset:
@@ -1078,6 +1171,160 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '422': { $ref: '#/components/responses/UnprocessableContent' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /api/v1/me/mfa/totp:
+    post:
+      operationId: startTotpEnrollment
+      tags: [Me]
+      summary: Begin TOTP enrolment
+      description: |
+        Actor: a signed-in user (`auth`); in R1 only an `active` account with an unrevoked
+        `platform_staff` row (FR-IAM-007), anyone else 403 `FORBIDDEN`. Input: `token` and
+        `password` only; any other member is 422 `unknown_field`.
+        Enrolment proves the mailbox as well as the password (07 §3.9). Checks that charge
+        nothing come first: an account with TOTP on is 409 `CONFLICT`; `token` must be the live
+        `mfa_enrollment` token issued to this account (purpose, owner, unconsumed, unexpired;
+        07 §3.8), else 422 `token_invalid` on `token`, and a token of another purpose or
+        account is left unconsumed. Then the current password through the `reauth` limiter
+        (06 §9.1): both keys take their point before the hash; past 5 wrong passwords in 15
+        minutes, 429 without hashing; a wrong password keeps the points, writes
+        `auth.reauth_failed` and is 422 `password_incorrect` on `password`.
+        Side effects, in one transaction: a new 160-bit secret, sealed with the field
+        encryption of 04 §2.9, is stored in `mfa_totp_secret_enc` by a compare-and-set on what
+        the checks read (no TOTP yet, the password just verified; a miss is 409), with
+        `mfa_last_used_step` cleared; the token, checked again under that row lock, is not
+        consumed. Each start replaces the pending secret and writes one
+        `auth.mfa_enrollment_start` audit row (proposed). The secret and its `otpauth://` URI
+        are answered once. Not ⚷ (06 §7.7). T-SEC-008. Release R1·M1.
+      x-release: R1·M1
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StartTotpEnrollmentRequest' }
+            examples:
+              start:
+                summary: The `/mfa` page with the emailed token
+                value:
+                  token: Zm9vYmFyLWV4YW1wbGUtdG9rZW4tbm90LXJlYWwtMDAw
+                  password: example-password
+      responses:
+        '200':
+          description: Started; the secret is shown once and never again.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TotpEnrollmentStartedResponse' }
+              examples:
+                started:
+                  summary: A new secret for the authenticator app
+                  value:
+                    data:
+                      otpauth_uri: otpauth://totp/DripNepal:hari%40example.com?secret=JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP&issuer=DripNepal&algorithm=SHA1&digits=6&period=30
+                      secret: JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: |
+            `CONFLICT`: TOTP is already on, or the password changed between the check and the
+            write.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem409' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422':
+          description: |
+            `VALIDATION_FAILED`: `token_invalid` on `token`, `password_incorrect` on `password`,
+            a missing or over-long member, or an unknown member (`unknown_field`).
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem422' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /api/v1/me/mfa/totp/confirm:
+    post:
+      operationId: confirmTotpEnrollment
+      tags: [Me]
+      summary: Confirm TOTP enrolment with a code
+      description: |
+        Actor: a signed-in user (`auth`); staff in R1, as `startTotpEnrollment` (else 403
+        `FORBIDDEN`). Input: `code` and `token` only; any other member is 422 `unknown_field`.
+        Checks that charge nothing come first: TOTP already on, or no enrolment started, is
+        409 `CONFLICT`; `token` must be this account's live `mfa_enrollment` token (422
+        `token_invalid`). Then the code, behind the `mfa_user` and `mfa` limiters as for
+        `verifyMfaChallenge` (06 §9.1, OD-50): a wrong code keeps their points and is 422
+        `code_incorrect` on `code` with one `auth.mfa_failed` row (proposed).
+        Side effects, in one transaction under the user's row lock: the code must match the
+        pending secret; the token is consumed in one statement bound to this user (07 §3.8),
+        so of two confirmations one succeeds; a compare-and-set on the pending secret sets
+        `mfa_enabled_at` and records the code's step in `mfa_last_used_step`, so the same code
+        cannot pass the challenge (AC-FR-IAM-007-3); one `platform_staff.mfa_enable` audit row
+        (proposed); the "two-step verification turned on" email (`user.mfa_enabled`, its event
+        ID the token's row ID, one per enrolment window); the `staff_privilege_change` alert
+        after the commit (11 §9.7). The session is left as it is: only `verifyMfaChallenge`
+        writes the MFA proof (07 §3.2), so the client asks for the next code. Not ⚷ (06 §7.7).
+        T-SEC-008, T-IAM-105. Release R1·M1.
+      x-release: R1·M1
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ConfirmTotpEnrollmentRequest' }
+            examples:
+              confirm:
+                summary: The first code from the authenticator app
+                value:
+                  code: '492039'
+                  token: Zm9vYmFyLWV4YW1wbGUtdG9rZW4tbm90LXJlYWwtMDAw
+      responses:
+        '200':
+          description: TOTP is on; the admin surface still needs a challenge with the next code.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MfaEnabledResponse' }
+              examples:
+                enabled:
+                  summary: Enrolled
+                  value: { data: { status: mfa_enabled } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: '`CONFLICT`: TOTP is already on, or no enrolment was started.'
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem409' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422':
+          description: |
+            `VALIDATION_FAILED`: `code_incorrect` on `code`, `token_invalid` on `token`, a
+            malformed code, or an unknown member (`unknown_field`).
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem422' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/Internal' }
 
@@ -5527,7 +5774,9 @@ components:
             redirect_to:
               type: string
               pattern: '^/'
-              description: The checked `return_to`, or `/` (07 TM-14); the client navigates only here.
+              description: |
+                The checked `return_to`, or `/` (07 TM-14); for active staff, `/mfa` with it as
+                `return_to`. The client navigates only here.
     MeResponse:
       type: object
       description: The 200 of `getMe`; a closed schema, so a new member is a contract change (07 TM-06).
@@ -5671,6 +5920,105 @@ components:
           required: [status]
           properties:
             status: { const: sessions_revoked }
+    VerifyMfaChallengeRequest:
+      type: object
+      description: The whole input of `verifyMfaChallenge`; any other member is 422 `unknown_field`.
+      additionalProperties: false
+      required: [code]
+      properties:
+        code:
+          type: string
+          pattern: '^\s*\d{6}\s*$'
+          writeOnly: true
+          description: Six digits (RFC 6238, 07 §3.9), trimmed. Never stored or logged.
+        return_to:
+          type: [string, 'null']
+          description: |
+            The `return_to` query of `/mfa`, passed on unchanged; checked by the helper of 07
+            TM-14, which turns a rejected value into `/` rather than an error.
+    MfaChallengeResponse:
+      type: object
+      description: The 200 of `verifyMfaChallenge`.
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required: [redirect_to]
+          properties:
+            redirect_to:
+              type: string
+              pattern: '^/'
+              description: The checked `return_to`, or `/` (07 TM-14); the client navigates only here.
+    StartTotpEnrollmentRequest:
+      type: object
+      description: The whole input of `startTotpEnrollment`; any other member is 422 `unknown_field`.
+      additionalProperties: false
+      required: [token, password]
+      properties:
+        token:
+          type: string
+          minLength: 1
+          maxLength: 256
+          writeOnly: true
+          description: The raw `mfa_enrollment` token of the emailed `/mfa?token=…` link (07 §3.8).
+        password:
+          type: string
+          maxLength: 128
+          writeOnly: true
+          description: The current password, checked through the `reauth` limiter (07 §3.6).
+    TotpEnrollmentStartedResponse:
+      type: object
+      description: The 200 of `startTotpEnrollment`; the secret is shown this once (07 §3.9).
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required: [otpauth_uri, secret]
+          properties:
+            otpauth_uri:
+              type: string
+              pattern: '^otpauth://totp/'
+              description: |
+                The key URI authenticator apps read: issuer `DripNepal` (with the environment
+                outside production), the account's email as the label, the secret, SHA1, 6
+                digits, 30 seconds.
+            secret:
+              type: string
+              pattern: '^[A-Z2-7]{32}$'
+              description: The 160-bit secret in base32 (RFC 4648, no padding), for manual entry.
+    ConfirmTotpEnrollmentRequest:
+      type: object
+      description: The whole input of `confirmTotpEnrollment`; any other member is 422 `unknown_field`.
+      additionalProperties: false
+      required: [code, token]
+      properties:
+        code:
+          type: string
+          pattern: '^\s*\d{6}\s*$'
+          writeOnly: true
+          description: Six digits from the authenticator app, trimmed.
+        token:
+          type: string
+          minLength: 1
+          maxLength: 256
+          writeOnly: true
+          description: The same `mfa_enrollment` token `startTotpEnrollment` took.
+    MfaEnabledResponse:
+      type: object
+      description: The 200 of `confirmTotpEnrollment`.
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required: [status]
+          properties:
+            status: { const: mfa_enabled }
 
     # ---------- listProducts ----------
     ListingCard:
@@ -7901,3 +8249,14 @@ components:
 #     limiter, and `revokeAllSessions` queues the "sessions revoked" email instead of "no email".
 #     In review round 2: `changePassword` names the `password_change` limiter and
 #     `revokeAllSessions` the `revoke_all` limiter (both proposed), with a 429 on the latter.
+#
+# Added with staff MFA (2026-11-23, M1 part 5):
+# 50. `verifyMfaChallenge`, `startTotpEnrollment` and `confirmTotpEnrollment` move from
+#     `x-pending-operations` to `paths`, written from the code, with the new schemas
+#     `VerifyMfaChallengeRequest`, `MfaChallengeResponse`, `StartTotpEnrollmentRequest`,
+#     `TotpEnrollmentStartedResponse`, `ConfirmTotpEnrollmentRequest` and `MfaEnabledResponse`
+#     (06 note 59). All three keep the default security (a signed-in session and the XSRF
+#     header); each answers 403 `FORBIDDEN` to a caller who is not active staff and 409
+#     `CONFLICT` to the wrong enrolment state before any limiter. The bodies follow 06 §3.4's
+#     envelope. `logIn`'s `redirect_to` is `/mfa` for active staff, with the checked
+#     destination as its `return_to` (note 37's `return_to`/`redirect_to` item).

@@ -9,6 +9,9 @@ import { fixtureTree, runCommand } from '#tests/support/scripts'
  * once must fail with exactly the expected violations, so a rule whose
  * pattern matches nothing fails here. The model rules read the repository's
  * architecture/model-ownership.json, so the fixtures use its model paths.
+ * T-SEC-034, rule 9: only the docs/07 §5.5 allowlist imports the field
+ * decrypter; the TOTP verifier may (M1 part 5), another identity file may
+ * not.
  */
 
 const DEPCRUISE = join(process.cwd(), 'node_modules', '.bin', 'depcruise')
@@ -139,6 +142,26 @@ test.group('T-ARCH-001 module dependency rules (dependency-cruiser)', (group) =>
         'rank-platform: app/modules/platform/jobs.ts → app/modules/identity/actions/sign_up.ts',
         'sdk-in-adapters-only: app/modules/catalog/actions/import_image.ts → node_modules/axios/index.js',
         'sdk-in-adapters-only: app/modules/identity/actions/notify.ts → node_modules/@adonisjs/mail/services/main.js',
+      ])
+    } finally {
+      await tree.cleanup()
+    }
+  })
+
+  test('T-SEC-034 the TOTP verifier may import the field decrypter; any other identity file may not', async ({
+    assert,
+  }) => {
+    const decrypter = {
+      'app/modules/platform/crypto/field_decrypter.ts': 'export const decryptField = 1\n',
+      'app/modules/identity/internal/totp_secret.ts':
+        "import { decryptField } from '../../platform/crypto/field_decrypter.js'\nexport const totp = decryptField\n",
+      'app/modules/identity/actions/peek_secret.ts':
+        "import { decryptField } from '../../platform/crypto/field_decrypter.js'\nexport const peek = decryptField\n",
+    }
+    const tree = await fixtureTree({ ...BASE, ...decrypter })
+    try {
+      assert.deepEqual(await cruise(tree.root), [
+        'field-decrypter-allowlist: app/modules/identity/actions/peek_secret.ts → app/modules/platform/crypto/field_decrypter.ts',
       ])
     } finally {
       await tree.cleanup()

@@ -15,6 +15,8 @@ type RateLimit = {
   prefix: string
   requests: number
   duration: string
+  // Past the limit, the key stays refused this long (the `mfa_user` lock, OD-50).
+  blockDuration?: string
 }
 
 /*
@@ -29,6 +31,16 @@ export const RATE_LIMITS = {
   // Password re-entry (docs/07 §3.6): both keys checked before hashing, charged before the check.
   reauth_user: { prefix: 'reauth:user', requests: 5, duration: '15 minutes' },
   reauth_user_day: { prefix: 'reauth:user_day', requests: 10, duration: '24 hours' },
+  // TOTP checks (docs/07 §3.9): per account, whatever the session or IP, more than 5 wrong
+  // codes in 5 minutes block the account's checks for 15 minutes (OD-50, decided 2026-11-22).
+  mfa_user: {
+    prefix: 'mfa:user',
+    requests: 5,
+    duration: '5 minutes',
+    blockDuration: '15 minutes',
+  },
+  // The per-source second layer behind `mfa_user` (proposed).
+  mfa: { prefix: 'mfa:user_ip', requests: 5, duration: '1 minute' },
   // signUp, per client network; charged on every valid request, known email or not (RF-38).
   signup_ip: { prefix: 'signup:ip', requests: 5, duration: '1 hour' },
   // resendEmailVerification, per user (AC-FR-IAM-002-3).
@@ -101,6 +113,7 @@ export function rateLimitKey(name: RateLimitName, ...parts: string[]) {
 
 // The limiter of a 06 §9.1 row on the configured store (config/limiter.ts).
 export function rateLimiter(name: RateLimitName) {
-  const { requests, duration } = RATE_LIMITS[name]
-  return limiter.use({ requests, duration })
+  const limit: RateLimit = RATE_LIMITS[name]
+  const { requests, duration, blockDuration } = limit
+  return limiter.use(blockDuration ? { requests, duration, blockDuration } : { requests, duration })
 }

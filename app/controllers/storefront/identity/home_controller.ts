@@ -14,9 +14,9 @@ import { MFA_WINDOW_MS, activeStaffRole, staffMay } from '#modules/identity/staf
  * for an active staff member with TOTP enrolled whose role may open
  * `/admin/logistics`, today's only admin page, and whose session holds MFA
  * from the last 12 hours, as `platformStaff` requires. So the link never
- * leads a role to the 403 page, nor a password-only staff session to the
- * `/mfa` redirect, which opens the 404 page until M1 part 5 (the UI hides,
- * the server decides, docs/08 §11.6).
+ * leads a role to the 403 page, nor a staff session without a fresh MFA
+ * proof to the `/mfa` redirect (the UI hides, the server decides, docs/08
+ * §11.6); `logIn` sends staff to `/mfa` before they get here (M1 part 5).
  * M4 moves the page to the catalog module's controller.
  */
 export default class HomeController {

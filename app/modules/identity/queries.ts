@@ -6,7 +6,9 @@ import type { UserTokenPurpose } from '#modules/identity/domain/user_token_purpo
 import { activeStaffRole } from '#modules/identity/staff'
 import {
   ABSOLUTE_SESSION_LIMIT_MS,
+  ADMIN_IDLE_LIMIT_MS,
   SELLER_IDLE_LIMIT_MS,
+  STAFF_ABSOLUTE_LIMIT_MS,
   olderThan,
 } from '#modules/identity/domain/session_limits'
 
@@ -54,6 +56,52 @@ export function sellerSessionIdle(
 ): boolean {
   const seenAt = session.sellerSeenAt ?? session.authenticatedAt
   return olderThan(seenAt, SELLER_IDLE_LIMIT_MS, now)
+}
+
+/*
+ * When the session's MFA proof was made, in epoch milliseconds, or null
+ * (docs/07 §3.2): `mfa_verified_at` holds `{ user_id, at }`, and counts only
+ * when `user_id` is the signed-in user and `at` is not earlier than
+ * `authenticated_at`, so one staff member's TOTP check never unlocks another
+ * account in the same browser, nor survives into a later sign-in. Anything
+ * else (missing, the wrong shape, an unreadable time) is no proof.
+ */
+export function verifiedMfaTime(
+  value: unknown,
+  userId: string,
+  authenticatedAt: unknown
+): number | null {
+  if (typeof value !== 'object' || value === null) return null
+  const { user_id: owner, at } = value as Record<string, unknown>
+  if (owner !== userId || typeof at !== 'string') return null
+  const time = Date.parse(at)
+  const signedInAt = typeof authenticatedAt === 'string' ? Date.parse(authenticatedAt) : Number.NaN
+  if (!Number.isFinite(time) || !Number.isFinite(signedInAt) || time < signedInAt) return null
+  return time
+}
+
+/*
+ * The admin surface's session limits (docs/07 §3.4), in the order the
+ * `platform_staff` middleware checks them after its 404 (07 §3.4 "Compare,
+ * then refresh"): `expired` past the 7-day staff limit from
+ * `authenticated_at` (proposed); `idle` more than 2 hours after
+ * `admin_seen_at`; `unverified` without an MFA proof from the last
+ * `windowMs` (12 hours for the admin surface). A missing timestamp never
+ * means "no limit" (07 §3.2).
+ */
+export type AdminStanding = 'valid' | 'expired' | 'idle' | 'unverified'
+
+export function adminStanding(
+  session: { authenticatedAt: unknown; adminSeenAt: unknown; mfaVerifiedAt: unknown },
+  userId: string,
+  windowMs: number,
+  now = Date.now()
+): AdminStanding {
+  if (olderThan(session.authenticatedAt, STAFF_ABSOLUTE_LIMIT_MS, now)) return 'expired'
+  if (olderThan(session.adminSeenAt, ADMIN_IDLE_LIMIT_MS, now)) return 'idle'
+  const verified = verifiedMfaTime(session.mfaVerifiedAt, userId, session.authenticatedAt)
+  if (verified === null || now - verified > windowMs) return 'unverified'
+  return 'valid'
 }
 
 /*
