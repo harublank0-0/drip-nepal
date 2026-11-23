@@ -9,8 +9,14 @@ import { placeholderCiphertext } from '#database/factories/placeholder_ciphertex
 
 /*
  * HTTP helpers of the courier operation tests (docs/06 §13.8). Signing in
- * uses `startSession`, as M1's `logIn` will; a staff session's MFA time stands
- * in for M1's challenge. The test route is registered once, on first import.
+ * uses `startSession`, as `logIn` does; a staff session's MFA time stands in
+ * for `verifyMfaChallenge` (M1 part 5), stored as the challenge stores it,
+ * `{ user_id, at }` (docs/07 §3.2). A proof counts only when it is not
+ * older than the sign-in, so with an MFA time the session's
+ * `authenticated_at` is set to it when it is earlier than now; the 7-day
+ * staff limit and the 2-hour admin idle limit (`admin_seen_at`, now) still
+ * pass for the times the tests use. The test route is registered once, on
+ * first import.
  */
 
 router.get('/__test__/courier/sign-in/:id', async (ctx) => {
@@ -18,14 +24,32 @@ router.get('/__test__/courier/sign-in/:id', async (ctx) => {
   await user.refresh()
   await startSession(ctx, user, user.securityStamp)
   const at = ctx.request.qs().mfa_verified_at
-  if (typeof at === 'string') ctx.session.put(SESSION_KEYS.mfaVerifiedAt, at)
+  if (typeof at === 'string') {
+    const signedInAt = ctx.session.get(SESSION_KEYS.authenticatedAt)
+    if (typeof signedInAt === 'string' && Date.parse(at) < Date.parse(signedInAt)) {
+      ctx.session.put(SESSION_KEYS.authenticatedAt, at)
+    }
+    ctx.session.put(SESSION_KEYS.mfaVerifiedAt, { user_id: user.id, at })
+  }
+  // The session-limit tests set the sign-in and admin times themselves (docs/07 §3.4).
+  const { authenticated_at: signedIn, admin_seen_at: adminSeen } = ctx.request.qs()
+  if (typeof signedIn === 'string') ctx.session.put(SESSION_KEYS.authenticatedAt, signedIn)
+  if (typeof adminSeen === 'string') ctx.session.put(SESSION_KEYS.adminSeenAt, adminSeen)
   return { ok: true }
 })
 
-export async function signIn(userId: string, mfaVerifiedAt?: string) {
+export async function signIn(
+  userId: string,
+  mfaVerifiedAt?: string,
+  times: { authenticatedAt?: string; adminSeenAt?: string } = {}
+) {
   const browser = testBrowser()
-  const query = mfaVerifiedAt ? `?mfa_verified_at=${encodeURIComponent(mfaVerifiedAt)}` : ''
-  const response = await browser.request(`/__test__/courier/sign-in/${userId}${query}`)
+  const query = new URLSearchParams()
+  if (mfaVerifiedAt) query.set('mfa_verified_at', mfaVerifiedAt)
+  if (times.authenticatedAt) query.set('authenticated_at', times.authenticatedAt)
+  if (times.adminSeenAt) query.set('admin_seen_at', times.adminSeenAt)
+  const search = query.size > 0 ? `?${query.toString()}` : ''
+  const response = await browser.request(`/__test__/courier/sign-in/${userId}${search}`)
   if (response.status !== 200) throw new Error(`sign-in answered ${response.status}`)
   return browser
 }

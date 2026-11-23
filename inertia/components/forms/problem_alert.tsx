@@ -1,4 +1,4 @@
-import { Alert, AlertDescription, AlertTitle } from '~/components/ui/alert'
+import { Alert, AlertDescription } from '~/components/ui/alert'
 import { StatusBadge } from '~/components/common/status_badge'
 import type { Problem } from '@shared/api/problem'
 import type { StatusEntity } from '@shared/ui/status_tones'
@@ -7,8 +7,9 @@ import { t } from '~/lib/i18n'
 /*
  * A form-level failure with no field errors (docs/08 §7.1, §8.3, AC-J00-01),
  * with the reference support asks for:
- * - a step-up refusal (401 `MFA_REQUIRED`, `verification_required`) says what
- *   to do (08 §7.3 rule 5; the TOTP field arrives with M1's `verifyMfaChallenge`);
+ * - a step-up refusal (401 `MFA_REQUIRED`, `verification_required`) never
+ *   reaches it: the dialog swaps in a TOTP field instead (`useStepUp`,
+ *   `StepUpField`; 08 §7.3 rule 5, M1 part 5);
  * - `NOT_FOUND` says the item no longer exists, and `INVALID_STATE_TRANSITION`
  *   shows `current_status` through `StatusBadge`; the caller reloads its list;
  * - a 5xx, a client-bug code or a body that was not problem+json gets the
@@ -48,14 +49,6 @@ export function ProblemAlert({
     )
   }
   if (!problem) return null
-  if (problem.code === 'MFA_REQUIRED' && problem.mfa === 'verification_required') {
-    return (
-      <Alert role="alert">
-        <AlertTitle>{t('common.form.step_up_title')}</AlertTitle>
-        <AlertDescription>{t('common.form.step_up_body')}</AlertDescription>
-      </Alert>
-    )
-  }
   const current =
     problem.code === 'INVALID_STATE_TRANSITION' && typeof problem.current_status === 'string'
       ? problem.current_status

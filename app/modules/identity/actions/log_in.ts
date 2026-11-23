@@ -49,6 +49,8 @@ import { INVALID_CREDENTIALS_DETAIL } from '#shared/constants/auth'
  *    step 3 does; anything else (the stamp or the hash changed) answers the
  *    generic 401 of step 4. Either writes one `auth.login_failed` row, and
  *    no session starts.
+ * 6. It says whether the account is active staff, because staff go to
+ *    `/mfa` next (01 AC-FR-IAM-007-1, 02 J-04 step 6; M1 part 5).
  */
 
 export type LogInCommand = {
@@ -64,11 +66,12 @@ export type LogInContext = {
   ipHash: Buffer | null
 }
 
-export type LogInResult = { user: User; securityStamp: string }
+// `staff`: an active account with an unrevoked `platform_staff` row, which the caller sends to `/mfa`.
+export type LogInResult = { user: User; securityStamp: string; staff: boolean }
 
 // What step 5's transaction found: a sign-in, or why the compare-and-set missed.
 type Finish =
-  | { kind: 'signed_in'; securityStamp: string }
+  | { kind: 'signed_in'; securityStamp: string; staff: boolean }
   | { kind: 'status'; status: string }
   | { kind: 'changed' }
 
@@ -169,7 +172,11 @@ export async function logIn(command: LogInCommand, context: LogInContext): Promi
       ipHash: context.ipHash,
       changes: rehashed ? { changed: ['password_hash'] } : {},
     })
-    return { kind: 'signed_in', securityStamp: row.security_stamp }
+    return {
+      kind: 'signed_in',
+      securityStamp: row.security_stamp,
+      staff: actor.actorType === 'platform_staff' && user.status === 'active',
+    }
   })
 
   if (finish.kind === 'status') {
@@ -182,5 +189,5 @@ export async function logIn(command: LogInCommand, context: LogInContext): Promi
     await recordFailure(command, context, { cause: 'account_changed' })
     throw invalidCredentials()
   }
-  return { user, securityStamp: finish.securityStamp }
+  return { user, securityStamp: finish.securityStamp, staff: finish.staff }
 }

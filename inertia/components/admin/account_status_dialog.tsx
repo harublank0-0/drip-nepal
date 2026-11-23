@@ -8,11 +8,13 @@ import { COURIER_LIMITS } from '@shared/constants/limits'
 import { client } from '~/client'
 import { useApiMutation } from '~/hooks/use_api_mutation'
 import { useErrorReport } from '~/hooks/use_error_report'
+import { useStepUp } from '~/hooks/use_step_up'
 import { applyServerErrors, changeAndRecheck } from '~/lib/forms'
 import { t } from '~/lib/i18n'
 import { ConfirmDialog } from '~/components/common/confirm_dialog'
 import { ErrorSummary } from '~/components/forms/error_summary'
 import { ProblemAlert } from '~/components/forms/problem_alert'
+import { StepUpField } from '~/components/forms/step_up_field'
 import { TextareaField } from '~/components/forms/textarea_field'
 
 /*
@@ -22,7 +24,9 @@ import { TextareaField } from '~/components/forms/textarea_field'
  * is tier 2, with the account's name typed to confirm. The reason is required
  * and kept in the audit log (§7.1 permanent notes). A refusal keeps the
  * dialog open with the typed reason; a 404 or 409 also reloads the list,
- * because the account changed meanwhile (§8.3).
+ * because the account changed meanwhile (§8.3). A step-up refusal swaps in
+ * the TOTP field (§7.3 rule 5, `useStepUp`): the next confirm verifies the
+ * code, then sends the same change again.
  */
 const KEYS = {
   suspended: 'suspend',
@@ -51,6 +55,7 @@ export function AccountStatusDialog({
   onCloseAutoFocus: (event: Event) => void
 }) {
   const mutation = useApiMutation()
+  const stepUp = useStepUp()
   const report = useErrorReport(FIELDS)
   const [problem, setProblem] = useState<Problem | null>(null)
   const [offline, setOffline] = useState(false)
@@ -68,6 +73,7 @@ export function AccountStatusDialog({
       setProblem(null)
       setOffline(false)
       report.clear()
+      if (!(await stepUp.ready())) return
       const outcome = await mutation.run(() =>
         client.request('adminSetLogisticsAccountStatus', {
           params: { accountId: account.id },
@@ -93,6 +99,7 @@ export function AccountStatusDialog({
       }
       // useApiMutation shows the wait next to the confirm button.
       if (outcome.problem.code === 'RATE_LIMITED') return
+      if (stepUp.refused(outcome.problem)) return
       setProblem(outcome.problem)
       // The codes ProblemAlert words as "the list has been updated".
       if (['NOT_FOUND', 'INVALID_STATE_TRANSITION'].includes(outcome.problem.code)) {
@@ -103,6 +110,7 @@ export function AccountStatusDialog({
 
   function close() {
     form.reset()
+    stepUp.reset()
     report.clear()
     setProblem(null)
     setOffline(false)
@@ -120,8 +128,8 @@ export function AccountStatusDialog({
       destructive={change !== 'pending'}
       identifier={change === 'disabled' ? account.name : undefined}
       identifierLabel={t('admin.logistics.status.disable.type_name', { name: account.name })}
-      pending={mutation.pending}
-      retryIn={mutation.retryIn}
+      pending={mutation.pending || stepUp.pending}
+      retryIn={Math.max(mutation.retryIn, stepUp.retryIn)}
       onConfirm={() => void form.handleSubmit()}
       onCloseAutoFocus={onCloseAutoFocus}
     >
@@ -148,6 +156,7 @@ export function AccountStatusDialog({
           />
         )}
       </form.Field>
+      <StepUpField view={stepUp.view} fieldRef={stepUp.fieldRef} id="status-step-up" />
       <ProblemAlert problem={problem} offline={offline} entity="courier_account" />
     </ConfirmDialog>
   )

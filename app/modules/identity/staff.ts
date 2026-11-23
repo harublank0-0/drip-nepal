@@ -4,9 +4,8 @@ import db from '@adonisjs/lucid/services/db'
  * The platform permissions the M6 courier operations need (docs/07 §4.2):
  * every platform permission also requires an active `platform_staff` row,
  * TOTP enrolled and MFA verified within 12 hours, which the
- * `platform_staff` middleware checks. M1 brings the full map and the MFA
- * challenge; until then no session carries `mfa_verified_at`, so these
- * operations answer 401 `MFA_REQUIRED` in production.
+ * `platform_staff` middleware checks; the session gets its MFA time from
+ * `verifyMfaChallenge` (M1 part 5). The full map comes with M1 part 7.
  */
 export const PLATFORM_PERMISSIONS = {
   'platform.orders.intervene': ['platform_admin', 'support_agent'],
@@ -20,6 +19,23 @@ export const MFA_WINDOW_MS = 12 * 60 * 60_000
 // Step-up: MFA within the last 15 minutes [Assumption] (docs/07 §3.10).
 export const STEP_UP_WINDOW_MS = 15 * 60_000
 
+/*
+ * The role of the user's unrevoked `platform_staff` row, enrolled in TOTP or
+ * not, or null: the `platform_staff` middleware's 404 decision and the
+ * staff check of the MFA operations (docs/06 §4.3), which tell enrolment
+ * from verification themselves.
+ */
+export async function staffRoleOf(userId: string): Promise<string | null> {
+  const row = await db
+    .from('platform_staff')
+    .where('user_id', userId)
+    .whereNull('revoked_at')
+    .select('role')
+    .first()
+  return row?.role ?? null
+}
+
+// The role of a staff member with TOTP enrolled, or null (the home page's admin link).
 export async function activeStaffRole(userId: string): Promise<string | null> {
   const row = await db
     .from('platform_staff')

@@ -8,6 +8,7 @@ export type ScannedRoutes = {
     'signUp': { paramsTuple?: []; params?: {} }
     'logIn': { paramsTuple?: []; params?: {} }
     'logOut': { paramsTuple?: []; params?: {} }
+    'verifyMfaChallenge': { paramsTuple?: []; params?: {} }
     'resendEmailVerification': { paramsTuple?: []; params?: {} }
     'confirmEmail': { paramsTuple?: []; params?: {} }
     'requestPasswordReset': { paramsTuple?: []; params?: {} }
@@ -15,6 +16,8 @@ export type ScannedRoutes = {
     'getMe': { paramsTuple?: []; params?: {} }
     'changePassword': { paramsTuple?: []; params?: {} }
     'revokeAllSessions': { paramsTuple?: []; params?: {} }
+    'startTotpEnrollment': { paramsTuple?: []; params?: {} }
+    'confirmTotpEnrollment': { paramsTuple?: []; params?: {} }
     'getLogisticsSettings': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'replaceLogisticsSettings': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'createShopCourierAccount': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
@@ -50,6 +53,7 @@ export type ScannedRoutes = {
     'verify_email': { paramsTuple?: []; params?: {} }
     'forgot_password': { paramsTuple?: []; params?: {} }
     'reset_password': { paramsTuple?: []; params?: {} }
+    'mfa': { paramsTuple?: []; params?: {} }
     'admin.logistics': { paramsTuple?: []; params?: {} }
     'dev.design_system': { paramsTuple?: []; params?: {} }
     'dev.overlays': { paramsTuple?: []; params?: {} }
@@ -73,6 +77,7 @@ export type ScannedRoutes = {
     'verify_email': { paramsTuple?: []; params?: {} }
     'forgot_password': { paramsTuple?: []; params?: {} }
     'reset_password': { paramsTuple?: []; params?: {} }
+    'mfa': { paramsTuple?: []; params?: {} }
     'admin.logistics': { paramsTuple?: []; params?: {} }
     'dev.design_system': { paramsTuple?: []; params?: {} }
     'dev.overlays': { paramsTuple?: []; params?: {} }
@@ -94,6 +99,7 @@ export type ScannedRoutes = {
     'verify_email': { paramsTuple?: []; params?: {} }
     'forgot_password': { paramsTuple?: []; params?: {} }
     'reset_password': { paramsTuple?: []; params?: {} }
+    'mfa': { paramsTuple?: []; params?: {} }
     'admin.logistics': { paramsTuple?: []; params?: {} }
     'dev.design_system': { paramsTuple?: []; params?: {} }
     'dev.overlays': { paramsTuple?: []; params?: {} }
@@ -102,12 +108,15 @@ export type ScannedRoutes = {
   POST: {
     'signUp': { paramsTuple?: []; params?: {} }
     'logIn': { paramsTuple?: []; params?: {} }
+    'verifyMfaChallenge': { paramsTuple?: []; params?: {} }
     'resendEmailVerification': { paramsTuple?: []; params?: {} }
     'confirmEmail': { paramsTuple?: []; params?: {} }
     'requestPasswordReset': { paramsTuple?: []; params?: {} }
     'resetPassword': { paramsTuple?: []; params?: {} }
     'changePassword': { paramsTuple?: []; params?: {} }
     'revokeAllSessions': { paramsTuple?: []; params?: {} }
+    'startTotpEnrollment': { paramsTuple?: []; params?: {} }
+    'confirmTotpEnrollment': { paramsTuple?: []; params?: {} }
     'createShopCourierAccount': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'rekeyShopCourierAccount': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'accountId': ParamValue} }
     'disableShopCourierAccount': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'accountId': ParamValue} }

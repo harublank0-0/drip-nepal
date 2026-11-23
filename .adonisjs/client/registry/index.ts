@@ -30,6 +30,12 @@ const routes = {
     tokens: [{"old":"/api/v1/auth/session","type":0,"val":"api","end":""},{"old":"/api/v1/auth/session","type":0,"val":"v1","end":""},{"old":"/api/v1/auth/session","type":0,"val":"auth","end":""},{"old":"/api/v1/auth/session","type":0,"val":"session","end":""}],
     types: placeholder as Registry['logOut']['types'],
   },
+  'verifyMfaChallenge': {
+    methods: ["POST"],
+    pattern: '/api/v1/auth/mfa/challenge',
+    tokens: [{"old":"/api/v1/auth/mfa/challenge","type":0,"val":"api","end":""},{"old":"/api/v1/auth/mfa/challenge","type":0,"val":"v1","end":""},{"old":"/api/v1/auth/mfa/challenge","type":0,"val":"auth","end":""},{"old":"/api/v1/auth/mfa/challenge","type":0,"val":"mfa","end":""},{"old":"/api/v1/auth/mfa/challenge","type":0,"val":"challenge","end":""}],
+    types: placeholder as Registry['verifyMfaChallenge']['types'],
+  },
   'resendEmailVerification': {
     methods: ["POST"],
     pattern: '/api/v1/auth/email-verification',
@@ -71,6 +77,18 @@ const routes = {
     pattern: '/api/v1/me/sessions/revoke-all',
     tokens: [{"old":"/api/v1/me/sessions/revoke-all","type":0,"val":"api","end":""},{"old":"/api/v1/me/sessions/revoke-all","type":0,"val":"v1","end":""},{"old":"/api/v1/me/sessions/revoke-all","type":0,"val":"me","end":""},{"old":"/api/v1/me/sessions/revoke-all","type":0,"val":"sessions","end":""},{"old":"/api/v1/me/sessions/revoke-all","type":0,"val":"revoke-all","end":""}],
     types: placeholder as Registry['revokeAllSessions']['types'],
+  },
+  'startTotpEnrollment': {
+    methods: ["POST"],
+    pattern: '/api/v1/me/mfa/totp',
+    tokens: [{"old":"/api/v1/me/mfa/totp","type":0,"val":"api","end":""},{"old":"/api/v1/me/mfa/totp","type":0,"val":"v1","end":""},{"old":"/api/v1/me/mfa/totp","type":0,"val":"me","end":""},{"old":"/api/v1/me/mfa/totp","type":0,"val":"mfa","end":""},{"old":"/api/v1/me/mfa/totp","type":0,"val":"totp","end":""}],
+    types: placeholder as Registry['startTotpEnrollment']['types'],
+  },
+  'confirmTotpEnrollment': {
+    methods: ["POST"],
+    pattern: '/api/v1/me/mfa/totp/confirm',
+    tokens: [{"old":"/api/v1/me/mfa/totp/confirm","type":0,"val":"api","end":""},{"old":"/api/v1/me/mfa/totp/confirm","type":0,"val":"v1","end":""},{"old":"/api/v1/me/mfa/totp/confirm","type":0,"val":"me","end":""},{"old":"/api/v1/me/mfa/totp/confirm","type":0,"val":"mfa","end":""},{"old":"/api/v1/me/mfa/totp/confirm","type":0,"val":"totp","end":""},{"old":"/api/v1/me/mfa/totp/confirm","type":0,"val":"confirm","end":""}],
+    types: placeholder as Registry['confirmTotpEnrollment']['types'],
   },
   'getLogisticsSettings': {
     methods: ["GET","HEAD"],
@@ -281,6 +299,12 @@ const routes = {
     pattern: '/reset-password',
     tokens: [{"old":"/reset-password","type":0,"val":"reset-password","end":""}],
     types: placeholder as Registry['reset_password']['types'],
+  },
+  'mfa': {
+    methods: ["GET","HEAD"],
+    pattern: '/mfa',
+    tokens: [{"old":"/mfa","type":0,"val":"mfa","end":""}],
+    types: placeholder as Registry['mfa']['types'],
   },
   'admin.logistics': {
     methods: ["GET","HEAD"],

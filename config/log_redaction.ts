@@ -20,8 +20,15 @@ const header = (prefix: string) =>
   HEADER_KEYS.map((key) => (key.startsWith('[') ? `${prefix}${key}` : `${prefix}.${key}`))
 
 export const REDACT_PATHS: string[] = [
-  // Credentials
-  ...withNested(['password', 'current_password', 'new_password', 'totp_code', 'secret']),
+  // Credentials; `otpauth_uri` carries the TOTP secret (startTotpEnrollment)
+  ...withNested([
+    'password',
+    'current_password',
+    'new_password',
+    'totp_code',
+    'secret',
+    'otpauth_uri',
+  ]),
   // Tokens; an idempotency key can be replayed for 24–72 h (docs/06 §7)
   ...withNested(['token', 'token_enc']),
   'idempotency_key',

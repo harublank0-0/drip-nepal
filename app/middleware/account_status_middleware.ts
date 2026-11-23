@@ -29,7 +29,8 @@ import { accountStanding } from '#modules/identity/queries'
  *
  * The exception to rows 3 and 4 (M1 part 4): on a route a guest may use with
  * an emailed token (`GUEST_TOKEN_ROUTES`: `/verify-email`,
- * `/forgot-password`, `/reset-password` and the operations they post to),
+ * `/forgot-password`, `/reset-password` and the operations they post to,
+ * and `/mfa`, the enrolment link's page, M1 part 5),
  * the stale session is ended, keeping Shield's CSRF secret, and the request
  * goes on as a guest's. Throwing would answer a page with a sign-in redirect
  * whose `return_to` carries the live token of the URL, and an operation with

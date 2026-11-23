@@ -9,6 +9,7 @@ import { client } from '~/client'
 import { useApiMutation } from '~/hooks/use_api_mutation'
 import { useIntentKey } from '~/hooks/use_intent_key'
 import { useErrorReport } from '~/hooks/use_error_report'
+import { useStepUp } from '~/hooks/use_step_up'
 import { applyServerErrors, changeAndRecheck, PENDING_BUTTON } from '~/lib/forms'
 import { t } from '~/lib/i18n'
 import { Button } from '~/components/ui/button'
@@ -26,6 +27,7 @@ import { ChoiceField } from '~/components/forms/choice_field'
 import { ErrorSummary } from '~/components/forms/error_summary'
 import { ProblemAlert } from '~/components/forms/problem_alert'
 import { RateLimitNotice } from '~/components/forms/rate_limit_notice'
+import { StepUpField } from '~/components/forms/step_up_field'
 
 /*
  * Create DripNepal's own Nepal Can Move account (`adminCreateLogisticsAccount`
@@ -36,6 +38,8 @@ import { RateLimitNotice } from '~/components/forms/rate_limit_notice'
  * trigger, so focus returns to it on close (docs/08 §7.3 rule 1); closing
  * drops what was typed, the token included, and cannot happen mid-request,
  * except after a timeout, when the values and the key are kept for a replay.
+ * A step-up refusal swaps in the TOTP field (§7.3 rule 5, `useStepUp`): the
+ * next submit verifies the code, then sends the same body with the same key.
  */
 type Body = Route.Body<'adminCreateLogisticsAccount'>
 
@@ -69,6 +73,7 @@ const RATE_LIMIT_ID = 'account-rate-limit'
 export function CreatePlatformAccountDialog() {
   const [open, setOpen] = useState(false)
   const mutation = useApiMutation()
+  const stepUp = useStepUp()
   const intentKey = useIntentKey<Body>()
   const report = useErrorReport(FIELDS)
   const [problem, setProblem] = useState<Problem | null>(null)
@@ -95,6 +100,7 @@ export function CreatePlatformAccountDialog() {
         external_account_ref: value.external_account_ref.trim() || null,
         credentials: { token: value.credentials.token },
       }
+      if (!(await stepUp.ready())) return
       const key = intentKey.for(body)
       const outcome = await mutation.run(() =>
         client.request('adminCreateLogisticsAccount', {
@@ -116,6 +122,7 @@ export function CreatePlatformAccountDialog() {
       }
       // useApiMutation shows the wait next to the submit button.
       if (outcome.problem.code === 'RATE_LIMITED') return
+      if (stepUp.refused(outcome.problem)) return
       if (outcome.problem.errors?.length) {
         report.failed(formApi, applyServerErrors(formApi, outcome.problem, KNOWN))
       } else {
@@ -126,6 +133,7 @@ export function CreatePlatformAccountDialog() {
 
   function close() {
     form.reset()
+    stepUp.reset()
     intentKey.reset()
     report.clear()
     setProblem(null)
@@ -136,10 +144,14 @@ export function CreatePlatformAccountDialog() {
   // Escape, the close button and Cancel. Never mid-request; after a timeout the account may
   // exist, so the values and the key stay for a retry that replays (06 §7.1).
   function requestClose() {
-    if (mutation.pending) return
+    if (mutation.pending || stepUp.pending) return
     if (offline) setOpen(false)
     else close()
   }
+
+  // The action's request or the step-up code's, and the longer RATE_LIMITED wait of the two.
+  const pending = mutation.pending || stepUp.pending
+  const retryIn = Math.max(mutation.retryIn, stepUp.retryIn)
 
   return (
     <Dialog open={open} onOpenChange={(next) => (next ? setOpen(true) : requestClose())}>
@@ -232,6 +244,7 @@ export function CreatePlatformAccountDialog() {
               />
             )}
           </form.Field>
+          <StepUpField view={stepUp.view} fieldRef={stepUp.fieldRef} id="account-step-up" />
           <ProblemAlert problem={problem} offline={offline} />
           <DialogFooter>
             <Button type="button" variant="outline" onClick={requestClose}>
@@ -240,16 +253,16 @@ export function CreatePlatformAccountDialog() {
             {/* Not disabled while pending, so it keeps focus; a second press is ignored (08 §7.1). */}
             <Button
               type="submit"
-              aria-disabled={mutation.pending || mutation.retryIn > 0 || undefined}
-              aria-describedby={mutation.retryIn > 0 ? RATE_LIMIT_ID : undefined}
+              aria-disabled={pending || retryIn > 0 || undefined}
+              aria-describedby={retryIn > 0 ? RATE_LIMIT_ID : undefined}
               className={PENDING_BUTTON}
             >
-              {mutation.pending
+              {pending
                 ? t('admin.logistics.create.submitting')
                 : t('admin.logistics.create.submit')}
             </Button>
           </DialogFooter>
-          <RateLimitNotice id={RATE_LIMIT_ID} seconds={mutation.retryIn} />
+          <RateLimitNotice id={RATE_LIMIT_ID} seconds={retryIn} />
         </form>
       </DialogContent>
     </Dialog>

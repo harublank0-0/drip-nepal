@@ -14,10 +14,17 @@ import { RateLimitNotice } from '~/components/forms/rate_limit_notice'
  * While the request runs the button keeps focus and ignores presses
  * (`aria-disabled`, 08 §7.1); a `RATE_LIMITED` wait shows next to it.
  */
-export function SignOutButton({ className }: { className?: string }) {
+export function SignOutButton({
+  className,
+  afterSignOut,
+}: {
+  className?: string
+  // Instead of visiting `/login` (`useSignOut`), for a page that reloads in place.
+  afterSignOut?: () => void
+}) {
   // A page may show two (the header's and the home page's), so each wait has its own id.
   const rateLimitId = useId()
-  const { signOut, pending, retryIn } = useSignOut()
+  const { signOut, pending, retryIn } = useSignOut({ afterSignOut })
   const blocked = pending || retryIn > 0
   return (
     <span className={cn('inline-flex items-center gap-2', className)}>

@@ -28,10 +28,12 @@ import type { AccountNotice, UserTokenIssued } from '#modules/notifications/even
  * as a permanent outcome does (docs/03 §10.4).
  *
  * The account notices, which carry no token: `user.signup_attempted` (M1
- * part 2a), whose template is `identity.account_exists`, and
+ * part 2a), whose template is `identity.account_exists`,
  * `user.password_changed` and `user.sessions_revoked` (M1 part 4), whose
- * templates are `identity.password_changed` and `identity.sessions_revoked`. The event ID is the one the sender gave
- * it, and the recipient the account. An account that no longer exists or
+ * templates are `identity.password_changed` and
+ * `identity.sessions_revoked`, and `user.mfa_enabled` (M1 part 5), whose
+ * template is `identity.mfa_enabled`. The event ID is the one the sender
+ * gave it, and the recipient the account. An account that no longer exists or
  * was anonymised meanwhile gets no row, with a warning. Log lines carry IDs
  * only, never the address or its hash (docs/09 §7.2).
  */
@@ -48,6 +50,7 @@ export const ACCOUNT_NOTICE_TEMPLATES: Record<AccountNotice['event'], EmailTempl
   'user.signup_attempted': 'identity.account_exists',
   'user.password_changed': 'identity.password_changed',
   'user.sessions_revoked': 'identity.sessions_revoked',
+  'user.mfa_enabled': 'identity.mfa_enabled',
 }
 
 // Whether an event from the queue is an account notice (a payload is not checked by the compiler).

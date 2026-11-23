@@ -7,3 +7,13 @@
  * again instead of saying the password is wrong.
  */
 export const INVALID_CREDENTIALS_DETAIL = 'Invalid email or password.'
+
+/*
+ * A TOTP code as `verifyMfaChallenge` and `confirmTotpEnrollment` take it:
+ * six digits (RFC 6238, docs/07 §3.9). The `/mfa` page and the step-up
+ * field send what the user typed or pasted with its spaces and hyphens
+ * removed (`totpInput`), so "123 456" from an authenticator app passes.
+ */
+export const TOTP_CODE_PATTERN = /^\d{6}$/
+
+export const totpInput = (value: string) => value.replace(/[\s-]/g, '')

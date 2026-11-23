@@ -16,6 +16,7 @@ declare module '@adonisjs/inertia/types' {
     'admin/logistics': ExtractProps<(typeof import('../../inertia/pages/admin/logistics.tsx'))['default']>
     'auth/forgot_password': ExtractProps<(typeof import('../../inertia/pages/auth/forgot_password.tsx'))['default']>
     'auth/login': ExtractProps<(typeof import('../../inertia/pages/auth/login.tsx'))['default']>
+    'auth/mfa': ExtractProps<(typeof import('../../inertia/pages/auth/mfa.tsx'))['default']>
     'auth/reset_password': ExtractProps<(typeof import('../../inertia/pages/auth/reset_password.tsx'))['default']>
     'auth/signup': ExtractProps<(typeof import('../../inertia/pages/auth/signup.tsx'))['default']>
     'auth/verify_email': ExtractProps<(typeof import('../../inertia/pages/auth/verify_email.tsx'))['default']>

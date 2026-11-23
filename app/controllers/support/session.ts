@@ -5,8 +5,9 @@ import type User from '#models/user'
  * The session helpers of docs/09 §3.4. They take `ctx`, so they live with
  * the HTTP layer; controllers and middleware share them. They implement
  * docs/07 §3.1, §3.2 and §3.11. `rotateSessionId` joined them with its
- * first caller, `changePassword` (M1 part 4); `verifyMfaChallenge` and the
- * shop operations that make the caller an owner or member follow.
+ * first caller, `changePassword` (M1 part 4), and `recordMfaVerified` with
+ * `verifyMfaChallenge` (M1 part 5); the shop operations that make the
+ * caller an owner or member follow.
  */
 
 // The session keys of docs/07 §3.2 that belong to one sign-in.
@@ -34,6 +35,22 @@ export async function startSession(ctx: HttpContext, user: User, stamp: string) 
   ctx.session.put(SESSION_KEYS.sellerSeenAt, now)
   ctx.session.put(SESSION_KEYS.adminSeenAt, now)
   await ctx.session.tag(String(user.id))
+}
+
+/*
+ * The MFA proof of docs/07 §3.2, after `verifyMfaChallenge` (and the
+ * development-only sign-in, 07 §3.13): `mfa_verified_at` as
+ * `{ user_id, at }`, which the admin surface and the step-up accept only for
+ * this user and only when `at` is not earlier than `authenticated_at`; and
+ * `admin_seen_at`, so a challenge ends admin idle (07 §3.4). It never
+ * touches `authenticated_at`, so the 7-day staff limit still ends in a
+ * password sign-in. The caller rotates the session ID afterwards where 07
+ * §3.9 says so.
+ */
+export function recordMfaVerified(ctx: HttpContext, userId: string, at = new Date()) {
+  const time = at.toISOString()
+  ctx.session.put(SESSION_KEYS.mfaVerifiedAt, { user_id: userId, at: time })
+  ctx.session.put(SESSION_KEYS.adminSeenAt, time)
 }
 
 /*
@@ -69,16 +86,20 @@ export async function endSession(ctx: HttpContext) {
 /*
  * The routes a guest may use with an emailed token, and the reset request
  * that leads to one (docs/07 §3.3 row 3, its exception): the pages
- * `/verify-email`, `/forgot-password` and `/reset-password` and the
- * operations they post to. On these, a stale session (a stamp that no
- * longer matches, or past the 30-day limit) is ended and the request goes
- * on as a guest's, and no sign-in redirect ever carries their URL as
- * `return_to`, because the URL can hold a live token (07 §3.8).
+ * `/verify-email`, `/forgot-password`, `/reset-password` and `/mfa` (the
+ * enrolment link, M1 part 5), and the operations the first three post to.
+ * On these, a stale session (a stamp that no longer matches, or past the
+ * 30-day limit) is ended and the request goes on as a guest's, and no
+ * sign-in redirect ever carries their URL as `return_to`, because the URL
+ * can hold a live token (07 §3.8). `/mfa` signs the guest in on the page
+ * itself and keeps the token in memory; its operations need a session, so
+ * they are not on this list.
  */
 export const GUEST_TOKEN_ROUTES: ReadonlySet<string> = new Set([
   'verify_email',
   'forgot_password',
   'reset_password',
+  'mfa',
   'confirmEmail',
   'requestPasswordReset',
   'resetPassword',

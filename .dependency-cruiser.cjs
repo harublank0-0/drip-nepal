@@ -150,8 +150,9 @@ module.exports = {
     },
     // 9. Field decryption only for the docs/07 §5.5 allowlist (T-SEC-034): the
     // courier adapter for an account's credentials, the courier booking job for
-    // the delivery-address snapshot it sends, and the seller logistics
-    // transformer for the shop's own pickup addresses.
+    // the delivery-address snapshot it sends, the seller logistics
+    // transformer for the shop's own pickup addresses, and the TOTP verifier
+    // for a staff member's secret (M1 part 5).
     {
       name: 'field-decrypter-allowlist',
       comment: 'Only the docs/07 §5.5 allowlist imports the field decrypter (T-SEC-034)',
@@ -163,6 +164,7 @@ module.exports = {
           '^app/modules/logistics/providers/courier_accounts\\.ts$',
           '^app/modules/orders/jobs/book_courier_shipment\\.ts$',
           '^app/transformers/seller/logistics_transformer\\.ts$',
+          '^app/modules/identity/internal/totp_secret\\.ts$',
         ],
       },
       to: { path: '^app/modules/platform/crypto/field_decrypter\\.ts$' },

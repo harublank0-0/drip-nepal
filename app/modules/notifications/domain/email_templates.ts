@@ -25,6 +25,9 @@
  * - `identity.sessions_revoked`: the "sessions revoked" notice of
  *   `revokeAllSessions` and the `reauth` lockout (01 AC-FR-NOT-001-1; M1
  *   part 4), with a link to `/forgot-password` and no token.
+ * - `identity.mfa_enabled`: the "two-step verification turned on" notice of
+ *   `confirmTotpEnrollment` (docs/07 §3.9; M1 part 5), with a link to
+ *   `/forgot-password` and no token.
  */
 export const EMAIL_TEMPLATES = [
   'identity.password_reset',
@@ -33,6 +36,7 @@ export const EMAIL_TEMPLATES = [
   'identity.account_exists',
   'identity.password_changed',
   'identity.sessions_revoked',
+  'identity.mfa_enabled',
 ] as const
 export type EmailTemplate = (typeof EMAIL_TEMPLATES)[number]
 

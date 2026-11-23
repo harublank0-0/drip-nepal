@@ -55,6 +55,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/auth/identity/session_controller').default['logOut']>>>
     }
   }
+  'verifyMfaChallenge': {
+    methods: ["POST"]
+    pattern: '/api/v1/auth/mfa/challenge'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/identity/mfa').verifyMfaChallengeValidator)>>
+      paramsTuple: []
+      params: {}
+      query: ExtractQuery<InferInput<(typeof import('#validators/identity/mfa').verifyMfaChallengeValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/api/v1/auth/identity/mfa_controller').default['verifyMfaChallenge']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/auth/identity/mfa_controller').default['verifyMfaChallenge']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
   'resendEmailVerification': {
     methods: ["POST"]
     pattern: '/api/v1/auth/email-verification'
@@ -137,6 +149,30 @@ export interface Registry {
       query: {}
       response: ExtractResponse<Awaited<ReturnType<import('#controllers/api/v1/auth/identity/session_controller').default['revokeAllSessions']>>>
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/auth/identity/session_controller').default['revokeAllSessions']>>>
+    }
+  }
+  'startTotpEnrollment': {
+    methods: ["POST"]
+    pattern: '/api/v1/me/mfa/totp'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/identity/mfa').startTotpEnrollmentValidator)>>
+      paramsTuple: []
+      params: {}
+      query: ExtractQuery<InferInput<(typeof import('#validators/identity/mfa').startTotpEnrollmentValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/api/v1/auth/identity/mfa_controller').default['startTotpEnrollment']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/auth/identity/mfa_controller').default['startTotpEnrollment']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
+  'confirmTotpEnrollment': {
+    methods: ["POST"]
+    pattern: '/api/v1/me/mfa/totp/confirm'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/identity/mfa').confirmTotpEnrollmentValidator)>>
+      paramsTuple: []
+      params: {}
+      query: ExtractQuery<InferInput<(typeof import('#validators/identity/mfa').confirmTotpEnrollmentValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/api/v1/auth/identity/mfa_controller').default['confirmTotpEnrollment']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/auth/identity/mfa_controller').default['confirmTotpEnrollment']>>> | { status: 422; response: { errors: SimpleError[] } }
     }
   }
   'getLogisticsSettings': {
@@ -557,6 +593,18 @@ export interface Registry {
       query: {}
       response: ExtractResponse<Awaited<ReturnType<import('#controllers/auth/identity/password_reset_controller').default['resetPassword']>>>
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/auth/identity/password_reset_controller').default['resetPassword']>>>
+    }
+  }
+  'mfa': {
+    methods: ["GET","HEAD"]
+    pattern: '/mfa'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/auth/identity/mfa_controller').default['show']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/auth/identity/mfa_controller').default['show']>>>
     }
   }
   'admin.logistics': {

@@ -10,6 +10,7 @@ import {
   sendPasswordChangedEmail,
   sendSessionsRevokedEmail,
 } from '#modules/identity/internal/password_effects'
+import { sendMfaEnabledEmail } from '#modules/identity/internal/mfa_account'
 import { signUp } from '#modules/identity/actions/sign_up'
 import type { UserTokenPurpose } from '#modules/identity/domain/user_token_purpose'
 import { keyedHash } from '#modules/platform/crypto/keyed_hash'
@@ -39,7 +40,8 @@ import { insertUser } from '#tests/support/schema_rows'
  *   once (compare-and-set on `queued`). Every token purpose, each with its
  *   template, subject and page, and the account-exists notice, whose link
  *   is the sign-in page and carries no token, and the "password changed"
- *   and "sessions revoked" notices of M1 part 4, whose link is the reset
+ *   and "sessions revoked" notices of M1 part 4 and the "two-step
+ *   verification turned on" notice of M1 part 5, whose link is the reset
  *   request page and carries no token. A replay after the token was
  *   used is a quiet duplicate; a send job whose row is done is quiet, and
  *   one whose row is missing warns (03 §10.4).
@@ -68,7 +70,13 @@ type SendPayload = Extract<
   JobEnvelope
 type NoticeDispatch = Extract<
   JobPayloads['notifications.dispatch'],
-  { event: 'user.signup_attempted' | 'user.password_changed' | 'user.sessions_revoked' }
+  {
+    event:
+      | 'user.signup_attempted'
+      | 'user.password_changed'
+      | 'user.sessions_revoked'
+      | 'user.mfa_enabled'
+  }
 > &
   JobEnvelope
 type AnySend = JobPayloads['notifications.send_email'] & JobEnvelope
@@ -123,18 +131,23 @@ async function signupNotice() {
 
 /*
  * The "password changed" event, queued by the step that `resetPassword`
- * and `changePassword` call in their transactions, or the "sessions
- * revoked" event of `revokeAllSessions` and the `reauth` lockout (M1 part 4).
+ * and `changePassword` call in their transactions, the "sessions revoked"
+ * event of `revokeAllSessions` and the `reauth` lockout (M1 part 4), or the
+ * "two-step verification turned on" event of `confirmTotpEnrollment`,
+ * whose event ID is the consumed token's row ID (M1 part 5).
  */
 async function passwordNotice(
-  event: 'user.password_changed' | 'user.sessions_revoked' = 'user.password_changed'
+  event:
+    | 'user.password_changed'
+    | 'user.sessions_revoked'
+    | 'user.mfa_enabled' = 'user.password_changed'
 ) {
   const userId = await insertUser()
-  await withTx((trx) =>
-    event === 'user.password_changed'
-      ? sendPasswordChangedEmail(trx, userId, null)
-      : sendSessionsRevokedEmail(trx, userId, null)
-  )
+  await withTx((trx) => {
+    if (event === 'user.password_changed') return sendPasswordChangedEmail(trx, userId, null)
+    if (event === 'user.sessions_revoked') return sendSessionsRevokedEmail(trx, userId, null)
+    return sendMfaEnabledEmail(trx, userId, randomUUID(), null)
+  })
   const jobs = await queued<NoticeDispatch>('notifications.dispatch')
   const job = jobs.find(
     (queuedJob) => queuedJob.data.event === event && queuedJob.data.user_id === userId
@@ -359,6 +372,12 @@ test.group('T-NOT-101 a replayed event gives one delivery row and one send', (gr
         kind: 'user.sessions_revoked' as const,
         template: 'identity.sessions_revoked',
         subject: 'Your DripNepal account was signed out on your devices',
+      },
+      {
+        name: 'mfa-enabled',
+        kind: 'user.mfa_enabled' as const,
+        template: 'identity.mfa_enabled',
+        subject: 'Two-step verification is on for your DripNepal account',
       },
     ])
     .run(async ({ assert }, { kind, template, subject }) => {
