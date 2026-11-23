@@ -6,6 +6,7 @@ import User from '#models/user'
 import { middleware } from '#start/kernel'
 import { startSession } from '#controllers/support/session'
 import { UserFactory } from '#database/factories/user_factory'
+import { revokeSessions } from '#modules/identity/jobs/revoke_sessions'
 import { testBrowser, type Browser } from '#tests/support/browser'
 
 /*
@@ -15,8 +16,9 @@ import { testBrowser, type Browser } from '#tests/support/browser'
  *   is refused with 403 `ACCOUNT_SUSPENDED` (API) or a redirect to /login
  *   (page) while the session row exists, and 401 `UNAUTHENTICATED` once the
  *   row is gone; a stamp-only mismatch and a session past the 30-day
- *   absolute limit are 401. Deleting the user's rows stands in for the
- *   `identity.revoke_sessions` job, which M1 builds.
+ *   absolute limit are 401. The rows are deleted by the real
+ *   `identity.revoke_sessions` handler (M1 part 4), after the stamp
+ *   rotation a suspension makes (docs/07 §3.3, §3.12).
  * - T-SEC-009, the E7 part: the cookie attributes, the tag after sign-in,
  *   and the store's 7-day and 2 h expiries for `write` and `touch`.
  *
@@ -210,9 +212,14 @@ test.group('T-SEC-010 the per-request account check', () => {
     assert,
   }) => {
     const { browser, user } = await signIn()
-    await db.from('users').where('id', user.id).update({ status: 'suspended' })
-    // What identity.revoke_sessions does: destroy every tagged row of the user.
-    await db.from('sessions').where('user_id', user.id).delete()
+    // What `suspendUser` will do (M1 part 7): the status and a new stamp, then the job.
+    await db
+      .from('users')
+      .where('id', user.id)
+      .update({ status: 'suspended', security_stamp: db.raw('gen_random_uuid()') })
+    const outcome = await revokeSessions({ user_id: user.id, request_id: null, causation_id: null })
+    assert.deepEqual(outcome, { destroyed: 1, kept: 0 })
+    assert.lengthOf(await db.from('sessions').where('user_id', user.id), 0)
 
     const read = await browser.clone().request('/api/v1/__test__/session/me')
     assert.equal(read.status, 401)

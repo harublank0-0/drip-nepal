@@ -1,7 +1,12 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import type { NextFn } from '@adonisjs/core/types/http'
 import { DomainError } from '#exceptions/domain_error'
-import { endSession, SESSION_KEYS } from '#controllers/support/session'
+import {
+  endSession,
+  endSessionAsGuest,
+  onGuestTokenRoute,
+  SESSION_KEYS,
+} from '#controllers/support/session'
 import { accountStanding } from '#modules/identity/queries'
 
 /*
@@ -21,6 +26,14 @@ import { accountStanding } from '#modules/identity/queries'
  * Row 2 (no session left) needs no code here: the guard finds no user, and
  * the `auth` middleware or the exception handler answers 401. The seller
  * and admin limits belong to their route groups (07 §3.4).
+ *
+ * The exception to rows 3 and 4 (M1 part 4): on a route a guest may use with
+ * an emailed token (`GUEST_TOKEN_ROUTES`: `/verify-email`,
+ * `/forgot-password`, `/reset-password` and the operations they post to),
+ * the stale session is ended, keeping Shield's CSRF secret, and the request
+ * goes on as a guest's. Throwing would answer a page with a sign-in redirect
+ * whose `return_to` carries the live token of the URL, and an operation with
+ * a 401 that loses the token the page holds (07 §3.3 row 3).
  */
 export default class AccountStatusMiddleware {
   async handle(ctx: HttpContext, next: NextFn) {
@@ -33,6 +46,10 @@ export default class AccountStatusMiddleware {
     })
     if (standing === 'valid') return next()
 
+    if (standing === 'signed_out' && onGuestTokenRoute(ctx)) {
+      await endSessionAsGuest(ctx)
+      return next()
+    }
     await endSession(ctx)
     if (standing === 'suspended') {
       throw new DomainError('ACCOUNT_SUSPENDED', { detail: 'Your account is suspended.' })

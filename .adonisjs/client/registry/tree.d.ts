@@ -12,7 +12,11 @@ export interface ApiDefinition {
   logOut: typeof routes['logOut']
   resendEmailVerification: typeof routes['resendEmailVerification']
   confirmEmail: typeof routes['confirmEmail']
+  requestPasswordReset: typeof routes['requestPasswordReset']
+  resetPassword: typeof routes['reset_password']
   getMe: typeof routes['getMe']
+  changePassword: typeof routes['changePassword']
+  revokeAllSessions: typeof routes['revokeAllSessions']
   getLogisticsSettings: typeof routes['getLogisticsSettings']
   replaceLogisticsSettings: typeof routes['replaceLogisticsSettings']
   createShopCourierAccount: typeof routes['createShopCourierAccount']
@@ -48,6 +52,7 @@ export interface ApiDefinition {
   login: typeof routes['login']
   signup: typeof routes['signup']
   verifyEmail: typeof routes['verify_email']
+  forgotPassword: typeof routes['forgot_password']
   admin: {
     logistics: typeof routes['admin.logistics']
   }

@@ -49,6 +49,9 @@ import { RateLimitNotice } from '~/components/forms/rate_limit_notice'
  *   and the server sends a signed-in visitor away.
  * - 422 on its fields; anything else above the button with its reference.
  * A failed submit keeps both values.
+ *
+ * After a password reset (`passwordChanged`, 02 J-18 step 4) a notice above
+ * the fields says the password was changed, until the first submit.
  */
 type Body = Route.Body<'logIn'>
 
@@ -82,8 +85,15 @@ function passwordError(value: string) {
     : t('auth.login.password_rule')
 }
 
-export function LogInForm({ notice }: { notice: 'account_suspended' | null }) {
+export function LogInForm({
+  notice,
+  passwordChanged = false,
+}: {
+  notice: 'account_suspended' | null
+  passwordChanged?: boolean
+}) {
   const mutation = useApiMutation({ signInOnUnauthenticated: false })
+  const [changed, setChanged] = useState(passwordChanged)
   const report = useErrorReport(FIELDS)
   const [refusal, setRefusal] = useState<Refusal | null>(
     notice === 'account_suspended' ? 'suspended' : null
@@ -95,6 +105,7 @@ export function LogInForm({ notice }: { notice: 'account_suspended' | null }) {
   const resending = useRef(false)
 
   function resetMessages() {
+    setChanged(false)
     setRefusal(null)
     setProblem(null)
     setOffline(false)
@@ -181,6 +192,12 @@ export function LogInForm({ notice }: { notice: 'account_suspended' | null }) {
       }}
     >
       <ErrorSummary form={form} summary={report.summary} summaryRef={report.summaryRef} />
+      {changed && (
+        <Alert role="status">
+          <AlertTitle>{t('auth.login.password_changed_title')}</AlertTitle>
+          <AlertDescription>{t('auth.login.password_changed_body')}</AlertDescription>
+        </Alert>
+      )}
       {refusal === 'suspended' && <SuspendedNotice />}
       <form.Field name="email" validators={{ onBlur: ({ value }) => emailError(value) }}>
         {(field) => (
@@ -211,8 +228,7 @@ export function LogInForm({ notice }: { notice: 'account_suspended' | null }) {
           )}
         </form.Field>
         <p className="text-sm">
-          {/* `/forgot-password` comes with M1 part 4; until then the link opens the 404 page. */}
-          <a className="text-link underline underline-offset-4" href="/forgot-password">
+          <a className="text-link underline underline-offset-4" href={urlFor('forgot_password')}>
             {t('auth.login.forgot')}
           </a>
         </p>

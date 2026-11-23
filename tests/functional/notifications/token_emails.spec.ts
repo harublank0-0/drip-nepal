@@ -5,6 +5,11 @@ import db from '@adonisjs/lucid/services/db'
 import { appUrl } from '#config/app'
 import { hmacKeys } from '#config/crypto'
 import { issueUserToken } from '#modules/identity/actions/issue_user_token'
+import {
+  lockoutEventId,
+  sendPasswordChangedEmail,
+  sendSessionsRevokedEmail,
+} from '#modules/identity/internal/password_effects'
 import { signUp } from '#modules/identity/actions/sign_up'
 import type { UserTokenPurpose } from '#modules/identity/domain/user_token_purpose'
 import { keyedHash } from '#modules/platform/crypto/keyed_hash'
@@ -33,7 +38,9 @@ import { insertUser } from '#tests/support/schema_rows'
  *   `notifications.send_email` job and one email; the job run twice sends
  *   once (compare-and-set on `queued`). Every token purpose, each with its
  *   template, subject and page, and the account-exists notice, whose link
- *   is the sign-in page and carries no token. A replay after the token was
+ *   is the sign-in page and carries no token, and the "password changed"
+ *   and "sessions revoked" notices of M1 part 4, whose link is the reset
+ *   request page and carries no token. A replay after the token was
  *   used is a quiet duplicate; a send job whose row is done is quiet, and
  *   one whose row is missing warns (03 §10.4).
  * - T-NOT-001, the handler part (05 §8.14): a retryable failure keeps the
@@ -43,7 +50,8 @@ import { insertUser } from '#tests/support/schema_rows'
  *   meanwhile, an address changed since dispatch, and a `token_enc` that no
  *   longer decrypts (07 §3.8 rule 4) make it `failed` with no send, keeping
  *   an earlier transport error in `last_error`, and so does an
- *   account-exists notice whose account was anonymised meanwhile; nothing
+ *   account-exists or "password changed" notice whose account was
+ *   anonymised meanwhile; nothing
  *   sends a `failed` row again. The dead-letter and redrive part, with `jobs:redrive`, is
  *   in tests/concurrency/notifications/email_outage.spec.ts.
  */
@@ -60,7 +68,7 @@ type SendPayload = Extract<
   JobEnvelope
 type NoticeDispatch = Extract<
   JobPayloads['notifications.dispatch'],
-  { event: 'user.signup_attempted' }
+  { event: 'user.signup_attempted' | 'user.password_changed' | 'user.sessions_revoked' }
 > &
   JobEnvelope
 type AnySend = JobPayloads['notifications.send_email'] & JobEnvelope
@@ -111,6 +119,29 @@ async function signupNotice() {
   )
   if (!job) throw new Error('signUp queued no account-exists event')
   return { userId: user.id as string, email, event: job.data }
+}
+
+/*
+ * The "password changed" event, queued by the step that `resetPassword`
+ * and `changePassword` call in their transactions, or the "sessions
+ * revoked" event of `revokeAllSessions` and the `reauth` lockout (M1 part 4).
+ */
+async function passwordNotice(
+  event: 'user.password_changed' | 'user.sessions_revoked' = 'user.password_changed'
+) {
+  const userId = await insertUser()
+  await withTx((trx) =>
+    event === 'user.password_changed'
+      ? sendPasswordChangedEmail(trx, userId, null)
+      : sendSessionsRevokedEmail(trx, userId, null)
+  )
+  const jobs = await queued<NoticeDispatch>('notifications.dispatch')
+  const job = jobs.find(
+    (queuedJob) => queuedJob.data.event === event && queuedJob.data.user_id === userId
+  )
+  if (!job) throw new Error(`no ${event} event was queued`)
+  const user = await db.from('users').where('id', userId).firstOrFail()
+  return { userId, email: user.email as string, event: job.data }
 }
 
 async function noticeSendJob(deliveryId: string) {
@@ -311,6 +342,84 @@ test.group('T-NOT-101 a replayed event gives one delivery row and one send', (gr
     assert.equal(link.origin, new URL(appUrl).origin)
     assert.equal(link.pathname, '/login')
     assert.notInclude(message.text, 'token=')
+  })
+
+  test(
+    'T-NOT-101 a {name} event dispatched three times gives one row, one job and one email linking the reset request page [AC-J18-06, AC-FR-NOT-001-1]'
+  )
+    .with([
+      {
+        name: 'password-changed',
+        kind: 'user.password_changed' as const,
+        template: 'identity.password_changed',
+        subject: 'Your DripNepal password was changed',
+      },
+      {
+        name: 'sessions-revoked',
+        kind: 'user.sessions_revoked' as const,
+        template: 'identity.sessions_revoked',
+        subject: 'Your DripNepal account was signed out on your devices',
+      },
+    ])
+    .run(async ({ assert }, { kind, template, subject }) => {
+      const { userId, email, event } = await passwordNotice(kind)
+
+      const outcomes = [
+        await dispatchNotification(event),
+        await dispatchNotification(event),
+        await dispatchNotification(event),
+      ]
+      assert.deepEqual(
+        outcomes.map((outcome) => outcome.kind),
+        ['queued', 'duplicate', 'duplicate']
+      )
+      const rows = await deliveriesOf(userId)
+      assert.lengthOf(rows, 1)
+      assert.equal(rows[0].dedupe_key, `${event.event_id}:${template}:${userId}`)
+      assert.include(rows[0], { template, status: 'queued' })
+
+      const job = await noticeSendJob(rows[0].id)
+      assert.include(job, { event: kind, user_id: userId })
+      const sent = await sendEmail(job)
+      const resent = await sendEmail(job)
+      assert.equal(sent.kind, 'sent')
+      assert.equal(resent.kind, 'not_queued')
+      assert.lengthOf(emails.fake.sent, 1)
+      const [message] = emails.fake.sent
+      assert.equal(message.to, email)
+      assert.equal(message.template, template)
+      assert.equal(message.subject, subject)
+      const link = linkIn(message.text)
+      assert.equal(link.origin, new URL(appUrl).origin)
+      assert.equal(link.pathname, '/forgot-password')
+      assert.notInclude(message.text, 'token=')
+    })
+})
+
+test.group('T-NOT-101 two reauth lockouts at once', (group) => {
+  group.setup(async () => {
+    await useJobBoss()
+  })
+
+  test('T-NOT-101 two lockout notices of one user and day give one delivery row [docs/07 §3.6]', async ({
+    assert,
+  }) => {
+    const userId = await insertUser()
+    const eventId = lockoutEventId(userId)
+    // What two lockouts committing together queue: two events with the same ID.
+    await withTx((trx) => sendSessionsRevokedEmail(trx, userId, null, { eventId }))
+    await withTx((trx) => sendSessionsRevokedEmail(trx, userId, null, { eventId }))
+    const jobs = await queued<NoticeDispatch>('notifications.dispatch')
+    const events = jobs
+      .filter((job) => job.data.event === 'user.sessions_revoked' && job.data.user_id === userId)
+      .map((job) => job.data)
+    assert.lengthOf(events, 2)
+    const outcomes = [await dispatchNotification(events[0]), await dispatchNotification(events[1])]
+    assert.deepEqual(
+      outcomes.map((outcome) => outcome.kind),
+      ['queued', 'duplicate']
+    )
+    assert.lengthOf(await deliveriesOf(userId), 1)
   })
 })
 
@@ -523,6 +632,30 @@ test.group('T-NOT-001 notifications.send_email failures', (group) => {
     // A replay of the event after the anonymisation dispatches nothing new.
     const replay = await dispatchNotification(event)
     assert.equal(replay.kind, 'duplicate')
+  })
+
+  test('T-NOT-001 a password-changed notice whose account was anonymised before the send fails without sending', async ({
+    assert,
+  }) => {
+    const { userId, event } = await passwordNotice()
+    const outcome = await dispatchNotification(event)
+    if (outcome.kind !== 'queued') throw new Error(`dispatch gave ${outcome.kind}`)
+    const job = await noticeSendJob(outcome.deliveryId)
+    await db
+      .from('users')
+      .where('id', userId)
+      .update({
+        status: 'anonymized',
+        anonymized_at: db.raw('now()'),
+        email: `deleted-${userId}@anonymized.invalid`,
+        full_name: null,
+        password_hash: null,
+        age_confirmed_at: null,
+      })
+
+    const sent = await sendEmail(job)
+    assert.deepEqual(sent, { kind: 'failed', reason: 'recipient_unreachable' })
+    assert.lengthOf(emails.fake.sent, 0)
   })
 
   test('T-NOT-001 an unexpected error is recorded by its name only, keeps the row queued and is rethrown', async ({

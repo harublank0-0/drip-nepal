@@ -145,6 +145,8 @@ export const JOB_QUEUES = {
     retryDelay: 60,
     ...TOKEN_RETENTION,
   },
+  // 5 retries with backoff; carries the user ID only (M1 part 4).
+  'identity.revoke_sessions': { ...QUEUE_DEFAULTS, retryLimit: 5 },
   // M6 courier queues (docs/03 §9 rows added with them, 2026-11-21).
   'logistics.verify_account': { ...QUEUE_DEFAULTS, retryLimit: 5 },
   'logistics.sync_branches': { ...QUEUE_DEFAULTS, retryLimit: 3 },
@@ -173,6 +175,7 @@ export type DeadLetterRule = 'redrive' | 'discard'
 export const DEAD_LETTER_RULES = {
   'notifications.dispatch': 'redrive',
   'notifications.send_email': 'redrive',
+  'identity.revoke_sessions': 'redrive',
   'logistics.verify_account': 'redrive',
   'logistics.sync_branches': 'redrive',
   'orders.book_courier_shipment': 'discard',

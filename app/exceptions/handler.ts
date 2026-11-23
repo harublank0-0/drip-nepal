@@ -5,6 +5,7 @@ import { DomainError } from '#exceptions/domain_error'
 import { databaseError, toProblem, type Problem } from '#exceptions/to_problem'
 import { reportToTracker, scrubbedDatabaseError, userReference } from '#exceptions/tracker'
 import { hmacKeys } from '#config/crypto'
+import { onGuestTokenRoute } from '#controllers/support/session'
 
 /*
  * The exception handler (docs/09 §5.4, ADR-0018). `toProblem()` is the one
@@ -71,14 +72,14 @@ function renderPage(
  * The redirect of a page visit that needs a sign-in: the visited URL, query
  * included, travels only as `return_to`, never forwarded as the target's own
  * query string (config/app.ts no longer forwards it, and `withQs(false)`
- * keeps this redirect so whatever the setting; docs/09 §5.4).
+ * keeps this redirect so whatever the setting; docs/09 §5.4). A guest token
+ * route's URL is never a `return_to`: it can hold a live token (docs/07
+ * §3.3 row 3, §3.8).
  */
 function signInRedirect(ctx: HttpContext, path: '/login' | '/mfa') {
-  return ctx.response
-    .redirect()
-    .withQs(false)
-    .withQs({ return_to: ctx.request.url(true) })
-    .toPath(path)
+  const redirect = ctx.response.redirect().withQs(false)
+  if (onGuestTokenRoute(ctx)) return redirect.toPath(path)
+  return redirect.withQs({ return_to: ctx.request.url(true) }).toPath(path)
 }
 
 function problemFor(error: unknown, ctx: HttpContext): Problem {

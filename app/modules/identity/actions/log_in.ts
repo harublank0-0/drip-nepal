@@ -1,11 +1,11 @@
 import { errors as authErrors } from '@adonisjs/auth'
 import hash from '@adonisjs/core/services/hash'
-import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
 import User from '#models/user'
 import { DomainError } from '#exceptions/domain_error'
 import { auditEmailSubject, recordAudit } from '#modules/audit/actions/record_audit'
 import { SIGNED_IN_STATUSES, maySignIn } from '#modules/identity/domain/user_status'
 import { throttledLogin } from '#modules/identity/internal/login_throttle'
+import { selfActor } from '#modules/identity/internal/self_actor'
 import { withTx } from '#modules/platform/tx'
 import { INVALID_CREDENTIALS_DETAIL } from '#shared/constants/auth'
 
@@ -110,19 +110,6 @@ async function recordFailure(
   })
 }
 
-// The actor of the `auth.login` row: staff with their role, anyone else a customer.
-async function loginActor(trx: TransactionClientContract, userId: string) {
-  const staff = await trx
-    .from('platform_staff')
-    .where('user_id', userId)
-    .whereNull('revoked_at')
-    .select('role')
-    .first()
-  return staff
-    ? { actorType: 'platform_staff' as const, actorRole: `platform:${staff.role}` }
-    : { actorType: 'customer' as const, actorRole: null }
-}
-
 export async function logIn(command: LogInCommand, context: LogInContext): Promise<LogInResult> {
   let user: User
   try {
@@ -170,7 +157,8 @@ export async function logIn(command: LogInCommand, context: LogInContext): Promi
       if (current && !maySignIn(current.status)) return { kind: 'status', status: current.status }
       return { kind: 'changed' }
     }
-    const actor = await loginActor(trx, user.id)
+    // The actor of the `auth.login` row: staff with their role, anyone else a customer.
+    const actor = await selfActor(trx, user.id)
     await recordAudit(trx, {
       ...actor,
       actorUserId: user.id,

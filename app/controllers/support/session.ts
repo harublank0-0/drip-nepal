@@ -4,8 +4,9 @@ import type User from '#models/user'
 /*
  * The session helpers of docs/09 §3.4. They take `ctx`, so they live with
  * the HTTP layer; controllers and middleware share them. They implement
- * docs/07 §3.1, §3.2 and §3.11. `rotateSessionId` joins them with its first
- * caller in M1 (`verifyMfaChallenge`, `changePassword`).
+ * docs/07 §3.1, §3.2 and §3.11. `rotateSessionId` joined them with its
+ * first caller, `changePassword` (M1 part 4); `verifyMfaChallenge` and the
+ * shop operations that make the caller an owner or member follow.
  */
 
 // The session keys of docs/07 §3.2 that belong to one sign-in.
@@ -36,6 +37,22 @@ export async function startSession(ctx: HttpContext, user: User, stamp: string) 
 }
 
 /*
+ * A new session ID for the signed-in session, which keeps its values
+ * (docs/07 §3.1): after `changePassword`, whose controller first puts the
+ * new stamp, and later after `verifyMfaChallenge` and a privilege the user
+ * gains in their own request. The store's commit writes the new ID with its
+ * data and expiry only, so the new row is tagged again here; `tag()`
+ * upserts it at once, and the commit then writes the data over it. Every
+ * `regenerate()` of a signed-in session other than `login()`'s, and the
+ * forced logouts' (`endSession`), goes through this helper.
+ */
+export async function rotateSessionId(ctx: HttpContext) {
+  const user = ctx.auth.getUserOrFail()
+  ctx.session.regenerate()
+  await ctx.session.tag(String(user.id))
+}
+
+/*
  * `logOut` and every forced logout (docs/07 §3.11): the guard forgets
  * `auth_web` but neither clears nor regenerates the session, so this does
  * both. An emptied session is deleted when the response commits it, and the
@@ -47,6 +64,44 @@ export async function endSession(ctx: HttpContext) {
   if (user) await ctx.session.untag(String(user.id))
   ctx.session.clear()
   ctx.session.regenerate()
+}
+
+/*
+ * The routes a guest may use with an emailed token, and the reset request
+ * that leads to one (docs/07 §3.3 row 3, its exception): the pages
+ * `/verify-email`, `/forgot-password` and `/reset-password` and the
+ * operations they post to. On these, a stale session (a stamp that no
+ * longer matches, or past the 30-day limit) is ended and the request goes
+ * on as a guest's, and no sign-in redirect ever carries their URL as
+ * `return_to`, because the URL can hold a live token (07 §3.8).
+ */
+export const GUEST_TOKEN_ROUTES: ReadonlySet<string> = new Set([
+  'verify_email',
+  'forgot_password',
+  'reset_password',
+  'confirmEmail',
+  'requestPasswordReset',
+  'resetPassword',
+])
+
+export const onGuestTokenRoute = (ctx: HttpContext) => GUEST_TOKEN_ROUTES.has(ctx.route?.name ?? '')
+
+// Shield's session key for its CSRF secret (@adonisjs/shield 9.0.0 `CsrfGuard`).
+const CSRF_SECRET_KEY = 'csrf-secret'
+
+/*
+ * The forced logout of a stale session on a guest token route: `endSession`,
+ * then Shield's CSRF secret is put back into the new, guest session. Shield
+ * has already checked this request and set the `XSRF-TOKEN` cookie from
+ * that secret, so the page this request renders can still post its form;
+ * without it the first post would fail the CSRF check. The secret belongs to
+ * the browser, not the account, as when `logIn` keeps it (07 §3.2). Nothing
+ * else of the old sign-in survives.
+ */
+export async function endSessionAsGuest(ctx: HttpContext) {
+  const secret: unknown = ctx.session.get(CSRF_SECRET_KEY)
+  await endSession(ctx)
+  if (typeof secret === 'string') ctx.session.put(CSRF_SECRET_KEY, secret)
 }
 
 /*

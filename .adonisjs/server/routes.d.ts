@@ -10,7 +10,11 @@ export type ScannedRoutes = {
     'logOut': { paramsTuple?: []; params?: {} }
     'resendEmailVerification': { paramsTuple?: []; params?: {} }
     'confirmEmail': { paramsTuple?: []; params?: {} }
+    'requestPasswordReset': { paramsTuple?: []; params?: {} }
+    'resetPassword': { paramsTuple?: []; params?: {} }
     'getMe': { paramsTuple?: []; params?: {} }
+    'changePassword': { paramsTuple?: []; params?: {} }
+    'revokeAllSessions': { paramsTuple?: []; params?: {} }
     'getLogisticsSettings': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'replaceLogisticsSettings': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'createShopCourierAccount': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
@@ -44,6 +48,8 @@ export type ScannedRoutes = {
     'login': { paramsTuple?: []; params?: {} }
     'signup': { paramsTuple?: []; params?: {} }
     'verify_email': { paramsTuple?: []; params?: {} }
+    'forgot_password': { paramsTuple?: []; params?: {} }
+    'reset_password': { paramsTuple?: []; params?: {} }
     'admin.logistics': { paramsTuple?: []; params?: {} }
     'dev.design_system': { paramsTuple?: []; params?: {} }
     'dev.overlays': { paramsTuple?: []; params?: {} }
@@ -65,6 +71,8 @@ export type ScannedRoutes = {
     'login': { paramsTuple?: []; params?: {} }
     'signup': { paramsTuple?: []; params?: {} }
     'verify_email': { paramsTuple?: []; params?: {} }
+    'forgot_password': { paramsTuple?: []; params?: {} }
+    'reset_password': { paramsTuple?: []; params?: {} }
     'admin.logistics': { paramsTuple?: []; params?: {} }
     'dev.design_system': { paramsTuple?: []; params?: {} }
     'dev.overlays': { paramsTuple?: []; params?: {} }
@@ -84,6 +92,8 @@ export type ScannedRoutes = {
     'login': { paramsTuple?: []; params?: {} }
     'signup': { paramsTuple?: []; params?: {} }
     'verify_email': { paramsTuple?: []; params?: {} }
+    'forgot_password': { paramsTuple?: []; params?: {} }
+    'reset_password': { paramsTuple?: []; params?: {} }
     'admin.logistics': { paramsTuple?: []; params?: {} }
     'dev.design_system': { paramsTuple?: []; params?: {} }
     'dev.overlays': { paramsTuple?: []; params?: {} }
@@ -94,6 +104,10 @@ export type ScannedRoutes = {
     'logIn': { paramsTuple?: []; params?: {} }
     'resendEmailVerification': { paramsTuple?: []; params?: {} }
     'confirmEmail': { paramsTuple?: []; params?: {} }
+    'requestPasswordReset': { paramsTuple?: []; params?: {} }
+    'resetPassword': { paramsTuple?: []; params?: {} }
+    'changePassword': { paramsTuple?: []; params?: {} }
+    'revokeAllSessions': { paramsTuple?: []; params?: {} }
     'createShopCourierAccount': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'rekeyShopCourierAccount': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'accountId': ParamValue} }
     'disableShopCourierAccount': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'accountId': ParamValue} }

@@ -24,5 +24,19 @@
   "identity.account_exists.action": "Sign in",
   "identity.account_exists.link_hint": "If the button doesn't work, copy this link into your browser:",
   "identity.account_exists.forgot": "If you forgot your password, choose \"Forgot password\" on the sign-in page to set a new one.",
-  "identity.account_exists.ignore": "If you didn't try to sign up, you can ignore this email. Your account has not changed."
+  "identity.account_exists.ignore": "If you didn't try to sign up, you can ignore this email. Your account has not changed.",
+  "identity.password_changed.subject": "Your DripNepal password was changed",
+  "identity.password_changed.intro": "The password of your DripNepal account was just changed.",
+  "identity.password_changed.sessions": "Devices that were signed in with the old password are signed out. If you changed it while signed in, that device stays signed in.",
+  "identity.password_changed.yours": "If you made this change, there is nothing more to do.",
+  "identity.password_changed.not_yours": "If you didn't change your password, set a new one now with the link below, and check that nobody else can read your email.",
+  "identity.password_changed.action": "Reset your password",
+  "identity.password_changed.link_hint": "If the button doesn't work, copy this link into your browser:",
+  "identity.sessions_revoked.subject": "Your DripNepal account was signed out on your devices",
+  "identity.sessions_revoked.intro": "The devices signed in to your DripNepal account were just signed out.",
+  "identity.sessions_revoked.why": "This happens when someone chooses \"Sign out of all devices\" while signed in, and that device stays signed in. It also happens after too many wrong passwords while signed in, and then every device is signed out.",
+  "identity.sessions_revoked.yours": "If that was you, there is nothing more to do: sign in again on your other devices.",
+  "identity.sessions_revoked.not_yours": "If you didn't do this, someone may know your password or have a signed-in device. Set a new password now with the link below; that signs out every device.",
+  "identity.sessions_revoked.action": "Reset your password",
+  "identity.sessions_revoked.link_hint": "If the button doesn't work, copy this link into your browser:"
 }

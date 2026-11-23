@@ -1,6 +1,7 @@
 import vine from '@vinejs/vine'
 import { accountEmail } from '#validators/support/account_email'
 import { nepalMobile } from '#validators/support/nepal_mobile'
+import { newPassword } from '#validators/support/new_password'
 import { nfcText } from '#validators/support/nfc_text'
 import { ACCOUNT_LIMITS } from '#shared/constants/limits'
 
@@ -18,7 +19,7 @@ const ticked = vine.createRule((value, _options, field) => {
  * - `email`: the shared account email rule (trimmed, lower-cased, at most
  *   254 characters, never in `.invalid`; RF-22, T-IAM-112).
  * - `password`: 10 to 128 characters, no composition rule, never trimmed
- *   (docs/07 §3.7 [Assumption A-22], RF-12).
+ *   (`newPassword`; docs/07 §3.7 [Assumption A-22], RF-12).
  * - `full_name`: trimmed and normalised to NFC first, then 1 to 100 code
  *   points, as `users_full_name_check` counts them (docs/04 §2.8); NFC can
  *   lengthen Devanagari, so the order matters (`nfcText`).
@@ -42,10 +43,7 @@ export const SIGN_UP_MEMBERS = [
 
 export const signUpValidator = vine.create({
   email: accountEmail(),
-  password: vine
-    .string()
-    .minLength(ACCOUNT_LIMITS.password.min)
-    .maxLength(ACCOUNT_LIMITS.password.max),
+  password: newPassword(),
   full_name: nfcText(ACCOUNT_LIMITS.fullName),
   phone: nepalMobile().nullable().optional(),
   age_confirmed: vine.boolean({ strict: true }).use(ticked()),

@@ -133,11 +133,7 @@ x-pending-operations:
   - getCurrentSellerAgreement
   # Auth and self (06 §13.3)
   - verifyMfaChallenge
-  - requestPasswordReset
-  - resetPassword
   - updateMe
-  - changePassword
-  - revokeAllSessions
   - startTotpEnrollment
   - confirmTotpEnrollment
   - requestAccountDeletion
@@ -767,6 +763,146 @@ paths:
         '422': { $ref: '#/components/responses/UnprocessableContent' }
         '500': { $ref: '#/components/responses/Internal' }
 
+  /api/v1/auth/password-reset:
+    post:
+      operationId: requestPasswordReset
+      tags: [Auth]
+      summary: Email a password reset link
+      description: |
+        Actor: anyone; no signed-in session is needed and none is created or changed (02 J-18
+        step 1). The request still needs `X-XSRF-TOKEN` (06 §4.1).
+        Input: `email` only; any other member is 422 `unknown_field` (T-API-002). The email is
+        trimmed and lower-cased (RF-22); like `logIn`, an address in `.invalid` is not refused.
+        Order: the `pwreset_ip` limiter (10 per hour per client network), then `pwreset_email`
+        (3 per hour per email) take their point before anything is looked up, for a known and an
+        unknown email alike, so the fourth request for one address in an hour is 429 either way
+        (AC-FR-IAM-004-3, AC-J18-01, 06 §9.1).
+        Answer: the same 202 status and body for an unknown email and for an account in any
+        status (AC-FR-IAM-004-1, T-SEC-012). Side effects, in one transaction with the account's
+        row locked: only an `active` or `pending_verification` account gets a `password_reset`
+        token (60 minutes, 07 §3.8) and its email through `notifications.dispatch`; the earlier
+        live reset token is consumed, so only the newest link works (AC-J18-04), and concurrent
+        requests leave exactly one live token (T-IAM-105). A suspended, deactivated or
+        anonymised account gets nothing. No audit row. Not ⚷ (06 §7.7). T-IAM-005. Release
+        R1·M1.
+      x-release: R1·M1
+      security:
+        - xsrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RequestPasswordResetRequest' }
+            examples:
+              request:
+                summary: A reset request from `/forgot-password`
+                value: { email: ram@example.com }
+      responses:
+        '202':
+          description: Accepted, for every address alike; nothing says whether it has an account.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ResetEmailSentResponse' }
+              examples:
+                sent:
+                  summary: The neutral answer of AC-FR-IAM-004-1
+                  value: { data: { status: reset_email_sent } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422': { $ref: '#/components/responses/UnprocessableContent' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /api/v1/auth/password-reset/confirm:
+    post:
+      operationId: resetPassword
+      tags: [Auth]
+      summary: Set a new password with a reset link
+      description: |
+        Actor: anyone holding the token; no session is needed, none is created, and nobody is
+        signed in afterwards (AC-FR-IAM-004-4). The request still needs `X-XSRF-TOKEN` (06 §4.1).
+        Input: `token` and `password` only; any other member is 422 `unknown_field`.
+        The token is looked up by its SHA-256 for the `password_reset` purpose, live, before the
+        password is hashed; an unknown, used, replaced or expired token, or one of another
+        purpose, which stays unconsumed (T-SEC-012), is 422 on `token` with `token_invalid` and
+        no account data, and nothing changes (AC-J18-02). A live token then charges the
+        `pwreset_token` limiter (5 per token per hour, proposed, 06 §9.1) before the hash; past
+        it, 429 `RATE_LIMITED`. Lock order (04a §5.2): the user's row,
+        then the token, redeemed in one statement, so of two tabs with one link exactly one
+        succeeds (T-IAM-105). A suspended, deactivated or anonymised account's token answers the
+        same 422.
+        Side effects, in one transaction: the new password hash and a new `security_stamp`, so
+        every session is refused on its next request (AC-J18-03); a `pending_verification`
+        account also becomes `active` with `email_verified_at`, because the link proves the
+        mailbox (02 J-18 step 3, 07 §3.12); the other live `password_reset` tokens are consumed,
+        and a live `mfa_enrollment` token is kept while TOTP is not enrolled (OD-60);
+        `identity.revoke_sessions` and the "password changed" email through
+        `notifications.dispatch` (AC-J18-06); one `auth.password_reset` audit row. Not ⚷
+        (06 §7.7). T-IAM-005. Release R1·M1.
+      x-release: R1·M1
+      security:
+        - xsrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ResetPasswordRequest' }
+            examples:
+              reset:
+                summary: The token from the emailed `/reset-password?token=…` link (placeholder)
+                value: { token: EXAMPLE-NOT-A-REAL-TOKEN, password: example-new-password }
+      responses:
+        '200':
+          description: The password is set; nobody is signed in, and every session has ended.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PasswordResetResponse' }
+              examples:
+                reset:
+                  summary: Reset
+                  value: { data: { status: password_reset } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422':
+          description: |
+            `VALIDATION_FAILED`: the token is unknown, used, replaced, expired, of another purpose
+            or its account may not sign in (one `token_invalid` item on `token`, no account data);
+            a missing, empty, non-string or over-256-character `token` (Vine's `required`,
+            `string` or `max_length`); a `password` outside 10 to 128 characters; or an unknown
+            member (`unknown_field`).
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem422' }
+              examples:
+                expired:
+                  summary: An expired, used or replaced link (AC-J18-02)
+                  value:
+                    type: https://dripnepal.com/problems/validation-failed
+                    title: Validation failed
+                    status: 422
+                    detail: This link has expired or has already been used.
+                    code: VALIDATION_FAILED
+                    request_id: 01929d01-0000-7000-8000-000000000423
+                    errors:
+                      - field: token
+                        code: token_invalid
+                        message: This link has expired or has already been used.
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/Internal' }
+
   /api/v1/me:
     get:
       operationId: getMe
@@ -814,6 +950,135 @@ paths:
                           role: owner
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /api/v1/me/password:
+    post:
+      operationId: changePassword
+      tags: [Me]
+      summary: Change the signed-in user's password
+      description: |
+        Actor: a signed-in user (`auth`); a guest gets 401. Scope: the caller's own account.
+        Input: `current_password` and `new_password` only; any other member is 422
+        `unknown_field`. A `new_password` outside 10 to 128 characters is 422 before the limiter
+        or any hash (07 §3.7).
+        Order (07 §3.6): both `reauth` keys (5 wrong passwords per 15 minutes, 10 per 24 h per
+        user, 06 §9.1) take their point before the current password is hashed; past either, 429
+        `RATE_LIMITED` without hashing. A wrong current password keeps the points, writes one
+        `auth.reauth_failed` audit row, adds a point to the caller's `login_acct_ip` key so it
+        counts toward the login limit (AC-FR-IAM-005-1), and is 422 on `current_password` with
+        `password_incorrect`; the 10th in 24 h also rotates `security_stamp` and sends
+        `identity.revoke_sessions`. A right current password takes a point of the
+        `password_change` limiter (5 per hour per user, proposed, 06 §9.1) before anything is
+        written, because each change queues an email; past it, 429 `RATE_LIMITED`.
+        Side effects, in one transaction: a compare-and-set writes the new hash and a new
+        `security_stamp` only while the account may sign in and still holds the acting
+        session's stamp and the hash the check verified; a miss is 403 `ACCOUNT_SUSPENDED` if
+        the status changed, else 401 `UNAUTHENTICATED`. The live `password_reset` tokens are
+        consumed (07 §3.8) and a live `mfa_enrollment` token is kept while TOTP is not enrolled
+        (OD-60); `identity.revoke_sessions` is sent with `startAfter` 10 s and the "password
+        changed" email is queued (AC-FR-IAM-005-4); one `auth.password_change` audit row.
+        This session keeps working (AC-FR-IAM-005-2, AC-J18-05): it receives the new stamp in
+        this request and a new session ID, re-tagged (`rotateSessionId`, 07 §3.1), so the job
+        ends every other session and spares it. Not ⚷ (06 §7.7). T-IAM-006. Release R1·M1.
+      x-release: R1·M1
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChangePasswordRequest' }
+            examples:
+              change:
+                summary: A change from `/account/security`
+                value:
+                  current_password: example-old-password
+                  new_password: example-new-password
+      responses:
+        '200':
+          description: Changed; this session continues under a new session ID.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PasswordChangedResponse' }
+              examples:
+                changed:
+                  summary: Changed
+                  value: { data: { status: password_changed } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422':
+          description: |
+            `VALIDATION_FAILED`: a wrong current password (`password_incorrect` on
+            `current_password`), a `new_password` outside 10 to 128 characters, a
+            `current_password` over 128 characters, or an unknown member (`unknown_field`).
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem422' }
+              examples:
+                wrong:
+                  summary: A wrong current password (AC-FR-IAM-005-1)
+                  value:
+                    type: https://dripnepal.com/problems/validation-failed
+                    title: Validation failed
+                    status: 422
+                    detail: Some fields need attention.
+                    code: VALIDATION_FAILED
+                    request_id: 01929d01-0000-7000-8000-000000000424
+                    errors:
+                      - field: current_password
+                        code: password_incorrect
+                        message: Your current password is not correct.
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /api/v1/me/sessions/revoke-all:
+    post:
+      operationId: revokeAllSessions
+      tags: [Me]
+      summary: Sign out of every other device
+      description: |
+        Actor: a signed-in user (`auth`); a guest gets 401. Input: an empty body; any member is
+        422 `unknown_field`. The `revoke_all` limiter (5 per hour per user, proposed, 06 §9.1)
+        takes a point on every call first, because each call queues an email and the session
+        survives to call again; past it, 429 `RATE_LIMITED` and nothing is written. Side
+        effects, in one transaction: a compare-and-set gives the
+        account a new `security_stamp` only while it may sign in and still holds the acting
+        session's stamp (a miss is 403 `ACCOUNT_SUSPENDED` if the status changed, else 401
+        `UNAUTHENTICATED`); `identity.revoke_sessions`, carrying the user ID only, is sent with
+        `startAfter` 10 s; one `auth.sessions_revoke` audit row (AC-FR-IAM-005-3). This session
+        receives the new stamp in the same request and keeps its ID and tag, so the job deletes
+        every other session of the user and spares this one (07 §3.3, T-IAM-109). The "sessions
+        revoked" email is queued through `notifications.dispatch` (01 AC-FR-NOT-001-1), so the
+        holder learns of it even when a stolen session did it. Not ⚷ (06 §7.7). Release R1·M1.
+      x-release: R1·M1
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '202':
+          description: The other sessions end when the job runs; this one continues.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionsRevokedResponse' }
+              examples:
+                revoked:
+                  summary: Signed out elsewhere
+                  value: { data: { status: sessions_revoked } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422': { $ref: '#/components/responses/UnprocessableContent' }
+        '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/Internal' }
 
   /api/v1/seller/shops/{shopSlug}/products:
@@ -5311,6 +5576,102 @@ components:
                     type: string
                     enum: [owner, manager, catalog_editor, order_fulfiller, viewer]
 
+    # ---------- password reset and change, revokeAllSessions (06 §13.3; M1 part 4) ----------
+    RequestPasswordResetRequest:
+      type: object
+      description: The whole input of `requestPasswordReset`; any other member is 422 `unknown_field`.
+      additionalProperties: false
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          description: Trimmed and lower-cased before the lookup (RF-22).
+    ResetEmailSentResponse:
+      type: object
+      description: The neutral 202 of `requestPasswordReset` (AC-FR-IAM-004-1).
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required: [status]
+          properties:
+            status: { const: reset_email_sent }
+    ResetPasswordRequest:
+      type: object
+      description: The whole input of `resetPassword`; any other member is 422 `unknown_field`.
+      additionalProperties: false
+      required: [token, password]
+      properties:
+        token:
+          type: string
+          minLength: 1
+          maxLength: 256
+          writeOnly: true
+          description: The raw token of the emailed link (32 random bytes, base64url, 07 §3.8).
+        password:
+          type: string
+          minLength: 10
+          maxLength: 128
+          writeOnly: true
+          description: The new password; no composition rule, paste allowed (07 §3.7). Never stored or logged.
+    PasswordResetResponse:
+      type: object
+      description: The 200 of `resetPassword`; nobody is signed in.
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required: [status]
+          properties:
+            status: { const: password_reset }
+    ChangePasswordRequest:
+      type: object
+      description: The whole input of `changePassword`; any other member is 422 `unknown_field`.
+      additionalProperties: false
+      required: [current_password, new_password]
+      properties:
+        current_password:
+          type: string
+          maxLength: 128
+          writeOnly: true
+          description: No minimum, so an older, shorter password still reaches the check (07 §3.7).
+        new_password:
+          type: string
+          minLength: 10
+          maxLength: 128
+          writeOnly: true
+          description: No composition rule, paste allowed (07 §3.7). Never stored or logged.
+    PasswordChangedResponse:
+      type: object
+      description: The 200 of `changePassword`; this session continues under a new ID.
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required: [status]
+          properties:
+            status: { const: password_changed }
+    SessionsRevokedResponse:
+      type: object
+      description: The 202 of `revokeAllSessions`.
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required: [status]
+          properties:
+            status: { const: sessions_revoked }
+
     # ---------- listProducts ----------
     ListingCard:
       type: object
@@ -7525,3 +7886,18 @@ components:
 #     that hold personal data. After the Fable review: `logIn`'s compare-and-set covers the stamp
 #     and, on a rehash, the hash the check read, and a miss answers 403 or the generic 401;
 #     a `return_to` over 2,048 characters becomes `/`.
+#
+# Added with password reset and change, and revoking sessions (2026-11-23, M1 part 4):
+# 49. `requestPasswordReset`, `resetPassword`, `changePassword` and `revokeAllSessions` move from
+#     `x-pending-operations` to `paths`, written from the code, with the new schemas
+#     `RequestPasswordResetRequest`, `ResetEmailSentResponse`, `ResetPasswordRequest`,
+#     `PasswordResetResponse`, `ChangePasswordRequest`, `PasswordChangedResponse` and
+#     `SessionsRevokedResponse` (06 note 58). The two reset operations a guest may call declare
+#     `security: [xsrfHeader]`, as `signUp` does; the two signed-in operations keep the default.
+#     The bodies follow 06 §3.4's envelope with one `status` each. `resetPassword` answers 422
+#     `token_invalid` for every refused token and names the validator's own items; a
+#     `changePassword` or `revokeAllSessions` whose compare-and-set misses answers 401 or 403.
+#     After the Fable review: `resetPassword` answers 429 past the proposed `pwreset_token`
+#     limiter, and `revokeAllSessions` queues the "sessions revoked" email instead of "no email".
+#     In review round 2: `changePassword` names the `password_change` limiter and
+#     `revokeAllSessions` the `revoke_all` limiter (both proposed), with a 429 on the latter.

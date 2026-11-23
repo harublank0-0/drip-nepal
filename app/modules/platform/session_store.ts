@@ -126,6 +126,40 @@ export class TaggedExpiryStore implements SessionStoreWithTaggingContract {
 }
 
 /*
+ * The live sessions tagged with `userId`, for `identity.revoke_sessions`
+ * (docs/07 §3.3): each row's ID, its stored `data` as read (`raw`, which the
+ * job's delete compares, so a row written since the read survives), and
+ * that data decoded and verified with the session ID as its purpose, as the
+ * package's `tagged()` does. Unlike `tagged()`, a row whose data does not
+ * verify is returned too, with `data` null: a revocation deletes it rather
+ * than skip it. It reads through `client`, so the job reads and deletes in
+ * its own transaction; the container's `SessionCollection` cannot, being a
+ * singleton whose store keeps the connection it resolved first.
+ */
+export type TaggedSessionRow = { id: string; raw: string; data: SessionData | null }
+
+export async function taggedSessions(
+  client: QueryClientContract,
+  userId: string,
+  tableName = 'sessions'
+): Promise<TaggedSessionRow[]> {
+  const rows: { id: string; data: string }[] = await client
+    .from(tableName)
+    .where('user_id', userId)
+    .where('expires_at', '>', new Date())
+    .select('id', 'data')
+  return rows.map((row) => {
+    let data: SessionData | null = null
+    try {
+      data = new MessageBuilder().verify<SessionData>(row.data, row.id)
+    } catch {
+      data = null
+    }
+    return { id: row.id, raw: row.data, data }
+  })
+}
+
+/*
  * The store for `config/session.ts`. The package's database store is not
  * exported, so its factory is resolved from `stores.database()` and called
  * once per request; `write()` and `touch()` are this class's own.
