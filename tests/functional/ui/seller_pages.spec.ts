@@ -26,8 +26,9 @@ import { addMember, createOwnerShop, GRIEVANCE, setShopStatus } from '#tests/sup
  *   `current_shop` names the shop, the role and its permissions on seller
  *   pages only; no grievance contact reaches any prop.
  * - T-SEC-030, a gated page prop per role: the pickup address item is sent
- *   only to roles with `shop.shipping.manage`, and the permissions are the
- *   docs/07 §4.3 map's for the role.
+ *   only to roles with `shop.shipping.manage`, the shipping item (R1-S part
+ *   1c) to every role, and the permissions are the docs/07 §4.3 map's for
+ *   the role.
  * - T-SEC-043: the overview and the settings page render with
  *   `encryptHistory`.
  * - T-UI-040 (new, R1-S part 1b): `/seller/{shopSlug}/settings` opens for
@@ -37,6 +38,18 @@ import { addMember, createOwnerShop, GRIEVANCE, setShopStatus } from '#tests/sup
  *   `shop` is `getSellerShop`'s answer for the member: the business
  *   details and the grievance contact for the owner only (T-SEC-036,
  *   T-SEC-034); another shop's settings are the 404 page (T-SEC-001).
+ * - T-UI-041 (new, R1-S part 1c): `/seller/{shopSlug}/shipping` opens for
+ *   the owner and every active role, rendered in the browser and never
+ *   stored, with encrypted history; a guest is sent to `/login`; the
+ *   `shop.member` gate refuses a `closed` shop and a non-owner of a
+ *   `pending_review` one. Its props (T-SEC-036): `shipping`, what
+ *   `getShopShipping` answers; `delivery_areas`, the 2 zones and the 77
+ *   districts by province with the valley's three in `ktm_valley`; and
+ *   `pickup_addresses`, with the contact phone in full and the place names,
+ *   with `provinces` for the pickup form, only for roles with
+ *   `shop.shipping.manage` while the shop is `active` (T-SEC-030). The overview's shipping and pickup items turn done after
+ *   the shop saves its shipping and adds a pickup address through the API.
+ *   Another shop's page is the 404 page (T-SEC-001).
  */
 
 const SHARED_PROPS = [
@@ -246,6 +259,7 @@ test.group('T-SEC-036 the seller overview props', () => {
     ])
     assert.deepEqual(props.checklist, [
       { item: 'seller_agreement', done: true },
+      { item: 'shipping_rates', done: false },
       { item: 'pickup_address', done: false },
     ])
     const written = JSON.stringify(props)
@@ -318,14 +332,19 @@ test.group('T-SEC-036 the seller overview props', () => {
       const current = props.current_shop as { role: string; permissions: string[] }
       assert.equal(current.role, role)
       assert.deepEqual(current.permissions, permissions)
+      // Every member reads the shipping (`getShopShipping`, `shop.member`); not set up here.
       assert.deepEqual(
         props.checklist,
         pickup
           ? [
               { item: 'seller_agreement', done: true },
+              { item: 'shipping_rates', done: false },
               { item: 'pickup_address', done: true },
             ]
-          : [{ item: 'seller_agreement', done: true }]
+          : [
+              { item: 'seller_agreement', done: true },
+              { item: 'shipping_rates', done: false },
+            ]
       )
     })
 })
@@ -441,4 +460,202 @@ test.group('T-UI-040 the seller settings page', () => {
         assert.notInclude(written, secret)
       }
     })
+})
+
+test.group('T-UI-041 the seller shipping page', () => {
+  const shippingPath = (slug: string) => `/seller/${slug}/shipping`
+  const RATES = [
+    { zone_code: 'ktm_valley', fee_minor: 10000, est_min_days: 0, est_max_days: 1 },
+    { zone_code: 'outside_valley', fee_minor: 15000, est_min_days: 2, est_max_days: 5 },
+  ]
+
+  test('T-UI-041 the shipping page opens for the owner, rendered in the browser and never stored', async ({
+    assert,
+  }) => {
+    const shop = await createOwnerShop()
+    const browser = await signIn(shop.ownerId)
+    const { status, headers, html, page } = await htmlPage(browser, shippingPath(shop.slug))
+    assert.equal(status, 200)
+    assert.equal(page?.component, 'seller/shipping')
+    assert.equal(headers.get('cache-control'), 'private, no-store')
+    // Seller pages render in the browser (config/inertia.ts): no server markup.
+    assert.notInclude(html, 'Save delivery settings')
+    assert.isTrue(page?.encryptHistory, 'T-SEC-043')
+  })
+
+  test('T-UI-041 every active role opens the shipping page: {role}')
+    .with([
+      { role: 'manager' },
+      { role: 'catalog_editor' },
+      { role: 'order_fulfiller' },
+      { role: 'viewer' },
+    ])
+    .run(async ({ assert }, { role }) => {
+      const shop = await createOwnerShop()
+      const memberId = await addMember(shop.shopId, role)
+      const { status, page } = await htmlPage(await signIn(memberId), shippingPath(shop.slug))
+      assert.equal(status, 200)
+      assert.equal(page?.component, 'seller/shipping')
+    })
+
+  test('T-UI-041 a guest is sent to /login with the shipping page as return_to', async ({
+    assert,
+  }) => {
+    const shop = await createOwnerShop()
+    const response = await testBrowser().request(shippingPath(shop.slug), {
+      headers: { Accept: 'text/html' },
+    })
+    await response.arrayBuffer()
+    assert.equal(response.status, 302)
+    const location = new URL(response.headers.get('location') ?? '', 'http://localhost')
+    assert.equal(location.pathname, '/login')
+    assert.equal(location.searchParams.get('return_to'), shippingPath(shop.slug))
+  })
+
+  test('T-UI-041 the shipping page follows the shop.member gate: {status} for the {actor}')
+    .with([
+      { status: 'closed' as const, actor: 'owner', expected: 403 },
+      { status: 'pending_review' as const, actor: 'owner', expected: 200 },
+      { status: 'pending_review' as const, actor: 'manager', expected: 403 },
+      { status: 'suspended' as const, actor: 'owner', expected: 200 },
+    ])
+    .run(async ({ assert }, { status, actor, expected }) => {
+      const shop = await createOwnerShop()
+      const userId = actor === 'owner' ? shop.ownerId : await addMember(shop.shopId, actor)
+      await setShopStatus(shop.shopId, status)
+      const page = await htmlPage(await signIn(userId), shippingPath(shop.slug))
+      assert.equal(page.status, expected)
+    })
+
+  test('T-SEC-001 another shop’s shipping page is the 404 page of an unknown slug', async ({
+    assert,
+  }) => {
+    const mine = await createOwnerShop()
+    const theirs = await createOwnerShop()
+    const browser = await signIn(mine.ownerId)
+    const unknown = await browser.request(shippingPath('no-such-shop-anywhere'), {
+      headers: { Accept: 'text/html' },
+    })
+    assert.equal(unknown.status, 404)
+    const expected = await pageText(unknown, 'no-such-shop-anywhere')
+    const other = await browser.request(shippingPath(theirs.slug), {
+      headers: { Accept: 'text/html' },
+    })
+    assert.equal(other.status, 404)
+    assert.equal(await pageText(other, theirs.slug), expected)
+  })
+
+  test('T-SEC-036 the owner’s shipping page sends the shipping, the delivery areas and the pickup addresses', async ({
+    assert,
+  }) => {
+    const shop = await createOwnerShop()
+    await insertLocation()
+    await insertEncryptedPickupAddress(shop.shopId)
+    const browser = await signIn(shop.ownerId)
+    const props = await pageProps(browser, shippingPath(shop.slug))
+    assert.sameMembers(Object.keys(props), [
+      ...SHARED_PROPS,
+      'shipping',
+      'delivery_areas',
+      'pickup_addresses',
+      'provinces',
+    ])
+    // The pickup form's first step is every active province, as the address book's is.
+    assert.lengthOf(props.provinces as unknown[], 7)
+    const read = await send(browser, 'GET', `/api/v1/seller/shops/${shop.slug}/shipping`)
+    assert.deepEqual(props.shipping, read.body.data)
+
+    const areas = props.delivery_areas as {
+      zones: { code: string; name: string }[]
+      provinces: { code: string; districts: { code: string; zone_code: string }[] }[]
+    }
+    assert.deepEqual(areas.zones, [
+      { code: 'ktm_valley', name: 'Kathmandu Valley' },
+      { code: 'outside_valley', name: 'Outside Kathmandu Valley' },
+    ])
+    assert.lengthOf(areas.provinces, 7)
+    const districts = areas.provinces.flatMap((province) => province.districts)
+    assert.lengthOf(districts, 77)
+    assert.sameMembers(
+      districts.filter((district) => district.zone_code === 'ktm_valley').map((d) => d.code),
+      ['306', '307', '308']
+    )
+
+    // The contact phone in full, as the shop's own data, with the place names (06 §13.8).
+    const [address] = props.pickup_addresses as Record<string, unknown>[]
+    assert.equal(address.contact_phone, '9812345678')
+    assert.equal(address.area_tole, 'Thamel')
+    assert.equal(address.district_name, 'Kathmandu')
+    assert.equal(address.local_level_name, 'Kathmandu Metropolitan City')
+    assert.equal(address.province_name, 'Bagmati')
+    assert.isTrue(address.is_default)
+    assert.notInclude(JSON.stringify(props), '_enc')
+  })
+
+  test('T-SEC-030 the pickup addresses and their provinces are left out for {label}')
+    .with([
+      { label: 'a viewer', role: 'viewer', status: null },
+      { label: 'an order fulfiller', role: 'order_fulfiller', status: null },
+      { label: 'the owner of a suspended shop', role: 'owner', status: 'suspended' as const },
+      {
+        label: 'the owner of a pending_review shop',
+        role: 'owner',
+        status: 'pending_review' as const,
+      },
+    ])
+    .run(async ({ assert }, { role, status }) => {
+      const shop = await createOwnerShop()
+      await insertLocation()
+      await insertEncryptedPickupAddress(shop.shopId)
+      const userId = role === 'owner' ? shop.ownerId : await addMember(shop.shopId, role)
+      if (status) await setShopStatus(shop.shopId, status)
+      const props = await pageProps(await signIn(userId), shippingPath(shop.slug))
+      assert.sameMembers(Object.keys(props), [...SHARED_PROPS, 'shipping', 'delivery_areas'])
+      assert.notInclude(JSON.stringify(props), '9812345678')
+    })
+
+  test('T-UI-041 the overview’s shipping and pickup items turn done once they are saved', async ({
+    assert,
+  }) => {
+    const shop = await createOwnerShop()
+    const browser = await signIn(shop.ownerId)
+    const saved = await send(
+      browser,
+      'PUT',
+      `/api/v1/seller/shops/${shop.slug}/shipping`,
+      { coverage: ['306', '405'], rates: RATES },
+      { 'If-Match': '"1"' }
+    )
+    assert.equal(saved.status, 200, saved.text)
+    const added = await send(
+      browser,
+      'POST',
+      `/api/v1/seller/shops/${shop.slug}/pickup-addresses`,
+      {
+        label: 'Workshop',
+        contact_name: 'Sita Fixture Rai',
+        contact_phone: '014123456',
+        province_code: '3',
+        district_code: '306',
+        local_level_code: '30608',
+        ward_no: 4,
+        area_tole: 'Fixture Tole',
+        street_landmark: null,
+      }
+    )
+    assert.equal(added.status, 201, added.text)
+    assert.isTrue(added.body.data.is_default)
+
+    const props = await pageProps(browser, `/seller/${shop.slug}`)
+    assert.deepEqual(props.checklist, [
+      { item: 'seller_agreement', done: true },
+      { item: 'shipping_rates', done: true },
+      { item: 'pickup_address', done: true },
+    ])
+    const page = await pageProps(browser, shippingPath(shop.slug))
+    assert.isTrue((page.shipping as { configured: boolean }).configured)
+    const [address] = page.pickup_addresses as Record<string, unknown>[]
+    assert.equal(address.contact_phone, '014123456')
+    assert.equal(address.postal_code, '3060804')
+  })
 })

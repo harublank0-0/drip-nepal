@@ -5,7 +5,6 @@ import type { Problem } from '@shared/api/problem'
 import { ACCOUNT_LIMITS, ADDRESS_LIMITS } from '@shared/constants/limits'
 import { toNepalMobileE164 } from '@shared/format/phone'
 import { client } from '~/client'
-import { apiCall } from '~/lib/api'
 import { useApiMutation } from '~/hooks/use_api_mutation'
 import { useErrorReport } from '~/hooks/use_error_report'
 import { applyServerErrors, changeAndRecheck, PENDING_BUTTON } from '~/lib/forms'
@@ -20,6 +19,15 @@ import { CheckboxField } from '~/components/forms/checkbox_field'
 import { ErrorSummary } from '~/components/forms/error_summary'
 import { ProblemAlert } from '~/components/forms/problem_alert'
 import { RateLimitNotice } from '~/components/forms/rate_limit_notice'
+import {
+  districtsOf,
+  LoadFailed,
+  localLevelsOf,
+  placeholderFor,
+  useCascade,
+  withSaved,
+  type Place,
+} from '~/components/forms/location_cascade'
 
 /*
  * `AddressForm` (docs/08 §4.3; 01 FR-IAM-012, AC-FR-IAM-012-1 to -3): adds
@@ -54,8 +62,8 @@ import { RateLimitNotice } from '~/components/forms/rate_limit_notice'
  * with its reference; a failed submit keeps every value. `onDone` hands the
  * outcome to the address book, which reloads its props.
  */
-export type Place = { code: string; name: string }
-type LocalLevel = Place & { ward_count: number }
+// The cascade's place type, which the address book and its page import from here.
+export type { Place }
 
 export type SavedAddress = {
   id: string
@@ -124,75 +132,6 @@ function optionalError(value: string, bounds: { min: number; max: number }, mess
 }
 
 const chosenError = (value: string, message: string) => (value === '' ? message : undefined)
-
-// The cascade's lists: read once per parent code, from the reference data.
-async function districtsOf(province: string): Promise<Place[] | null> {
-  const outcome = await apiCall(() =>
-    client.request('listDistricts', { query: { province }, timeout: 30_000 })
-  )
-  return outcome.ok ? outcome.data.data : null
-}
-
-async function localLevelsOf(district: string): Promise<LocalLevel[] | null> {
-  const outcome = await apiCall(() =>
-    client.request('listLocalLevels', { query: { district }, timeout: 30_000 })
-  )
-  return outcome.ok ? outcome.data.data : null
-}
-
-type ListState<P> =
-  | { status: 'idle' }
-  | { status: 'loading' }
-  | { status: 'failed' }
-  | { status: 'ready'; items: P[] }
-
-/*
- * One step of the cascade: the list for `parent`, read when `parent` is
- * first chosen and kept for the life of the form. "Try again" forgets a
- * failure, so the effect reads it again. A late answer for a parent no
- * longer chosen is dropped.
- */
-function useCascade<P>(parent: string, read: (parent: string) => Promise<P[] | null>) {
-  const [lists, setLists] = useState<Record<string, P[] | 'failed'>>({})
-  const entry = parent === '' ? undefined : lists[parent]
-  useEffect(() => {
-    if (parent === '' || entry !== undefined) return
-    let live = true
-    void read(parent).then((items) => {
-      if (live) setLists((previous) => ({ ...previous, [parent]: items ?? 'failed' }))
-    })
-    return () => {
-      live = false
-    }
-  }, [parent, entry, read])
-
-  let state: ListState<P> = { status: 'idle' }
-  if (parent !== '') {
-    if (entry === undefined) state = { status: 'loading' }
-    else if (entry === 'failed') state = { status: 'failed' }
-    else state = { status: 'ready', items: entry }
-  }
-  function retry() {
-    setLists((previous) => {
-      const next = { ...previous }
-      delete next[parent]
-      return next
-    })
-  }
-  return { state, retry }
-}
-
-// The saved place stays choosable on edit even when the reference data has made it inactive.
-function withSaved<P extends Place>(items: P[], saved: P | null): P[] {
-  if (!saved || items.some((item) => item.code === saved.code)) return items
-  return [...items, saved]
-}
-
-function placeholderFor(state: ListState<unknown>, waiting: string, choose: string) {
-  if (state.status === 'idle') return waiting
-  if (state.status === 'loading') return t('account.addresses.form.loading')
-  return choose
-}
 
 function createBody(value: Values): CreateBody {
   const phone = value.recipient_phone.trim()
@@ -724,18 +663,5 @@ export function AddressForm({
         </div>
       </form>
     </section>
-  )
-}
-
-// A list of the cascade that could not be read, with a way to read it again.
-function LoadFailed({ state, onRetry }: { state: ListState<unknown>; onRetry: () => void }) {
-  if (state.status !== 'failed') return null
-  return (
-    <div role="alert" className="flex flex-wrap items-center gap-2 text-sm">
-      <span>{t('account.addresses.form.load_failed')}</span>
-      <Button type="button" variant="outline" size="sm" onClick={onRetry}>
-        {t('account.addresses.form.retry')}
-      </Button>
-    </div>
   )
 }

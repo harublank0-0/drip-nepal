@@ -32,6 +32,8 @@ export interface ApiDefinition {
   listMyShops: typeof routes['listMyShops']
   getSellerShop: typeof routes['getSellerShop']
   updateShopProfile: typeof routes['updateShopProfile']
+  getShopShipping: typeof routes['getShopShipping']
+  replaceShopShipping: typeof routes['replaceShopShipping']
   getLogisticsSettings: typeof routes['getLogisticsSettings']
   replaceLogisticsSettings: typeof routes['replaceLogisticsSettings']
   createShopCourierAccount: typeof routes['createShopCourierAccount']
@@ -77,6 +79,7 @@ export interface ApiDefinition {
   seller: {
     overview: typeof routes['seller.overview']
     settings: typeof routes['seller.settings']
+    shipping: typeof routes['seller.shipping']
   }
   admin: {
     logistics: typeof routes['admin.logistics']

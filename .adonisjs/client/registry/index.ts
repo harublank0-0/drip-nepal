@@ -162,6 +162,18 @@ const routes = {
     tokens: [{"old":"/api/v1/seller/shops/:shopSlug","type":0,"val":"api","end":""},{"old":"/api/v1/seller/shops/:shopSlug","type":0,"val":"v1","end":""},{"old":"/api/v1/seller/shops/:shopSlug","type":0,"val":"seller","end":""},{"old":"/api/v1/seller/shops/:shopSlug","type":0,"val":"shops","end":""},{"old":"/api/v1/seller/shops/:shopSlug","type":1,"val":"shopSlug","end":""}],
     types: placeholder as Registry['updateShopProfile']['types'],
   },
+  'getShopShipping': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/v1/seller/shops/:shopSlug/shipping',
+    tokens: [{"old":"/api/v1/seller/shops/:shopSlug/shipping","type":0,"val":"api","end":""},{"old":"/api/v1/seller/shops/:shopSlug/shipping","type":0,"val":"v1","end":""},{"old":"/api/v1/seller/shops/:shopSlug/shipping","type":0,"val":"seller","end":""},{"old":"/api/v1/seller/shops/:shopSlug/shipping","type":0,"val":"shops","end":""},{"old":"/api/v1/seller/shops/:shopSlug/shipping","type":1,"val":"shopSlug","end":""},{"old":"/api/v1/seller/shops/:shopSlug/shipping","type":0,"val":"shipping","end":""}],
+    types: placeholder as Registry['getShopShipping']['types'],
+  },
+  'replaceShopShipping': {
+    methods: ["PUT"],
+    pattern: '/api/v1/seller/shops/:shopSlug/shipping',
+    tokens: [{"old":"/api/v1/seller/shops/:shopSlug/shipping","type":0,"val":"api","end":""},{"old":"/api/v1/seller/shops/:shopSlug/shipping","type":0,"val":"v1","end":""},{"old":"/api/v1/seller/shops/:shopSlug/shipping","type":0,"val":"seller","end":""},{"old":"/api/v1/seller/shops/:shopSlug/shipping","type":0,"val":"shops","end":""},{"old":"/api/v1/seller/shops/:shopSlug/shipping","type":1,"val":"shopSlug","end":""},{"old":"/api/v1/seller/shops/:shopSlug/shipping","type":0,"val":"shipping","end":""}],
+    types: placeholder as Registry['replaceShopShipping']['types'],
+  },
   'getLogisticsSettings': {
     methods: ["GET","HEAD"],
     pattern: '/api/v1/seller/shops/:shopSlug/logistics',
@@ -407,6 +419,12 @@ const routes = {
     pattern: '/seller/:shopSlug/settings',
     tokens: [{"old":"/seller/:shopSlug/settings","type":0,"val":"seller","end":""},{"old":"/seller/:shopSlug/settings","type":1,"val":"shopSlug","end":""},{"old":"/seller/:shopSlug/settings","type":0,"val":"settings","end":""}],
     types: placeholder as Registry['seller.settings']['types'],
+  },
+  'seller.shipping': {
+    methods: ["GET","HEAD"],
+    pattern: '/seller/:shopSlug/shipping',
+    tokens: [{"old":"/seller/:shopSlug/shipping","type":0,"val":"seller","end":""},{"old":"/seller/:shopSlug/shipping","type":1,"val":"shopSlug","end":""},{"old":"/seller/:shopSlug/shipping","type":0,"val":"shipping","end":""}],
+    types: placeholder as Registry['seller.shipping']['types'],
   },
   'admin.logistics': {
     methods: ["GET","HEAD"],

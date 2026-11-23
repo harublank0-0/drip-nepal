@@ -43,3 +43,31 @@ export function assertNotNull(body: unknown, members: readonly string[]) {
     })
   }
 }
+
+/*
+ * `assertKnownMembers` for the objects of an array member, such as the
+ * rates of `replaceShopShipping`: an unknown member of item `i` answers 422
+ * `unknown_field` on `<member>.<i>.<key>`. VineJS drops the unknown
+ * properties of a nested object silently, so this runs first (T-SEC-003).
+ * A member that is not an array, or an item that is not an object, is left
+ * to the validator.
+ */
+export function assertKnownItemMembers(body: unknown, member: string, allowed: readonly string[]) {
+  if (body === null || typeof body !== 'object' || Array.isArray(body)) return
+  const items = (body as Record<string, unknown>)[member]
+  if (!Array.isArray(items)) return
+  const errors = items.flatMap((item, index) =>
+    item !== null && typeof item === 'object' && !Array.isArray(item)
+      ? Object.keys(item)
+          .filter((key) => !allowed.includes(key))
+          .map((key) => ({
+            field: `${member}.${index}.${key}`,
+            code: 'unknown_field',
+            message: 'This field is not accepted.',
+          }))
+      : []
+  )
+  if (errors.length > 0) {
+    throw new DomainError('VALIDATION_FAILED', { detail: 'Some fields need attention.', errors })
+  }
+}

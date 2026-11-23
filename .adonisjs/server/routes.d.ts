@@ -30,6 +30,8 @@ export type ScannedRoutes = {
     'listMyShops': { paramsTuple?: []; params?: {} }
     'getSellerShop': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'updateShopProfile': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
+    'getShopShipping': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
+    'replaceShopShipping': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'getLogisticsSettings': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'replaceLogisticsSettings': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'createShopCourierAccount': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
@@ -71,6 +73,7 @@ export type ScannedRoutes = {
     'account.security': { paramsTuple?: []; params?: {} }
     'seller.overview': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'seller.settings': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
+    'seller.shipping': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'admin.logistics': { paramsTuple?: []; params?: {} }
     'dev.design_system': { paramsTuple?: []; params?: {} }
     'dev.overlays': { paramsTuple?: []; params?: {} }
@@ -87,6 +90,7 @@ export type ScannedRoutes = {
     'listAddresses': { paramsTuple?: []; params?: {} }
     'listMyShops': { paramsTuple?: []; params?: {} }
     'getSellerShop': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
+    'getShopShipping': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'getLogisticsSettings': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'getCourierBookingOptions': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'shopOrderNumber': ParamValue} }
     'adminListLogisticsAccounts': { paramsTuple?: []; params?: {} }
@@ -106,6 +110,7 @@ export type ScannedRoutes = {
     'account.security': { paramsTuple?: []; params?: {} }
     'seller.overview': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'seller.settings': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
+    'seller.shipping': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'admin.logistics': { paramsTuple?: []; params?: {} }
     'dev.design_system': { paramsTuple?: []; params?: {} }
     'dev.overlays': { paramsTuple?: []; params?: {} }
@@ -120,6 +125,7 @@ export type ScannedRoutes = {
     'listAddresses': { paramsTuple?: []; params?: {} }
     'listMyShops': { paramsTuple?: []; params?: {} }
     'getSellerShop': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
+    'getShopShipping': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'getLogisticsSettings': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'getCourierBookingOptions': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'shopOrderNumber': ParamValue} }
     'adminListLogisticsAccounts': { paramsTuple?: []; params?: {} }
@@ -139,6 +145,7 @@ export type ScannedRoutes = {
     'account.security': { paramsTuple?: []; params?: {} }
     'seller.overview': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'seller.settings': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
+    'seller.shipping': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'admin.logistics': { paramsTuple?: []; params?: {} }
     'dev.design_system': { paramsTuple?: []; params?: {} }
     'dev.overlays': { paramsTuple?: []; params?: {} }
@@ -190,6 +197,7 @@ export type ScannedRoutes = {
     'adminUpdateLogisticsBranch': { paramsTuple: [ParamValue]; params: {'branchId': ParamValue} }
   }
   PUT: {
+    'replaceShopShipping': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'replaceLogisticsSettings': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'adminAllowShopOnLogisticsAccount': { paramsTuple: [ParamValue,ParamValue]; params: {'accountId': ParamValue,'shopId': ParamValue} }
     'adminSetShopLogisticsEnabled': { paramsTuple: [ParamValue]; params: {'shopId': ParamValue} }

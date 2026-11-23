@@ -12,16 +12,20 @@ import { StatusBadge } from '~/components/common/status_badge'
  * sell": the `checklist` prop, the items the server could read from real
  * state for this member (shop_controller.ts), each marked done or not by
  * text, with the icon only reinforcing it (SC 1.4.1). The profile adds no
- * item (it cannot be incomplete, docs/08 note 87); shipping zones and
- * products join the list with R1-S parts 1c and 2, the balance and order
- * counts with the milestones that build them.
+ * item (it cannot be incomplete, docs/08 note 87); the shipping zones and
+ * rates joined with R1-S part 1c, products join with part 2, the balance
+ * and order counts with the milestones that build them.
  */
-type ChecklistItem = { item: 'seller_agreement' | 'pickup_address'; done: boolean }
+type ChecklistItem = {
+  item: 'seller_agreement' | 'shipping_rates' | 'pickup_address'
+  done: boolean
+}
 
 type Props = InertiaProps<{ checklist: ChecklistItem[] }>
 
 const LABEL: Record<ChecklistItem['item'], Parameters<typeof t>[0]> = {
   seller_agreement: 'seller.overview.checklist.seller_agreement',
+  shipping_rates: 'seller.overview.checklist.shipping_rates',
   pickup_address: 'seller.overview.checklist.pickup_address',
 }
 
