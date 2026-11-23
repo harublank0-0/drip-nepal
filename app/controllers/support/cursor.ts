@@ -31,6 +31,13 @@ export function invalidParameter(parameter: string, message: string) {
   })
 }
 
+// A closed parameter list without a cursor (docs/06 §6.3): any other parameter is 400.
+export function closedQuery(ctx: HttpContext, parameters: readonly string[]) {
+  for (const name of Object.keys(ctx.request.qs())) {
+    if (!parameters.includes(name)) throw invalidParameter(name, 'Unknown query parameter.')
+  }
+}
+
 // One query parameter, at most once.
 function single(ctx: HttpContext, name: string): string | undefined {
   const value = ctx.request.qs()[name]

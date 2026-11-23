@@ -1,5 +1,5 @@
 import db from '@adonisjs/lucid/services/db'
-import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
+import type { QueryClientContract, TransactionClientContract } from '@adonisjs/lucid/types/database'
 import LogisticsAccount from '#models/logistics_account'
 import LogisticsBranch from '#models/logistics_branch'
 import { courierProviderCodes as registryProviderCodes } from '#modules/logistics/providers/registry'
@@ -289,4 +289,118 @@ export async function activeBranches(providerCode: string) {
     .where({ provider_code: providerCode, is_active: true })
     .orderBy('name', 'asc')
   return rows.map(branchView)
+}
+
+/*
+ * The national location reference data (docs/04a §9.1–§9.3; 04 §21.4,
+ * VX-10) for the address cascades of docs/06 §13.2 (`listProvinces`,
+ * `listDistricts`, `listLocalLevels`) and the address checks of the modules
+ * above. Only active rows are offered: a unit the government merges or
+ * renames keeps its row with `is_active = false`, and addresses already
+ * saved with it stay valid (04a §9). Names are the English ones, the UI's
+ * language; districts and local levels are ordered by name, provinces by
+ * code, the order of 04 §21.4. `client` reads inside the caller's
+ * transaction (docs/09 §3.9).
+ */
+export type Place = { code: string; name: string }
+export type LocalLevelPlace = Place & { wardCount: number }
+
+export async function activeProvinces(): Promise<Place[]> {
+  const rows = await db
+    .from('provinces')
+    .where('is_active', true)
+    .orderBy('code', 'asc')
+    .select('code', 'name_en')
+  return rows.map((row) => ({ code: row.code, name: row.name_en }))
+}
+
+// The active districts of an active province; empty for an unknown or inactive one.
+export async function activeDistricts(provinceCode: string): Promise<Place[]> {
+  const rows = await db
+    .from('districts as d')
+    .join('provinces as p', 'p.code', 'd.province_code')
+    .where('d.province_code', provinceCode)
+    .where('d.is_active', true)
+    .where('p.is_active', true)
+    .orderBy('d.name_en', 'asc')
+    .orderBy('d.code', 'asc')
+    .select('d.code', 'd.name_en')
+  return rows.map((row) => ({ code: row.code, name: row.name_en }))
+}
+
+// The active local levels of an active district, with their ward counts; empty otherwise.
+export async function activeLocalLevels(districtCode: string): Promise<LocalLevelPlace[]> {
+  const rows = await db
+    .from('local_levels as l')
+    .join('districts as d', 'd.code', 'l.district_code')
+    .join('provinces as p', 'p.code', 'd.province_code')
+    .where('l.district_code', districtCode)
+    .where('l.is_active', true)
+    .where('d.is_active', true)
+    .where('p.is_active', true)
+    .orderBy('l.name_en', 'asc')
+    .orderBy('l.code', 'asc')
+    .select('l.code', 'l.name_en', 'l.ward_count')
+  return rows.map((row) => ({ code: row.code, name: row.name_en, wardCount: row.ward_count }))
+}
+
+/*
+ * An active local level with its district and province, all three active,
+ * for an address check (docs/04a §5.5: the validator checks the hierarchy
+ * before the insert, so the composite keys are only a backstop); null for
+ * an unknown or inactive one.
+ */
+export type LocalLevelChain = {
+  code: string
+  districtCode: string
+  provinceCode: string
+  wardCount: number
+}
+
+export async function activeLocalLevelChain(
+  code: string,
+  options: { client?: QueryClientContract } = {}
+): Promise<LocalLevelChain | null> {
+  const client: QueryClientContract = options.client ?? db.connection()
+  const row = await client
+    .from('local_levels as l')
+    .join('districts as d', 'd.code', 'l.district_code')
+    .join('provinces as p', 'p.code', 'd.province_code')
+    .where('l.code', code)
+    .where('l.is_active', true)
+    .where('d.is_active', true)
+    .where('p.is_active', true)
+    .select('l.code', 'l.district_code', 'd.province_code', 'l.ward_count')
+    .first()
+  if (!row) return null
+  return {
+    code: row.code,
+    districtCode: row.district_code,
+    provinceCode: row.province_code,
+    wardCount: row.ward_count,
+  }
+}
+
+/*
+ * The names of saved local levels with their district and province, active
+ * or not, so an address saved before a unit was renamed still shows its
+ * place (docs/04a §9 "Changes"). Keyed by local-level code.
+ */
+export type PlaceNames = { localLevel: string; district: string; province: string }
+
+export async function placeNames(localLevelCodes: string[]): Promise<Map<string, PlaceNames>> {
+  const codes = [...new Set(localLevelCodes)]
+  if (codes.length === 0) return new Map()
+  const rows = await db
+    .from('local_levels as l')
+    .join('districts as d', 'd.code', 'l.district_code')
+    .join('provinces as p', 'p.code', 'd.province_code')
+    .whereIn('l.code', codes)
+    .select('l.code', 'l.name_en as local_level', 'd.name_en as district', 'p.name_en as province')
+  return new Map(
+    rows.map((row) => [
+      row.code as string,
+      { localLevel: row.local_level, district: row.district, province: row.province },
+    ])
+  )
 }

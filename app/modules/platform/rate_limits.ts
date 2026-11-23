@@ -65,6 +65,9 @@ export const RATE_LIMITS = {
   // Every other authenticated /api/v1 call, per user; admin calls use `api_staff` (06 §9.1).
   api_user: { prefix: 'api:user', requests: 300, duration: '1 minute' },
   api_staff: { prefix: 'admin:user', requests: 600, duration: '1 minute' },
+  // The public reads, per client network (06 §9.1): since M1 part 6b the location cascades;
+  // the catalog and shop reads join with M4. Charged signed in or not.
+  catalog_ip: { prefix: 'public:ip', requests: 120, duration: '1 minute' },
   // Courier callbacks (docs/06 §9.1, M6): per client network before the token, then per account.
   webhook_ip: { prefix: 'webhook:ip', requests: 600, duration: '1 minute' },
   courier_callback: { prefix: 'courier_callback', requests: 120, duration: '1 minute' },
@@ -134,7 +137,8 @@ export function rateLimiter(name: RateLimitName) {
  * table's "every other authenticated call"), and `logOut`, which always
  * goes through: refusing it would keep a session alive that its holder is
  * ending (M1 part 6a). The API limits middleware reads it by route name,
- * which is the operationId (docs/09 §4.3).
+ * which is the operationId (docs/09 §4.3). The per-network public reads are
+ * in `IP_LIMIT_OPERATIONS` below, which the middleware checks first.
  */
 export const OWN_LIMIT_OPERATIONS: ReadonlySet<string> = new Set([
   'logIn',
@@ -159,4 +163,17 @@ export const OWN_LIMIT_OPERATIONS: ReadonlySet<string> = new Set([
   'createMediaUpload',
   'receiveCourierCallback',
   'receivePaymentWebhook',
+])
+
+/*
+ * The public reads that a per-network row of docs/06 §9.1 names, with that
+ * row: the API limits middleware charges them on the client network
+ * (`clientNetwork`), whether a user is signed in or not, instead of
+ * `api_user` (M1 part 6b). The location cascades are on `catalog_ip`; the
+ * catalog and shop reads join with M4.
+ */
+export const IP_LIMIT_OPERATIONS: ReadonlyMap<string, RateLimitName> = new Map([
+  ['listProvinces', 'catalog_ip'],
+  ['listDistricts', 'catalog_ip'],
+  ['listLocalLevels', 'catalog_ip'],
 ])

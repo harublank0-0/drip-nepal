@@ -167,4 +167,24 @@ test.group('T-ARCH-001 module dependency rules (dependency-cruiser)', (group) =>
       await tree.cleanup()
     }
   })
+
+  test('T-SEC-034 the customer address transformer may import the field decrypter; the account transformer may not', async ({
+    assert,
+  }) => {
+    const decrypter = {
+      'app/modules/platform/crypto/field_decrypter.ts': 'export const decryptField = 1\n',
+      'app/transformers/identity/address_transformer.ts':
+        "import { decryptField } from '../../modules/platform/crypto/field_decrypter.js'\nexport const address = decryptField\n",
+      'app/transformers/identity/account_transformer.ts':
+        "import { decryptField } from '../../modules/platform/crypto/field_decrypter.js'\nexport const account = decryptField\n",
+    }
+    const tree = await fixtureTree({ ...BASE, ...decrypter })
+    try {
+      assert.deepEqual(await cruise(tree.root), [
+        'field-decrypter-allowlist: app/transformers/identity/account_transformer.ts → app/modules/platform/crypto/field_decrypter.ts',
+      ])
+    } finally {
+      await tree.cleanup()
+    }
+  })
 })

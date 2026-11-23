@@ -5,8 +5,8 @@ import { cn } from '~/lib/utils'
 
 /*
  * The account navigation (docs/08 §2.4, §6.2): the account pages built so
- * far, profile and security (M1 part 6a); the address book joins with part
- * 6b, orders, shops and support with their milestones. Below `lg` it is a
+ * far, profile and security (M1 part 6a) and the address book (part 6b);
+ * orders, shops and support join with their milestones. Below `lg` it is a
  * row of links at the top, from `lg` a list on the left. Links, not a
  * select that navigates on change, which would move the user on input
  * (WCAG 2.2 SC 3.2.2). The current page is marked with `aria-current` and
@@ -19,6 +19,7 @@ const CURRENT = 'border-border bg-muted font-semibold'
 export function AccountNav() {
   const { component } = usePage()
   const onOverview = component === 'account/overview'
+  const onAddresses = component === 'account/addresses'
   const onSecurity = component === 'account/security'
   return (
     <nav aria-label={t('account.nav.label')} className="lg:w-48 lg:shrink-0">
@@ -30,6 +31,15 @@ export function AccountNav() {
             aria-current={onOverview ? 'page' : undefined}
           >
             {t('account.nav.overview')}
+          </Link>
+        </li>
+        <li>
+          <Link
+            route="account.addresses"
+            className={cn(ITEM, onAddresses && CURRENT)}
+            aria-current={onAddresses ? 'page' : undefined}
+          >
+            {t('account.nav.addresses')}
           </Link>
         </li>
         <li>

@@ -102,6 +102,48 @@ const routes = {
     tokens: [{"old":"/api/v1/me/mfa/totp/confirm","type":0,"val":"api","end":""},{"old":"/api/v1/me/mfa/totp/confirm","type":0,"val":"v1","end":""},{"old":"/api/v1/me/mfa/totp/confirm","type":0,"val":"me","end":""},{"old":"/api/v1/me/mfa/totp/confirm","type":0,"val":"mfa","end":""},{"old":"/api/v1/me/mfa/totp/confirm","type":0,"val":"totp","end":""},{"old":"/api/v1/me/mfa/totp/confirm","type":0,"val":"confirm","end":""}],
     types: placeholder as Registry['confirmTotpEnrollment']['types'],
   },
+  'listProvinces': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/v1/locations/provinces',
+    tokens: [{"old":"/api/v1/locations/provinces","type":0,"val":"api","end":""},{"old":"/api/v1/locations/provinces","type":0,"val":"v1","end":""},{"old":"/api/v1/locations/provinces","type":0,"val":"locations","end":""},{"old":"/api/v1/locations/provinces","type":0,"val":"provinces","end":""}],
+    types: placeholder as Registry['listProvinces']['types'],
+  },
+  'listDistricts': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/v1/locations/districts',
+    tokens: [{"old":"/api/v1/locations/districts","type":0,"val":"api","end":""},{"old":"/api/v1/locations/districts","type":0,"val":"v1","end":""},{"old":"/api/v1/locations/districts","type":0,"val":"locations","end":""},{"old":"/api/v1/locations/districts","type":0,"val":"districts","end":""}],
+    types: placeholder as Registry['listDistricts']['types'],
+  },
+  'listLocalLevels': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/v1/locations/local-levels',
+    tokens: [{"old":"/api/v1/locations/local-levels","type":0,"val":"api","end":""},{"old":"/api/v1/locations/local-levels","type":0,"val":"v1","end":""},{"old":"/api/v1/locations/local-levels","type":0,"val":"locations","end":""},{"old":"/api/v1/locations/local-levels","type":0,"val":"local-levels","end":""}],
+    types: placeholder as Registry['listLocalLevels']['types'],
+  },
+  'listAddresses': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/v1/me/addresses',
+    tokens: [{"old":"/api/v1/me/addresses","type":0,"val":"api","end":""},{"old":"/api/v1/me/addresses","type":0,"val":"v1","end":""},{"old":"/api/v1/me/addresses","type":0,"val":"me","end":""},{"old":"/api/v1/me/addresses","type":0,"val":"addresses","end":""}],
+    types: placeholder as Registry['listAddresses']['types'],
+  },
+  'createAddress': {
+    methods: ["POST"],
+    pattern: '/api/v1/me/addresses',
+    tokens: [{"old":"/api/v1/me/addresses","type":0,"val":"api","end":""},{"old":"/api/v1/me/addresses","type":0,"val":"v1","end":""},{"old":"/api/v1/me/addresses","type":0,"val":"me","end":""},{"old":"/api/v1/me/addresses","type":0,"val":"addresses","end":""}],
+    types: placeholder as Registry['createAddress']['types'],
+  },
+  'updateAddress': {
+    methods: ["PATCH"],
+    pattern: '/api/v1/me/addresses/:addressId',
+    tokens: [{"old":"/api/v1/me/addresses/:addressId","type":0,"val":"api","end":""},{"old":"/api/v1/me/addresses/:addressId","type":0,"val":"v1","end":""},{"old":"/api/v1/me/addresses/:addressId","type":0,"val":"me","end":""},{"old":"/api/v1/me/addresses/:addressId","type":0,"val":"addresses","end":""},{"old":"/api/v1/me/addresses/:addressId","type":1,"val":"addressId","end":""}],
+    types: placeholder as Registry['updateAddress']['types'],
+  },
+  'deleteAddress': {
+    methods: ["DELETE"],
+    pattern: '/api/v1/me/addresses/:addressId',
+    tokens: [{"old":"/api/v1/me/addresses/:addressId","type":0,"val":"api","end":""},{"old":"/api/v1/me/addresses/:addressId","type":0,"val":"v1","end":""},{"old":"/api/v1/me/addresses/:addressId","type":0,"val":"me","end":""},{"old":"/api/v1/me/addresses/:addressId","type":0,"val":"addresses","end":""},{"old":"/api/v1/me/addresses/:addressId","type":1,"val":"addressId","end":""}],
+    types: placeholder as Registry['deleteAddress']['types'],
+  },
   'getLogisticsSettings': {
     methods: ["GET","HEAD"],
     pattern: '/api/v1/seller/shops/:shopSlug/logistics',
@@ -323,6 +365,12 @@ const routes = {
     pattern: '/account',
     tokens: [{"old":"/account","type":0,"val":"account","end":""}],
     types: placeholder as Registry['account.overview']['types'],
+  },
+  'account.addresses': {
+    methods: ["GET","HEAD"],
+    pattern: '/account/addresses',
+    tokens: [{"old":"/account/addresses","type":0,"val":"account","end":""},{"old":"/account/addresses","type":0,"val":"addresses","end":""}],
+    types: placeholder as Registry['account.addresses']['types'],
   },
   'account.security': {
     methods: ["GET","HEAD"],

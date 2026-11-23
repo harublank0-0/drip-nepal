@@ -199,6 +199,90 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/auth/identity/mfa_controller').default['confirmTotpEnrollment']>>> | { status: 422; response: { errors: SimpleError[] } }
     }
   }
+  'listProvinces': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/locations/provinces'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/api/v1/public/logistics/locations_controller').default['listProvinces']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/public/logistics/locations_controller').default['listProvinces']>>>
+    }
+  }
+  'listDistricts': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/locations/districts'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: ExtractQueryForGet<InferInput<(typeof import('#validators/logistics/locations').listDistrictsValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/api/v1/public/logistics/locations_controller').default['listDistricts']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/public/logistics/locations_controller').default['listDistricts']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
+  'listLocalLevels': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/locations/local-levels'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: ExtractQueryForGet<InferInput<(typeof import('#validators/logistics/locations').listLocalLevelsValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/api/v1/public/logistics/locations_controller').default['listLocalLevels']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/public/logistics/locations_controller').default['listLocalLevels']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
+  'listAddresses': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/me/addresses'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/api/v1/customer/identity/addresses_controller').default['listAddresses']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/customer/identity/addresses_controller').default['listAddresses']>>>
+    }
+  }
+  'createAddress': {
+    methods: ["POST"]
+    pattern: '/api/v1/me/addresses'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/identity/address').createAddressValidator)>>
+      paramsTuple: []
+      params: {}
+      query: ExtractQuery<InferInput<(typeof import('#validators/identity/address').createAddressValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/api/v1/customer/identity/addresses_controller').default['createAddress']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/customer/identity/addresses_controller').default['createAddress']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
+  'updateAddress': {
+    methods: ["PATCH"]
+    pattern: '/api/v1/me/addresses/:addressId'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/identity/address').updateAddressValidator)>>
+      paramsTuple: [ParamValue]
+      params: { addressId: ParamValue }
+      query: ExtractQuery<InferInput<(typeof import('#validators/identity/address').updateAddressValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/api/v1/customer/identity/addresses_controller').default['updateAddress']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/customer/identity/addresses_controller').default['updateAddress']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
+  'deleteAddress': {
+    methods: ["DELETE"]
+    pattern: '/api/v1/me/addresses/:addressId'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { addressId: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/api/v1/customer/identity/addresses_controller').default['deleteAddress']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/customer/identity/addresses_controller').default['deleteAddress']>>>
+    }
+  }
   'getLogisticsSettings': {
     methods: ["GET","HEAD"]
     pattern: '/api/v1/seller/shops/:shopSlug/logistics'
@@ -641,6 +725,18 @@ export interface Registry {
       query: {}
       response: ExtractResponse<Awaited<ReturnType<import('#controllers/account/identity/account_controller').default['overview']>>>
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/account/identity/account_controller').default['overview']>>>
+    }
+  }
+  'account.addresses': {
+    methods: ["GET","HEAD"]
+    pattern: '/account/addresses'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/account/identity/account_controller').default['addresses']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/account/identity/account_controller').default['addresses']>>>
     }
   }
   'account.security': {
