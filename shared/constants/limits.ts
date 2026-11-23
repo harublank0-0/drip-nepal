@@ -4,10 +4,11 @@
  * (docs/08 §7.1 "Client rules mirror").
  */
 
-// The account fields of `signUp` (docs/06 §13.3; 01 AC-FR-IAM-001-1): the email
-// rule of `users_email_check`, the name of `users_full_name_check`, and the
-// password of docs/07 §3.7 [Assumption A-22]. `phoneInput` bounds what a phone
-// field accepts before it is normalised (`shared/format/phone.ts`).
+// The account fields of `signUp` and `updateMe` (docs/06 §13.3; 01
+// AC-FR-IAM-001-1): the email rule of `users_email_check`, the name of
+// `users_full_name_check`, and the password of docs/07 §3.7 [Assumption A-22].
+// `phoneInput` bounds what a phone field accepts before it is normalised
+// (`shared/format/phone.ts`).
 export const ACCOUNT_LIMITS = {
   email: { min: 3, max: 254 },
   fullName: { min: 1, max: 100 },

@@ -127,6 +127,30 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/auth/identity/me_controller').default['getMe']>>>
     }
   }
+  'updateMe': {
+    methods: ["PATCH"]
+    pattern: '/api/v1/me'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/identity/update_me').updateMeValidator)>>
+      paramsTuple: []
+      params: {}
+      query: ExtractQuery<InferInput<(typeof import('#validators/identity/update_me').updateMeValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/api/v1/auth/identity/me_controller').default['updateMe']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/auth/identity/me_controller').default['updateMe']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
+  'requestAccountDeletion': {
+    methods: ["POST"]
+    pattern: '/api/v1/me/deletion-request'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/identity/request_account_deletion').requestAccountDeletionValidator)>>
+      paramsTuple: []
+      params: {}
+      query: ExtractQuery<InferInput<(typeof import('#validators/identity/request_account_deletion').requestAccountDeletionValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/api/v1/auth/identity/me_controller').default['requestAccountDeletion']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/auth/identity/me_controller').default['requestAccountDeletion']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
   'changePassword': {
     methods: ["POST"]
     pattern: '/api/v1/me/password'
@@ -605,6 +629,30 @@ export interface Registry {
       query: {}
       response: ExtractResponse<Awaited<ReturnType<import('#controllers/auth/identity/mfa_controller').default['show']>>>
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/auth/identity/mfa_controller').default['show']>>>
+    }
+  }
+  'account.overview': {
+    methods: ["GET","HEAD"]
+    pattern: '/account'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/account/identity/account_controller').default['overview']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/account/identity/account_controller').default['overview']>>>
+    }
+  }
+  'account.security': {
+    methods: ["GET","HEAD"]
+    pattern: '/account/security'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/account/identity/account_controller').default['security']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/account/identity/account_controller').default['security']>>>
     }
   }
   'admin.logistics': {

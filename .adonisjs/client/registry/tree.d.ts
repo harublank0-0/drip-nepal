@@ -16,6 +16,8 @@ export interface ApiDefinition {
   requestPasswordReset: typeof routes['requestPasswordReset']
   resetPassword: typeof routes['reset_password']
   getMe: typeof routes['getMe']
+  updateMe: typeof routes['updateMe']
+  requestAccountDeletion: typeof routes['requestAccountDeletion']
   changePassword: typeof routes['changePassword']
   revokeAllSessions: typeof routes['revokeAllSessions']
   startTotpEnrollment: typeof routes['startTotpEnrollment']
@@ -57,6 +59,10 @@ export interface ApiDefinition {
   verifyEmail: typeof routes['verify_email']
   forgotPassword: typeof routes['forgot_password']
   mfa: typeof routes['mfa']
+  account: {
+    overview: typeof routes['account.overview']
+    security: typeof routes['account.security']
+  }
   admin: {
     logistics: typeof routes['admin.logistics']
   }

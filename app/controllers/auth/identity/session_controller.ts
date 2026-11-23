@@ -7,13 +7,16 @@ import type { HttpContext } from '@adonisjs/core/http'
  *
  * `notice` is the one flash the page reads: `account_suspended`, which the
  * exception handler flashes when the account check of docs/07 §3.3 ends a
- * suspended user's session on a page visit, so the page says why. The page
+ * suspended user's session on a page visit, so the page says why; and
+ * `deletion_requested`, which `requestAccountDeletion` flashes into the
+ * guest session it leaves (M1 part 6a), so the page the client visits next
+ * says the account is closed. The page
  * reads `return_to` from its own URL and hands it to `logIn` unchanged
  * (docs/07 TM-14); this controller never looks at it. Like every page
  * rendered without a signed-in user, it renders with `clearHistory`
  * (InertiaMiddleware, docs/07 §3.11).
  */
-const LOGIN_NOTICES = ['account_suspended'] as const
+const LOGIN_NOTICES = ['account_suspended', 'deletion_requested'] as const
 type LoginNotice = (typeof LOGIN_NOTICES)[number]
 
 const isNotice = (value: unknown): value is LoginNotice =>

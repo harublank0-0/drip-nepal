@@ -3,8 +3,7 @@ import hash from '@adonisjs/core/services/hash'
 import { InvariantViolation } from '#exceptions/programming_errors'
 import { recordAudit } from '#modules/audit/actions/record_audit'
 import { issueUserToken } from '#modules/identity/actions/issue_user_token'
-import { phoneBlindIndex } from '#modules/platform/crypto/blind_index'
-import { encryptField } from '#modules/platform/crypto/field_encrypter'
+import { encryptedPhone } from '#modules/identity/internal/phone'
 import { sendJob } from '#modules/platform/jobs'
 import { currentLegalVersions } from '#modules/platform/legal_documents'
 import { clientNetwork, rateLimitKey, rateLimiter } from '#modules/platform/rate_limits'
@@ -61,15 +60,6 @@ export type SignUpContext = {
 export type SignUpResult = { status: 'verification_email_sent' }
 
 const SIGNED_UP: SignUpResult = { status: 'verification_email_sent' }
-
-function encryptedPhone(e164: string | null) {
-  if (!e164) return { enc: null, hash: null, last4: null }
-  return {
-    enc: encryptField(e164, 'users.phone_enc'),
-    hash: phoneBlindIndex(e164),
-    last4: e164.slice(-4),
-  }
-}
 
 export async function signUp(
   command: SignUpCommand,

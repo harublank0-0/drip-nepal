@@ -8,17 +8,16 @@ import { DomainError } from '#exceptions/domain_error'
  * pages and on `logIn` (T-UI-025), so a signed-in session must log out
  * before it signs in as another account (docs/07 §3.2).
  *
- * - A page visit by a signed-in user is redirected to `/` (the interim
- *   home page until M4's, storefront/identity/home_controller.ts), without
- *   the visited query; 02 J-04 asks for `/account`, which comes with M1
- *   part 6.
+ * - A page visit by a signed-in user is redirected to `/account` (02 J-04
+ *   "Permissions"; the account page exists since M1 part 6a), without the
+ *   visited query.
  * - An API call (`logIn`) by a signed-in user gets 409 `CONFLICT`
  *   problem+json, "You are already signed in", instead of a redirect a
  *   JSON client cannot use (docs/06 §13.3 [Assumption]); the client
  *   reloads the page.
  */
 export default class GuestMiddleware {
-  redirectTo = '/'
+  redirectTo = '/account'
 
   async handle(
     ctx: HttpContext,

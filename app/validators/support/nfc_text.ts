@@ -10,7 +10,7 @@ import vine from '@vinejs/vine'
  * normalising would let a name through that the column's CHECK refuses,
  * which answers 500 instead of 422. Too short or too long answers 422 on the
  * field with the item code `min_length` or `max_length`, as Vine's own
- * length rules do. `signUp` uses it for `full_name`; `updateMe` and the
+ * length rules do. `signUp` and `updateMe` use it for `full_name`; the
  * other name fields join with their operations.
  */
 const toNfc = vine.createRule((value, _options, field) => {

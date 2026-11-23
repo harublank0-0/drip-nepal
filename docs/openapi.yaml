@@ -131,9 +131,6 @@ x-pending-operations:
   - listDistricts
   - listLocalLevels
   - getCurrentSellerAgreement
-  # Auth and self (06 §13.3)
-  - updateMe
-  - requestAccountDeletion
   # Customer (06 §13.4)
   - listAddresses
   - createAddress
@@ -1010,7 +1007,9 @@ paths:
         digits, the staff role of an unrevoked `platform_staff` row (enrolled or not), and the
         shops the user owns or is an `active` member of, with their place in each. Never the
         password hash, the security stamp, the TOTP secret, the encrypted phone or its blind
-        index (07 §5.5, TM-06). Side effects: none. T-IAM-004. Release R1·M1.
+        index (07 §5.5, TM-06). Side effects: none. Charged to `api_user` (300 per minute per
+        user, 06 §9.1), as every authenticated call without a limiter of its own is since M1 part
+        6a; past it, 429. T-IAM-004. Release R1·M1.
       x-release: R1·M1
       security:
         - cookieAuth: []
@@ -1045,6 +1044,111 @@ paths:
                           role: owner
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/Internal' }
+    patch:
+      operationId: updateMe
+      tags: [Me]
+      summary: Edit the signed-in user's profile and marketing consents
+      description: |
+        Actor: a signed-in user (`auth`), `pending_verification` included (AC-FR-IAM-002-2); a
+        guest gets 401. Scope: the caller's own row only. Input: `full_name`, `phone` and the two
+        marketing consents, each optional; an absent member keeps its column, and an empty body
+        changes nothing. Any other member, `email` included (no operation changes the login email
+        in R1), is 422 `unknown_field` (T-SEC-003). `full_name` is trimmed and normalised to NFC,
+        then 1 to 100 code points; `phone` is a Nepali mobile number (`^9[678]\d{8}$` once `+977`,
+        `977`, a leading `0`, spaces and hyphens are dropped), stored in E.164 encrypted with its
+        blind index and last four digits (04 §2.9), or `null`, which removes the number; `""`
+        removes it too, because the JSON body parser turns an empty string into `null` and the
+        two cannot be told apart. The consents are strict booleans. `full_name` and the consents
+        may be left out but not sent as `null` or `""`: 422 `required`.
+        Order: the `profile_update` limiter (20 per hour per user, proposed, 06 §9.1) takes a
+        point on every call first, because each consent change adds a row to the insert-only
+        `audit_logs`; past it, 429 `RATE_LIMITED` and nothing is written. It has this row of its
+        own, so `api_user` does not charge it.
+        Side effects, in one transaction: the user's row is locked and the write is a
+        compare-and-set on a signed-in status and the acting session's stamp, so a suspension,
+        deletion request, password change or "sign out everywhere" that committed after the
+        account check wins (403 `ACCOUNT_SUSPENDED` if the status changed, else 401
+        `UNAUTHENTICATED`), and nothing is written. A consent set to `true` takes the time only
+        when none is held; `false` clears it at once (07 §5.3). A changed or removed phone also
+        clears `phone_verified_at` (always null in R1). A request that grants or withdraws a
+        consent writes one `user.consent_change` audit row (proposed) with the source
+        `account_page` and the columns by name (AC-FR-IAM-013-4); the name and the phone write
+        none. No email. Not ⟳ (`users` has no `version`, 06 §8) and not ⚷ (a repeat sets the
+        same values, 06 §7.7). T-IAM-007, T-IAM-103, T-SEC-011. Release R1·M1.
+      x-release: R1·M1
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateMeRequest' }
+            examples:
+              profile:
+                summary: A name, a new number and the email consent withdrawn, from `/account`
+                value:
+                  full_name: Ram Thapa
+                  phone: '+9779841234567'
+                  marketing_email_consent: false
+                  marketing_sms_consent: false
+              removePhone:
+                summary: Remove the number
+                value: { phone: null }
+      responses:
+        '200':
+          description: Saved; the account as `getMe` answers it.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MeResponse' }
+              examples:
+                saved:
+                  summary: After the change above
+                  value:
+                    data:
+                      id: 01929d02-0000-7000-8000-000000000001
+                      email: ram@example.com
+                      full_name: Ram Thapa
+                      status: active
+                      phone_last4: '4567'
+                      marketing_email_consent: false
+                      marketing_sms_consent: false
+                      staff_role: null
+                      shops: []
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422':
+          description: |
+            `VALIDATION_FAILED`: a name that is empty or longer than 100 code points after NFC, a
+            phone that is not a Nepali mobile number (`nepal_mobile`), a consent that is not a
+            boolean, a name or consent sent as `null` or `""` (`required`), or an unknown member
+            (`unknown_field`).
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem422' }
+              examples:
+                phone:
+                  summary: A landline (AC-J04-04)
+                  value:
+                    type: https://dripnepal.com/problems/validation-failed
+                    title: Validation failed
+                    status: 422
+                    detail: Some fields need attention.
+                    code: VALIDATION_FAILED
+                    request_id: 01929d01-0000-7000-8000-000000000425
+                    errors:
+                      - field: phone
+                        code: nepal_mobile
+                        message: The phone field must be a Nepali mobile number
+        '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/Internal' }
 
   /api/v1/me/password:
@@ -1323,6 +1427,89 @@ paths:
           description: |
             `VALIDATION_FAILED`: `code_incorrect` on `code`, `token_invalid` on `token`, a
             malformed code, or an unknown member (`unknown_field`).
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem422' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /api/v1/me/deletion-request:
+    post:
+      operationId: requestAccountDeletion
+      tags: [Me]
+      summary: Close the signed-in user's account and ask for its deletion
+      description: |
+        Actor: a signed-in user (`auth`), `pending_verification` included; a guest gets 401.
+        Scope: the caller's own account. Input: `password` only (at most 128 characters, never
+        trimmed, no minimum); any other member, a `reason` included, is 422 `unknown_field`: no
+        free text is taken, because the request's only record is an insert-only audit row that
+        outlives anonymisation (04 §19.2).
+        Order (07 §3.6): both `reauth` keys (5 wrong passwords per 15 minutes, 10 per 24 h per
+        user, 06 §9.1) take their point before the password is hashed; past either, 429
+        `RATE_LIMITED` without hashing. A wrong password keeps the points, writes one
+        `auth.reauth_failed` audit row and is 422 on `password` with `password_incorrect`; the
+        10th in 24 h also rotates `security_stamp` and ends every session.
+        Side effects, in one transaction (04 §19.2 step 1, 07 §3.12): for a requester who holds
+        an unrevoked `platform_admin` row, every unrevoked `platform_admin` row is locked first
+        and the other admins whose account is `active` are counted; the last one gets 409
+        `CONFLICT` and nothing changes (04a §5.4). Then a compare-and-set on the status read
+        under the row lock (`active` or `pending_verification`), the acting session's stamp and
+        the hash the check verified sets `status = deactivated`, `deletion_requested_at` and a
+        new `security_stamp`; a miss is 403 `ACCOUNT_SUSPENDED` if the status changed, else 401
+        `UNAUTHENTICATED`. `identity.revoke_sessions` is sent at once, so every other session
+        ends; the "deletion request received" email is queued (01 AC-FR-NOT-001-1); one
+        `user.deletion_request` audit row (proposed) holds the transition and no free text
+        (04a §15.3). This session ends in the
+        same request, as at `logOut`; the new guest session carries the `notice` flash that
+        `/login` shows (08 §2.3). The request then waits in the admin deletion queue; staff
+        anonymise the account with `anonymizeUser` (M7) or reinstate it. No limiter of its own:
+        the request succeeds once per deactivation and the session it came from ends with it.
+        Not ⚷ (a status compare-and-set: a repeat changes nothing, 06 §7.7). T-IAM-008,
+        T-IAM-110. Release R1·M1.
+      x-release: R1·M1
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RequestAccountDeletionRequest' }
+            examples:
+              request:
+                summary: A request from `/account/security`
+                value:
+                  password: example-current-password
+      responses:
+        '202':
+          description: The account is closed and this session has ended; the request waits for staff.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DeletionRequestedResponse' }
+              examples:
+                requested:
+                  summary: Closed
+                  value: { data: { status: deletion_requested } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: '`CONFLICT`: the caller is the last `platform_admin` whose account is `active`.'
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem409' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422':
+          description: |
+            `VALIDATION_FAILED`: a wrong password (`password_incorrect` on `password`), a missing or
+            over-long password, or an unknown member, a `reason` included (`unknown_field`).
           headers:
             X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
             Cache-Control: { $ref: '#/components/headers/Cache-Control' }
@@ -5829,6 +6016,53 @@ components:
                     type: string
                     enum: [owner, manager, catalog_editor, order_fulfiller, viewer]
 
+    # ---------- the profile and the deletion request (06 §13.3; M1 part 6a) ----------
+    UpdateMeRequest:
+      type: object
+      description: |
+        The whole input of `updateMe`, each member optional; any other member, `email`
+        included, is 422 `unknown_field`. `full_name` and the consents may be left out but not
+        sent as `null` or `""` (422 `required`).
+      additionalProperties: false
+      properties:
+        full_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Trimmed and normalised to NFC, then 1 to 100 code points (04 §2.8).
+        phone:
+          type: [string, 'null']
+          maxLength: 32
+          description: |
+            A Nepali mobile number, with or without `+977`, `977` or a leading `0`, spaces and
+            hyphens; stored in E.164, encrypted (04 §2.9). `null` removes the number, and so does
+            `""`, which the JSON body parser turns into `null`.
+        marketing_email_consent: { type: boolean }
+        marketing_sms_consent: { type: boolean }
+    RequestAccountDeletionRequest:
+      type: object
+      description: The whole input of `requestAccountDeletion`; any other member is 422 `unknown_field`.
+      additionalProperties: false
+      required: [password]
+      properties:
+        password:
+          type: string
+          maxLength: 128
+          writeOnly: true
+          description: The current password; no minimum (07 §3.7). Never stored or logged.
+    DeletionRequestedResponse:
+      type: object
+      description: The 202 of `requestAccountDeletion`; the account is closed and this session has ended.
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required: [status]
+          properties:
+            status: { const: deletion_requested }
+
     # ---------- password reset and change, revokeAllSessions (06 §13.3; M1 part 4) ----------
     RequestPasswordResetRequest:
       type: object
@@ -8267,3 +8501,20 @@ components:
 #     After the Fable review (2026-11-23): `verifyMfaChallenge` states the lock exactly (the
 #     attempt after 5 wrong codes is refused unchecked, right or wrong) and the refund of an
 #     attempt that fails on a data fault; `startTotpEnrollment` names the `totp_start` 429.
+#
+# Added with the profile and the deletion request (2026-11-23, M1 part 6a):
+# 51. `updateMe` and `requestAccountDeletion` move from `x-pending-operations` to `paths`,
+#     written from the code, with the new schemas `UpdateMeRequest`,
+#     `RequestAccountDeletionRequest` and `DeletionRequestedResponse` (06 note 60). `updateMe`
+#     answers 200 with `MeResponse`, the account as `getMe` answers it, which 06's "Profile"
+#     output meant; every member is optional, `phone: null` removes the number, and `email` is
+#     an unknown member, since no R1 operation changes the login email. Neither is ⟳ (`users`
+#     has no `version`) or ⚷. `requestAccountDeletion` answers 202 with one `status`, as the
+#     other self operations do, and 409 to the last active `platform_admin`. Both keep the
+#     default security.
+#     After the Fable review (2026-11-23): `updateMe` answers 429 past the proposed
+#     `profile_update` limiter (20 per hour per user) and `getMe` past `api_user`, which is
+#     built for every authenticated call without a limiter of its own (06 §9.1); `updateMe`
+#     refuses a null or empty name or consent (422 `required`) and reads `phone: ""` as null;
+#     `requestAccountDeletion` takes the password only (its `reason` was removed, because the
+#     audit row that held it outlives anonymisation); each description says why it is not ⚷.

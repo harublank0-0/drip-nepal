@@ -1,5 +1,6 @@
 import common from '@lang/en/common.json'
 import errors from '@lang/en/errors.json'
+import account from '@lang/en/account.json'
 import admin from '@lang/en/admin.json'
 import auth from '@lang/en/auth.json'
 import status from '@lang/en/status.json'
@@ -12,7 +13,8 @@ import { createTranslator } from '@shared/i18n/translator'
  * checkout, seller, admin) join as their surfaces are built: admin.json and
  * the `StatusBadge` labels of status.json since the courier pages (M6), and
  * auth.json and storefront.json since the sign-up pages and the draft legal
- * pages (M1). The same catalogs on the server and in the browser keep SSR
- * and hydration equal.
+ * pages (M1), and account.json since the account pages (M1 part 6a). The
+ * same catalogs on the server and in the browser keep SSR and hydration
+ * equal.
  */
-export const t = createTranslator({ common, errors, admin, auth, status, storefront })
+export const t = createTranslator({ common, errors, account, admin, auth, status, storefront })

@@ -7,7 +7,7 @@ import { SIGNED_IN_STATUSES, maySignIn } from '#modules/identity/domain/user_sta
 import { throttledLogin } from '#modules/identity/internal/login_throttle'
 import { selfActor } from '#modules/identity/internal/self_actor'
 import { withTx } from '#modules/platform/tx'
-import { INVALID_CREDENTIALS_DETAIL } from '#shared/constants/auth'
+import { ACCOUNT_SUSPENDED_DETAIL, INVALID_CREDENTIALS_DETAIL } from '#shared/constants/auth'
 
 /*
  * `logIn` (docs/06 §13.3; 01 FR-IAM-003; 02 J-04 step 5), the identity
@@ -80,7 +80,7 @@ const invalidCredentials = () =>
   new DomainError('UNAUTHENTICATED', { detail: INVALID_CREDENTIALS_DETAIL })
 
 const accountSuspended = () =>
-  new DomainError('ACCOUNT_SUSPENDED', { detail: 'Your account is suspended.' })
+  new DomainError('ACCOUNT_SUSPENDED', { detail: ACCOUNT_SUSPENDED_DETAIL })
 
 // A right password for an account that may not sign in, carried out of the limiter.
 class RefusedStatus extends Error {

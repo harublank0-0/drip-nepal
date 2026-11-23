@@ -20,3 +20,26 @@ export function assertKnownMembers(body: unknown, allowed: readonly string[]) {
     })
   }
 }
+
+/*
+ * A member that may be left out but, once sent, may not be null: VineJS's
+ * `optional()` treats null as missing (vine 4.4.0), and the JSON body parser
+ * turns an empty string into null (`convertEmptyStringsToNull`), so without
+ * this a blank value would be skipped and answer 200 having changed nothing.
+ * Each such member answers 422 `required` on its field (docs/06 §5.2).
+ */
+export function assertNotNull(body: unknown, members: readonly string[]) {
+  if (body === null || typeof body !== 'object' || Array.isArray(body)) return
+  const record = body as Record<string, unknown>
+  const blank = members.filter((key) => key in record && record[key] === null)
+  if (blank.length > 0) {
+    throw new DomainError('VALIDATION_FAILED', {
+      detail: 'Some fields need attention.',
+      errors: blank.map((field) => ({
+        field,
+        code: 'required',
+        message: 'This field is required.',
+      })),
+    })
+  }
+}

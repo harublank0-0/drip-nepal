@@ -50,6 +50,8 @@ router.use([
   () => import('#middleware/silent_auth_middleware'),
   // Status, stamp and the absolute limit of the signed-in user (docs/07 §3.3).
   () => import('#middleware/account_status_middleware'),
+  // `api_user` and `api_staff`, per signed-in user, on /api/v1 (docs/06 §9.1).
+  () => import('#middleware/api_limits_middleware'),
 ])
 
 /**

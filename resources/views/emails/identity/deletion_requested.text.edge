@@ -1,0 +1,28 @@
+{{--
+  identity.deletion_requested, the plain-text part (AC-FR-NOT-001-3). A
+  text-only template: it prints the raw values, because text/plain has no
+  markup context (docs/07 TM-11, docs/09 §11.2). Values: `t`, `link`, and
+  `support_email` and `support_phone` when configured.
+--}}
+{{{ t('emails.identity.deletion_requested.intro') }}}
+
+{{{ t('emails.identity.deletion_requested.closed') }}}
+
+{{{ t('emails.identity.deletion_requested.next') }}}
+
+@if(support_email || support_phone)
+{{{ t('emails.identity.deletion_requested.not_yours') }}}
+@if(support_email)
+{{{ t('emails.identity.deletion_requested.contact_email', { email: support_email }) }}}
+@end
+@if(support_phone)
+{{{ t('emails.identity.deletion_requested.contact_phone', { phone: support_phone }) }}}
+@end
+@else
+{{{ t('emails.identity.deletion_requested.not_yours_no_contact') }}}
+@end
+
+{{{ t('emails.identity.deletion_requested.action') }}}:
+{{{ link }}}
+
+{{{ t('emails.layout.footer') }}}
