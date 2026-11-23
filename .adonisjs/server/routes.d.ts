@@ -14,6 +14,8 @@ export type ScannedRoutes = {
     'requestPasswordReset': { paramsTuple?: []; params?: {} }
     'resetPassword': { paramsTuple?: []; params?: {} }
     'getMe': { paramsTuple?: []; params?: {} }
+    'updateMe': { paramsTuple?: []; params?: {} }
+    'requestAccountDeletion': { paramsTuple?: []; params?: {} }
     'changePassword': { paramsTuple?: []; params?: {} }
     'revokeAllSessions': { paramsTuple?: []; params?: {} }
     'startTotpEnrollment': { paramsTuple?: []; params?: {} }
@@ -54,6 +56,8 @@ export type ScannedRoutes = {
     'forgot_password': { paramsTuple?: []; params?: {} }
     'reset_password': { paramsTuple?: []; params?: {} }
     'mfa': { paramsTuple?: []; params?: {} }
+    'account.overview': { paramsTuple?: []; params?: {} }
+    'account.security': { paramsTuple?: []; params?: {} }
     'admin.logistics': { paramsTuple?: []; params?: {} }
     'dev.design_system': { paramsTuple?: []; params?: {} }
     'dev.overlays': { paramsTuple?: []; params?: {} }
@@ -78,6 +82,8 @@ export type ScannedRoutes = {
     'forgot_password': { paramsTuple?: []; params?: {} }
     'reset_password': { paramsTuple?: []; params?: {} }
     'mfa': { paramsTuple?: []; params?: {} }
+    'account.overview': { paramsTuple?: []; params?: {} }
+    'account.security': { paramsTuple?: []; params?: {} }
     'admin.logistics': { paramsTuple?: []; params?: {} }
     'dev.design_system': { paramsTuple?: []; params?: {} }
     'dev.overlays': { paramsTuple?: []; params?: {} }
@@ -100,6 +106,8 @@ export type ScannedRoutes = {
     'forgot_password': { paramsTuple?: []; params?: {} }
     'reset_password': { paramsTuple?: []; params?: {} }
     'mfa': { paramsTuple?: []; params?: {} }
+    'account.overview': { paramsTuple?: []; params?: {} }
+    'account.security': { paramsTuple?: []; params?: {} }
     'admin.logistics': { paramsTuple?: []; params?: {} }
     'dev.design_system': { paramsTuple?: []; params?: {} }
     'dev.overlays': { paramsTuple?: []; params?: {} }
@@ -113,6 +121,7 @@ export type ScannedRoutes = {
     'confirmEmail': { paramsTuple?: []; params?: {} }
     'requestPasswordReset': { paramsTuple?: []; params?: {} }
     'resetPassword': { paramsTuple?: []; params?: {} }
+    'requestAccountDeletion': { paramsTuple?: []; params?: {} }
     'changePassword': { paramsTuple?: []; params?: {} }
     'revokeAllSessions': { paramsTuple?: []; params?: {} }
     'startTotpEnrollment': { paramsTuple?: []; params?: {} }
@@ -140,14 +149,15 @@ export type ScannedRoutes = {
     'archivePickupAddress': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'addressId': ParamValue} }
     'adminRemoveShopFromLogisticsAccount': { paramsTuple: [ParamValue,ParamValue]; params: {'accountId': ParamValue,'shopId': ParamValue} }
   }
+  PATCH: {
+    'updateMe': { paramsTuple?: []; params?: {} }
+    'updatePickupAddress': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'addressId': ParamValue} }
+    'adminUpdateLogisticsBranch': { paramsTuple: [ParamValue]; params: {'branchId': ParamValue} }
+  }
   PUT: {
     'replaceLogisticsSettings': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'adminAllowShopOnLogisticsAccount': { paramsTuple: [ParamValue,ParamValue]; params: {'accountId': ParamValue,'shopId': ParamValue} }
     'adminSetShopLogisticsEnabled': { paramsTuple: [ParamValue]; params: {'shopId': ParamValue} }
-  }
-  PATCH: {
-    'updatePickupAddress': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'addressId': ParamValue} }
-    'adminUpdateLogisticsBranch': { paramsTuple: [ParamValue]; params: {'branchId': ParamValue} }
   }
 }
 declare module '@adonisjs/core/types/http' {

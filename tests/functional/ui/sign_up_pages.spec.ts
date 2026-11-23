@@ -109,7 +109,8 @@ test.group('T-UI-036 /signup', () => {
     const response = await browser.request('/signup', { headers: { Accept: 'text/html' } })
     await response.arrayBuffer()
     assert.equal(response.status, 302)
-    assert.equal(response.headers.get('location'), '/')
+    // 02 J-04 "Permissions": the account page, since M1 part 6a.
+    assert.equal(response.headers.get('location'), '/account')
   })
 
   test('T-SEC-036 /signup sends the shared props and the legal links, nothing else', async ({

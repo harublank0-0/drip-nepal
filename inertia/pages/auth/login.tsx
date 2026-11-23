@@ -8,14 +8,16 @@ import { LogInForm } from '~/components/auth/log_in_form'
  * guests, server-rendered in the auth layout. The form signs in with
  * `logIn` and then goes where the server's `redirect_to` says
  * (log_in_form.tsx). `notice` is `account_suspended` after the account
- * check ended a suspended user's session on a page visit, else null.
+ * check ended a suspended user's session on a page visit,
+ * `deletion_requested` right after the user closed their account on
+ * `/account/security` (M1 part 6a), else null.
  *
  * `password_changed` is never a server prop: `/reset-password` sets it on
  * its client-side visit here after a reset (02 J-18 step 4), so the form
  * says the password was changed. A reload drops it.
  */
 type Props = InertiaProps<{
-  notice: 'account_suspended' | null
+  notice: 'account_suspended' | 'deletion_requested' | null
   password_changed?: boolean
 }>
 

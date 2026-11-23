@@ -66,6 +66,18 @@ const routes = {
     tokens: [{"old":"/api/v1/me","type":0,"val":"api","end":""},{"old":"/api/v1/me","type":0,"val":"v1","end":""},{"old":"/api/v1/me","type":0,"val":"me","end":""}],
     types: placeholder as Registry['getMe']['types'],
   },
+  'updateMe': {
+    methods: ["PATCH"],
+    pattern: '/api/v1/me',
+    tokens: [{"old":"/api/v1/me","type":0,"val":"api","end":""},{"old":"/api/v1/me","type":0,"val":"v1","end":""},{"old":"/api/v1/me","type":0,"val":"me","end":""}],
+    types: placeholder as Registry['updateMe']['types'],
+  },
+  'requestAccountDeletion': {
+    methods: ["POST"],
+    pattern: '/api/v1/me/deletion-request',
+    tokens: [{"old":"/api/v1/me/deletion-request","type":0,"val":"api","end":""},{"old":"/api/v1/me/deletion-request","type":0,"val":"v1","end":""},{"old":"/api/v1/me/deletion-request","type":0,"val":"me","end":""},{"old":"/api/v1/me/deletion-request","type":0,"val":"deletion-request","end":""}],
+    types: placeholder as Registry['requestAccountDeletion']['types'],
+  },
   'changePassword': {
     methods: ["POST"],
     pattern: '/api/v1/me/password',
@@ -305,6 +317,18 @@ const routes = {
     pattern: '/mfa',
     tokens: [{"old":"/mfa","type":0,"val":"mfa","end":""}],
     types: placeholder as Registry['mfa']['types'],
+  },
+  'account.overview': {
+    methods: ["GET","HEAD"],
+    pattern: '/account',
+    tokens: [{"old":"/account","type":0,"val":"account","end":""}],
+    types: placeholder as Registry['account.overview']['types'],
+  },
+  'account.security': {
+    methods: ["GET","HEAD"],
+    pattern: '/account/security',
+    tokens: [{"old":"/account/security","type":0,"val":"account","end":""},{"old":"/account/security","type":0,"val":"security","end":""}],
+    types: placeholder as Registry['account.security']['types'],
   },
   'admin.logistics': {
     methods: ["GET","HEAD"],

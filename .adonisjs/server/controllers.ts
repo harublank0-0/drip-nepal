@@ -4,6 +4,11 @@
  */
 
 export const controllers = {
+  account: {
+    identity: {
+      Account: () => import('#controllers/account/identity/account_controller'),
+    },
+  },
   admin: {
     CourierBookings: () => import('#controllers/admin/courier_bookings_controller'),
     Logistics: () => import('#controllers/admin/logistics_controller'),

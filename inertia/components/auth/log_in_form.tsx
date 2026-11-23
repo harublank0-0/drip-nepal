@@ -51,7 +51,10 @@ import { RateLimitNotice } from '~/components/forms/rate_limit_notice'
  * A failed submit keeps both values.
  *
  * After a password reset (`passwordChanged`, 02 J-18 step 4) a notice above
- * the fields says the password was changed, until the first submit.
+ * the fields says the password was changed, until the first submit. Right
+ * after a deletion request (`notice` `deletion_requested`, M1 part 6a) a
+ * notice says the account is closed, with the support contact, until the
+ * first submit.
  *
  * `/mfa` signs a guest in with this form too (M1 part 5): with `onSignedIn`
  * the form calls it instead of visiting `redirect_to`, so the page reloads
@@ -97,13 +100,14 @@ export function LogInForm({
   onSignedIn,
   signUpLink = true,
 }: {
-  notice: 'account_suspended' | null
+  notice: 'account_suspended' | 'deletion_requested' | null
   passwordChanged?: boolean
   onSignedIn?: () => void
   signUpLink?: boolean
 }) {
   const mutation = useApiMutation({ signInOnUnauthenticated: false })
   const [changed, setChanged] = useState(passwordChanged)
+  const [closed, setClosed] = useState(notice === 'deletion_requested')
   const report = useErrorReport(FIELDS)
   const [refusal, setRefusal] = useState<Refusal | null>(
     notice === 'account_suspended' ? 'suspended' : null
@@ -116,6 +120,7 @@ export function LogInForm({
 
   function resetMessages() {
     setChanged(false)
+    setClosed(false)
     setRefusal(null)
     setProblem(null)
     setOffline(false)
@@ -209,6 +214,7 @@ export function LogInForm({
           <AlertDescription>{t('auth.login.password_changed_body')}</AlertDescription>
         </Alert>
       )}
+      {closed && <ClosedNotice />}
       {refusal === 'suspended' && <SuspendedNotice />}
       <form.Field name="email" validators={{ onBlur: ({ value }) => emailError(value) }}>
         {(field) => (
@@ -288,6 +294,32 @@ function SuspendedNotice() {
       <AlertTitle>{t('auth.login.suspended_title')}</AlertTitle>
       <AlertDescription>
         <p>{t('auth.login.suspended_body')}</p>
+        {help && (
+          <p>
+            <a className="underline underline-offset-4" href={help}>
+              {t('common.support.contact')}
+            </a>
+          </p>
+        )}
+      </AlertDescription>
+    </Alert>
+  )
+}
+
+/*
+ * The notice after a deletion request (01 AC-FR-IAM-009-1; M1 part 6a):
+ * the account is closed and the email says what follows; the support
+ * contact, as the suspension notice has it, for someone who wants the
+ * account back. A status, not an alert: it reports what the user just did.
+ */
+function ClosedNotice() {
+  const { support } = usePage<Data.SharedProps>().props
+  const help = support.email ? `mailto:${support.email}` : support.whatsapp
+  return (
+    <Alert role="status">
+      <AlertTitle>{t('auth.login.closed_title')}</AlertTitle>
+      <AlertDescription>
+        <p>{t('auth.login.closed_body')}</p>
         {help && (
           <p>
             <a className="underline underline-offset-4" href={help}>

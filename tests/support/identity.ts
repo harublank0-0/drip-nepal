@@ -328,3 +328,22 @@ export async function forgetMfa(userId: string, ...ips: string[]) {
   await forgetKeys('mfa_user', userId)
   for (const ip of ips) await forgetKeys('mfa', userId, clientNetwork(ip))
 }
+
+/*
+ * Helpers of the profile and deletion-request tests (docs/06 §13.3; M1
+ * part 6a). `updateMe` charges no limiter; `requestAccountDeletion` charges
+ * the two `reauth` keys of the user, which each test deletes with
+ * `forgetReauth` (docs/10 §3.3).
+ */
+export const DELETION_REQUEST_PATH = '/api/v1/me/deletion-request'
+
+// A `PATCH` (`updateMe`) from `client`, with its client network as the forwarded address.
+export function patchJson(client: Guest, path: string, body: unknown) {
+  return send(client.browser, 'PATCH', path, body, { 'X-Forwarded-For': client.ip })
+}
+
+// The `notifications.dispatch` jobs of the "deletion request received" email for `userId`.
+export async function deletionRequestedJobsFor(userId: string) {
+  const jobs = await dispatchJobsFor(userId)
+  return jobs.filter((job) => job.data.event === 'user.deletion_requested')
+}

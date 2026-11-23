@@ -52,8 +52,9 @@ import { isAccountNotice } from '#modules/notifications/jobs/dispatch'
  *   `to_address_hash`: `failed` with `address_changed` and no send, so the
  *   row never claims a send to an address it does not record (04a §14.3);
  * - an account notice (`user.signup_attempted`, M1 part 2a,
- *   `user.password_changed` and `user.sessions_revoked`, M1 part 4, or
- *   `user.mfa_enabled`, M1 part 5) of an
+ *   `user.password_changed` and `user.sessions_revoked`, M1 part 4,
+ *   `user.mfa_enabled`, M1 part 5, or `user.deletion_requested`, M1 part
+ *   6a) of an
  *   account that is gone or was anonymised meanwhile: `failed` with
  *   `recipient_unreachable` and no send.
  * `last_error` holds short reasons, never an address (04a §14.3): a final
@@ -75,13 +76,17 @@ const TOKEN_PAGES: Record<UserTokenPurpose, string> = {
  * The page each account notice links (docs/08 §2.3): sign-in for "account
  * already exists", and the reset request for "your password was changed",
  * "sessions revoked" and "two-step verification turned on", for a holder
- * who did not make the change.
+ * who did not make the change. "Deletion request received" links the
+ * privacy notice (`/legal/privacy`, 08 §2.2), which says how deletion
+ * works: the account is closed, so a reset would do nothing, and its footer
+ * carries the support contact.
  */
 const NOTICE_PAGES: Partial<Record<EmailTemplate, string>> = {
   'identity.account_exists': '/login',
   'identity.password_changed': '/forgot-password',
   'identity.sessions_revoked': '/forgot-password',
   'identity.mfa_enabled': '/forgot-password',
+  'identity.deletion_requested': '/legal/privacy',
 }
 
 export type SendOutcome =

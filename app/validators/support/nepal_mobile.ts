@@ -8,8 +8,8 @@ import { toNepalMobileE164 } from '#shared/format/phone'
  * `0` and with spaces or hyphens, checked with the rule `NepalPhoneInput`
  * shares (`shared/format/phone.ts`), and handed on in E.164. Anything else,
  * a landline included, answers 422 on the field with the item code
- * `nepal_mobile`. `signUp` uses it today; `updateMe` and the address book
- * join with their operations.
+ * `nepal_mobile`. `signUp` and `updateMe` use it; the address book joins
+ * with its operations (M1 part 6b).
  */
 const nepalMobileRule = vine.createRule((value, _options, field) => {
   if (typeof value !== 'string') return

@@ -14,8 +14,8 @@ import { testBrowser, type Browser } from '#tests/support/browser'
  * - T-UI-036: `/login` renders on the server for a guest, with the
  *   `email` and `current-password` tokens, a show-password button, links
  *   to `/forgot-password` and `/signup` (with `return_to` passed on), and
- *   no remember-me box; a signed-in user is sent to `/` without the
- *   visited query; after the account check ended a suspended user's
+ *   no remember-me box; a signed-in user is sent to `/account` (since M1
+ *   part 6a) without the visited query; after the account check ended a suspended user's
  *   session on a page, the page says the account is suspended.
  * - T-SEC-036: the page's prop key set, the shared props and `notice`.
  */
@@ -86,7 +86,8 @@ test.group('T-UI-036 /login', () => {
     })
     await response.arrayBuffer()
     assert.equal(response.status, 302)
-    assert.equal(response.headers.get('location'), '/')
+    // 02 J-04 "Permissions": the account page, since M1 part 6a.
+    assert.equal(response.headers.get('location'), '/account')
   })
 
   test('T-UI-036 after the account check ends a suspended session on a page, /login says why [AC-FR-IAM-006-2]', async ({

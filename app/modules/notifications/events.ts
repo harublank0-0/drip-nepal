@@ -76,8 +76,28 @@ export type MfaEnabled = {
   user_id: string
 }
 
+/*
+ * The holder asked for the account to be deleted, by
+ * `requestAccountDeletion` (01 AC-FR-IAM-009-1, AC-FR-NOT-001-1 "deletion
+ * request received"; M1 part 6a): the account is closed and every session
+ * ends, so the email tells the holder what happens next and what to do if
+ * it was not them. A random `event_id`, as for the other notices; the
+ * payload carries the account's ID only. The account is `deactivated` by
+ * then, which is still reachable (only an anonymised one is not).
+ */
+export type DeletionRequested = {
+  event: 'user.deletion_requested'
+  event_id: string
+  user_id: string
+}
+
 // The events about an account that carry no token, each with its own template.
-export type AccountNotice = SignupAttempted | PasswordChanged | SessionsRevoked | MfaEnabled
+export type AccountNotice =
+  | SignupAttempted
+  | PasswordChanged
+  | SessionsRevoked
+  | MfaEnabled
+  | DeletionRequested
 
 // The events `notifications.dispatch` turns into emails.
 export type NotificationEvent = UserTokenIssued | AccountNotice

@@ -15,10 +15,10 @@ const MfaController = () => import('#controllers/api/v1/auth/identity/mfa_contro
  * anyone, signed in or not: the `guest` middleware is kept for the sign-in
  * and sign-up pages and `logIn` (docs/09 §3.4 row 3, T-UI-025), where it
  * answers 409 `CONFLICT`. `logOut`, `getMe`, `resendEmailVerification`,
- * `changePassword`, `revokeAllSessions` and the staff MFA operations
+ * `changePassword`, `revokeAllSessions`, the staff MFA operations
  * (`verifyMfaChallenge`, `startTotpEnrollment`, `confirmTotpEnrollment`,
- * M1 part 5) need a session (`auth`). CSRF applies to every unsafe route
- * here.
+ * M1 part 5), `updateMe` and `requestAccountDeletion` (M1 part 6a) need a
+ * session (`auth`). CSRF applies to every unsafe route here.
  */
 router
   .group(() => {
@@ -46,6 +46,11 @@ router
       .post('/auth/password-reset/confirm', [PasswordController, 'resetPassword'])
       .as('resetPassword')
     router.get('/me', [MeController, 'getMe']).as('getMe').use(middleware.auth())
+    router.patch('/me', [MeController, 'updateMe']).as('updateMe').use(middleware.auth())
+    router
+      .post('/me/deletion-request', [MeController, 'requestAccountDeletion'])
+      .as('requestAccountDeletion')
+      .use(middleware.auth())
     router
       .post('/me/password', [PasswordController, 'changePassword'])
       .as('changePassword')

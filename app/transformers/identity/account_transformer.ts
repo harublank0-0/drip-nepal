@@ -38,3 +38,19 @@ export function meJson(account: OwnAccount, shops: UserShop[]) {
     })),
   }
 }
+
+/*
+ * The `account` prop of `/account` (docs/08 §2.4; M1 part 6a): what the
+ * profile form shows and edits, nothing more (T-SEC-036). The phone is the
+ * last four digits only (docs/07 §5.5); no ID, role or shop.
+ */
+export function profileProps(account: OwnAccount) {
+  return {
+    email: account.email,
+    full_name: account.fullName,
+    status: account.status,
+    phone_last4: account.phoneLast4,
+    marketing_email_consent: account.marketingEmailConsent,
+    marketing_sms_consent: account.marketingSmsConsent,
+  }
+}

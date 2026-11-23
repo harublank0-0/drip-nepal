@@ -28,6 +28,11 @@
  * - `identity.mfa_enabled`: the "two-step verification turned on" notice of
  *   `confirmTotpEnrollment` (docs/07 §3.9; M1 part 5), with a link to
  *   `/forgot-password` and no token.
+ * - `identity.deletion_requested`: the "deletion request received" notice of
+ *   `requestAccountDeletion` (01 AC-FR-IAM-009-1, AC-FR-NOT-001-1; M1 part
+ *   6a), with a link to the privacy notice and no token: the account is
+ *   closed, so a password reset would do nothing, and the holder who did
+ *   not ask contacts support.
  */
 export const EMAIL_TEMPLATES = [
   'identity.password_reset',
@@ -37,6 +42,7 @@ export const EMAIL_TEMPLATES = [
   'identity.password_changed',
   'identity.sessions_revoked',
   'identity.mfa_enabled',
+  'identity.deletion_requested',
 ] as const
 export type EmailTemplate = (typeof EMAIL_TEMPLATES)[number]
 
