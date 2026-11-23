@@ -57,7 +57,7 @@ export default class LogisticsController {
   // getLogisticsSettings
   async show(ctx: HttpContext) {
     assertShopPermission(ctx.shop, 'shop.shipping.manage')
-    assertShopGate(ctx.shop, 'shipping')
+    assertShopGate(ctx.shop, 'logistics')
     const settings = await logisticsSettings(ctx.shop.id)
     const accounts = await accountsUsableByShop(ctx.shop.id)
     const addresses = await livePickupAddresses(ctx.shop.id)
@@ -82,7 +82,7 @@ export default class LogisticsController {
   // replaceLogisticsSettings ⟳
   async replace(ctx: HttpContext) {
     assertShopPermission(ctx.shop, 'shop.shipping.manage')
-    assertShopGate(ctx.shop, 'shipping')
+    assertShopGate(ctx.shop, 'logistics')
     assertKnownMembers(ctx.request.body(), LOGISTICS_SETTINGS_MEMBERS)
     const input = await ctx.request.validateUsing(replaceLogisticsSettingsValidator)
     const version = expectedVersion(ctx)
@@ -231,7 +231,7 @@ export default class LogisticsController {
 
   #shippingGuards(ctx: HttpContext) {
     assertShopPermission(ctx.shop, 'shop.shipping.manage')
-    assertShopGate(ctx.shop, 'shipping')
+    assertShopGate(ctx.shop, 'logistics')
   }
 }
 

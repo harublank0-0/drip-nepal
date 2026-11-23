@@ -145,8 +145,6 @@ x-pending-operations:
   - getMySupportCase
   - replyToMySupportCase
   # Seller (06 §13.5)
-  - getShopShipping
-  - replaceShopShipping
   - listMembers
   - inviteMember
   - revokeInvitation
@@ -2372,6 +2370,203 @@ paths:
                       - field: registration_authority
                         code: required
                         message: A registered business needs its registering authority.
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /api/v1/seller/shops/{shopSlug}/shipping:
+    parameters:
+      - $ref: '#/components/parameters/ShopSlug'
+    get:
+      operationId: getShopShipping
+      tags: [Seller]
+      summary: Read the shop's delivery coverage, zone rates and estimates
+      description: |
+        Actor: the owner or any active member (`shop.member`, 07 §4.5). Scope: the shop comes from
+        `{shopSlug}` only; another shop's slug, or one the caller is not in, answers the 404 of an
+        unknown slug (06 §4.4, T-SEC-001). Status gate, the `shop.member` rule of 07 §4.4: open in
+        `active` and in both suspension modes, to the owner only while `pending_review` or
+        `rejected` (OD-47), and refused in `closed`, with 403 `SHOP_NOT_ACTIVE` and `shop_status`
+        and `suspension_mode`. Query: none; any parameter is 400 `INVALID_QUERY_PARAMETER`
+        (06 §6.3).
+        Returns `coverage`, the covered district codes in code order; `rates`, one per zone in
+        the zones' editor order (`delivery_zones.position`), each with its fee as Money and its
+        delivery estimate in days; `configured`, the publish gate's "shipping is configured"
+        condition (01 AC-FR-CAT-005-2, AC-FR-SHOP-004-3: at least one covered district and a rate
+        for every covered district's zone); and `version`, `shops.version`, which the strong
+        `ETag` repeats and `replaceShopShipping` takes as `If-Match` (06 §8). `updateShopProfile`
+        moves the same version. Side effects: none. Charged to `api_user` (06 §9.1); past it,
+        429. T-SHOP-010. Release R1·M2; built in R1-S part 1c.
+      x-release: R1·M2
+      x-permission: shop.member
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: The shop's delivery configuration.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+            ETag: { $ref: '#/components/headers/ETag' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ShopShippingResponse' }
+              examples:
+                configured:
+                  summary: A shop delivering to two districts, one in each zone (placeholders)
+                  value:
+                    data:
+                      coverage: ['306', '405']
+                      rates:
+                        - zone_code: ktm_valley
+                          fee: { amount_minor: 10000, currency: NPR }
+                          est_min_days: 0
+                          est_max_days: 1
+                        - zone_code: outside_valley
+                          fee: { amount_minor: 15000, currency: NPR }
+                          est_min_days: 2
+                          est_max_days: 5
+                      configured: true
+                      version: 3
+                new:
+                  summary: A shop that has set nothing yet
+                  value:
+                    data: { coverage: [], rates: [], configured: false, version: 1 }
+        '400':
+          description: A query parameter; the operation takes none, and one `invalid` item names it.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem400' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/Internal' }
+    put:
+      operationId: replaceShopShipping
+      tags: [Seller]
+      summary: Replace the shop's delivery coverage, or its zone rates and estimates
+      description: |
+        Actor: `shop.shipping.manage` (07 §4.5; AC-FR-SHOP-004-4). Status gate, the "profile,
+        shipping" column of 07 §4.4: open while `active`, to the owner only while
+        `pending_review` or `rejected` (OD-47, decided 2026-10-01, because approval needs
+        coverage with rates), refused while `suspended` or `closed` (403 `SHOP_NOT_ACTIVE` with
+        `shop_status` and `suspension_mode`). Scope: the shop comes from `{shopSlug}` only;
+        another shop's slug answers the 404 of an unknown one (T-SEC-001). Query: none; any
+        parameter is 400 `INVALID_QUERY_PARAMETER` (06 §6.3).
+        Input: `coverage` and `rates`, each optional and each replaced whole when sent; an absent
+        one keeps the saved set, so a form sends only the set it changed (06 note 65). Neither
+        may be `null` (422 `required`). Any other member (`shop_id`, `version`, `configured`,
+        ...), and any member of a rate other than its four, is 422 `unknown_field` (T-SEC-003).
+        `coverage`: district codes, each once (`distinct`), each an active district of an active
+        province with an active zone (else `not_offered` on `coverage.<i>`). `rates`: one per
+        zone, each zone once (`distinct`) and active (else `not_offered` on
+        `rates.<i>.zone_code`); `fee_minor` a JSON integer of paisa from 0 (free delivery), never
+        a float or a string (ADR-0007, 06 §3.3); `est_min_days` and `est_max_days` JSON integers
+        from 0 (same day) to 30 [Assumption], the fastest no longer than the slowest
+        (`less_than_min` on `rates.<i>.est_max_days`). On the result, the saved sets with the
+        changes laid over them (04a §9.6, 05 §3.3 item 3): at least one covered district
+        (`required` on `coverage`, AC-FR-SHOP-004-1) and a rate for every covered district's
+        zone (`rate_required` on `rates`, naming the zone, T-SHOP-109). A rate for a zone the
+        shop does not cover is kept.
+        Order: the permission, the status gate, the members, the validator, then `If-Match`.
+        Concurrency: ⟳ `If-Match` on `shops.version`, from `getShopShipping`'s `ETag` (the
+        version `updateShopProfile` moves too). Missing, `*` or a list → 428; a stale version, a
+        weak tag or any other value → 412 `VERSION_CONFLICT` with `current`, the shipping as
+        `getShopShipping` shows it (06 §8). Not ⚷ (06 §7.7).
+        Side effects, in one transaction: the shop row locked `FOR NO KEY UPDATE` (05 §4.4 level
+        0) and the status gate checked again on it; each changed set deleted and re-inserted
+        (`shop_delivery_coverage`, `shop_shipping_rates`; placed orders keep their fee and zone,
+        AC-FR-SHOP-004-2); `version + 1` by compare-and-set on the version and status; one
+        `shop.shipping_replace` audit row (proposed) with the from and to values of each set
+        written (04a §15.3). A request that changes nothing writes nothing and keeps the
+        version. Charged to `api_user` (06 §9.1). T-SHOP-010, T-SHOP-109, T-API-004, T-SEC-030,
+        T-SEC-031. Release R1·M2; built in R1-S part 1c.
+      x-release: R1·M2
+      x-permission: shop.shipping.manage
+      x-if-match: true
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReplaceShopShippingRequest' }
+            examples:
+              firstSave:
+                summary: The first save, both sets (placeholders)
+                value:
+                  coverage: ['306', '405']
+                  rates:
+                    - { zone_code: ktm_valley, fee_minor: 10000, est_min_days: 0, est_max_days: 1 }
+                    - {
+                        zone_code: outside_valley,
+                        fee_minor: 15000,
+                        est_min_days: 2,
+                        est_max_days: 5,
+                      }
+              coverageOnly:
+                summary: A later save of the coverage alone; the rates stay
+                value:
+                  coverage: ['306', '307', '308', '405']
+      responses:
+        '200':
+          description: Saved; the shipping as `getShopShipping` shows it, with the new `ETag`.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+            ETag: { $ref: '#/components/headers/ETag' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ShopShippingResponse' }
+        '400':
+          description: A query parameter; the operation takes none, and one `invalid` item names it.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem400' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422':
+          description: |
+            `VALIDATION_FAILED`: a member out of rule (`array`, `regex`, `distinct`, `number`,
+            `without_decimals`, `range`, `max_length`), a `null` (`required`), an unknown member
+            (`unknown_field`), a district or zone that is not offered (`not_offered`), the slowest
+            estimate shorter than the fastest (`less_than_min`), no covered district (`required`
+            on `coverage`), or a covered zone without a rate (`rate_required` on `rates`).
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem422' }
+              examples:
+                rateRequired:
+                  summary: Coverage reaching a zone that has no rate
+                  value:
+                    type: https://dripnepal.com/problems/validation-failed
+                    title: Validation failed
+                    status: 422
+                    detail: Some fields need attention.
+                    code: VALIDATION_FAILED
+                    request_id: 01929d01-0000-7000-8000-000000000427
+                    errors:
+                      - field: rates
+                        code: rate_required
+                        message: Outside Kathmandu Valley needs a fee and a delivery time, because you deliver to districts in it.
         '428': { $ref: '#/components/responses/PreconditionRequired' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/Internal' }
@@ -7320,6 +7515,100 @@ components:
           maxLength: 32
           description: Owner only. A Nepali mobile or landline, stored in E.164 and encrypted (04 §2.9).
 
+    ShopShipping:
+      type: object
+      description: |
+        A shop's delivery configuration as `getShopShipping` answers it to any member (04a §9.6,
+        §9.7); a closed schema. No personal data.
+      additionalProperties: false
+      required: [coverage, rates, configured, version]
+      properties:
+        coverage:
+          type: array
+          description: The covered district codes, in code order.
+          items: { type: string, pattern: '^[1-7][0-9]{2}$' }
+        rates:
+          type: array
+          description: One rate per zone, in the zones' editor order (`delivery_zones.position`).
+          items: { $ref: '#/components/schemas/ShopShippingRate' }
+        configured:
+          type: boolean
+          description: |
+            The publish gate's "shipping is configured" condition (01 AC-FR-CAT-005-2,
+            AC-FR-SHOP-004-3): at least one covered district, and a rate for every covered
+            district's zone.
+        version: { type: integer, minimum: 1, description: '`shops.version`; the ETag repeats it.' }
+    ShopShippingRate:
+      type: object
+      description: A shop's flat fee and delivery estimate for one zone (A-27).
+      additionalProperties: false
+      required: [zone_code, fee, est_min_days, est_max_days]
+      properties:
+        zone_code: { type: string, pattern: '^[a-z][a-z0-9_]{1,31}$' }
+        fee:
+          allOf: [{ $ref: '#/components/schemas/Money' }]
+          description: The fee for one parcel to the zone, ≥ 0; 0 is free delivery.
+        est_min_days: { type: integer, minimum: 0, maximum: 30 }
+        est_max_days: { type: integer, minimum: 0, maximum: 30 }
+    ShopShippingResponse:
+      type: object
+      description: The 200 of `getShopShipping` and of `replaceShopShipping`.
+      additionalProperties: false
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/ShopShipping' }
+    ReplaceShopShippingRequest:
+      type: object
+      description: |
+        The whole input of `replaceShopShipping`: two sets, each optional and replaced whole when
+        sent; an absent one keeps the saved set. Any other member is 422 `unknown_field`, and
+        neither may be `null` (422 `required`).
+      additionalProperties: false
+      properties:
+        coverage:
+          type: array
+          maxItems: 100
+          uniqueItems: true
+          description: |
+            The districts the shop delivers to; each an active district (else `not_offered`). On
+            the result at least one (`required`).
+          items: { type: string, pattern: '^[1-7][0-9]{2}$' }
+        rates:
+          type: array
+          maxItems: 20
+          description: |
+            One rate per zone, each zone once (`distinct`); on the result every covered
+            district's zone needs one (`rate_required`).
+          items: { $ref: '#/components/schemas/ShopShippingRateInput' }
+    ShopShippingRateInput:
+      type: object
+      description: |
+        One zone's rate; any other member is 422 `unknown_field` on `rates.<i>.<member>`. No
+        `currency`: NPR is implied (06 §3.3).
+      additionalProperties: false
+      required: [zone_code, fee_minor, est_min_days, est_max_days]
+      properties:
+        zone_code:
+          type: string
+          pattern: '^[a-z][a-z0-9_]{1,31}$'
+          description: An active zone (else `not_offered`).
+        fee_minor:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9007199254740991
+          description: Paisa, a JSON integer (never a float or a string, ADR-0007); 0 is free delivery.
+        est_min_days:
+          type: integer
+          minimum: 0
+          maximum: 30
+          description: The fastest delivery in whole days; 0 is the same day.
+        est_max_days:
+          type: integer
+          minimum: 0
+          maximum: 30
+          description: The slowest, no shorter than the fastest (`less_than_min`).
+
     # ---------- password reset and change, revokeAllSessions (06 §13.3; M1 part 4) ----------
     RequestPasswordResetRequest:
       type: object
@@ -9834,3 +10123,17 @@ components:
 #     `registration_number`, `registration_authority` and `pan_vat_number` like `""`; the
 #     schema adds the validator's `minLength` to `registration_number` (1) and
 #     `registration_authority` (2).
+#
+# Added with the shop's shipping (2026-11-23, R1-S part 1c):
+# 55. `getShopShipping` and `replaceShopShipping` move from `x-pending-operations` to `paths` as
+#     the `get` and `put` of `/api/v1/seller/shops/{shopSlug}/shipping`, written from the code,
+#     with the new closed schemas `ShopShipping`, `ShopShippingRate`, `ShopShippingResponse`,
+#     `ReplaceShopShippingRequest` and `ShopShippingRateInput` (06 note 65). The read declares
+#     `x-permission: shop.member` and sends a strong `ETag` of `shops.version`, the version
+#     `updateShopProfile` moves too; the write declares `x-permission: shop.shipping.manage`
+#     and `x-if-match: true`. Each set of the write is optional and replaced whole, so a form
+#     sends only what it changed; the fee is Money in the answer and a bare `fee_minor` integer
+#     in the request (06 §3.3). `configured` is the publish gate's shipping condition. The 422
+#     item codes `not_offered`, `less_than_min` and `rate_required` are new and are described
+#     in the operation, as `ProblemErrorItem` names its codes by example only. Both refuse any
+#     query parameter (400) and are charged to `api_user`.

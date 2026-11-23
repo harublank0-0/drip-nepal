@@ -33,5 +33,8 @@
   "step_up.code": "6-digit code",
   "step_up.code_help": "From the DripNepal entry in your authenticator app.",
   "step_up.code_rule": "Enter the 6 digits your app shows.",
-  "step_up.code_incorrect": "That code didn't work. Enter the code your app shows now."
+  "step_up.code_incorrect": "That code didn't work. Enter the code your app shows now.",
+  "location.loading": "Loading…",
+  "location.load_failed": "This list could not be loaded.",
+  "location.retry": "Try again"
 }

@@ -60,17 +60,20 @@ export function assertShopOwner(shop: SellerContext, detail: string) {
  *   in `active` and in both suspension modes, to the owner only in
  *   `pending_review` and `rejected`, refused in `closed` (`memberRoutesOpen`,
  *   which the seller UI's links share);
- * - `profile`, the "profile, shipping" column for `updateShopProfile`: open
- *   in `active`, to the owner only in `pending_review` and `rejected`,
- *   refused while `suspended` or `closed` (`profileEditable`, which the
- *   settings page shares; R1-S part 1b);
+ * - `profile`, the "profile, shipping" column for `updateShopProfile` and
+ *   `replaceShopShipping`: open in `active`, to the owner only in
+ *   `pending_review` and `rejected` (OD-47 for shipping), refused while
+ *   `suspended` or `closed` (`profileEditable`, which the settings and
+ *   shipping pages share; R1-S parts 1b and 1c);
  * - courier accounts like the payout account (active only);
- * - logistics settings and pickup addresses like the profile and shipping
- *   column (active only);
+ * - `logistics`, the logistics settings and pickup addresses: the "profile,
+ *   shipping" column without its `pending_review` and `rejected` cell,
+ *   which allows named operations only (`getShopShipping` and
+ *   `replaceShopShipping` among them, not these), so active only;
  * - courier booking like orders process (active, or suspended in
  *   `fulfill_existing` mode).
  */
-export type ShopGate = 'member' | 'profile' | 'courier_accounts' | 'shipping' | 'orders_process'
+export type ShopGate = 'member' | 'profile' | 'courier_accounts' | 'logistics' | 'orders_process'
 
 export function shopGateAllows(shop: SellerContext, gate: ShopGate) {
   switch (gate) {
@@ -84,7 +87,7 @@ export function shopGateAllows(shop: SellerContext, gate: ShopGate) {
         (shop.status === 'suspended' && shop.suspensionMode === 'fulfill_existing')
       )
     case 'courier_accounts':
-    case 'shipping':
+    case 'logistics':
       return shop.status === 'active'
   }
 }

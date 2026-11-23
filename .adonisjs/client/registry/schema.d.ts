@@ -319,6 +319,30 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/seller/shops/shops_controller').default['updateShopProfile']>>> | { status: 422; response: { errors: SimpleError[] } }
     }
   }
+  'getShopShipping': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/seller/shops/:shopSlug/shipping'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { shopSlug: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/api/v1/seller/shops/shipping_controller').default['show']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/seller/shops/shipping_controller').default['show']>>>
+    }
+  }
+  'replaceShopShipping': {
+    methods: ["PUT"]
+    pattern: '/api/v1/seller/shops/:shopSlug/shipping'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/shops/replace_shop_shipping').replaceShopShippingValidator)>>
+      paramsTuple: [ParamValue]
+      params: { shopSlug: ParamValue }
+      query: ExtractQuery<InferInput<(typeof import('#validators/shops/replace_shop_shipping').replaceShopShippingValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/api/v1/seller/shops/shipping_controller').default['replace']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/seller/shops/shipping_controller').default['replace']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
   'getLogisticsSettings': {
     methods: ["GET","HEAD"]
     pattern: '/api/v1/seller/shops/:shopSlug/logistics'
@@ -809,6 +833,18 @@ export interface Registry {
       query: {}
       response: ExtractResponse<Awaited<ReturnType<import('#controllers/seller/shops/shop_controller').default['settings']>>>
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/seller/shops/shop_controller').default['settings']>>>
+    }
+  }
+  'seller.shipping': {
+    methods: ["GET","HEAD"]
+    pattern: '/seller/:shopSlug/shipping'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { shopSlug: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/seller/shops/shop_controller').default['shipping']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/seller/shops/shop_controller').default['shipping']>>>
     }
   }
   'admin.logistics': {

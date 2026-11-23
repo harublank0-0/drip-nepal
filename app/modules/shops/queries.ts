@@ -1,8 +1,10 @@
 import db from '@adonisjs/lucid/services/db'
 import type { QueryClientContract } from '@adonisjs/lucid/types/database'
+import { InvariantViolation } from '#exceptions/programming_errors'
 import type { ShopMemberRole } from '#modules/shops/domain/shop_member_role'
 import { hasShopSlugShape } from '#modules/shops/domain/shop_slug'
 import { CURRENT_SELLER_AGREEMENT } from '#modules/shops/domain/seller_agreements'
+import { shopShipping, type ShopShippingView } from '#modules/logistics/queries'
 
 /*
  * The shops module's reads for other layers (docs/09 §2.2: a module's
@@ -224,4 +226,33 @@ export async function acceptedCurrentAgreement(shopId: string) {
 export async function ownsAnyShop(userId: string) {
   const row = await db.from('shops').where('owner_user_id', userId).select('id').first()
   return row !== null
+}
+
+/*
+ * A shop's delivery configuration with the `version` of its ETag, as
+ * `getShopShipping` answers it (docs/06 §13.5, §8; R1-S part 1c): the
+ * coverage and rates are `logistics` rows (04a §9.6, §9.7), the version is
+ * `shops.version`, which `replaceShopShipping` takes as `If-Match`. The
+ * version is read first: a save that commits between the two reads then
+ * leaves the version older than the rows, never newer, so a form built from
+ * this answer gets 412 instead of overwriting the newer rows unseen. Inside
+ * `replaceShopShipping`'s transaction (`client`) the shop row is locked and
+ * the pair is exact.
+ */
+export type ShopShippingState = ShopShippingView & { version: number }
+
+export async function shopShippingState(
+  shopId: string,
+  options: { client?: QueryClientContract } = {}
+): Promise<ShopShippingState> {
+  const client: QueryClientContract = options.client ?? db.connection()
+  const shop: { version: number } | null = await client
+    .from('shops')
+    .where('id', shopId)
+    .select('version')
+    .first()
+  // Callers pass the shop `seller_context` has just found; shops are never deleted while members remain.
+  if (!shop) throw new InvariantViolation('the shop of a seller route was not found')
+  const shipping = await shopShipping(shopId, { client })
+  return { ...shipping, version: shop.version }
 }

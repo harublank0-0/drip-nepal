@@ -404,3 +404,141 @@ export async function placeNames(localLevelCodes: string[]): Promise<Map<string,
     ])
   )
 }
+
+/*
+ * A shop's delivery configuration (docs/04a §9.6, §9.7; 01 FR-SHOP-004;
+ * R1-S part 1c): the districts it delivers to, by code, and its rate for
+ * each zone, the zones in their editor order (`delivery_zones.position`).
+ * `configured` is the publish gate's "shipping is configured" condition
+ * (AC-FR-CAT-005-2, AC-FR-SHOP-004-3) on these rows: at least one covered
+ * district, and every covered district's zone with a rate, the same test as
+ * `shippingConfigured`. `client` reads inside the caller's transaction.
+ */
+export type ShopRate = {
+  zoneCode: string
+  feeMinor: number
+  estMinDays: number
+  estMaxDays: number
+}
+
+export type ShopShippingView = { coverage: string[]; rates: ShopRate[]; configured: boolean }
+
+export async function shopShipping(
+  shopId: string,
+  options: { client?: QueryClientContract } = {}
+): Promise<ShopShippingView> {
+  const client: QueryClientContract = options.client ?? db.connection()
+  const covered: { district_code: string; zone_code: string | null }[] = await client
+    .from('shop_delivery_coverage as c')
+    .leftJoin('delivery_zone_districts as dz', 'dz.district_code', 'c.district_code')
+    .where('c.shop_id', shopId)
+    .orderBy('c.district_code', 'asc')
+    .select('c.district_code', 'dz.zone_code')
+  const rates: {
+    zone_code: string
+    fee_minor: number
+    est_min_days: number
+    est_max_days: number
+  }[] = await client
+    .from('shop_shipping_rates as r')
+    .join('delivery_zones as z', 'z.code', 'r.zone_code')
+    .where('r.shop_id', shopId)
+    .orderBy('z.position', 'asc')
+    .orderBy('z.code', 'asc')
+    .select('r.zone_code', 'r.fee_minor', 'r.est_min_days', 'r.est_max_days')
+  const rated = new Set(rates.map((rate) => rate.zone_code))
+  return {
+    coverage: covered.map((row) => row.district_code),
+    rates: rates.map((rate) => ({
+      zoneCode: rate.zone_code,
+      feeMinor: rate.fee_minor,
+      estMinDays: rate.est_min_days,
+      estMaxDays: rate.est_max_days,
+    })),
+    configured:
+      covered.length > 0 &&
+      covered.every((row) => row.zone_code !== null && rated.has(row.zone_code)),
+  }
+}
+
+/*
+ * Whether a shop's shipping is configured (AC-FR-CAT-005-2,
+ * AC-FR-SHOP-004-3): at least one covered district, and no covered district
+ * whose zone has no rate for the shop. The overview's "before you can sell"
+ * item reads it (docs/08 §2.5), and the publish gate of R1-S part 2 will.
+ * One round trip on the two primary keys and
+ * `delivery_zone_districts_district_key`.
+ */
+export async function shippingConfigured(
+  shopId: string,
+  options: { client?: QueryClientContract } = {}
+): Promise<boolean> {
+  const client: QueryClientContract = options.client ?? db.connection()
+  const result = await client.rawQuery(
+    `SELECT EXISTS (SELECT 1 FROM shop_delivery_coverage WHERE shop_id = :shop)
+            AND NOT EXISTS (
+              SELECT 1
+                FROM shop_delivery_coverage c
+                LEFT JOIN delivery_zone_districts dz ON dz.district_code = c.district_code
+                LEFT JOIN shop_shipping_rates r
+                       ON r.shop_id = c.shop_id AND r.zone_code = dz.zone_code
+               WHERE c.shop_id = :shop AND r.zone_code IS NULL) AS configured`,
+    { shop: shopId }
+  )
+  return result.rows[0]?.configured === true
+}
+
+/*
+ * The delivery areas a shop chooses from in its shipping editor (docs/04a
+ * §9.4, §9.5; docs/08 §2.5 `/shipping`): the active zones in their editor
+ * order, and the active provinces by code with their active districts by
+ * name, each district with its zone. A district without an active zone is
+ * left out: no rate could price it (T-SHOP-108 keeps every active district
+ * in one zone). Public reference data, the same for every shop. The names
+ * are the English ones, the UI's language, offered as choices and never
+ * described as official (VX-10).
+ */
+export type DeliveryZoneView = { code: string; name: string }
+export type DeliveryDistrictView = Place & { zoneCode: string }
+export type DeliveryProvinceView = Place & { districts: DeliveryDistrictView[] }
+export type DeliveryAreas = { zones: DeliveryZoneView[]; provinces: DeliveryProvinceView[] }
+
+export async function deliveryAreas(
+  options: { client?: QueryClientContract } = {}
+): Promise<DeliveryAreas> {
+  const client: QueryClientContract = options.client ?? db.connection()
+  const zones: { code: string; name_en: string }[] = await client
+    .from('delivery_zones')
+    .where('is_active', true)
+    .orderBy('position', 'asc')
+    .orderBy('code', 'asc')
+    .select('code', 'name_en')
+  const rows: {
+    code: string
+    name_en: string
+    province_code: string
+    province_name: string
+    zone_code: string
+  }[] = await client
+    .from('districts as d')
+    .join('provinces as p', 'p.code', 'd.province_code')
+    .join('delivery_zone_districts as dz', 'dz.district_code', 'd.code')
+    .join('delivery_zones as z', 'z.code', 'dz.zone_code')
+    .where('d.is_active', true)
+    .where('p.is_active', true)
+    .where('z.is_active', true)
+    .orderBy('p.code', 'asc')
+    .orderBy('d.name_en', 'asc')
+    .orderBy('d.code', 'asc')
+    .select('d.code', 'd.name_en', 'd.province_code', 'p.name_en as province_name', 'dz.zone_code')
+  const provinces: DeliveryProvinceView[] = []
+  for (const row of rows) {
+    let province = provinces.at(-1)
+    if (province?.code !== row.province_code) {
+      province = { code: row.province_code, name: row.province_name, districts: [] }
+      provinces.push(province)
+    }
+    province.districts.push({ code: row.code, name: row.name_en, zoneCode: row.zone_code })
+  }
+  return { zones: zones.map((zone) => ({ code: zone.code, name: zone.name_en })), provinces }
+}
