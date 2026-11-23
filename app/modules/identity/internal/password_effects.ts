@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
 import { InvariantViolation } from '#exceptions/programming_errors'
 import { sendJob, type SendJobOptions } from '#modules/platform/jobs'
@@ -83,19 +83,42 @@ export async function sendPasswordChangedEmail(
  * The "sessions revoked" email (01 AC-FR-NOT-001-1): the event
  * `user.sessions_revoked`, sent by `revokeAllSessions` and by the `reauth`
  * lockout, which signs every device out. The holder learns of it even when
- * a stolen session did it. A random `event_id`, as for the other notices.
+ * a stolen session did it. `revokeAllSessions` gives each event a random
+ * `event_id`, as for the other notices (its `revoke_all` limiter bounds
+ * them); the lockout passes `lockoutEventId`, so two lockouts that commit
+ * together collapse into one delivery row.
  */
 export async function sendSessionsRevokedEmail(
   trx: TransactionClientContract,
   userId: string,
-  requestId: string | null
+  requestId: string | null,
+  options: { eventId?: string } = {}
 ) {
   const jobId = await sendJob(trx, 'notifications.dispatch', {
     event: 'user.sessions_revoked',
-    event_id: randomUUID(),
+    event_id: options.eventId ?? randomUUID(),
     user_id: userId,
     request_id: requestId,
     causation_id: null,
   })
   if (!jobId) throw new InvariantViolation('notifications.dispatch refused the sessions email job')
+}
+
+/*
+ * The `event_id` of the `reauth` lockout's "sessions revoked" email: the
+ * same for one user on one day in Asia/Kathmandu, so the `dedupe_key` of
+ * two lockouts that read the used-up day key at once (the 9th and 10th
+ * wrong passwords arriving together) collapses them into one email. A
+ * later lockout needs a new 24-hour window of the day key (docs/06 §9.1
+ * `reauth`), so it falls on another day unless it comes within a few hours
+ * of the previous window's end, when the holder already has that day's
+ * notice. UUID-shaped (version 8, RFC 9562), from a SHA-256 of the parts.
+ */
+export function lockoutEventId(userId: string, at = new Date()) {
+  const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kathmandu' }).format(at)
+  const hex = createHash('sha256')
+    .update(JSON.stringify(['reauth_lockout', userId, day]))
+    .digest('hex')
+  const variant = ((Number.parseInt(hex[16], 16) & 0x3) | 0x8).toString(16)
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-8${hex.slice(13, 16)}-${variant}${hex.slice(17, 20)}-${hex.slice(20, 32)}`
 }

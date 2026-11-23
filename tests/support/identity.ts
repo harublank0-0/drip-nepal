@@ -230,6 +230,13 @@ export async function forgetReauth(userId: string) {
   await forgetKeys('reauth_user_day', userId)
 }
 
+// Every per-user key of the password and session operations: `reauth`, `password_change`, `revoke_all`.
+export async function forgetUserLimits(userId: string) {
+  await forgetReauth(userId)
+  await forgetKeys('password_change', userId)
+  await forgetKeys('revoke_all', userId)
+}
+
 // The `identity.revoke_sessions` jobs queued for `userId`, with their `start_after`.
 export async function revokeJobsFor(userId: string) {
   const rows = await db

@@ -39,6 +39,10 @@ export const RATE_LIMITS = {
   pwreset_ip: { prefix: 'pwreset:ip', requests: 10, duration: '1 hour' },
   // resetPassword, per live token (proposed): charged before the new password is hashed.
   pwreset_token: { prefix: 'pwreset:token', requests: 5, duration: '1 hour' },
+  // changePassword, per user, on each right current password (proposed): bounds the emails.
+  password_change: { prefix: 'pwchange:user', requests: 5, duration: '1 hour' },
+  // revokeAllSessions, per user, on every call (proposed): bounds the emails.
+  revoke_all: { prefix: 'revoke_all:user', requests: 5, duration: '1 hour' },
   // Courier callbacks (docs/06 §9.1, M6): per client network before the token, then per account.
   webhook_ip: { prefix: 'webhook:ip', requests: 600, duration: '1 minute' },
   courier_callback: { prefix: 'courier_callback', requests: 120, duration: '1 minute' },

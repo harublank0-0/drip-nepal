@@ -1,6 +1,7 @@
 import hash from '@adonisjs/core/services/hash'
 import { recordAudit, type AuditEntry } from '#modules/audit/actions/record_audit'
 import {
+  lockoutEventId,
   sendRevokeSessions,
   sendSessionsRevokedEmail,
 } from '#modules/identity/internal/password_effects'
@@ -29,7 +30,8 @@ import { withTx } from '#modules/platform/tx'
  *    24 h, also rotates `security_stamp`, sends `identity.revoke_sessions`,
  *    which ends every session of the user, the possibly stolen one included
  *    (07 §3.3), and queues the "sessions revoked" email, all in the same
- *    transaction.
+ *    transaction; the email's `event_id` is the user's and the day's
+ *    (`lockoutEventId`), so two lockouts committing together send one.
  *
  * The email to the account holder after the fifth wrong password in 15
  * minutes (07 §3.6) is not sent yet: it needs a template in 01
@@ -90,7 +92,9 @@ export async function reauthenticate(
       .update({ security_stamp: trx.knexRawQuery('gen_random_uuid()') }, ['id'])
     if (rotated.length === 0) return
     await sendRevokeSessions(trx, userId, context.requestId)
-    await sendSessionsRevokedEmail(trx, userId, context.requestId)
+    await sendSessionsRevokedEmail(trx, userId, context.requestId, {
+      eventId: lockoutEventId(userId),
+    })
   })
   return { ok: false, email: user?.email ?? null }
 }

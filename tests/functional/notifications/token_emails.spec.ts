@@ -6,6 +6,7 @@ import { appUrl } from '#config/app'
 import { hmacKeys } from '#config/crypto'
 import { issueUserToken } from '#modules/identity/actions/issue_user_token'
 import {
+  lockoutEventId,
   sendPasswordChangedEmail,
   sendSessionsRevokedEmail,
 } from '#modules/identity/internal/password_effects'
@@ -393,6 +394,33 @@ test.group('T-NOT-101 a replayed event gives one delivery row and one send', (gr
       assert.equal(link.pathname, '/forgot-password')
       assert.notInclude(message.text, 'token=')
     })
+})
+
+test.group('T-NOT-101 two reauth lockouts at once', (group) => {
+  group.setup(async () => {
+    await useJobBoss()
+  })
+
+  test('T-NOT-101 two lockout notices of one user and day give one delivery row [docs/07 §3.6]', async ({
+    assert,
+  }) => {
+    const userId = await insertUser()
+    const eventId = lockoutEventId(userId)
+    // What two lockouts committing together queue: two events with the same ID.
+    await withTx((trx) => sendSessionsRevokedEmail(trx, userId, null, { eventId }))
+    await withTx((trx) => sendSessionsRevokedEmail(trx, userId, null, { eventId }))
+    const jobs = await queued<NoticeDispatch>('notifications.dispatch')
+    const events = jobs
+      .filter((job) => job.data.event === 'user.sessions_revoked' && job.data.user_id === userId)
+      .map((job) => job.data)
+    assert.lengthOf(events, 2)
+    const outcomes = [await dispatchNotification(events[0]), await dispatchNotification(events[1])]
+    assert.deepEqual(
+      outcomes.map((outcome) => outcome.kind),
+      ['queued', 'duplicate']
+    )
+    assert.lengthOf(await deliveriesOf(userId), 1)
+  })
 })
 
 test.group('T-NOT-001 notifications.send_email failures', (group) => {

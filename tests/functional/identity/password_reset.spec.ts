@@ -19,8 +19,8 @@ import {
   PASSWORD_RESET_PATH,
   RESET_CONFIRM_PATH,
   forgetPasswordReset,
-  forgetReauth,
   forgetResetToken,
+  forgetUserLimits,
   getJson,
   guest,
   liveToken,
@@ -121,9 +121,7 @@ test.group('T-IAM-005 password reset', (group) => {
     return async () => {
       for (const email of emails) await forgetPasswordReset(email, client.ip)
       for (const token of tokens) await forgetResetToken(token)
-      for (const userId of changers) {
-        await forgetReauth(userId)
-      }
+      for (const userId of changers) await forgetUserLimits(userId)
     }
   })
 

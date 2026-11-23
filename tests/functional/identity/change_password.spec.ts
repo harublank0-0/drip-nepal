@@ -19,7 +19,7 @@ import {
   ME_PATH,
   REVOKE_ALL_PATH,
   forgetLogin,
-  forgetReauth,
+  forgetUserLimits,
   getJson,
   guest,
   passwordChangedJobsFor,
@@ -130,7 +130,7 @@ test.group('T-IAM-006 changePassword', (group) => {
     users = []
     return async () => {
       for (const user of users) {
-        await forgetReauth(user.id)
+        await forgetUserLimits(user.id)
         for (const ip of user.ips) await forgetLogin(user.email, ip)
       }
     }
@@ -359,14 +359,22 @@ test.group('T-IAM-006 changePassword', (group) => {
 })
 
 test.group('T-IAM-109 revokeAllSessions and identity.revoke_sessions', (group) => {
+  let userIds: string[]
   group.setup(async () => {
     await useJobBoss()
+  })
+  group.each.setup(() => {
+    userIds = []
+    return async () => {
+      for (const userId of userIds) await forgetUserLimits(userId)
+    }
   })
 
   test('T-IAM-109 revokeAllSessions keeps this session with the new stamp; the job deletes every other session and spares it [AC-FR-IAM-005-3]', async ({
     assert,
   }) => {
     const user = await account()
+    userIds.push(user.id)
     const acting = await device(user.id)
     const others = [await device(user.id), await device(user.id)]
     const before = sessionIdOf(acting.browser)
@@ -409,6 +417,7 @@ test.group('T-IAM-109 revokeAllSessions and identity.revoke_sessions', (group) =
 
   test('T-IAM-109 an MFA-verified staff session is revoked too', async ({ assert }) => {
     const user = await account()
+    userIds.push(user.id)
     await db
       .from('users')
       .where('id', user.id)

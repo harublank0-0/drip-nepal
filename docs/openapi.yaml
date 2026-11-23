@@ -968,7 +968,9 @@ paths:
         `auth.reauth_failed` audit row, adds a point to the caller's `login_acct_ip` key so it
         counts toward the login limit (AC-FR-IAM-005-1), and is 422 on `current_password` with
         `password_incorrect`; the 10th in 24 h also rotates `security_stamp` and sends
-        `identity.revoke_sessions`.
+        `identity.revoke_sessions`. A right current password takes a point of the
+        `password_change` limiter (5 per hour per user, proposed, 06 §9.1) before anything is
+        written, because each change queues an email; past it, 429 `RATE_LIMITED`.
         Side effects, in one transaction: a compare-and-set writes the new hash and a new
         `security_stamp` only while the account may sign in and still holds the acting
         session's stamp and the hash the check verified; a miss is 403 `ACCOUNT_SUSPENDED` if
@@ -1044,7 +1046,10 @@ paths:
       summary: Sign out of every other device
       description: |
         Actor: a signed-in user (`auth`); a guest gets 401. Input: an empty body; any member is
-        422 `unknown_field`. Side effects, in one transaction: a compare-and-set gives the
+        422 `unknown_field`. The `revoke_all` limiter (5 per hour per user, proposed, 06 §9.1)
+        takes a point on every call first, because each call queues an email and the session
+        survives to call again; past it, 429 `RATE_LIMITED` and nothing is written. Side
+        effects, in one transaction: a compare-and-set gives the
         account a new `security_stamp` only while it may sign in and still holds the acting
         session's stamp (a miss is 403 `ACCOUNT_SUSPENDED` if the status changed, else 401
         `UNAUTHENTICATED`); `identity.revoke_sessions`, carrying the user ID only, is sent with
@@ -1073,6 +1078,7 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '422': { $ref: '#/components/responses/UnprocessableContent' }
+        '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/Internal' }
 
   /api/v1/seller/shops/{shopSlug}/products:
@@ -7893,3 +7899,5 @@ components:
 #     `changePassword` or `revokeAllSessions` whose compare-and-set misses answers 401 or 403.
 #     After the Fable review: `resetPassword` answers 429 past the proposed `pwreset_token`
 #     limiter, and `revokeAllSessions` queues the "sessions revoked" email instead of "no email".
+#     In review round 2: `changePassword` names the `password_change` limiter and
+#     `revokeAllSessions` the `revoke_all` limiter (both proposed), with a 429 on the latter.

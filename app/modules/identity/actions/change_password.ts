@@ -31,7 +31,12 @@ import { withTx } from '#modules/platform/tx'
  *    operation, so a sign-in burst from the same network does not block
  *    a password change, and a password change does not delete the key a
  *    sign-in would.
- * 2. The new password is hashed before the transaction.
+ * 2. A right password takes a point of the `password_change` limiter (5
+ *    per hour per user, proposed, docs/06 §9.1) before anything is written:
+ *    `reauth` gives a right password's points back, and each change queues
+ *    an email to the account's address, which may be unverified, so this
+ *    bounds them (07 TM-09). Then the new password is hashed, before the
+ *    transaction.
  * 3. In one transaction: a compare-and-set writes the new hash and a new
  *    `security_stamp` only while the account may sign in and still holds
  *    the stamp of the acting session and the hash the check verified, so a
@@ -98,6 +103,8 @@ export async function changePassword(
   }
   const verifiedHash = checked.passwordHash
 
+  // Each change queues an email; a right password gives its `reauth` points back, so this bounds them.
+  await rateLimiter('password_change').consume(rateLimitKey('password_change', userId))
   const passwordHash = await hash.use('scrypt').make(command.newPassword)
 
   return withTx(async (trx) => {

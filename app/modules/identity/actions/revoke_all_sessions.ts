@@ -7,6 +7,7 @@ import {
   sendSessionsRevokedEmail,
 } from '#modules/identity/internal/password_effects'
 import { selfActor } from '#modules/identity/internal/self_actor'
+import { rateLimitKey, rateLimiter } from '#modules/platform/rate_limits'
 import { withTx } from '#modules/platform/tx'
 
 /*
@@ -16,7 +17,13 @@ import { withTx } from '#modules/platform/tx'
  * returns into the acting session, which keeps its ID and tag (docs/07
  * §3.3), so it survives the job.
  *
- * In one transaction: a compare-and-set gives the account a new
+ * First the `revoke_all` limiter (5 per hour per user, proposed, docs/06
+ * §9.1) takes a point on every call: each call queues an email to the
+ * account's address, which may be unverified, and the session survives to
+ * call again, so without it one session could send an email per request
+ * (07 TM-09). Past it, 429 `RATE_LIMITED` and nothing is written.
+ *
+ * Then, in one transaction: a compare-and-set gives the account a new
  * `security_stamp` only while it may sign in and still holds the stamp of
  * the acting session, so a session that a password change or reset made
  * stale meanwhile cannot take the new stamp and outlive the change (its
@@ -38,6 +45,7 @@ export async function revokeAllSessions(
   sessionStamp: string,
   context: RevokeAllSessionsContext
 ): Promise<RevokeAllSessionsResult> {
+  await rateLimiter('revoke_all').consume(rateLimitKey('revoke_all', userId))
   return withTx(async (trx) => {
     const rows: { security_stamp: string }[] = await trx
       .from('users')

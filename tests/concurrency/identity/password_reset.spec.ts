@@ -9,6 +9,8 @@ import { changePassword } from '#modules/identity/actions/change_password'
 import { confirmPassword } from '#modules/identity/actions/confirm_password'
 import { requestPasswordReset } from '#modules/identity/actions/request_password_reset'
 import { resetPassword } from '#modules/identity/actions/reset_password'
+import { revokeAllSessions } from '#modules/identity/actions/revoke_all_sessions'
+import { lockoutEventId } from '#modules/identity/internal/password_effects'
 import { JOB_SCHEMA } from '#modules/platform/jobs'
 import { MIGRATOR_CONNECTION } from '#tests/support/database'
 import {
@@ -18,7 +20,9 @@ import {
   forgetPasswordReset,
   forgetReauth,
   forgetResetToken,
+  forgetUserLimits,
   liveToken,
+  passwordChangedJobsFor,
   randomIPv4,
   rawTokenOf,
   revokeJobsFor,
@@ -38,6 +42,9 @@ import { useJobBoss } from '#tests/support/jobs'
  * - T-IAM-105: two concurrent reset requests for one account leave exactly
  *   one live token, and concurrent redemptions of one reset token succeed
  *   once.
+ * - T-IAM-006 and T-IAM-109: the sixth successful `changePassword`, and
+ *   the sixth `revokeAllSessions`, of one user in an hour gets 429 and
+ *   queues no email (`password_change`, `revoke_all`, proposed).
  * - T-SEC-011: the sixth wrong current password in 15 minutes on
  *   `changePassword` gets 429 without hashing; the tenth in 24 h rotates
  *   the stamp and queues `identity.revoke_sessions` and the "sessions
@@ -383,7 +390,10 @@ test.group('T-SEC-011 password re-entry on changePassword', (group) => {
       const fresh = await db.from('users').where('id', user.id).firstOrFail()
       assert.notEqual(fresh.security_stamp, user.securityStamp)
       assert.lengthOf(await revokeJobsFor(user.id), 1)
-      assert.lengthOf(await sessionsRevokedJobsFor(user.id), 1)
+      const notices = await sessionsRevokedJobsFor(user.id)
+      assert.lengthOf(notices, 1)
+      // The user's and the day's ID, so a lockout committing at the same moment collapses into it.
+      assert.equal((notices[0].data as { event_id?: string }).event_id, lockoutEventId(user.id))
 
       await forgetKeys('reauth_user', user.id)
       const eleventh = await refusal(() => confirmPassword(user.id, FACTORY_PASSWORD, null))
@@ -392,4 +402,72 @@ test.group('T-SEC-011 password re-entry on changePassword', (group) => {
       await forgetReauth(user.id)
     }
   }).timeout(60_000)
+})
+
+test.group('T-IAM-006 and T-IAM-109 the per-user email limiters', (group) => {
+  group.setup(async () => {
+    await useJobBoss()
+  })
+  group.each.setup(() => cleanUp)
+
+  test('T-IAM-006 the sixth successful changePassword of one user in an hour gets 429 and queues no email [docs/06 §9.1 password_change, TM-09]', async ({
+    assert,
+  }) => {
+    const user = await account('change-limit')
+    const ip = randomIPv4()
+    const context = { ip, requestId: null, ipHash: null }
+    let current = FACTORY_PASSWORD
+    let stamp = user.securityStamp
+    try {
+      for (let n = 0; n < 5; n++) {
+        const next = `${NEW_PASSWORD}-${n}`
+        const result = await changePassword(
+          user.id,
+          { currentPassword: current, newPassword: next, sessionStamp: stamp },
+          context
+        )
+        current = next
+        stamp = result.securityStamp
+      }
+      const sixth = await refusal(() =>
+        changePassword(
+          user.id,
+          { currentPassword: current, newPassword: `${NEW_PASSWORD}-6`, sessionStamp: stamp },
+          context
+        )
+      )
+      assert.instanceOf(sixth, limiterErrors.E_TOO_MANY_REQUESTS)
+      assert.lengthOf(await passwordChangedJobsFor(user.id), 5)
+      const fresh = await db.from('users').where('id', user.id).firstOrFail()
+      assert.equal(fresh.security_stamp, stamp)
+      const changes = await db
+        .from('audit_logs')
+        .where({ action: 'auth.password_change', subject_id: user.id })
+      assert.lengthOf(changes, 5)
+    } finally {
+      await forgetUserLimits(user.id)
+    }
+  }).timeout(60_000)
+
+  test('T-IAM-109 the sixth revokeAllSessions of one user in an hour gets 429 and queues no email [docs/06 §9.1 revoke_all, TM-09]', async ({
+    assert,
+  }) => {
+    const user = await account('revoke-limit')
+    const context = { requestId: null, ipHash: null }
+    let stamp = user.securityStamp
+    try {
+      for (let n = 0; n < 5; n++) {
+        const result = await revokeAllSessions(user.id, stamp, context)
+        stamp = result.securityStamp
+      }
+      const sixth = await refusal(() => revokeAllSessions(user.id, stamp, context))
+      assert.instanceOf(sixth, limiterErrors.E_TOO_MANY_REQUESTS)
+      assert.lengthOf(await sessionsRevokedJobsFor(user.id), 5)
+      assert.lengthOf(await revokeJobsFor(user.id), 5)
+      const fresh = await db.from('users').where('id', user.id).firstOrFail()
+      assert.equal(fresh.security_stamp, stamp)
+    } finally {
+      await forgetUserLimits(user.id)
+    }
+  }).timeout(30_000)
 })
