@@ -1580,3 +1580,12 @@ The success transaction adds `refunded_minor` on the payment and allocation, pos
     - **The list**: one item per product with the product list's filters, order and cursor (§6.3), each with its active variants' SKU, label, stock and latest movement. `low_stock` is R2, so in R1 it is an unknown parameter (400). The movement history of 02 J-11 step 4 is a page prop of the inventory page, built with the seller pages (R1-S part 2f).
 
     Tests: `T-INV-008` and `T-INV-009` (new), `T-INV-002`, `T-SEC-001`, `T-SEC-003`, `T-SEC-030`, `T-SEC-031` and the reverse race of `T-CAT-106` ([10 §6](10-testing-and-quality-gates.md#6-test-id-registry)).
+
+70. **The uploads built (2026-11-24, R1-S part 2d-i).** The `createMediaUpload` and `completeMediaUpload` rows of §13.5 are built; `openapi.yaml` specifies them now (its note 60). Decisions where the owners were silent or disagreed, each recorded in its owner:
+    - **Kinds**: R1-S offers `product_image` only, under `shop.products.edit` and the "products edit, publish; inventory" gate ([07 §4.8](07-security-threat-model-and-permissions.md#48-how-policies-are-implemented)). Logo and banner (FR-MED-003, if wanted) and KYC documents with `document_type` join with their features ([12 §9](12-roadmap-and-backlog.md#9-single-seller-launch-r1-s)).
+    - **A declared size above 10 MB** is 422 `VALIDATION_FAILED` on `bytes` (`max`), as §9.2 says, not 413: 02 J-10 is corrected.
+    - **Signing comes first**: the URL is presigned for a new UUIDv7 before the row is inserted, so a store that cannot sign answers 503 `PROVIDER_UNAVAILABLE` and leaves no row ([03 §7.5](03-system-architecture.md#75-media-upload-pipeline-j-10-fr-med-001-adr-0013) is corrected).
+    - **The finish** answers 202 `processing`; 200 `rejected` with a reason the seller sees, for an empty object, one above 10 MB or one whose `Content-Type` differs from the declared mime, which is then deleted; and 409 `CONFLICT` with an `upload_missing` item when no object has arrived, writing nothing so the seller may PUT again and finish once more.
+    - **No audit row** for an upload: nothing a buyer sees changes until `replaceProductMedia` uses the asset.
+
+    Tests: `T-MED-004` (new), `T-ARCH-003` (its storage case), `T-ARCH-024`, `T-SEC-001`, `T-SEC-003`, `T-SEC-030`, `T-SEC-031` ([10 §6](10-testing-and-quality-gates.md#6-test-id-registry)).

@@ -142,6 +142,14 @@ if (args.routes) {
     APP_URL: 'https://routes.invalid',
     APP_RELEASE: 'route-check',
     DB_SSL: 'true',
+    // Object storage is required in production (start/env_policy.ts); no call is made.
+    S3_ENDPOINT: 'https://storage.routes.invalid',
+    S3_REGION: 'auto',
+    S3_ACCESS_KEY_ID: 'route-check',
+    S3_SECRET_ACCESS_KEY: key(),
+    S3_BUCKET_PRIVATE: 'route-check-private',
+    S3_BUCKET_PUBLIC: 'route-check-public',
+    MEDIA_PUBLIC_URL: 'https://media.routes.invalid',
   })
 }
 

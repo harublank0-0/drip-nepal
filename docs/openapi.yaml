@@ -157,8 +157,6 @@ x-pending-operations:
   - unpublishProduct
   - archiveProduct
   - restoreProduct
-  - createMediaUpload
-  - completeMediaUpload
   - replaceProductMedia
   - listShopOrders
   - getShopOrder
@@ -2975,6 +2973,149 @@ paths:
         '428': { $ref: '#/components/responses/PreconditionRequired' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/Internal' }
+
+  /api/v1/seller/shops/{shopSlug}/media/uploads:
+    parameters:
+      - $ref: '#/components/parameters/ShopSlug'
+    post:
+      operationId: createMediaUpload
+      tags: [Seller]
+      summary: Start an upload with a presigned URL
+      description: |
+        Actor: `mediaByKind` (07 §4.8): `seller_context` checks membership, then the validated
+        `kind`'s requirement and status gate apply. R1-S offers `product_image` only
+        (`shop.products.edit`; the "products edit, publish; inventory" gate, `active`); logo,
+        banner and KYC documents, with `document_type`, join with their features (12 §9).
+        Rules (ADR-0013 decision 2, 06 §9.2): JPEG, PNG or WebP, a declared size of 1 byte to
+        10 MB (`max` above it, 422, never 413); the `media_upload` limiter allows 120 uploads per
+        hour per shop, whoever uploads (06 §9.1; 429 past it). The presigned PUT targets the
+        upload key `originals/<shop_id>/<media_asset_id>` in the private bucket for 10 minutes,
+        with `content-type` among its signed headers, so the browser must send `headers`
+        exactly (07 TM-16). It is signed before the asset is stored, so a store that cannot
+        sign is 503 `PROVIDER_UNAVAILABLE` and leaves nothing. No `Location`: no read operation
+        serves an asset (06 §3.7). Side effects: one `media_assets` row `pending_upload`; no
+        audit row. T-MED-004, T-SEC-001, T-SEC-003, T-SEC-030, T-SEC-031. Release R1·M2
+        (`product_image` from M3; R1-S part 2d-i).
+      x-release: R1·M2
+      x-permission: mediaByKind
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateMediaUploadRequest' }
+            examples:
+              photo:
+                summary: A product photo of 2.4 MB
+                value: { kind: product_image, mime: image/jpeg, bytes: 2400000 }
+      responses:
+        '201':
+          description: The presigned upload and the asset, `pending_upload`.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MediaUploadResponse' }
+              examples:
+                created:
+                  summary: IDs and signature illustrative
+                  value:
+                    data:
+                      media_asset_id: 01929a70-0000-7000-8000-0000000000c1
+                      upload_url: https://account.r2.cloudflarestorage.com/dripnepal-production-private/originals/01929a40-0000-7000-8000-000000000001/01929a70-0000-7000-8000-0000000000c1?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=600&X-Amz-SignedHeaders=content-type%3Bhost&X-Amz-Signature=9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08
+                      headers: { Content-Type: image/jpeg }
+                      expires_at: '2026-11-24T06:10:00.000Z'
+                      asset:
+                        id: 01929a70-0000-7000-8000-0000000000c1
+                        kind: product_image
+                        status: pending_upload
+                        mime: image/jpeg
+                        bytes: 2400000
+                        rejection_reason: null
+                        created_at: '2026-11-24T06:00:00.000Z'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422': { $ref: '#/components/responses/UnprocessableContent' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/Internal' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/seller/shops/{shopSlug}/media/{mediaAssetId}/complete:
+    parameters:
+      - $ref: '#/components/parameters/ShopSlug'
+      - $ref: '#/components/parameters/MediaAssetId'
+    post:
+      operationId: completeMediaUpload
+      tags: [Seller]
+      summary: Finish an upload
+      description: |
+        Actor: `mediaByKind`, with the `kind` of the asset loaded inside the shop (07 §4.8); an
+        asset of another shop is 404 (T-SEC-001). The asset must be `pending_upload`, else 409
+        `INVALID_STATE_TRANSITION` with `current_status`. The body takes no member. A `HEAD` of
+        the upload key, outside any transaction (03 §7.5): no object yet is 409 `CONFLICT`
+        (`upload_missing`), nothing is written and the seller may PUT again while the URL lasts
+        and finish once more. An object as declared moves the asset to `processing` with its
+        ETag and size (04a §7.13) and sends `media.process_upload` in the same transaction:
+        202. An empty object, one above 10 MB or one whose `Content-Type` differs from the
+        declared mime is `rejected` with a `rejection_reason` the seller sees, and deleted: 200
+        (ADR-0013 decision 2, 07 TM-15, TM-16). T-MED-004, T-SEC-001, T-SEC-003, T-SEC-030,
+        T-SEC-031. Release R1·M2 (`product_image` from M3; R1-S part 2d-i).
+      x-release: R1·M2
+      x-permission: mediaByKind
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: The object was refused; the asset is `rejected` with its reason.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SellerMediaAssetResponse' }
+        '202':
+          description: The asset is `processing`; the worker checks it next (`media.process_upload`).
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SellerMediaAssetResponse' }
+              examples:
+                processing:
+                  summary: IDs illustrative
+                  value:
+                    data:
+                      id: 01929a70-0000-7000-8000-0000000000c1
+                      kind: product_image
+                      status: processing
+                      mime: image/jpeg
+                      bytes: 2400000
+                      rejection_reason: null
+                      created_at: '2026-11-24T06:00:00.000Z'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: |
+            `INVALID_STATE_TRANSITION` (the asset is no longer `pending_upload`), or `CONFLICT`
+            with an `upload_missing` item (no object at the upload key yet).
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem409' }
+        '422': { $ref: '#/components/responses/UnprocessableContent' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/Internal' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
   /api/v1/seller/shops/{shopSlug}/inventory:
     parameters:
@@ -6399,6 +6540,12 @@ components:
       required: true
       description: Product UUID, looked up inside the resolved shop (404 otherwise).
       schema: { $ref: '#/components/schemas/Uuid' }
+    MediaAssetId:
+      name: mediaAssetId
+      in: path
+      required: true
+      description: Media asset UUID, looked up inside the resolved shop (404 otherwise).
+      schema: { $ref: '#/components/schemas/Uuid' }
     VariantId:
       name: variantId
       in: path
@@ -8563,6 +8710,64 @@ components:
       properties:
         data: { $ref: '#/components/schemas/InventoryChange' }
 
+    # ---------- createMediaUpload, completeMediaUpload ----------
+    CreateMediaUploadRequest:
+      type: object
+      description: R1-S offers `product_image` only; other kinds and `document_type` join later.
+      additionalProperties: false
+      required: [kind, mime, bytes]
+      properties:
+        kind: { type: string, enum: [product_image] }
+        mime: { type: string, enum: [image/jpeg, image/png, image/webp] }
+        bytes:
+          type: integer
+          minimum: 1
+          maximum: 10485760
+          description: The declared size; the worker re-checks the object it reads.
+    SellerMediaAsset:
+      type: object
+      additionalProperties: false
+      required: [id, kind, status, mime, bytes, rejection_reason, created_at]
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        kind: { type: string, enum: [product_image, shop_logo, shop_banner, kyc_document] }
+        status: { type: string, enum: [pending_upload, processing, ready, rejected, deleted] }
+        mime: { type: string, enum: [image/jpeg, image/png, image/webp, application/pdf] }
+        bytes: { type: integer, minimum: 1, maximum: 10485760 }
+        rejection_reason: { type: [string, 'null'], maxLength: 500 }
+        created_at: { $ref: '#/components/schemas/Timestamp' }
+    SellerMediaAssetResponse:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/SellerMediaAsset' }
+    MediaUpload:
+      type: object
+      additionalProperties: false
+      required: [media_asset_id, upload_url, headers, expires_at, asset]
+      properties:
+        media_asset_id: { $ref: '#/components/schemas/Uuid' }
+        upload_url:
+          type: string
+          format: uri
+          description: The presigned PUT, valid until `expires_at`; never logged.
+        headers:
+          type: object
+          description: Send these with the PUT exactly; `Content-Type` is signed.
+          additionalProperties: false
+          required: [Content-Type]
+          properties:
+            Content-Type: { type: string, enum: [image/jpeg, image/png, image/webp] }
+        expires_at: { $ref: '#/components/schemas/Timestamp' }
+        asset: { $ref: '#/components/schemas/SellerMediaAsset' }
+    MediaUploadResponse:
+      type: object
+      additionalProperties: false
+      required: [data]
+      properties:
+        data: { $ref: '#/components/schemas/MediaUpload' }
+
     # ---------- listInventory ----------
     InventoryLastMovement:
       type: object
@@ -10716,3 +10921,11 @@ components:
 #     row, the listing refresh (for a count, only when `on_hand` changed), and that a stale
 #     `expected_on_hand` comes before `below_reserved`. The request numbers gain the `int` bounds,
 #     and `committed_shop_orders` at most 20 items, oldest first.
+# 60. `createMediaUpload` and `completeMediaUpload` move from `x-pending-operations` to `paths`,
+#     written from the code (R1-S part 2d-i, 2026-11-24; 06 note 70), with the new parameter
+#     `MediaAssetId` and the schemas `CreateMediaUploadRequest`, `MediaUpload`,
+#     `MediaUploadResponse`, `SellerMediaAsset` and `SellerMediaAssetResponse`. The request
+#     offers `kind: product_image` only and no `document_type` until logo, banner and KYC
+#     uploads are built. A declared size above 10 MB is 422 `max`. The finish answers 202
+#     `processing`, 200 `rejected` with its reason, or 409 `upload_missing` when no object has
+#     arrived.

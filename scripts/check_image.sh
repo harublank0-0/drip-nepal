@@ -44,6 +44,10 @@ docker run -d --name "$NAME" -p 127.0.0.1:3399:3333 \
   -e DATA_ENCRYPTION_KEYS="k1:$(key)" -e DATA_ENCRYPTION_ACTIVE_KEY_ID=k1 \
   -e BLIND_INDEX_KEY="$(key)" -e HMAC_KEY_LIMITER="$(key)" \
   -e HMAC_KEY_AUDIT_IP="$(key)" -e HMAC_KEY_NOTIFY_ADDRESS="$(key)" \
+  -e S3_ENDPOINT=https://storage.staging.dripnepal.test -e S3_REGION=auto \
+  -e S3_ACCESS_KEY_ID=image-check -e S3_SECRET_ACCESS_KEY="$(key)" \
+  -e S3_BUCKET_PRIVATE=dripnepal-staging-private -e S3_BUCKET_PUBLIC=dripnepal-staging-public \
+  -e MEDIA_PUBLIC_URL=https://media.staging.dripnepal.test \
   "$IMAGE" >/dev/null
 
 live=""
