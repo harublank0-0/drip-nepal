@@ -203,6 +203,58 @@ test.group('T-CAT-011 replaceProductVariants', (group) => {
     assert.lengthOf(await jobsFor(product.id), 3, 'no job for a set that changes nothing')
   })
 
+  test('T-CAT-011 two kept variants may swap their SKUs or their options in one request', async ({
+    assert,
+  }) => {
+    const w = await world()
+    const product = await draft(w)
+    const first = await replace(
+      w,
+      product.id,
+      { option_axes: ['apparel_size'], variants: [sized('s', 'SKU-A'), sized('m', 'SKU-B')] },
+      1
+    )
+    const [small, medium] = first.body.data.variants as Variant[]
+    const skus = await replace(
+      w,
+      product.id,
+      {
+        option_axes: ['apparel_size'],
+        variants: [
+          { ...sized('s', 'SKU-B'), id: small.id },
+          { ...sized('m', 'SKU-A'), id: medium.id },
+        ],
+      },
+      2
+    )
+    assert.equal(skus.status, 200, skus.text)
+    const options = await replace(
+      w,
+      product.id,
+      {
+        option_axes: ['apparel_size'],
+        variants: [
+          { ...sized('m', 'SKU-B'), id: small.id },
+          { ...sized('s', 'SKU-A'), id: medium.id },
+        ],
+      },
+      3
+    )
+    assert.equal(options.status, 200, options.text)
+    const rows = await db
+      .from('product_variants')
+      .whereIn('id', [small.id, medium.id])
+      .orderBy('sku')
+      .select('id', 'sku', 'option_signature', 'status')
+    assert.deepEqual(
+      rows.map((row) => [row.id, row.sku, row.option_signature, row.status]),
+      [
+        [medium.id, 'SKU-A', 'apparel_size:s', 'active'],
+        [small.id, 'SKU-B', 'apparel_size:m', 'active'],
+      ]
+    )
+  })
+
   test('T-CAT-011 a rejected product returns to draft; under review, archived or blocked is 409', async ({
     assert,
   }) => {
