@@ -6,6 +6,7 @@ import {
   definePolicy,
   NONCE,
   omitDirective,
+  storageOrigins,
 } from '#modules/platform/content_security_policy'
 
 /*
@@ -27,7 +28,10 @@ import {
  * the error tracker's browser ingest origin joins with @sentry/react.
  * NONCE is the request's nonce, written unquoted.
  */
-const originOf = (url: string | undefined) => (url ? [new URL(url).origin] : [])
+const storage = storageOrigins({
+  uploadEndpoint: env.get('S3_ENDPOINT'),
+  mediaPublicUrl: env.get('MEDIA_PUBLIC_URL'),
+})
 
 const target = definePolicy({
   defaultSrc: ["'self'"],
@@ -37,9 +41,9 @@ const target = definePolicy({
   styleSrc: ["'self'", NONCE, "'report-sample'"],
   styleSrcAttr: ["'unsafe-inline'"],
   // data: for inline images, blob: for the previews of selected files.
-  imgSrc: ["'self'", ...originOf(env.get('MEDIA_PUBLIC_URL')), 'data:', 'blob:'],
+  imgSrc: ["'self'", ...storage.imgSrc, 'data:', 'blob:'],
   fontSrc: ["'self'"],
-  connectSrc: ["'self'", ...originOf(env.get('S3_ENDPOINT'))],
+  connectSrc: ["'self'", ...storage.connectSrc],
   formAction: ["'self'"],
   frameAncestors: ["'none'"],
   baseUri: ["'self'"],

@@ -4,6 +4,7 @@ import {
   definePolicy,
   omitDirective,
   serializePolicy,
+  storageOrigins,
 } from '#modules/platform/content_security_policy'
 import { csp } from '#config/shield'
 
@@ -35,6 +36,25 @@ test.group('T-SEC-035 Content-Security-Policy policies', () => {
         "img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; form-action 'self'; " +
         "frame-ancestors 'none'; base-uri 'self'; object-src 'none'"
     )
+  })
+
+  test('T-SEC-035 the upload and media origins join connect-src and img-src when set', ({
+    assert,
+  }) => {
+    assert.deepEqual(
+      storageOrigins({
+        uploadEndpoint: 'https://account.r2.cloudflarestorage.com/a/path',
+        mediaPublicUrl: 'https://media.dripnepal.com/',
+      }),
+      {
+        connectSrc: ['https://account.r2.cloudflarestorage.com'],
+        imgSrc: ['https://media.dripnepal.com'],
+      }
+    )
+    assert.deepEqual(storageOrigins({}), { connectSrc: [], imgSrc: [] })
+    assert.deepEqual(storageOrigins({ uploadEndpoint: 'http://127.0.0.1:9000' }).connectSrc, [
+      'http://127.0.0.1:9000',
+    ])
   })
 
   test('T-SEC-035 a report URI adds report-uri and report-to', ({ assert }) => {

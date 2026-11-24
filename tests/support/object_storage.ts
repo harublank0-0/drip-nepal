@@ -14,7 +14,9 @@ import { PortAdapter } from '#modules/platform/ports/port_adapter'
  * browser would PUT to the presigned URL, and asserts what was presigned,
  * read and deleted. Like the real adapter it extends `PortAdapter`, so a
  * call inside a `withTx` transaction throws (T-ARCH-003). `failNext` makes
- * the next calls throw, as an outage would.
+ * the next calls throw, as an outage would; `gateHeads(n)` holds each
+ * `head` until `n` of them wait, so concurrent requests all pass the step
+ * before it before any goes on (the concurrency suite's races).
  *
  *   const storage = fakeObjectStorage()   // in group.each.setup, returning storage.restore
  *   storage.fake.put('private', key, 2048, 'image/jpeg')
@@ -34,6 +36,12 @@ export class MemoryObjectStorage extends PortAdapter implements ObjectStorage {
   readonly contexts: CallContext[] = []
   #failures: Error[] = []
   #version = 0
+  #headGate: { count: number; waiting: (() => void)[] } | null = null
+
+  gateHeads(count: number) {
+    this.#headGate = { count, waiting: [] }
+    return this
+  }
 
   failNext(error: Error, times = 1) {
     for (let n = 0; n < times; n++) this.#failures.push(error)
@@ -73,6 +81,16 @@ export class MemoryObjectStorage extends PortAdapter implements ObjectStorage {
 
   async head(bucket: StorageBucket, key: string, ctx: CallContext): Promise<StoredObject | null> {
     this.guard('head')
+    const gate = this.#headGate
+    if (gate) {
+      await new Promise<void>((resolve) => {
+        gate.waiting.push(resolve)
+        if (gate.waiting.length >= gate.count) {
+          this.#headGate = null
+          for (const release of gate.waiting) release()
+        }
+      })
+    }
     this.#call(ctx)
     return this.objects.get(`${bucket}/${key}`) ?? null
   }
