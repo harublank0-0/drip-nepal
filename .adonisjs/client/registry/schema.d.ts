@@ -439,6 +439,30 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/seller/inventory/inventory_items_controller').default['stocktake']>>> | { status: 422; response: { errors: SimpleError[] } }
     }
   }
+  'createMediaUpload': {
+    methods: ["POST"]
+    pattern: '/api/v1/seller/shops/:shopSlug/media/uploads'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/media/create_media_upload').createMediaUploadValidator)>>
+      paramsTuple: [ParamValue]
+      params: { shopSlug: ParamValue }
+      query: ExtractQuery<InferInput<(typeof import('#validators/media/create_media_upload').createMediaUploadValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/api/v1/seller/media/media_uploads_controller').default['store']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/seller/media/media_uploads_controller').default['store']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
+  'completeMediaUpload': {
+    methods: ["POST"]
+    pattern: '/api/v1/seller/shops/:shopSlug/media/:mediaAssetId/complete'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue, ParamValue]
+      params: { shopSlug: ParamValue; mediaAssetId: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/api/v1/seller/media/media_uploads_controller').default['complete']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/seller/media/media_uploads_controller').default['complete']>>>
+    }
+  }
   'getLogisticsSettings': {
     methods: ["GET","HEAD"]
     pattern: '/api/v1/seller/shops/:shopSlug/logistics'

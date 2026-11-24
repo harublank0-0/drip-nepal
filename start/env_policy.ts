@@ -36,6 +36,8 @@ export type EnvPolicyValues = {
   SMTP_USERNAME?: string
   SMTP_PASSWORD?: boolean
   MAIL_FROM_ADDRESS?: string
+  // Object storage (docs/09 §6.1): the names and URLs, and whether the secret is set.
+  STORAGE?: Record<string, string | boolean | undefined>
   // Base64 of every key that must differ from the others in staging and prod.
   KEYS: Record<string, string | undefined>
 }
@@ -111,6 +113,27 @@ export function environmentPolicyViolations(values: EnvPolicyValues): string[] {
 
   if (values.SENTRY_DSN && !values.KEYS.HMAC_KEY_TELEMETRY) {
     violations.push('HMAC_KEY_TELEMETRY is required when SENTRY_DSN is set (docs/09 §5.6)')
+  }
+
+  /*
+   * Object storage (docs/09 §6.1, R1-S part 2d): all of it or none of it,
+   * so a half-configured store fails at boot rather than at the first
+   * upload; staging and production need it, over https.
+   */
+  const storage = values.STORAGE ?? {}
+  const storageSet = Object.entries(storage).filter(([, value]) => Boolean(value))
+  if (storageSet.length > 0 && storageSet.length < Object.keys(storage).length) {
+    const missing = Object.keys(storage).filter((name) => !storage[name])
+    violations.push(`Object storage is partly configured; set ${missing.join(', ')} (docs/09 §6.1)`)
+  }
+  if (deployed && storageSet.length === 0) {
+    violations.push('S3_* and MEDIA_PUBLIC_URL are required in staging and production')
+  }
+  for (const name of ['S3_ENDPOINT', 'MEDIA_PUBLIC_URL']) {
+    const url = storage[name]
+    if (deployed && typeof url === 'string' && !url.startsWith('https://')) {
+      violations.push(`${name} must use https:// in staging and production`)
+    }
   }
 
   // A process that sends email needs a sender address (docs/09 §6.1).

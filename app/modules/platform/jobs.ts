@@ -149,6 +149,13 @@ export const JOB_QUEUES = {
   'identity.revoke_sessions': { ...QUEUE_DEFAULTS, retryLimit: 5 },
   // 5 retries with backoff (docs/03 §9; R1-S part 2a).
   'catalog.refresh_listing': { ...QUEUE_DEFAULTS, retryLimit: 5 },
+  // 03 §9: 3 retries from 30 s; image work gets 300 s before it counts as expired.
+  'media.process_upload': {
+    ...QUEUE_DEFAULTS,
+    retryLimit: 3,
+    retryDelay: 30,
+    expireInSeconds: 300,
+  },
   // M6 courier queues (docs/03 §9 rows added with them, 2026-11-21).
   'logistics.verify_account': { ...QUEUE_DEFAULTS, retryLimit: 5 },
   'logistics.sync_branches': { ...QUEUE_DEFAULTS, retryLimit: 3 },
@@ -179,6 +186,7 @@ export const DEAD_LETTER_RULES = {
   'notifications.send_email': 'redrive',
   'identity.revoke_sessions': 'redrive',
   'catalog.refresh_listing': 'redrive',
+  'media.process_upload': 'redrive',
   'logistics.verify_account': 'redrive',
   'logistics.sync_branches': 'redrive',
   'orders.book_courier_shipment': 'discard',

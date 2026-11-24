@@ -20,11 +20,15 @@ import {
  * page, the scroll lock of Radix dialogs) and style attributes (OD-52). M7
  * enforces `target`, once sonner's injection has stopped (docs/07 note 36).
  *
- * The environment-specific origins of 07 §7.3 join with their work: the media
- * origin in img-src and the upload origin in connect-src with uploads (M3),
- * the error tracker's browser ingest origin with @sentry/react.
+ * The environment-specific origins of 07 §7.3 join with their work: the
+ * public media origin (MEDIA_PUBLIC_URL) in img-src and the presigned upload
+ * origin (S3_ENDPOINT, path-style, so the URL's origin is the endpoint's) in
+ * connect-src joined with the uploads (R1-S part 2d-i), each only when set;
+ * the error tracker's browser ingest origin joins with @sentry/react.
  * NONCE is the request's nonce, written unquoted.
  */
+const originOf = (url: string | undefined) => (url ? [new URL(url).origin] : [])
+
 const target = definePolicy({
   defaultSrc: ["'self'"],
   // The root view's inline theme script for `system` carries the nonce (docs/08 §1.2).
@@ -33,9 +37,9 @@ const target = definePolicy({
   styleSrc: ["'self'", NONCE, "'report-sample'"],
   styleSrcAttr: ["'unsafe-inline'"],
   // data: for inline images, blob: for the previews of selected files.
-  imgSrc: ["'self'", 'data:', 'blob:'],
+  imgSrc: ["'self'", ...originOf(env.get('MEDIA_PUBLIC_URL')), 'data:', 'blob:'],
   fontSrc: ["'self'"],
-  connectSrc: ["'self'"],
+  connectSrc: ["'self'", ...originOf(env.get('S3_ENDPOINT'))],
   formAction: ["'self'"],
   frameAncestors: ["'none'"],
   baseUri: ["'self'"],

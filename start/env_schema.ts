@@ -12,8 +12,9 @@ import { Secret } from '@adonisjs/core/helpers'
 | as secrets, so `env.get()` returns a `Secret` that prints redacted.
 |
 | Variables whose consumers arrive later join with them, under the same
-| rules (docs/09 §6.1 "Deliberately not in the schema"): S3_* with media
-| (M2), PAYMENT_PROVIDER and the gateway keys with payments.
+| rules (docs/09 §6.1 "Deliberately not in the schema"): PAYMENT_PROVIDER
+| and the gateway keys with payments. S3_* joined with the photo pipeline
+| (R1-S part 2d).
 |
 */
 
@@ -145,6 +146,23 @@ export const envSchema = {
 
   // Uploaded files ("fs" = ./storage on local disk)
   DRIVE_DISK: Env.schema.enum(['fs'] as const),
+
+  /*
+   * Object storage (docs/03 §3.5, docs/09 §6.1, docs/11 §3.6; R1-S part 2d):
+   * an S3-compatible store with a private and a public bucket, reached
+   * path-style so a presigned upload's origin is S3_ENDPOINT's (07 §7.3).
+   * Optional outside staging and production: unset, the photo operations
+   * answer 503 `PROVIDER_UNAVAILABLE` (providers/ports_provider.ts), and
+   * tests swap in an in-memory fake. MEDIA_PUBLIC_URL is the public
+   * bucket's origin (`https://media.<domain>`).
+   */
+  S3_ENDPOINT: Env.schema.string.optional({ format: 'url', tld: false }),
+  S3_REGION: Env.schema.string.optional(),
+  S3_ACCESS_KEY_ID: Env.schema.string.optional(),
+  S3_SECRET_ACCESS_KEY: Env.schema.secret.optional(),
+  S3_BUCKET_PRIVATE: Env.schema.string.optional(),
+  S3_BUCKET_PUBLIC: Env.schema.string.optional(),
+  MEDIA_PUBLIC_URL: Env.schema.string.optional({ format: 'url', tld: false }),
 
   // Rate limiter store
   LIMITER_STORE: Env.schema.enum(['database', 'memory'] as const),
