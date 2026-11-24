@@ -174,6 +174,30 @@ const routes = {
     tokens: [{"old":"/api/v1/seller/shops/:shopSlug/shipping","type":0,"val":"api","end":""},{"old":"/api/v1/seller/shops/:shopSlug/shipping","type":0,"val":"v1","end":""},{"old":"/api/v1/seller/shops/:shopSlug/shipping","type":0,"val":"seller","end":""},{"old":"/api/v1/seller/shops/:shopSlug/shipping","type":0,"val":"shops","end":""},{"old":"/api/v1/seller/shops/:shopSlug/shipping","type":1,"val":"shopSlug","end":""},{"old":"/api/v1/seller/shops/:shopSlug/shipping","type":0,"val":"shipping","end":""}],
     types: placeholder as Registry['replaceShopShipping']['types'],
   },
+  'listShopProducts': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/v1/seller/shops/:shopSlug/products',
+    tokens: [{"old":"/api/v1/seller/shops/:shopSlug/products","type":0,"val":"api","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products","type":0,"val":"v1","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products","type":0,"val":"seller","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products","type":0,"val":"shops","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products","type":1,"val":"shopSlug","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products","type":0,"val":"products","end":""}],
+    types: placeholder as Registry['listShopProducts']['types'],
+  },
+  'createProduct': {
+    methods: ["POST"],
+    pattern: '/api/v1/seller/shops/:shopSlug/products',
+    tokens: [{"old":"/api/v1/seller/shops/:shopSlug/products","type":0,"val":"api","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products","type":0,"val":"v1","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products","type":0,"val":"seller","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products","type":0,"val":"shops","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products","type":1,"val":"shopSlug","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products","type":0,"val":"products","end":""}],
+    types: placeholder as Registry['createProduct']['types'],
+  },
+  'getShopProduct': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/v1/seller/shops/:shopSlug/products/:productId',
+    tokens: [{"old":"/api/v1/seller/shops/:shopSlug/products/:productId","type":0,"val":"api","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId","type":0,"val":"v1","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId","type":0,"val":"seller","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId","type":0,"val":"shops","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId","type":1,"val":"shopSlug","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId","type":0,"val":"products","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId","type":1,"val":"productId","end":""}],
+    types: placeholder as Registry['getShopProduct']['types'],
+  },
+  'updateProduct': {
+    methods: ["PATCH"],
+    pattern: '/api/v1/seller/shops/:shopSlug/products/:productId',
+    tokens: [{"old":"/api/v1/seller/shops/:shopSlug/products/:productId","type":0,"val":"api","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId","type":0,"val":"v1","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId","type":0,"val":"seller","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId","type":0,"val":"shops","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId","type":1,"val":"shopSlug","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId","type":0,"val":"products","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId","type":1,"val":"productId","end":""}],
+    types: placeholder as Registry['updateProduct']['types'],
+  },
   'getLogisticsSettings': {
     methods: ["GET","HEAD"],
     pattern: '/api/v1/seller/shops/:shopSlug/logistics',

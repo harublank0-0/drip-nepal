@@ -71,9 +71,21 @@ export function assertShopOwner(shop: SellerContext, detail: string) {
  *   which allows named operations only (`getShopShipping` and
  *   `replaceShopShipping` among them, not these), so active only;
  * - courier booking like orders process (active, or suspended in
- *   `fulfill_existing` mode).
+ *   `fulfill_existing` mode);
+ * - `products_view` (`listShopProducts`, `getShopProduct`): active, or
+ *   suspended in either mode; refused while `pending_review`, `rejected`
+ *   or `closed` (R1-S part 2a);
+ * - `products_edit`, the "products edit, publish; inventory" column
+ *   (`createProduct`, `updateProduct`): active only.
  */
-export type ShopGate = 'member' | 'profile' | 'courier_accounts' | 'logistics' | 'orders_process'
+export type ShopGate =
+  | 'member'
+  | 'profile'
+  | 'courier_accounts'
+  | 'logistics'
+  | 'orders_process'
+  | 'products_view'
+  | 'products_edit'
 
 export function shopGateAllows(shop: SellerContext, gate: ShopGate) {
   switch (gate) {
@@ -86,8 +98,11 @@ export function shopGateAllows(shop: SellerContext, gate: ShopGate) {
         shop.status === 'active' ||
         (shop.status === 'suspended' && shop.suspensionMode === 'fulfill_existing')
       )
+    case 'products_view':
+      return shop.status === 'active' || shop.status === 'suspended'
     case 'courier_accounts':
     case 'logistics':
+    case 'products_edit':
       return shop.status === 'active'
   }
 }

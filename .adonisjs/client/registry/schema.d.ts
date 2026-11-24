@@ -343,6 +343,54 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/seller/shops/shipping_controller').default['replace']>>> | { status: 422; response: { errors: SimpleError[] } }
     }
   }
+  'listShopProducts': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/seller/shops/:shopSlug/products'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { shopSlug: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/api/v1/seller/catalog/products_controller').default['index']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/seller/catalog/products_controller').default['index']>>>
+    }
+  }
+  'createProduct': {
+    methods: ["POST"]
+    pattern: '/api/v1/seller/shops/:shopSlug/products'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/catalog/products').createProductValidator)>>
+      paramsTuple: [ParamValue]
+      params: { shopSlug: ParamValue }
+      query: ExtractQuery<InferInput<(typeof import('#validators/catalog/products').createProductValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/api/v1/seller/catalog/products_controller').default['store']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/seller/catalog/products_controller').default['store']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
+  'getShopProduct': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/seller/shops/:shopSlug/products/:productId'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue, ParamValue]
+      params: { shopSlug: ParamValue; productId: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/api/v1/seller/catalog/products_controller').default['show']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/seller/catalog/products_controller').default['show']>>>
+    }
+  }
+  'updateProduct': {
+    methods: ["PATCH"]
+    pattern: '/api/v1/seller/shops/:shopSlug/products/:productId'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/catalog/products').updateProductValidator)>>
+      paramsTuple: [ParamValue, ParamValue]
+      params: { shopSlug: ParamValue; productId: ParamValue }
+      query: ExtractQuery<InferInput<(typeof import('#validators/catalog/products').updateProductValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/api/v1/seller/catalog/products_controller').default['update']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/seller/catalog/products_controller').default['update']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
   'getLogisticsSettings': {
     methods: ["GET","HEAD"]
     pattern: '/api/v1/seller/shops/:shopSlug/logistics'
