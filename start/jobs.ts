@@ -1,3 +1,4 @@
+import { refreshListing } from '#modules/catalog/jobs/refresh_listing'
 import { revokeSessions } from '#modules/identity/jobs/revoke_sessions'
 import { verifyAccount } from '#modules/logistics/jobs/verify_account'
 import { syncBranches } from '#modules/logistics/jobs/sync_branches'
@@ -33,6 +34,8 @@ export const JOB_HANDLERS: { [Q in QueueName]?: Handler<Q> } = {
   'notifications.send_email': (payload) => sendEmail(payload),
   // M1 part 4: sessions that no longer hold the user's stamp (docs/03 §9, docs/07 §3.3).
   'identity.revoke_sessions': (payload) => revokeSessions(payload),
+  // R1-S part 2a: the listing read model (docs/04a §7.12).
+  'catalog.refresh_listing': (payload) => refreshListing(payload),
   'logistics.verify_account': (payload) => verifyAccount(payload),
   'logistics.sync_branches': (payload) => syncBranches(payload),
   'orders.book_courier_shipment': (payload, attempt) => bookCourierShipmentJob(payload, attempt),

@@ -38,6 +38,9 @@ export const controllers = {
         },
       },
       seller: {
+        catalog: {
+          Products: () => import('#controllers/api/v1/seller/catalog/products_controller'),
+        },
         shops: {
           Shipping: () => import('#controllers/api/v1/seller/shops/shipping_controller'),
           Shops: () => import('#controllers/api/v1/seller/shops/shops_controller'),

@@ -81,3 +81,19 @@ export const SHIPPING_LIMITS = {
   coverage: { max: 100 },
   zones: { max: 20 },
 } as const
+
+// A product's text fields (docs/04a §7.6; 06 §13.5 `createProduct`,
+// `updateProduct`; R1-S part 2a): the bounds of `products_title_check` and
+// the four disclosure CHECKs, counted in code points after NFC and trim
+// (docs/04 §2.8). The maxima are [Assumption] values of 04a. `attributeValues`
+// bounds one attribute's value list in a request; the reference data has
+// fewer values per attribute.
+export const PRODUCT_LIMITS = {
+  title: { min: 3, max: 120 },
+  description: { max: 5000 },
+  manufacturerName: { max: 200 },
+  warrantyText: { max: 1000 },
+  careAndPrecautions: { max: 2000 },
+  attributes: { max: 30 },
+  attributeValues: { max: 20 },
+} as const

@@ -5,11 +5,12 @@ const ShopsController = () => import('#controllers/api/v1/seller/shops/shops_con
 const ShippingController = () => import('#controllers/api/v1/seller/shops/shipping_controller')
 const LogisticsController = () => import('#controllers/seller/logistics_controller')
 const CourierBookingsController = () => import('#controllers/seller/courier_bookings_controller')
+const ProductsController = () => import('#controllers/api/v1/seller/catalog/products_controller')
 
 /*
  * Seller JSON operations (docs/06 §13.5, §13.8): the shop reads of R1-S part
- * 1a, the profile edit of part 1b, the shipping of part 1c and the M6
- * courier work. `listMyShops` is the one seller route outside `{shopSlug}`:
+ * 1a, the profile edit of part 1b, the shipping of part 1c, the product
+ * drafts of part 2a and the M6 courier work. `listMyShops` is the one seller route outside `{shopSlug}`:
  * `auth` only, the `session` requirement of docs/07 §4.5.
  * Every other route runs `auth`, then `sellerContext` on the exact
  * `:shopSlug` segment (T-SEC-005, T-SEC-037); the controllers check the
@@ -27,6 +28,16 @@ router
     router.patch('/', [ShopsController, 'updateShopProfile']).as('updateShopProfile')
     router.get('/shipping', [ShippingController, 'show']).as('getShopShipping')
     router.put('/shipping', [ShippingController, 'replace']).as('replaceShopShipping')
+    router.get('/products', [ProductsController, 'index']).as('listShopProducts')
+    router.post('/products', [ProductsController, 'store']).as('createProduct')
+    router
+      .get('/products/:productId', [ProductsController, 'show'])
+      .as('getShopProduct')
+      .where('productId', router.matchers.uuid())
+    router
+      .patch('/products/:productId', [ProductsController, 'update'])
+      .as('updateProduct')
+      .where('productId', router.matchers.uuid())
     router.get('/logistics', [LogisticsController, 'show']).as('getLogisticsSettings')
     router.put('/logistics', [LogisticsController, 'replace']).as('replaceLogisticsSettings')
     router
