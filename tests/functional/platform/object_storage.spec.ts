@@ -215,12 +215,15 @@ test.group('T-MED-004 S3 object storage', () => {
       await failureOf(storage.head('private', KEY, { requestId: 'req-2', timeoutMs: 50 })),
       ProviderTimeoutError
     )
+    // A time limit far away, so only the caller's abort can end the call quickly.
     const caller = new AbortController()
+    const startedAt = Date.now()
     const pending = failureOf(
-      storage.head('private', KEY, { requestId: 'req-3', timeoutMs: 5000, signal: caller.signal })
+      storage.head('private', KEY, { requestId: 'req-3', timeoutMs: 60_000, signal: caller.signal })
     )
     caller.abort()
     assert.instanceOf(await pending, ProviderTimeoutError, 'the caller’s signal aborts the call')
+    assert.isBelow(Date.now() - startedAt, 1000, 'at once, not at the time limit')
     assert.deepEqual(
       lines.map((line) => [line.level, line.fields.operation, line.fields.outcome]),
       [
