@@ -283,6 +283,17 @@ test.group('T-SEC-045 OD-44: platform actions on the staff member’s own shop',
       assert.deepEqual(await op.state(), before, `${op.name} changed nothing`)
     }
     assert.lengthOf(await auditsBy(s.user.id), 0, 'no audit row')
+    // The check comes before the state checks: a disabled account still answers 403, not 409.
+    await db
+      .from('logistics_accounts')
+      .where('id', s.otherAccountId)
+      .update({ status: 'disabled', disabled_at: db.raw('now()'), credentials_enc: null })
+    const disabled = await s.call(
+      'PUT',
+      `/api/v1/admin/logistics/accounts/${s.otherAccountId}/shops/${s.world.shopId}`,
+      {}
+    )
+    assert.equal(disabled.status, 403, disabled.text)
   })
 
   test('T-SEC-045 with the mode off, a code changes nothing: the refusal comes first and the code is not spent', async ({
