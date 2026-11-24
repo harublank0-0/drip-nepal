@@ -10,6 +10,7 @@ import {
 import { closeHeldEvent, courierEvent } from '#modules/logistics/actions/courier_events'
 import { accountsUsableByShop, activeBranches, logisticsSettings } from '#modules/logistics/queries'
 import type { Actor } from '#modules/platform/actor'
+import type { OwnShopCheck } from '#modules/platform/own_shop'
 import { raiseAlert } from '#modules/platform/alerts'
 import { idempotentTx, type IdempotencyScope } from '#modules/platform/idempotency'
 import { sendJob } from '#modules/platform/jobs'
@@ -178,7 +179,11 @@ export async function cancelCourierBooking<T>(
   })
 }
 
-// Staff record what they learned from the courier (docs/06 §13.8 `adminResolveCourierBooking`).
+/*
+ * Staff record what they learned from the courier (docs/06 §13.8
+ * `adminResolveCourierBooking`), on a shop checked against OD-44
+ * (`ownShop`) after the key's insert, so a replayed key checks no code.
+ */
 export async function resolveCourierBooking<T>(
   command: {
     shopOrderNumber: string
@@ -188,14 +193,17 @@ export async function resolveCourierBooking<T>(
   },
   context: {
     actor: Actor
+    ownShop: OwnShopCheck
     idempotency: IdempotencyScope | null
     present: (shipment: ShipmentView) => T
   }
 ) {
   return idempotentTx(context.idempotency, async (trx) => {
     const { shipment } = await lockShipmentChain(trx, command.shopOrderNumber)
-    if (!shipment || !shipment.logistics_account_id) {
-      throw conflict(shipment?.status ?? 'none', 'This parcel has no courier booking.')
+    if (!shipment) throw conflict('none', 'This parcel has no courier booking.')
+    const flags = await context.ownShop(trx, [shipment.shop_id])
+    if (!shipment.logistics_account_id) {
+      throw conflict(shipment.status, 'This parcel has no courier booking.')
     }
     let resultId = shipment.id as string
     let action = 'shipment.booking_resolve'
@@ -293,7 +301,7 @@ export async function resolveCourierBooking<T>(
       subjectType: 'shipment',
       subjectId: shipment.id,
       shopId: shipment.shop_id,
-      changes,
+      changes: { ...changes, ...flags },
       reason: command.note,
     })
     return { status: 200, body: context.present((await shipmentById(trx, resultId))!) }
@@ -317,14 +325,26 @@ export async function refreshCourierStatus(shopOrderNumber: string, actor: Actor
   })
 }
 
-// Staff close a held reading after acting on it; the replay continues (`adminResolveCourierEvent`).
+/*
+ * Staff close a held reading after acting on it; the replay continues
+ * (`adminResolveCourierEvent`). The reading's shop (null for one that
+ * matched no shipment of a platform-owned account) is checked against
+ * OD-44 (`ownShop`) before the change.
+ */
 export async function resolveCourierEvent(
   command: { eventId: string; status: 'applied' | 'ignored'; note: string },
-  actor: Actor
+  context: { actor: Actor; ownShop: OwnShopCheck }
 ) {
+  const { actor } = context
   const existing = await courierEvent(command.eventId)
   if (!existing) throw new DomainError('NOT_FOUND')
   await withTx(async (trx) => {
+    const current = await trx
+      .from('courier_events')
+      .where('id', command.eventId)
+      .select('shop_id')
+      .first()
+    const flags = await context.ownShop(trx, [current?.shop_id ?? null])
     const closed = await closeHeldEvent(trx, command.eventId, command.status)
     if (!closed) throw new InvalidStateTransition(existing.processing_status, [])
     await recordAudit(trx, {
@@ -333,7 +353,7 @@ export async function resolveCourierEvent(
       subjectType: 'courier_event',
       subjectId: command.eventId,
       shopId: closed.shop_id,
-      changes: { processing_status: { from: 'held', to: command.status } },
+      changes: { processing_status: { from: 'held', to: command.status }, ...flags },
       reason: command.note,
     })
     if (closed.shipment_id) {
@@ -355,6 +375,8 @@ export async function resolveCourierEvent(
  * (docs/05 §4.4 level 3), so a dispatch action cannot race the change. Setting
  * `review_required` or `failed` on an order with a parcel already `booked`
  * raises an alert: staff cancel the booking or resolve the verification.
+ * An order is the staff member's own when any of its shop orders belongs to
+ * a shop they own or work in (OD-44, `ownShop`).
  */
 export async function recordOrderVerification(
   command: {
@@ -363,11 +385,20 @@ export async function recordOrderVerification(
     method: 'phone_call' | 'manual'
     notes: string | null
   },
-  actor: Actor
+  context: { actor: Actor; ownShop: OwnShopCheck }
 ) {
+  const { actor } = context
   return withTx(async (trx) => {
     const order = await trx.from('orders').where('number', command.orderNumber).forUpdate().first()
     if (!order) throw new DomainError('NOT_FOUND')
+    const shops: { shop_id: string }[] = await trx
+      .from('shop_orders')
+      .where('order_id', order.id)
+      .select('shop_id')
+    const flags = await context.ownShop(
+      trx,
+      shops.map((row) => row.shop_id)
+    )
     await trx
       .from('orders')
       .where('id', order.id)
@@ -386,6 +417,7 @@ export async function recordOrderVerification(
       changes: {
         verification_status: { from: order.verification_status, to: command.status },
         verification_method: command.method,
+        ...flags,
       },
     })
     if (command.status !== 'verified') {

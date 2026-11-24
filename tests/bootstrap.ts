@@ -35,7 +35,24 @@ export const plugins: Config['plugins'] = [
  * The teardown functions are executed after all the tests
  */
 export const runnerHooks: Required<Pick<Config, 'setup' | 'teardown'>> = {
-  setup: [],
+  /*
+   * Every limiter of docs/06 §9.1 is built once here, outside any
+   * transaction. The limiter manager caches each limiter for the life of
+   * the process, with the database client it was built on; one first built
+   * inside a functional test would keep that test's finished (global or
+   * savepoint) transaction, and its later writes could land on whichever
+   * transaction holds that pooled connection next, in another test or
+   * suite. Built here, every limiter writes `rate_limits` on its own pooled
+   * connection and commits, as in production (docs/10 §3.3).
+   */
+  setup: [
+    async () => {
+      const { RATE_LIMITS, rateLimiter } = await import('#modules/platform/rate_limits')
+      for (const name of Object.keys(RATE_LIMITS) as (keyof typeof RATE_LIMITS)[]) {
+        rateLimiter(name)
+      }
+    },
+  ],
   // A test that started the shared pg-boss instance leaves its pool open: close it (tests/support/jobs.ts).
   teardown: [() => stopJobBoss()],
 }

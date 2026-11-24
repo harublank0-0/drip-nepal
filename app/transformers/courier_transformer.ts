@@ -35,7 +35,9 @@ export function accountJson(account: AccountView) {
  */
 export function adminAccountJson(
   account: AccountView & { shops: { shopId: string; isActive: boolean }[] },
-  labels: Map<string, ShopLabel>
+  labels: Map<string, ShopLabel>,
+  // The shops an action by the viewing staff member needs a `totp_code` for (OD-44).
+  codeShops: ReadonlySet<string> = new Set()
 ) {
   const label = (shopId: string) => {
     const shop = labels.get(shopId)
@@ -45,6 +47,8 @@ export function adminAccountJson(
     ...accountJson(account),
     shop: account.shopId === null ? null : label(account.shopId),
     shops: account.shops.map((link) => ({ ...label(link.shopId), is_active: link.isActive })),
+    // A status change on this shop-owned account needs a code in the body (R1-S part 1c-ii).
+    needs_totp_code: account.shopId !== null && codeShops.has(account.shopId),
   }
 }
 

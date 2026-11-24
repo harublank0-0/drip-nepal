@@ -65,10 +65,11 @@ export class WrongTotpCode extends Error {
 
 const WRONG_CODE_MESSAGE = "That code didn't work. Enter the code your app shows now."
 
-export function wrongCodeError() {
+// The 422 of a wrong code, on `code` or, for a code in an action's body, on `totp_code`.
+export function wrongCodeError(field: 'code' | 'totp_code' = 'code') {
   return new DomainError('VALIDATION_FAILED', {
     detail: WRONG_CODE_MESSAGE,
-    errors: [{ field: 'code', code: 'code_incorrect', message: WRONG_CODE_MESSAGE }],
+    errors: [{ field, code: 'code_incorrect', message: WRONG_CODE_MESSAGE }],
   })
 }
 
@@ -96,8 +97,16 @@ async function audit(
   })
 }
 
-// The 429 of the attempt that started the block: write the lock's audit row and alert once.
-async function consumeAccountPoint(userId: string, context: MfaAttemptContext) {
+const lockAudit = (userId: string, context: MfaAttemptContext) =>
+  audit(userId, 'auth.mfa_locked', context, { blocked_minutes: 15 })
+
+/*
+ * The 429 of the attempt that started the block: `onCrossed` writes the
+ * lock's audit row and alert once, in its own transaction, or, for a code
+ * checked inside an action's transaction, notes the crossing so the row is
+ * written after that transaction ends (`deferredTotpThrottle`).
+ */
+async function consumeAccountPoint(userId: string, onCrossed: () => Promise<void>) {
   const account = rateLimiter('mfa_user')
   const key = rateLimitKey('mfa_user', userId)
   try {
@@ -106,7 +115,7 @@ async function consumeAccountPoint(userId: string, context: MfaAttemptContext) {
     const crossed =
       error instanceof limiterErrors.E_TOO_MANY_REQUESTS &&
       error.response.consumed === RATE_LIMITS.mfa_user.requests + 1
-    if (crossed) await audit(userId, 'auth.mfa_locked', context, { blocked_minutes: 15 })
+    if (crossed) await onCrossed()
     throw error
   }
   return { account, key }
@@ -133,31 +142,95 @@ async function settle(points: Point[], how: 'decrement' | 'delete', requestId: s
   }
 }
 
+// Both points, charged before a code is checked; the 429s of section 2.
+async function chargePoints(
+  userId: string,
+  context: MfaAttemptContext,
+  onCrossed: () => Promise<void> = () => lockAudit(userId, context)
+): Promise<Point[]> {
+  const { account, key: accountKey } = await consumeAccountPoint(userId, onCrossed)
+  const source = rateLimiter('mfa')
+  const sourceKey = rateLimitKey('mfa', userId, clientNetwork(context.ip))
+  await source.consume(sourceKey)
+  return [
+    { limiter: account, key: accountKey, name: 'mfa_user' },
+    { limiter: source, key: sourceKey, name: 'mfa' },
+  ]
+}
+
+// After the check: a right code deletes both keys, a wrong one keeps them, anything else gives them back.
+async function settleAfter<T>(
+  userId: string,
+  context: MfaAttemptContext,
+  points: Point[],
+  outcome: { ok: true; value: T } | { ok: false; error: unknown },
+  field: 'code' | 'totp_code'
+): Promise<T> {
+  if (outcome.ok) {
+    await settle(points, 'delete', context.requestId)
+    return outcome.value
+  }
+  if (!(outcome.error instanceof WrongTotpCode)) {
+    await settle(points, 'decrement', context.requestId)
+    throw outcome.error
+  }
+  await audit(userId, 'auth.mfa_failed', context)
+  throw wrongCodeError(field)
+}
+
 export async function throttledTotpCheck<T>(
   userId: string,
   context: MfaAttemptContext,
   check: () => Promise<T>
 ): Promise<T> {
-  const { account, key: accountKey } = await consumeAccountPoint(userId, context)
-  const source = rateLimiter('mfa')
-  const sourceKey = rateLimitKey('mfa', userId, clientNetwork(context.ip))
-  await source.consume(sourceKey)
-  const points: Point[] = [
-    { limiter: account, key: accountKey, name: 'mfa_user' },
-    { limiter: source, key: sourceKey, name: 'mfa' },
-  ]
-
-  let result: T
+  const points = await chargePoints(userId, context)
+  let outcome: { ok: true; value: T } | { ok: false; error: unknown }
   try {
-    result = await check()
+    outcome = { ok: true, value: await check() }
   } catch (error) {
-    if (!(error instanceof WrongTotpCode)) {
-      await settle(points, 'decrement', context.requestId)
-      throw error
-    }
-    await audit(userId, 'auth.mfa_failed', context)
-    throw wrongCodeError()
+    outcome = { ok: false, error }
   }
-  await settle(points, 'delete', context.requestId)
-  return result
+  return settleAfter(userId, context, points, outcome, 'code')
+}
+
+/*
+ * The same limiters for a `totp_code` in an action's body (docs/06 §7.3
+ * step 3; docs/07 §3.10), where the code is checked deep inside the
+ * action's transaction, and only when the action needs it: after the
+ * idempotency key's insert, so a replayed key charges nothing, and only
+ * for the actions that ask (OD-44's own-shop check). `charge()` takes both
+ * points the first time it is called, on the limiters' own connection, so
+ * they stay counted when the transaction rolls back; a deadlock retry of
+ * the transaction does not charge again. `run()` wraps the whole request
+ * and settles the points once the transaction has ended: a `WrongTotpCode`
+ * thrown out of it writes the `auth.mfa_failed` row and answers 422 on
+ * `totp_code`, a success deletes the keys, and any other error gives the
+ * points back, as `throttledTotpCheck` does. The attempt that starts the
+ * 15-minute block (section 2) answers 429 and writes its `auth.mfa_locked`
+ * row and alert here too, after the transaction: inside it, the row's own
+ * transaction would nest. A request that never charged passes through
+ * untouched.
+ */
+export function deferredTotpThrottle(userId: string, context: MfaAttemptContext) {
+  let points: Point[] | null = null
+  let lockCrossed = false
+  return {
+    async charge() {
+      points ??= await chargePoints(userId, context, async () => {
+        lockCrossed = true
+      })
+    },
+    async run<T>(work: () => Promise<T>): Promise<T> {
+      let outcome: { ok: true; value: T } | { ok: false; error: unknown }
+      try {
+        outcome = { ok: true, value: await work() }
+      } catch (error) {
+        outcome = { ok: false, error }
+      }
+      if (lockCrossed) await lockAudit(userId, context)
+      if (points) return settleAfter(userId, context, points, outcome, 'totp_code')
+      if (outcome.ok) return outcome.value
+      throw outcome.error
+    },
+  }
 }

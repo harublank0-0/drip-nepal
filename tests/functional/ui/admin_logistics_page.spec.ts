@@ -88,6 +88,7 @@ type Account = {
   status: string
   shop: { shop_id: string; slug: string | null; name: string | null } | null
   shops: { shop_id: string; slug: string | null; name: string | null; is_active: boolean }[]
+  needs_totp_code: boolean
 }
 
 test.group('T-SEC-030 /admin/logistics access', () => {
@@ -182,6 +183,7 @@ test.group('T-SEC-036 /admin/logistics props', () => {
       'version',
       'shop',
       'shops',
+      'needs_totp_code',
     ])
   })
 
@@ -239,6 +241,45 @@ test.group('T-UI-035 /admin/logistics lists the courier accounts', () => {
       { shop_id: allowed.id, slug: allowed.slug, name: allowed.name, is_active: true },
       { shop_id: removed.id, slug: removed.slug, name: removed.name, is_active: false },
     ])
+    assert.isFalse(shopOwned.needs_totp_code, 'another person’s shop')
+    assert.isFalse(ours.needs_totp_code)
+  })
+
+  test('T-SEC-045 an account of the staff member’s own shop needs a code only under single-operator mode', async ({
+    assert,
+  }) => {
+    const setMode = (on: boolean) =>
+      db.rawQuery(
+        `INSERT INTO platform_settings (key, value) VALUES ('single_operator_mode', ?::jsonb)
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+        [JSON.stringify(on)]
+      )
+    const staffId = await staffUser('platform_admin')
+    const owned = await ShopFactory.merge({ ownerUserId: staffId }).apply('active').create()
+    const someoneElses = await ShopFactory.apply('active').create()
+    const own = await insertNcmAccount(owned.id)
+    const other = await insertNcmAccount(someoneElses.id)
+    const platform = await platformAccount('DripNepal NCM')
+    await allow(platform, owned.id)
+    const browser = await signIn(staffId, minutesAgo(1))
+    const needsCode = async () => {
+      const props = await pageProps(browser)
+      const items = (props.accounts as { items: Account[] }).items
+      const of = (id: string) => items.find((item) => item.id === id)!.needs_totp_code
+      return { own: of(own), other: of(other), platform: of(platform) }
+    }
+    await setMode(false)
+    assert.deepEqual(
+      await needsCode(),
+      { own: false, other: false, platform: false },
+      'mode off: the action answers 403 instead'
+    )
+    await setMode(true)
+    assert.deepEqual(
+      await needsCode(),
+      { own: true, other: false, platform: false },
+      'only the staff member’s own shop-owned account'
+    )
   })
 
   test('T-UI-035 one cursor page at a time', async ({ assert }) => {

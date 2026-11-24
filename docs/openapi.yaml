@@ -5074,20 +5074,29 @@ paths:
       description: |
         Proposed (06 §13.8); OD-58, re-decided 2026-11-22.
         Actor: platform staff with `platform.logistics.manage` (proposed) and fresh MFA (step-up,
-        07 §3.10; else 401 `MFA_REQUIRED`). Scope: platform-owned accounts only; a shop's own
-        account, an unknown account or an unknown shop is 404. No body; any member is 422
+        07 §3.10; else 401 `MFA_REQUIRED`, unless the body carries `totp_code`). Scope:
+        platform-owned accounts only; a shop's own account, an unknown account or an unknown shop
+        is 404. The body is optional and holds only `totp_code`; any other member is 422
         `unknown_field`.
+        Own shop (OD-44, R1-S part 1c-ii): on a shop the staff member owns or works in, 403
+        `FORBIDDEN` while `single_operator_mode` is off, and a `totp_code` under it
+        (`OwnShopTotpCode`).
         Rules: a `disabled` account is 409 `INVALID_STATE_TRANSITION`. Inserts the shop's
         `logistics_account_shops` row or reactivates it (04a §9.10); allowing an allowed shop
         changes nothing and writes no audit row. Whether the shop may then choose the `platform`
         mode is the settings' rule (`own_account_active`, `replaceLogisticsSettings`).
         Side effects: audit `logistics_account_shop.allow` (proposed). Not ⚷ (PUT), not ⟳.
-        T-SEC-041. Release R1·M6.
+        T-SEC-041, T-SEC-045. Release R1·M6.
       x-release: R1·M6
       x-proposed: true
       x-permission: platform.logistics.manage
       parameters:
         - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OwnShopCodeRequest' }
       responses:
         '200':
           description: The shop's row on the account.
@@ -5112,6 +5121,7 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/UnprocessableContent' }
+        '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/Internal' }
     delete:
       operationId: adminRemoveShopFromLogisticsAccount
@@ -5120,16 +5130,25 @@ paths:
       description: |
         Proposed (06 §13.8); OD-58, re-decided 2026-11-22.
         Actor: as `adminAllowShopOnLogisticsAccount`, with step-up. Scope: platform-owned accounts
-        only; a shop's own account or an unknown account is 404.
+        only; a shop's own account or an unknown account is 404. The optional body holds only
+        `totp_code`, with the own-shop rule of `adminAllowShopOnLogisticsAccount` (OD-44),
+        checked after the 404 and before the shop's row is read, whether or not the shop is
+        allowed.
         Effects (04a §9.10), in one transaction: the shop's row is deactivated, a shop whose
         default the account was returns to `manual`, and bookings already made keep the account.
         Removing a shop that is not allowed changes nothing.
-        Side effects: audit `logistics_account_shop.remove` (proposed). T-SEC-041. Release R1·M6.
+        Side effects: audit `logistics_account_shop.remove` (proposed). T-SEC-041, T-SEC-045.
+        Release R1·M6.
       x-release: R1·M6
       x-proposed: true
       x-permission: platform.logistics.manage
       parameters:
         - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OwnShopCodeRequest' }
       responses:
         '204':
           description: Removed, or not allowed in the first place.
@@ -5139,6 +5158,8 @@ paths:
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/UnprocessableContent' }
+        '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/Internal' }
 
   /api/v1/admin/logistics/accounts/{accountId}/status:
@@ -5152,7 +5173,11 @@ paths:
         Proposed (06 §13.8); waits for the product owner's approval.
         Actor: platform staff with `platform.logistics.manage` (proposed) and fresh MFA.
         Step-up (07 §3.10): MFA verified within the last 15 minutes, else 401 `MFA_REQUIRED`
-        with `verification_required` (06 §4.3). Scope: any account; an unknown one is 404.
+        with `verification_required` (06 §4.3), unless the body carries `totp_code`. Scope: any
+        account; an unknown one is 404.
+        Own shop (OD-44, R1-S part 1c-ii): a shop-owned account of a shop the staff member owns
+        or works in answers 403 `FORBIDDEN` while `single_operator_mode` is off, and needs
+        `totp_code` under it (`OwnShopTotpCode`); a platform-owned account is nobody's shop.
         Transitions (04a §9.9), in one transaction with the account row locked (suspend and
         resume also by compare-and-set on `status`): `suspended` from `pending`, `active` or `invalid`; `pending` (resume, re-verified by job
         `logistics.verify_account`) only from `suspended`; `disabled` from any status but
@@ -5161,7 +5186,7 @@ paths:
         to `manual`), refused while a parcel on the account is not finished. Any other request
         is 409 `INVALID_STATE_TRANSITION` with the `allowed_events` of the current status.
         Side effects: `version` + 1; audit `logistics_account.status_change` with `reason`.
-        Not ⚷, not ⟳. T-SEC-041, T-SHOP-116. Release R1·M6.
+        Not ⚷, not ⟳. T-SEC-041, T-SHOP-116, T-SEC-045. Release R1·M6.
       x-release: R1·M6
       x-proposed: true
       x-permission: platform.logistics.manage
@@ -5206,6 +5231,7 @@ paths:
         '409': { $ref: '#/components/responses/Conflict' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '422': { $ref: '#/components/responses/UnprocessableContent' }
+        '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/Internal' }
 
   /api/v1/admin/shops/{shopId}/logistics-enabled:
@@ -5219,12 +5245,15 @@ paths:
         Proposed (06 §13.8); waits for the product owner's approval.
         Actor: platform staff with `platform.logistics.manage` (proposed) and MFA verified
         within 12 h; no step-up. Scope: any shop; an unknown one is 404.
+        Own shop (OD-44, R1-S part 1c-ii): on a shop the staff member owns or works in, 403
+        `FORBIDDEN` while `single_operator_mode` is off, and a `totp_code` under it
+        (`OwnShopTotpCode`).
         Side effects, in one transaction with the shop row, then the settings row, locked: when
         `is_enabled` changes, the settings row is updated (`version` + 1) or inserted
         (`version` 1), so a seller edit loaded before it gets 412 `VERSION_CONFLICT`, and audit
         `shop_logistics_settings.enable` with `reason`. The same value again writes nothing and
         answers 200 (idempotent on the value). A disabled shop's `bookCourierShipment` is 409.
-        Not ⚷, not ⟳. Release R1·M6.
+        Not ⚷, not ⟳. T-SEC-045. Release R1·M6.
       x-release: R1·M6
       x-proposed: true
       x-permission: platform.logistics.manage
@@ -5263,6 +5292,7 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '422': { $ref: '#/components/responses/UnprocessableContent' }
+        '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/Internal' }
 
   /api/v1/admin/logistics/branches:
@@ -5542,6 +5572,10 @@ paths:
         Proposed (06 §13.8); waits for the product owner's approval.
         Actor: platform staff with `platform.orders.intervene` and MFA verified within 12 h; no
         step-up. Scope: the shop order's live shipment; an unknown shop order is 404.
+        Own shop (OD-44, R1-S part 1c-ii): on a shop the staff member owns or works in, 403
+        `FORBIDDEN` while `single_operator_mode` is off, and a `totp_code` under it
+        (`OwnShopTotpCode`), checked after the key's insert, so a replayed key checks no code and
+        a wrong code leaves the key free.
         Rules (05 §6.3), each refusal 409 `INVALID_STATE_TRANSITION` unless marked 422: the live
         shipment must have a courier booking. `booked` and `booking_failed` only from
         `needs_reconciliation`; `booked` requires `external_shipment_id` (422 `required`) that
@@ -5555,7 +5589,8 @@ paths:
         Side effects, in one transaction with the order, shop order and shipment rows locked:
         the compare-and-set, `version` + 1, a shipment event for each status change, and audit
         `shipment.booking_resolve`, `shipment.cancel` or `shipment.cancel_decline` with actor
-        `platform_staff` and `note` as the reason. Idempotency: ⚷, 24 h. Release R1·M6.
+        `platform_staff` and `note` as the reason. Idempotency: ⚷, 24 h. T-SEC-045. Release
+        R1·M6.
       x-release: R1·M6
       x-proposed: true
       x-permission: platform.orders.intervene
@@ -5624,6 +5659,7 @@ paths:
         '409': { $ref: '#/components/responses/Conflict' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '422': { $ref: '#/components/responses/UnprocessableContent' }
+        '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/Internal' }
 
   /api/v1/admin/shop-orders/{shopOrderNumber}/courier-refresh:
@@ -5641,7 +5677,8 @@ paths:
         Side effects: job `orders.process_courier_event` with no trigger row, sent in a
         transaction with the order, shop order and shipment rows locked; the job reads the
         parcel's status history and records its readings in `courier_events` (05 §6.3
-        "Replaying a status history", 04a §9.14). No body. Not ⚷. Release R1·M6.
+        "Replaying a status history", 04a §9.14). No body. Not ⚷. It changes nothing staff
+        choose, so OD-44's own-shop check does not apply (07 §4.1 item 4). Release R1·M6.
       x-release: R1·M6
       x-proposed: true
       x-permission: platform.orders.intervene
@@ -5741,13 +5778,17 @@ paths:
       description: |
         Proposed (06 §13.8); waits for the product owner's approval.
         Actor: platform staff with `platform.orders.intervene` and MFA verified within 12 h.
-        Scope: an unknown reading is 404. Rules: compare-and-set `held → applied` or `held →
+        Scope: an unknown reading is 404.
+        Own shop (OD-44, R1-S part 1c-ii): a reading of a shop the staff member owns or works in
+        is 403 `FORBIDDEN` while `single_operator_mode` is off, and needs a `totp_code` under it
+        (`OwnShopTotpCode`); a reading that matched no shipment is nobody's shop.
+        Rules: compare-and-set `held → applied` or `held →
         ignored` (sets `processed_at`); a reading in any other status is 409
         `INVALID_STATE_TRANSITION`. The shipment change itself goes through
         `adminRecordFulfillmentEvent` or `adminResolveCourierBooking`.
         Side effects, in one transaction: job `orders.process_courier_event` for the reading's
         shipment, so a replay that stopped on this row continues; audit
-        `courier_event.resolve` with `note` as the reason. Not ⚷. Release R1·M6.
+        `courier_event.resolve` with `note` as the reason. Not ⚷. T-SEC-045. Release R1·M6.
       x-release: R1·M6
       x-proposed: true
       x-permission: platform.orders.intervene
@@ -5797,6 +5838,7 @@ paths:
         '409': { $ref: '#/components/responses/Conflict' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '422': { $ref: '#/components/responses/UnprocessableContent' }
+        '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/Internal' }
 
   /api/v1/admin/orders/{orderNumber}/verification:
@@ -5810,6 +5852,9 @@ paths:
         Proposed (06 §13.8; OD-57, FR-ORD-009); waits for the product owner's approval.
         Actor: platform staff with `platform.orders.intervene` and MFA verified within 12 h; no
         step-up. Scope: an unknown order is 404.
+        Own shop (OD-44, R1-S part 1c-ii): an order with a shop order of a shop the staff member
+        owns or works in is 403 `FORBIDDEN` while `single_operator_mode` is off, and needs a
+        `totp_code` under it (`OwnShopTotpCode`), at most one per 30-second step.
         Rules: sets `verification_status`, `verification_method`, `verification_notes` (left
         out: `null`) and `verified_at` (now for `verified`, else `null`); `sms_otp` is R2
         (A-55). `verified` lifts the dispatch rule (T-ORD-011, T-ORD-012).
@@ -5817,7 +5862,7 @@ paths:
         as every fulfilment action reads it: the verification columns; audit `order.verify`; for
         `review_required` or `failed`, the `order.verification_after_booking` alert for each
         parcel already `booked` (05 §6.3). `orders` has no `version`, so this is not ⟳; not ⚷.
-        Release R1·M6.
+        T-SEC-045. Release R1·M6.
       x-release: R1·M6
       x-proposed: true
       x-permission: platform.orders.intervene
@@ -5860,6 +5905,7 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '422': { $ref: '#/components/responses/UnprocessableContent' }
+        '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/Internal' }
 
   /api/v1/webhooks/couriers/{providerCode}/{accountId}:
@@ -8858,6 +8904,7 @@ components:
           description: '`pending` resumes a `suspended` account, which is verified again.'
         reason:
           { type: string, minLength: 3, maxLength: 500, description: Stored in the audit row. }
+        totp_code: { $ref: '#/components/schemas/OwnShopTotpCode' }
     CreateLogisticsAccountRequest:
       type: object
       additionalProperties: false
@@ -8946,6 +8993,30 @@ components:
         is_enabled: { type: boolean }
         reason:
           { type: string, minLength: 3, maxLength: 500, description: Stored in the audit row. }
+        totp_code: { $ref: '#/components/schemas/OwnShopTotpCode' }
+    OwnShopTotpCode:
+      type: string
+      pattern: '^[0-9]{6}$'
+      description: |
+        A TOTP code for one admin action (R1-S part 1c-ii; OD-44, decided 2026-11-23; 07 §4.1
+        rule 4, §4.7). Required when the action touches a shop the staff member owns or works in
+        and `single_operator_mode` is on; without it the answer is 422 on `totp_code`
+        (`required`), and with the mode off such an action is 403 `FORBIDDEN` whatever the body
+        holds. Checked and spent in the action's transaction, so a wrong or replayed code is 422
+        on `totp_code` (`code_incorrect`), rolls the action back and counts toward the `mfa_user`
+        and `mfa` limiters (06 §9.1); the audit row of a change made with it carries
+        `{"flags":["single_operator"]}`. On a step-up operation a code in the body also stands in
+        for a stale step-up, on any shop, and refreshes the session's MFA time. Left out of the
+        idempotency fingerprint (06 §7.2); a replayed key checks no code. Sent on another shop
+        under no step-up, it is not checked.
+    OwnShopCodeRequest:
+      type: object
+      additionalProperties: false
+      description: |
+        The optional body of `adminAllowShopOnLogisticsAccount` and
+        `adminRemoveShopFromLogisticsAccount`: only `totp_code` (R1-S part 1c-ii).
+      properties:
+        totp_code: { $ref: '#/components/schemas/OwnShopTotpCode' }
     PickupAddress:
       type: object
       description: |
@@ -9415,6 +9486,7 @@ components:
           maxLength: 100
           description: The courier's parcel ID; required with `booked`.
         note: { type: string, minLength: 3, maxLength: 500, description: Stored in the audit row. }
+        totp_code: { $ref: '#/components/schemas/OwnShopTotpCode' }
     CourierEvent:
       type: object
       description: |
@@ -9510,6 +9582,7 @@ components:
       properties:
         processing_status: { type: string, enum: [applied, ignored] }
         note: { type: string, minLength: 3, maxLength: 500, description: Stored in the audit row. }
+        totp_code: { $ref: '#/components/schemas/OwnShopTotpCode' }
     RecordOrderVerificationRequest:
       type: object
       additionalProperties: false
@@ -9521,6 +9594,7 @@ components:
           enum: [phone_call, manual]
           description: '`sms_otp` is R2 (A-55).'
         verification_notes: { type: [string, 'null'], minLength: 1, maxLength: 500 }
+        totp_code: { $ref: '#/components/schemas/OwnShopTotpCode' }
     OrderVerification:
       type: object
       description: The verification columns of an order (`orders`, 04a §11.1; OD-57).
@@ -10147,3 +10221,14 @@ components:
 #     `configured` read only the covered districts the editor offers, so a saved district no
 #     longer offered stays until the next coverage save, which must leave it out
 #     (`not_offered`), and needs no rate.
+# 56. OD-44's own-shop check (R1-S part 1c-ii, 2026-11-24; 07 §4.1 item 4, 06 note 66). The new
+#     schema `OwnShopTotpCode` is the optional `totp_code` of `SetLogisticsAccountStatusRequest`,
+#     `SetShopLogisticsEnabledRequest`, `ResolveCourierBookingRequest`,
+#     `ResolveCourierEventRequest` and `RecordOrderVerificationRequest`, and the one member of the
+#     new `OwnShopCodeRequest`, the optional body that `adminAllowShopOnLogisticsAccount` and
+#     `adminRemoveShopFromLogisticsAccount` now take (a `DELETE` with a body, which OpenAPI 3.1
+#     allows and the body parser reads). Each of the seven descriptions says the rule: 403
+#     `FORBIDDEN` on the staff member's own shop while `single_operator_mode` is off, a code
+#     under it; each lists 422 and 429 (the code's limiters). `adminRefreshCourierStatus` says
+#     why it is not covered. The three step-up operations say a code in the body stands in for a
+#     stale step-up.

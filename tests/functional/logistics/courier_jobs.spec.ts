@@ -25,6 +25,7 @@ import {
   fakeCourier,
   insertNcmAccount,
   NCM_TOKEN,
+  notOwnShop,
   type CourierWorld,
   type FakeCourier,
 } from '#tests/support/courier'
@@ -331,6 +332,7 @@ test.group('T-SHOP-116 courier account verification and status', (group) => {
       { accountId: suspended, status: 'suspended', reason: 'Reported leaked' },
       {
         actor: await admin(),
+        ownShop: notOwnShop,
         unfinishedShipments: accountHasUnfinishedShipments,
         present: (a) => a,
       }
@@ -360,6 +362,7 @@ test.group('T-SHOP-116 courier account verification and status', (group) => {
     const actor = await admin()
     const context = {
       actor,
+      ownShop: notOwnShop,
       unfinishedShipments: accountHasUnfinishedShipments,
       present: (a: unknown) => a,
     }
@@ -627,7 +630,7 @@ test.group('T-FUL-113 the courier sweepers and the status poll', (group) => {
       .first()
     await resolveCourierEvent(
       { eventId: held.id, status: 'ignored', note: 'NCM internal label' },
-      await admin()
+      { actor: await admin(), ownShop: notOwnShop }
     )
     assert.equal(await pick(sweepCourierEvents(null, OLD), 'resent'), 1)
   })
