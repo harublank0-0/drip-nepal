@@ -170,7 +170,7 @@ test.group('T-MED-004 S3 object storage', () => {
   test('T-MED-004 head answers size, type and the quoted ETag, or null for a missing object', async ({
     assert,
   }) => {
-    const { storage, seen } = storageWith([
+    const { storage, seen, lines } = storageWith([
       {
         statusCode: 200,
         headers: {
@@ -191,6 +191,13 @@ test.group('T-MED-004 S3 object storage', () => {
     })
     assert.deepInclude(seen[0], { method: 'HEAD', path: `/dripnepal-test-private/${KEY}` })
     assert.isNull(await storage.head('private', KEY, CTX))
+    assert.deepEqual(
+      lines.map((line) => [line.level, line.fields.outcome]),
+      [
+        ['info', 'ok'],
+        ['info', 'not_found'],
+      ]
+    )
     const tagless = await storage.head('private', KEY, CTX)
     assert.equal(tagless?.etag, '', 'an object without an ETag answers an empty one')
   })
@@ -223,6 +230,7 @@ test.group('T-MED-004 S3 object storage', () => {
     )
     caller.abort()
     assert.instanceOf(await pending, ProviderTimeoutError, 'the caller’s signal aborts the call')
+    assert.deepInclude(lines.at(-1)!.fields, { outcome: 'timeout', reason: 'aborted' })
     assert.isBelow(Date.now() - startedAt, 1000, 'at once, not at the time limit')
     assert.deepEqual(
       lines.map((line) => [line.level, line.fields.operation, line.fields.outcome]),

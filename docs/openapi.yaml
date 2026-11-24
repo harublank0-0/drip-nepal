@@ -3064,7 +3064,8 @@ paths:
         `media.process_upload` in the same transaction: 202. An empty object, one above 10 MB,
         one whose `Content-Type` differs from the declared mime or one whose ETag cannot be
         stored is `rejected` with a `rejection_reason` the seller sees, and deleted: 200
-        (ADR-0013 decision 2, 07 TM-15, TM-16). A store that cannot be asked is 503. T-MED-004, T-SEC-001, T-SEC-003, T-SEC-030,
+        (ADR-0013 decision 2, 07 TM-15, TM-16). A store that cannot be asked is 503.
+        T-MED-004, T-SEC-001, T-SEC-003, T-SEC-030,
         T-SEC-031. Release R1·M2 (`product_image` from M3; R1-S part 2d-i).
       x-release: R1·M2
       x-permission: mediaByKind

@@ -28,7 +28,12 @@ export default class PortsProvider {
     // One S3 client per process (config/object_storage.ts), or a store that refuses every call.
     const settings = objectStorage
     const client = settings
-      ? s3ClientFor({ ...settings, secretAccessKey: settings.secretAccessKey.release() })
+      ? s3ClientFor({
+          endpoint: settings.endpoint,
+          region: settings.region,
+          accessKeyId: settings.accessKeyId,
+          secretAccessKey: settings.secretAccessKey.release(),
+        })
       : null
     this.app.container.bind(ObjectStorage, async (resolver) => {
       const logger = await resolver.make('logger')

@@ -185,7 +185,11 @@ export class S3ObjectStorage extends PortAdapter implements ObjectStorage {
       return result
     } catch (error) {
       if (isTimeout(error, signal)) {
-        this.logger.warn(fields('timeout'), 'provider.call')
+        // The caller's abort is told apart in the log; both are 503 to the caller.
+        this.logger.warn(
+          fields('timeout', ctx.signal?.aborted ? 'aborted' : undefined),
+          'provider.call'
+        )
         throw new ProviderTimeoutError('s3', operation)
       }
       this.logger.warn(fields('unavailable', (error as SdkError)?.name ?? 'error'), 'provider.call')

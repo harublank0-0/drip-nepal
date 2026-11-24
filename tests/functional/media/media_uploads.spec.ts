@@ -305,6 +305,10 @@ test.group('T-MED-004 createMediaUpload and completeMediaUpload', (group) => {
     assert.equal(response.status, 200, response.text)
     const row = await assetRow(id)
     assert.equal(row.status, 'rejected')
+    assert.isTrue(
+      storage.fake.has('private', `originals/${w.shop.shopId}/${id}`),
+      'the delete was tried and failed'
+    )
   })
 })
 
