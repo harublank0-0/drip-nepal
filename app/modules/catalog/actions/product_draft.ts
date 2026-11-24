@@ -8,13 +8,15 @@ import {
 } from '#modules/catalog/domain/attribute_rules'
 import { newPublicId, productSlug } from '#modules/catalog/domain/identifiers'
 import { originProblems } from '#modules/catalog/domain/disclosures'
+import type { EffectiveRule } from '#modules/catalog/domain/attribute_rules'
 import {
   activeLeafCategory,
   attributeValuesOf,
+  categoryRef,
   effectiveRules,
   selectableBrand,
-  type CategoryRef,
 } from '#modules/catalog/queries'
+import { withSavepoint } from '#modules/platform/tx'
 
 /*
  * The catalog steps of a product draft (docs/09 §12.8; docs/04 §3.4, §3.6,
@@ -40,11 +42,39 @@ export function validationFailed(problems: RuleProblem[]) {
 }
 
 /*
+ * What an action checks of a product's fields against other rows. A create
+ * checks everything; an edit checks only what it sends or changes, so a
+ * platform change to a rule or a brand does not lock a vendor out of
+ * unrelated edits (a product that no longer complies stays as it is and is
+ * flagged, docs/04 §3.7 "Revisit when").
+ */
+export type FieldChecks = {
+  // `active_leaf` for a create or a new category (T-CAT-101); `stored` reads the kept category.
+  category: 'active_leaf' | 'stored'
+  brand: boolean
+  attributes: boolean
+  origin: boolean
+  // The required attributes of a live product (04 §3.7 rule 4).
+  complete: boolean
+  // Value IDs already on the product, which may stay although inactive.
+  keptValueIds?: ReadonlySet<string>
+}
+
+export const CHECK_EVERYTHING: FieldChecks = {
+  category: 'active_leaf',
+  brand: true,
+  attributes: true,
+  origin: true,
+  complete: false,
+}
+
+/*
  * The rules that need other rows, checked together so one 422 lists every
  * problem (06 §5.1): an active leaf category (T-CAT-101), a selectable
  * brand, the origin rule of `products_country_check`, and the attribute
- * rules of 04 §3.7 (T-CAT-104). `complete` adds the required attributes,
- * for a live product.
+ * rules of 04 §3.7 (T-CAT-104). Returns the category, its effective rules,
+ * the resolved values (null when the attributes were not checked) and the
+ * chosen brand.
  */
 export async function checkProductFields(
   trx: TransactionClientContract,
@@ -52,10 +82,13 @@ export async function checkProductFields(
     ProductFields,
     'categoryId' | 'brandId' | 'attributes' | 'isImported' | 'countryOfOrigin'
   >,
-  options: { complete: boolean; keptValueIds?: ReadonlySet<string> }
-): Promise<{ category: CategoryRef; values: ResolvedValue[] }> {
+  checks: FieldChecks
+) {
   const problems: RuleProblem[] = []
-  const category = await activeLeafCategory(trx, fields.categoryId)
+  const category =
+    checks.category === 'active_leaf'
+      ? await activeLeafCategory(trx, fields.categoryId)
+      : await categoryRef(trx, fields.categoryId)
   if (!category) {
     problems.push({
       field: 'category_id',
@@ -63,28 +96,31 @@ export async function checkProductFields(
       message: 'Choose a category from the list.',
     })
   }
-  if (fields.brandId && !(await selectableBrand(trx, fields.brandId))) {
+  const brand = checks.brand && fields.brandId ? await selectableBrand(trx, fields.brandId) : null
+  if (checks.brand && fields.brandId && !brand) {
     problems.push({ field: 'brand_id', code: 'invalid', message: 'Choose a brand from the list.' })
   }
-  problems.push(...originProblems(fields))
-  let values: ResolvedValue[] = []
+  if (checks.origin) problems.push(...originProblems(fields))
+  let values: ResolvedValue[] | null = null
+  let rules = new Map<string, EffectiveRule>()
   if (category) {
-    const rules = await effectiveRules(trx, category.path)
-    const checked = checkProductAttributes({
-      rules,
-      values: await attributeValuesOf(
-        trx,
-        fields.attributes.map((attribute) => attribute.code)
-      ),
-      requested: fields.attributes,
-      kept: options.keptValueIds,
-      complete: options.complete,
-    })
-    problems.push(...checked.problems)
-    values = checked.resolved
+    rules = await effectiveRules(trx, category.path)
+    if (checks.attributes) {
+      const checked = checkProductAttributes({
+        rules,
+        values: await attributeValuesOf(
+          trx,
+          fields.attributes.map((attribute) => attribute.code)
+        ),
+        requested: fields.attributes,
+        kept: checks.keptValueIds,
+        complete: checks.complete,
+      })
+      problems.push(...checked.problems)
+      values = checked.resolved
+    }
   }
-  if (problems.length > 0 || !category) throw validationFailed(problems)
-  return { category, values }
+  return { category, rules, values, brand, problems }
 }
 
 // Replaces a product's attribute values as a set (docs/04a §7.7, docs/04 §2.15).
@@ -118,7 +154,8 @@ export async function insertProductDraft(
   owner: { shopId: string; actorUserId: string },
   newId: () => string = newPublicId
 ) {
-  const { category, values } = await checkProductFields(trx, fields, { complete: false })
+  const { category, values, problems } = await checkProductFields(trx, fields, CHECK_EVERYTHING)
+  if (problems.length > 0 || !category) throw validationFailed(problems)
   const product = await withFreshPublicId(trx, newId, async (publicId, savepoint) => {
     const [row] = await savepoint
       .table('products')
@@ -142,7 +179,7 @@ export async function insertProductDraft(
       .returning(['id', 'public_id'])
     return { id: row.id as string, publicId: row.public_id as string }
   })
-  await writeAttributeValues(trx, { id: product.id, shopId: owner.shopId }, values)
+  await writeAttributeValues(trx, { id: product.id, shopId: owner.shopId }, values ?? [])
   const [variant] = await trx
     .table('product_variants')
     .insert({
@@ -167,7 +204,7 @@ async function withFreshPublicId<T>(
 ): Promise<T> {
   for (let attempt = 1; ; attempt++) {
     try {
-      return await trx.transaction((savepoint) => insert(newId(), savepoint))
+      return await withSavepoint(trx, (savepoint) => insert(newId(), savepoint))
     } catch (error) {
       const pg = error as { code?: string; constraint?: string }
       const collided = pg.code === '23505' && pg.constraint === 'products_public_id_key'

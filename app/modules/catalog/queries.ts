@@ -96,14 +96,34 @@ export async function attributeValuesOf(
   return values
 }
 
-// A brand a vendor may choose (docs/04a §7.5): `active` only.
-export async function selectableBrand(client: QueryClientContract, brandId: string) {
+/*
+ * A brand a vendor may choose (docs/04a §7.5): `active` only, or null.
+ * `requiresModeration` marks a watch-listed brand, whose products always
+ * go through moderation (04 §3.10, AC-FR-CAT-008-3).
+ */
+export async function selectableBrand(
+  client: QueryClientContract,
+  brandId: string
+): Promise<{ id: string; requiresModeration: boolean } | null> {
   const row = await client
     .from('brands')
     .where({ id: brandId, status: 'active' })
-    .select('id')
+    .select('id', 'requires_moderation')
     .first()
-  return row !== null
+  return row ? { id: row.id, requiresModeration: row.requires_moderation } : null
+}
+
+// A category as stored, active or not (an edit that keeps the category).
+export async function categoryRef(
+  client: QueryClientContract,
+  categoryId: string
+): Promise<CategoryRef | null> {
+  const row = await client
+    .from('categories')
+    .where('id', categoryId)
+    .select('id', 'path', 'name')
+    .first()
+  return row ? { id: row.id, path: row.path, name: row.name } : null
 }
 
 export type ProductRow = {
@@ -320,10 +340,12 @@ export type ProductListItem = {
 
 /*
  * The seller product list (docs/06 §13.5 `listShopProducts`, §6.2, §6.3):
- * newest change first, by the cursor `(updated_at, id) < (:k0, :k1)` on
- * `products_seller_list_idx`. Without `status` every product but the
+ * newest change first, by the cursor `(updated_at, id) < (:k0, :k1)`. Without `status` every product but the
  * archived ones; `q` matches a title prefix (case-insensitive) or a SKU
- * prefix of any variant. `variantCount` counts active variants.
+ * prefix of any variant. `variantCount` counts active variants. A `status`
+ * filter reads `products_seller_list_idx` in order; the default list reads
+ * the shop's rows through its `shop_id` prefix and sorts them, a few hundred
+ * at A-03 scale (04a §7.6).
  */
 export async function listShopProducts(filters: {
   shopId: string

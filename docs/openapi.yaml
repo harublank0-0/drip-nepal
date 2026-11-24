@@ -2781,12 +2781,15 @@ paths:
         Status gate (05 §6.10): a product in `pending_review`, `archived` or `blocked` is 409
         `INVALID_STATE_TRANSITION`. Partial: a member left out keeps its value; `null` clears a
         nullable one; `attributes`, when sent, replaces the attribute set, and when left out the
-        stored set is checked again (against a new category too). Rules as `createProduct`: an
-        active leaf category, an active brand, the origin rule and the attribute rules (T-CAT-101,
-        T-CAT-104); a new category must also allow the product's option axes (422
+        stored set is kept. Only what the request sends or changes is checked, by the rules of
+        `createProduct`: a new category is an active leaf, a new brand is active, a sent origin
+        agrees, and the attribute set is checked when sent or when the category changes
+        (T-CAT-101, T-CAT-104); a new category must also allow the product's option axes (422
         `axes_not_allowed` on `category_id`). A product in `published` or `unpublished` keeps
-        every disclosure and every required attribute (422 `required` on each, T-CAT-105). All
-        problems come in one 422.
+        every disclosure, and, when its attributes or category change, every required attribute
+        (`required` on `attributes`) and every required axis of the category (`axes_required` on
+        `category_id`); it may not switch to a brand with `requires_moderation` (422
+        `moderation_required` on `brand_id`; T-CAT-105). All problems come in one 422.
         Side effects, in one transaction with the product row locked: the changed columns
         (`slug` follows `title`), `version` + 1, a `rejected` product back to `draft` (status
         CAS, AC-FR-CAT-006-2), the attribute set when it changed, audit `product.update`
@@ -8130,7 +8133,8 @@ components:
         (`products_disclosures_check`, 04a §7.6). Text lengths mirror the per-column CHECKs
         `products_description_check`, `products_manufacturer_name_check`,
         `products_warranty_text_check` and `products_care_and_precautions_check` (04a §7.6); the
-        validator trims first, so a blank value is 422 `VALIDATION_FAILED` on its field.
+        validator trims first, and a disclosure or `description` sent as `""` or spaces is stored
+        as `null` (06 §3.5).
       additionalProperties: false
       required:
         [
@@ -8377,9 +8381,9 @@ components:
         `updateProduct` (06 §13.5): any members of `CreateProductRequest`, each optional. `title`,
         `category_id`, `attributes` and `is_imported` may be left out but not sent as `null`
         (422 `required`); `null` clears a nullable member. Server-owned members are
-        `unknown_field` (T-SEC-003).
+        `unknown_field` (T-SEC-003). An empty object changes nothing and answers 200 with the
+        same version. A text member sent as `""` or spaces clears it, as `null` does (06 §3.5).
       additionalProperties: false
-      minProperties: 1
       properties:
         title: { type: string, minLength: 3, maxLength: 120 }
         description: { type: [string, 'null'], minLength: 1, maxLength: 5000 }
@@ -10531,4 +10535,6 @@ components:
 #     stay closed, and the `createProduct` and `replaceProductVariants` examples show the new
 #     members. New schemas:
 #     `SellerProductListItem`, `SellerProductList` and `UpdateProductRequest`. `createProduct`'s
-#     row is unchanged otherwise.
+#     row is unchanged otherwise. After the Fable review: `UpdateProductRequest` drops
+#     `minProperties` (an empty body answers 200, changing nothing), both product requests say a
+#     blank text clears the member, and `updateProduct` says what an edit checks.

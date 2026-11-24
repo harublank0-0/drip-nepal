@@ -87,7 +87,22 @@ async function create(w: World, body: Record<string, unknown>, idempotencyKey = 
 }
 
 const audits = (productId: string, action: string) =>
-  db.from('audit_logs').where({ subject_id: productId, action })
+  db.from('audit_logs').where({ subject_id: productId, action }).orderBy('id')
+
+// Brands are platform reference data; none is seeded yet, so tests insert their own.
+async function insertBrand(status = 'active', requiresModeration = false) {
+  const slug = `test-brand-${Math.random().toString(36).slice(2, 10)}`
+  const [row] = await db
+    .table('brands')
+    .insert({ slug, name: `Test brand ${slug}`, status, requires_moderation: requiresModeration })
+    .returning('id')
+  return row.id as string
+}
+
+async function jobsFor(productId: string) {
+  const jobs = await queued<{ product_id: string }>('catalog.refresh_listing')
+  return jobs.filter((job) => job.data.product_id === productId)
+}
 
 test.group('T-CAT-008 createProduct and getShopProduct', (group) => {
   group.setup(async () => {
@@ -138,9 +153,12 @@ test.group('T-CAT-008 createProduct and getShopProduct', (group) => {
       .where('variant_id', created.variants[0].id)
       .firstOrFail()
     assert.deepEqual([stock.on_hand, stock.reserved, stock.shop_id], [0, 0, w.shop.shopId])
-    assert.lengthOf(await audits(created.id, 'product.create'), 1)
-    const jobs = await queued<{ product_id: string }>('catalog.refresh_listing')
-    assert.isTrue(jobs.some((job) => job.data.product_id === created.id))
+    const [audit] = await audits(created.id, 'product.create')
+    assert.deepEqual(audit.changes, {
+      status: { from: null, to: 'draft' },
+      category_id: { from: null, to: created.category.id },
+    })
+    assert.lengthOf(await jobsFor(created.id), 1)
 
     const read = await send(w.owner, 'GET', productPath(w.shop.slug, created.id))
     assert.equal(read.status, 200)
@@ -213,6 +231,78 @@ test.group('T-CAT-008 createProduct and getShopProduct', (group) => {
     assert.lengthOf(await queued('catalog.refresh_listing'), jobsBefore.length)
   })
 
+  test('T-CAT-001 a failure after every write rolls back the product, variant, stock, audit row, key and job', async ({
+    assert,
+  }) => {
+    const { createProduct } = await import('#modules/inventory/actions/create_product')
+    const { requestFingerprint } = await import('#modules/platform/idempotency')
+    const w = await world()
+    const body = await draftBody()
+    const jobsBefore = await queued('catalog.refresh_listing')
+    const failed = await createProduct(
+      {
+        title: body.title,
+        description: body.description,
+        categoryId: body.category_id,
+        brandId: null,
+        attributes: [{ code: 'audience', valueCodes: ['men'] }],
+        manufacturerName: null,
+        isImported: false,
+        countryOfOrigin: null,
+        warrantyText: null,
+        careAndPrecautions: null,
+      },
+      {
+        shopId: w.shop.shopId,
+        actor: {
+          type: 'shop_member',
+          userId: w.shop.ownerId,
+          role: `shop:${w.shop.shopId}:owner`,
+          requestId: null,
+          ipHash: null,
+        },
+        idempotency: {
+          actorScope: w.shop.ownerId,
+          operation: 'createProduct',
+          key: key(),
+          fingerprint: requestFingerprint({ method: 'POST', route: '/', params: {}, body }),
+        },
+        // The presenter runs last, after every row and the job are written.
+        present: async () => {
+          throw new Error('presenter failed')
+        },
+      }
+    ).then(
+      () => null,
+      (error: Error) => error
+    )
+    assert.equal(failed?.message, 'presenter failed')
+    assert.lengthOf(await db.from('products').where('shop_id', w.shop.shopId), 0)
+    assert.lengthOf(await db.from('product_variants').where('shop_id', w.shop.shopId), 0)
+    assert.lengthOf(await db.from('inventory_items').where('shop_id', w.shop.shopId), 0)
+    assert.lengthOf(
+      await db.from('audit_logs').where({ shop_id: w.shop.shopId, action: 'product.create' }),
+      0
+    )
+    assert.lengthOf(
+      await db
+        .from('idempotency_keys')
+        .where({ actor_scope: w.shop.ownerId, operation: 'createProduct' }),
+      0
+    )
+    assert.lengthOf(await queued('catalog.refresh_listing'), jobsBefore.length)
+  })
+
+  test('T-API-007 a create without an Idempotency-Key is 400 and writes nothing', async ({
+    assert,
+  }) => {
+    const w = await world()
+    const response = await send(w.owner, 'POST', productsPath(w.shop.slug), await draftBody())
+    assert.equal(response.status, 400)
+    assert.equal(response.body.code, 'IDEMPOTENCY_KEY_REQUIRED')
+    assert.lengthOf(await db.from('products').where('shop_id', w.shop.shopId), 0)
+  })
+
   test('T-CAT-101 a category that is not a leaf, or not active, is 422', async ({ assert }) => {
     const w = await world()
     const parent = await create(w, await draftBody({ category_id: await categoryId('tops') }))
@@ -249,6 +339,56 @@ test.group('T-CAT-008 createProduct and getShopProduct', (group) => {
     // A draft may leave a required attribute out (AC-FR-CAT-002-2).
     const partial = await create(w, await draftBody({ attributes: [] }))
     assert.equal(partial.status, 201, partial.text)
+  })
+
+  test('T-CAT-104 the deepest rule on the path wins', async ({ assert }) => {
+    const w = await world()
+    // `fit` is an optional rule of `clothing`; made required on the leaf, the leaf's row wins.
+    const leaf = await categoryId('t-shirts')
+    const fit = await db.from('attributes').where('code', 'fit').firstOrFail()
+    await db.table('category_attributes').insert({
+      category_id: leaf,
+      attribute_id: fit.id,
+      usage: 'product',
+      is_required: true,
+    })
+    const product = await ProductFactory.merge({ shopId: w.shop.shopId })
+      .apply('published')
+      .create()
+    const response = await send(
+      w.owner,
+      'PATCH',
+      productPath(w.shop.slug, product.id),
+      {
+        attributes: [
+          { attribute_code: 'audience', value_codes: ['men'] },
+          { attribute_code: 'material', value_codes: ['cotton'] },
+        ],
+      },
+      { 'If-Match': '"1"' }
+    )
+    assert.equal(response.status, 422)
+    assert.deepEqual(fields(response.body), [['attributes', 'required']])
+    assert.include(response.body.errors[0].message, 'Fit')
+  })
+
+  test('T-CAT-008 every rule problem comes in one 422, the origin rule included', async ({
+    assert,
+  }) => {
+    const w = await world()
+    const response = await create(
+      w,
+      await draftBody({
+        is_imported: false,
+        country_of_origin: 'CN',
+        attributes: [{ attribute_code: 'fit', value_codes: ['slim', 'regular'] }],
+      })
+    )
+    assert.equal(response.status, 422)
+    assert.deepEqual(fields(response.body), [
+      ['country_of_origin', 'invalid'],
+      ['attributes.0.value_codes', 'too_many'],
+    ])
   })
 
   test('T-SEC-003 server-owned members and unknown item members are unknown_field', async ({
@@ -363,7 +503,8 @@ test.group('T-CAT-009 updateProduct', (group) => {
     const row = await db.from('products').where('id', product.id).firstOrFail()
     assert.equal(row.slug, 'heavy-cotton-tee')
     const [audit] = await audits(product.id, 'product.update')
-    assert.sameMembers(audit.changes.changed, ['title', 'description', 'warranty_text'])
+    assert.deepEqual(audit.changes, { changed: ['title', 'description', 'warranty_text'] })
+    assert.lengthOf(await jobsFor(product.id), 2, 'the create and this edit each sent the job')
 
     const attributes = await update(
       w,
@@ -374,11 +515,86 @@ test.group('T-CAT-009 updateProduct', (group) => {
     assert.deepEqual(attributes.body.data.attributes, [
       { attribute_code: 'fit', value_codes: ['slim'] },
     ])
+    const second = await audits(product.id, 'product.update')
+    assert.deepEqual(second[1].changes, { changed: ['attributes'] })
 
     const same = await update(w, product.id, { title: 'Heavy cotton tee' }, 3)
     assert.equal(same.status, 200)
     assert.equal(same.body.data.version, 3, 'a request that changes nothing keeps the version')
     assert.lengthOf(await audits(product.id, 'product.update'), 2)
+    assert.lengthOf(await jobsFor(product.id), 3, 'no job for a request that changes nothing')
+  })
+
+  test('T-CAT-009 an edit checks only what it sends: a brand the platform withdrew does not block a title edit', async ({
+    assert,
+  }) => {
+    const w = await world()
+    const brand = await insertBrand()
+    const response = await create(w, await draftBody({ brand_id: brand }))
+    assert.equal(response.status, 201, response.text)
+    const product = response.body.data
+    await db.from('brands').where('id', brand).update({ status: 'rejected' })
+    const title = await update(w, product.id, { title: 'Renamed tee' }, 1)
+    assert.equal(title.status, 200, title.text)
+    const sent = await update(w, product.id, { brand_id: brand, title: 'Renamed again' }, 2)
+    assert.equal(sent.status, 200, 'the same brand is not a change')
+    const pending = await insertBrand('pending')
+    const refused = await update(w, product.id, { brand_id: pending }, 3)
+    assert.deepEqual(fields(refused.body), [['brand_id', 'invalid']])
+  })
+
+  test('T-SEC-003 the edit refuses unknown members and a null where a value is required', async ({
+    assert,
+  }) => {
+    const w = await world()
+    const product = await draft(w)
+    const unknown = await update(w, product.id, { status: 'published', shop_id: w.shop.shopId }, 1)
+    assert.sameDeepMembers(fields(unknown.body), [
+      ['status', 'unknown_field'],
+      ['shop_id', 'unknown_field'],
+    ])
+    const item = await update(
+      w,
+      product.id,
+      { attributes: [{ attribute_code: 'fit', value_codes: ['slim'], position: 1 }] },
+      1
+    )
+    assert.deepEqual(fields(item.body), [['attributes.0.position', 'unknown_field']])
+    const nulls = await update(
+      w,
+      product.id,
+      { title: null, category_id: null, attributes: null, is_imported: null },
+      1
+    )
+    assert.sameDeepMembers(fields(nulls.body), [
+      ['title', 'required'],
+      ['category_id', 'required'],
+      ['attributes', 'required'],
+      ['is_imported', 'required'],
+    ])
+    const row = await db.from('products').where('id', product.id).firstOrFail()
+    assert.equal(row.version, 1)
+  })
+
+  test('T-SEC-030 a viewer cannot edit; T-SEC-031 a suspended shop cannot edit', async ({
+    assert,
+  }) => {
+    const w = await world()
+    const product = await draft(w)
+    const viewer = await signIn(await addMember(w.shop.shopId, 'viewer'))
+    const refused = await send(
+      viewer,
+      'PATCH',
+      productPath(w.shop.slug, product.id),
+      { title: 'Viewer edit' },
+      { 'If-Match': '"1"' }
+    )
+    assert.equal(refused.status, 403)
+    assert.equal(refused.body.code, 'FORBIDDEN')
+    await setShopStatus(w.shop.shopId, 'suspended', 'fulfill_existing')
+    const suspended = await update(w, product.id, { title: 'Suspended edit' }, 1)
+    assert.equal(suspended.status, 403)
+    assert.equal(suspended.body.code, 'SHOP_NOT_ACTIVE')
   })
 
   test('T-API-004 no If-Match is 428; a stale version is 412 with current', async ({ assert }) => {
@@ -404,7 +620,17 @@ test.group('T-CAT-009 updateProduct', (group) => {
     const fixed = await update(w, product.id, { title: 'Sharper tee' }, 1)
     assert.equal(fixed.status, 200, fixed.text)
     assert.equal(fixed.body.data.status, 'draft')
-    for (const status of ['archived', 'blocked'] as const) {
+    const [audit] = await audits(product.id, 'product.update')
+    assert.deepEqual(audit.changes, {
+      changed: ['title'],
+      status: { from: 'rejected', to: 'draft' },
+    })
+    // A product under review must hold its disclosures and submission time (04a §7.6).
+    await db
+      .from('products')
+      .where('id', product.id)
+      .update({ warranty_text: 'No warranty', submitted_at: db.raw('now()') })
+    for (const status of ['pending_review', 'archived', 'blocked'] as const) {
       await db.from('products').where('id', product.id).update({ status })
       const refused = await update(w, product.id, { title: 'Another title' }, 2)
       assert.equal(refused.status, 409, status)
@@ -452,6 +678,34 @@ test.group('T-CAT-009 updateProduct', (group) => {
     assert.equal(row.version, 1)
   })
 
+  test('T-CAT-105 a live product keeps its category’s required axes and avoids a watch-listed brand', async ({
+    assert,
+  }) => {
+    const w = await world()
+    const product = await ProductFactory.merge({ shopId: w.shop.shopId })
+      .apply('published')
+      .create()
+    // T-shirts require a size axis (04 §21.3); the published product has none, so a move to
+    // another leaf of `tops` must bring one. Shirts are a sibling leaf with the same rule.
+    const sibling = await db
+      .from('categories as c')
+      .where('c.path', 'like', '/clothing/tops/%')
+      .whereNot('c.slug', 't-shirts')
+      .whereNotExists((child) => child.from('categories as k').whereColumn('k.parent_id', 'c.id'))
+      .select('c.id')
+      .firstOrFail()
+    const moved = await update(w, product.id, { category_id: sibling.id }, 1)
+    assert.equal(moved.status, 422)
+    assert.deepInclude(fields(moved.body), ['category_id', 'axes_required'])
+
+    const watched = await insertBrand('active', true)
+    const branded = await update(w, product.id, { brand_id: watched }, 1)
+    assert.equal(branded.status, 422)
+    assert.deepEqual(fields(branded.body), [['brand_id', 'moderation_required']])
+    const row = await db.from('products').where('id', product.id).firstOrFail()
+    assert.deepEqual([row.version, row.brand_id], [1, null])
+  })
+
   test('T-SEC-001 another shop’s product is 404', async ({ assert }) => {
     const w = await world()
     const product = await draft(w)
@@ -466,7 +720,8 @@ test.group('T-CAT-010 listShopProducts', (group) => {
     await useJobBoss()
   })
 
-  test('T-CAT-010 newest change first, by cursor; archived only on request; q by title or SKU prefix', async ({
+  // The order by change time and its cursor pages need real commits: tests/concurrency/catalog.
+  test('T-CAT-010 archived only on request; q matches a title or SKU prefix, not a fragment', async ({
     assert,
   }) => {
     const w = await world()
@@ -475,59 +730,74 @@ test.group('T-CAT-010 listShopProducts', (group) => {
       const response = await create(w, await draftBody({ title }))
       ids.push(response.body.data.id)
     }
-    // Distinct change times, Gamma newest.
-    for (const [index, id] of ids.entries()) {
-      await db
-        .from('products')
-        .where('id', id)
-        .update({ updated_at: db.raw(`now() - interval '${3 - index} minutes'`) })
+    const listed = async (query = '') => {
+      const response = await send(w.owner, 'GET', `${productsPath(w.shop.slug)}${query}`)
+      assert.equal(response.status, 200, response.text)
+      return response.body.data as { id: string; title: string; variant_count: number }[]
     }
-    const first = await send(w.owner, 'GET', `${productsPath(w.shop.slug)}?limit=2`)
-    assert.equal(first.status, 200, first.text)
-    assert.deepEqual(
-      first.body.data.map((item: { title: string }) => item.title),
-      ['Gamma hoodie', 'Beta tee']
+    const idsOf = async (query = '') => {
+      const items = await listed(query)
+      return items.map((item) => item.id)
+    }
+    const all = await listed()
+    assert.sameMembers(
+      all.map((item) => item.id),
+      ids
     )
-    assert.equal(first.body.data[0].variant_count, 1)
-    const cursor = encodeURIComponent(first.body.meta.next_cursor)
-    const second = await send(
-      w.owner,
-      'GET',
-      `${productsPath(w.shop.slug)}?limit=2&cursor=${cursor}`
-    )
-    assert.deepEqual(
-      second.body.data.map((item: { title: string }) => item.title),
-      ['Alpha tee']
-    )
-    assert.isNull(second.body.meta.next_cursor)
+    assert.isTrue(all.every((item) => item.variant_count === 1))
 
     await db.from('products').where('id', ids[0]).update({ status: 'archived' })
-    const active = await send(w.owner, 'GET', productsPath(w.shop.slug))
-    assert.notInclude(
-      active.body.data.map((item: { id: string }) => item.id),
-      ids[0]
-    )
-    const archived = await send(w.owner, 'GET', `${productsPath(w.shop.slug)}?status=archived`)
-    assert.deepEqual(
-      archived.body.data.map((item: { id: string }) => item.id),
-      [ids[0]]
-    )
+    assert.notInclude(await idsOf(), ids[0])
+    assert.deepEqual(await idsOf('?status=archived'), [ids[0]])
 
-    const byTitle = await send(w.owner, 'GET', `${productsPath(w.shop.slug)}?q=gam`)
-    assert.deepEqual(
-      byTitle.body.data.map((item: { title: string }) => item.title),
-      ['Gamma hoodie']
-    )
+    assert.deepEqual(await idsOf('?q=gam'), [ids[2]])
+    assert.deepEqual(await listed('?q=tee'), [], 'a word inside a title is not a prefix')
     const sku = await db.from('product_variants').where('product_id', ids[1]).firstOrFail()
-    const bySku = await send(
+    assert.deepEqual(await idsOf(`?q=${encodeURIComponent(sku.sku.slice(0, 6))}`), [ids[1]])
+    assert.deepEqual(
+      await listed(`?q=${encodeURIComponent(sku.sku.slice(3, 9))}`),
+      [],
+      'a fragment inside a SKU is not a prefix'
+    )
+  })
+
+  test('T-API-003 a tampered cursor, or one made for other filters, is 400', async ({ assert }) => {
+    const w = await world()
+    for (const title of ['Alpha tee', 'Alpine tee']) await create(w, await draftBody({ title }))
+    const page = await send(w.owner, 'GET', `${productsPath(w.shop.slug)}?q=al&limit=1`)
+    const cursor = encodeURIComponent(page.body.meta.next_cursor)
+    const same = await send(
       w.owner,
       'GET',
-      `${productsPath(w.shop.slug)}?q=${encodeURIComponent(sku.sku.slice(0, 6))}`
+      `${productsPath(w.shop.slug)}?q=al&limit=1&cursor=${cursor}`
     )
-    assert.include(
-      bySku.body.data.map((item: { id: string }) => item.id),
-      ids[1]
-    )
+    assert.equal(same.status, 200)
+    for (const query of [
+      `q=alp&limit=1&cursor=${cursor}`,
+      `status=draft&q=al&limit=1&cursor=${cursor}`,
+      'cursor=not-a-cursor',
+    ]) {
+      const response = await send(w.owner, 'GET', `${productsPath(w.shop.slug)}?${query}`)
+      assert.equal(response.status, 400, query)
+      assert.equal(response.body.code, 'INVALID_QUERY_PARAMETER')
+    }
+  })
+
+  test('T-SEC-031 the reads are refused while the shop is pending review, rejected or closed', async ({
+    assert,
+  }) => {
+    const w = await world()
+    const created = await create(w, await draftBody())
+    for (const status of ['pending_review', 'rejected', 'closed'] as const) {
+      await setShopStatus(w.shop.shopId, status)
+      for (const path of [
+        productsPath(w.shop.slug),
+        productPath(w.shop.slug, created.body.data.id),
+      ]) {
+        const response = await send(w.owner, 'GET', path)
+        assert.equal(response.status, 403, `${status} ${path}`)
+      }
+    }
   })
 
   test('T-CAT-010 an unknown status or parameter is 400', async ({ assert }) => {

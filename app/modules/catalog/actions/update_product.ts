@@ -1,5 +1,6 @@
 import type { QueryClientContract } from '@adonisjs/lucid/types/database'
 import { DomainError, InvalidStateTransition, VersionConflict } from '#exceptions/domain_error'
+import { InvariantViolation } from '#exceptions/programming_errors'
 import { recordAudit } from '#modules/audit/actions/record_audit'
 import type { RuleProblem } from '#modules/catalog/domain/attribute_rules'
 import { LIVE_STATUSES, liveDisclosureProblems } from '#modules/catalog/domain/disclosures'
@@ -10,12 +11,7 @@ import {
   writeAttributeValues,
   type ProductFields,
 } from '#modules/catalog/actions/product_draft'
-import {
-  effectiveRules,
-  productEditorData,
-  shopProduct,
-  type ProductEditorData,
-} from '#modules/catalog/queries'
+import { productEditorData, shopProduct, type ProductEditorData } from '#modules/catalog/queries'
 import type { Actor } from '#modules/platform/actor'
 import { sendJob } from '#modules/platform/jobs'
 import { withTx } from '#modules/platform/tx'
@@ -33,13 +29,18 @@ import { withTx } from '#modules/platform/tx'
  *    version they saw;
  * 3. ⟳: the locked `version` must equal the `If-Match` version, else 412
  *    `VERSION_CONFLICT` with `current` (06 §8);
- * 4. the given fields are merged over the stored ones, and the result is
- *    checked as `createProduct` checks a draft: the category, brand, origin
- *    and attribute rules. An absent `attributes` keeps the stored set, which
- *    is checked again against a new category. A new category must also
- *    allow the product's option axes. A product in `published` or
- *    `unpublished` must stay complete: every required attribute and every
- *    disclosure (T-CAT-105). All problems come in one 422;
+ * 4. the given fields are merged over the stored ones, and what the request
+ *    sends or changes is checked as `createProduct` checks a draft: a new
+ *    category is an active leaf, a new brand is selectable, a sent origin
+ *    agrees, and the attribute set is checked when it is sent or the
+ *    category changes (an absent `attributes` keeps the stored set). A new
+ *    category must allow the product's option axes. A product in
+ *    `published` or `unpublished` must stay complete: every disclosure, and,
+ *    when the attributes or category change, every required attribute and
+ *    required axis (T-CAT-105); it may not switch to a watch-listed brand
+ *    (04 §3.10). Fields left alone are not checked again, so a platform
+ *    change to a rule or a brand never blocks an unrelated edit. All
+ *    problems come in one 422;
  * 5. a request that changes nothing writes nothing and keeps the version;
  *    otherwise the row is updated (`slug` follows the title), `version + 1`,
  *    a `rejected` product returns to `draft` (status CAS, AC-FR-CAT-006-2),
@@ -123,17 +124,23 @@ export async function updateProduct<T>(
       .where('product_id', product.id)
       .select('attribute_value_id')
     const keptValueIds = new Set(keptRows.map((row) => row.attribute_value_id))
-    const problems: RuleProblem[] = []
-    let checked: Awaited<ReturnType<typeof checkProductFields>> | null = null
-    try {
-      checked = await checkProductFields(trx, merged, { complete: live, keptValueIds })
-    } catch (error) {
-      if (!(error instanceof DomainError) || error.problemCode !== 'VALIDATION_FAILED') throw error
-      problems.push(...((error.options.errors ?? []) as RuleProblem[]))
-    }
-    if (checked && merged.categoryId !== product.categoryId && current.optionAxes.length > 0) {
-      const rules = await effectiveRules(trx, checked.category.path)
-      const refused = current.optionAxes.filter((code) => rules.get(code)?.usage !== 'variant_axis')
+    const categoryChanged = merged.categoryId !== product.categoryId
+    const brandChanged = merged.brandId !== product.brandId
+    const checkAttributes = command.changes.attributes !== undefined || categoryChanged
+    const checked = await checkProductFields(trx, merged, {
+      category: categoryChanged ? 'active_leaf' : 'stored',
+      brand: brandChanged,
+      attributes: checkAttributes,
+      origin:
+        command.changes.isImported !== undefined || command.changes.countryOfOrigin !== undefined,
+      complete: live && checkAttributes,
+      keptValueIds,
+    })
+    const problems: RuleProblem[] = [...checked.problems]
+    if (checked.category && categoryChanged) {
+      const refused = current.optionAxes.filter(
+        (code) => checked.rules.get(code)?.usage !== 'variant_axis'
+      )
       if (refused.length > 0) {
         problems.push({
           field: 'category_id',
@@ -141,9 +148,32 @@ export async function updateProduct<T>(
           message: `This category does not vary by ${refused.join(' or ')}. Change the variants first.`,
         })
       }
+      // 04 §3.7 rule 4: a live product keeps every required axis of its category.
+      const missingAxes = live
+        ? [...checked.rules.values()]
+            .filter((rule) => rule.usage === 'variant_axis' && rule.isRequired)
+            .filter((rule) => !current.optionAxes.includes(rule.code))
+            .map((rule) => rule.name)
+        : []
+      if (missingAxes.length > 0) {
+        problems.push({
+          field: 'category_id',
+          code: 'axes_required',
+          message: `A live product in this category varies by ${missingAxes.join(' and ')}. Change the variants first.`,
+        })
+      }
+    }
+    // A watch-listed brand's products always go through review (04 §3.10, AC-FR-CAT-008-3).
+    if (live && brandChanged && checked.brand?.requiresModeration) {
+      problems.push({
+        field: 'brand_id',
+        code: 'moderation_required',
+        message:
+          'Products of this brand are reviewed before they go live. Unpublish the product first.',
+      })
     }
     if (live) problems.push(...liveDisclosureProblems(merged))
-    if (problems.length > 0 || !checked) throw validationFailed(problems)
+    if (problems.length > 0 || !checked.category) throw validationFailed(problems)
 
     const changed: string[] = []
     const update: Record<string, unknown> = {}
@@ -158,9 +188,11 @@ export async function updateProduct<T>(
       }
     }
     if (merged.title !== product.title) update.slug = productSlug(merged.title)
-    const newValueIds = new Set(checked.values.map((value) => value.valueId))
+    const newValueIds = new Set((checked.values ?? []).map((value) => value.valueId))
     const attributesChanged =
-      newValueIds.size !== keptValueIds.size || [...newValueIds].some((id) => !keptValueIds.has(id))
+      checked.values !== null &&
+      (newValueIds.size !== keptValueIds.size ||
+        [...newValueIds].some((id) => !keptValueIds.has(id)))
     if (attributesChanged) changed.push('attributes')
 
     if (changed.length === 0) {
@@ -176,8 +208,14 @@ export async function updateProduct<T>(
         version: trx.raw('version + 1'),
       })
       .returning('version')
+    // The row is locked above, so the compare-and-set cannot miss it.
+    if (!row) throw new InvariantViolation('updateProduct: the locked product changed')
     if (attributesChanged) {
-      await writeAttributeValues(trx, { id: product.id, shopId: product.shopId }, checked.values)
+      await writeAttributeValues(
+        trx,
+        { id: product.id, shopId: product.shopId },
+        checked.values ?? []
+      )
     }
     await recordAudit(trx, {
       actorType: context.actor.type,

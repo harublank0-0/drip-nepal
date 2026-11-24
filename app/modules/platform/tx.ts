@@ -58,3 +58,15 @@ export async function withTx<T>(
 // The worker's values of docs/03 §8.2.
 export const jobTx = <T>(fn: (trx: TransactionClientContract) => Promise<T>) =>
   withTx(fn, { lockTimeoutMs: 10_000, statementTimeoutMs: 30_000 })
+
+/*
+ * A savepoint inside an open transaction, for one statement whose failure
+ * the caller handles and retries (a random key that collided, docs/04 §2.1):
+ * the savepoint rolls back alone and the outer transaction survives.
+ */
+export function withSavepoint<T>(
+  trx: TransactionClientContract,
+  fn: (savepoint: TransactionClientContract) => Promise<T>
+): Promise<T> {
+  return trx.transaction(fn)
+}
