@@ -33,7 +33,9 @@ import { TextareaField } from '~/components/forms/textarea_field'
  * single-operator mode (OD-44, R1-S part 1c-ii): the field shows from the
  * start when the page says so (`needs_totp_code`), or once the action
  * answers 422 on `totp_code`; that code also covers a stale step-up, so the
- * step-up field is then skipped. A wrong code empties the field.
+ * step-up field is then skipped. A step-up refusal reloads the list first,
+ * so a stale page learns the account needs the own-shop code before a code
+ * is spent on the challenge. A wrong code empties the field.
  */
 const KEYS = {
   suspended: 'suspend',
@@ -87,7 +89,8 @@ export function AccountStatusDialog({
       setOffline(false)
       report.clear()
       // A code in the body covers the step-up too (docs/07 §3.10).
-      if (!askCode && !(await stepUp.ready())) return
+      if (askCode) stepUp.reset()
+      else if (!(await stepUp.ready())) return
       const outcome = await mutation.run(() =>
         client.request('adminSetLogisticsAccountStatus', {
           params: { accountId: account.id },
@@ -122,7 +125,13 @@ export function AccountStatusDialog({
       }
       // useApiMutation shows the wait next to the confirm button.
       if (outcome.problem.code === 'RATE_LIMITED') return
-      if (stepUp.refused(outcome.problem)) return
+      if (stepUp.refused(outcome.problem)) {
+        // A page loaded before the account became the staff member's own (or before the mode
+        // was switched on) would spend this code on the challenge, then ask for another: fresh
+        // props show the own-shop field instead.
+        router.reload({ only: ['accounts'] })
+        return
+      }
       setProblem(outcome.problem)
       // The codes ProblemAlert words as "the list has been updated".
       if (['NOT_FOUND', 'INVALID_STATE_TRANSITION'].includes(outcome.problem.code)) {
@@ -199,7 +208,9 @@ export function AccountStatusDialog({
           )}
         </form.Field>
       )}
-      <StepUpField view={stepUp.view} fieldRef={stepUp.fieldRef} id="status-step-up" />
+      {!askCode && (
+        <StepUpField view={stepUp.view} fieldRef={stepUp.fieldRef} id="status-step-up" />
+      )}
       <ProblemAlert problem={problem} offline={offline} entity="courier_account" />
     </ConfirmDialog>
   )

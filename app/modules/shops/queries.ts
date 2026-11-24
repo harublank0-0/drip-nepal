@@ -231,7 +231,7 @@ export async function ownsAnyShop(userId: string) {
 
 /*
  * Which of `shopIds` the user owns or works in (an `active` membership),
- * in any shop status: OD-44's "their own shop" (docs/07 §4.1 rule 4,
+ * in any shop status: OD-44's "their own shop" (docs/07 §4.1 item 4,
  * `ownShopCheck`). Read in the caller's transaction, without a lock: a
  * membership that changes during one admin action is not a race this check
  * has to win.

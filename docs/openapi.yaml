@@ -5132,7 +5132,8 @@ paths:
         Actor: as `adminAllowShopOnLogisticsAccount`, with step-up. Scope: platform-owned accounts
         only; a shop's own account or an unknown account is 404. The optional body holds only
         `totp_code`, with the own-shop rule of `adminAllowShopOnLogisticsAccount` (OD-44),
-        checked before anything else, whether or not the shop is allowed.
+        checked after the 404 and before the shop's row is read, whether or not the shop is
+        allowed.
         Effects (04a §9.10), in one transaction: the shop's row is deactivated, a shop whose
         default the account was returns to `manual`, and bookings already made keep the account.
         Removing a shop that is not allowed changes nothing.
@@ -5677,7 +5678,7 @@ paths:
         transaction with the order, shop order and shipment rows locked; the job reads the
         parcel's status history and records its readings in `courier_events` (05 §6.3
         "Replaying a status history", 04a §9.14). No body. Not ⚷. It changes nothing staff
-        choose, so OD-44's own-shop check does not apply (07 §4.1 rule 4). Release R1·M6.
+        choose, so OD-44's own-shop check does not apply (07 §4.1 item 4). Release R1·M6.
       x-release: R1·M6
       x-proposed: true
       x-permission: platform.orders.intervene
@@ -10220,7 +10221,7 @@ components:
 #     `configured` read only the covered districts the editor offers, so a saved district no
 #     longer offered stays until the next coverage save, which must leave it out
 #     (`not_offered`), and needs no rate.
-# 56. OD-44's own-shop check (R1-S part 1c-ii, 2026-11-24; 07 §4.1 rule 4, 06 note 66). The new
+# 56. OD-44's own-shop check (R1-S part 1c-ii, 2026-11-24; 07 §4.1 item 4, 06 note 66). The new
 #     schema `OwnShopTotpCode` is the optional `totp_code` of `SetLogisticsAccountStatusRequest`,
 #     `SetShopLogisticsEnabledRequest`, `ResolveCourierBookingRequest`,
 #     `ResolveCourierEventRequest` and `RecordOrderVerificationRequest`, and the one member of the

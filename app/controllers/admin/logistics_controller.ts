@@ -30,7 +30,7 @@ import {
   staffActor,
 } from '#controllers/support/http'
 import { listRequest, oneOf } from '#controllers/support/cursor'
-import { ownShopGuard } from '#controllers/support/own_shop'
+import { assertStepUpOrCode, ownShopGuard } from '#controllers/support/own_shop'
 import { assertKnownMembers } from '#validators/support/strict_keys'
 import {
   ACCOUNT_STATUS_MEMBERS,
@@ -126,6 +126,7 @@ export default class AdminLogisticsController {
 
   // adminAllowShopOnLogisticsAccount (step-up; OD-44)
   async allowShop(ctx: HttpContext) {
+    assertStepUpOrCode(ctx)
     assertKnownMembers(ctx.request.body(), SHOP_LINK_MEMBERS)
     const input = await ctx.request.validateUsing(shopLinkValidator)
     const guard = ownShopGuard(ctx, input.totp_code ?? undefined, { stepUp: true })
@@ -140,6 +141,7 @@ export default class AdminLogisticsController {
 
   // adminRemoveShopFromLogisticsAccount (step-up; OD-44)
   async removeShop(ctx: HttpContext) {
+    assertStepUpOrCode(ctx)
     assertKnownMembers(ctx.request.body(), SHOP_LINK_MEMBERS)
     const input = await ctx.request.validateUsing(shopLinkValidator)
     const guard = ownShopGuard(ctx, input.totp_code ?? undefined, { stepUp: true })
@@ -154,6 +156,7 @@ export default class AdminLogisticsController {
 
   // adminSetLogisticsAccountStatus (step-up; OD-44 on a shop-owned account)
   async setAccountStatus(ctx: HttpContext) {
+    assertStepUpOrCode(ctx)
     assertKnownMembers(ctx.request.body(), ACCOUNT_STATUS_MEMBERS)
     const input = await ctx.request.validateUsing(setLogisticsAccountStatusValidator)
     const guard = ownShopGuard(ctx, input.totp_code ?? undefined, { stepUp: true })

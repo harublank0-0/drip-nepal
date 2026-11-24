@@ -8,7 +8,7 @@ import { TOTP_CODE_PATTERN } from '#shared/constants/auth'
 /*
  * `totp_code` (R1-S part 1c-ii): the code OD-44's single-operator exception
  * needs for an action on the staff member's own shop, and that satisfies a
- * step-up operation's 15-minute window (docs/07 §3.10, §4.1 rule 4). Six
+ * step-up operation's 15-minute window (docs/07 §3.10, §4.1 item 4). Six
  * digits, checked by the action, never part of the idempotency fingerprint
  * (docs/06 §7.2). Optional here: whether it is needed is the action's call.
  */

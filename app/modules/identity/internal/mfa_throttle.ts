@@ -97,8 +97,16 @@ async function audit(
   })
 }
 
-// The 429 of the attempt that started the block: write the lock's audit row and alert once.
-async function consumeAccountPoint(userId: string, context: MfaAttemptContext) {
+const lockAudit = (userId: string, context: MfaAttemptContext) =>
+  audit(userId, 'auth.mfa_locked', context, { blocked_minutes: 15 })
+
+/*
+ * The 429 of the attempt that started the block: `onCrossed` writes the
+ * lock's audit row and alert once, in its own transaction, or, for a code
+ * checked inside an action's transaction, notes the crossing so the row is
+ * written after that transaction ends (`deferredTotpThrottle`).
+ */
+async function consumeAccountPoint(userId: string, onCrossed: () => Promise<void>) {
   const account = rateLimiter('mfa_user')
   const key = rateLimitKey('mfa_user', userId)
   try {
@@ -107,7 +115,7 @@ async function consumeAccountPoint(userId: string, context: MfaAttemptContext) {
     const crossed =
       error instanceof limiterErrors.E_TOO_MANY_REQUESTS &&
       error.response.consumed === RATE_LIMITS.mfa_user.requests + 1
-    if (crossed) await audit(userId, 'auth.mfa_locked', context, { blocked_minutes: 15 })
+    if (crossed) await onCrossed()
     throw error
   }
   return { account, key }
@@ -135,8 +143,12 @@ async function settle(points: Point[], how: 'decrement' | 'delete', requestId: s
 }
 
 // Both points, charged before a code is checked; the 429s of section 2.
-async function chargePoints(userId: string, context: MfaAttemptContext): Promise<Point[]> {
-  const { account, key: accountKey } = await consumeAccountPoint(userId, context)
+async function chargePoints(
+  userId: string,
+  context: MfaAttemptContext,
+  onCrossed: () => Promise<void> = () => lockAudit(userId, context)
+): Promise<Point[]> {
+  const { account, key: accountKey } = await consumeAccountPoint(userId, onCrossed)
   const source = rateLimiter('mfa')
   const sourceKey = rateLimitKey('mfa', userId, clientNetwork(context.ip))
   await source.consume(sourceKey)
@@ -193,14 +205,20 @@ export async function throttledTotpCheck<T>(
  * and settles the points once the transaction has ended: a `WrongTotpCode`
  * thrown out of it writes the `auth.mfa_failed` row and answers 422 on
  * `totp_code`, a success deletes the keys, and any other error gives the
- * points back, as `throttledTotpCheck` does. A request that never charged
- * passes through untouched.
+ * points back, as `throttledTotpCheck` does. The attempt that starts the
+ * 15-minute block (section 2) answers 429 and writes its `auth.mfa_locked`
+ * row and alert here too, after the transaction: inside it, the row's own
+ * transaction would nest. A request that never charged passes through
+ * untouched.
  */
 export function deferredTotpThrottle(userId: string, context: MfaAttemptContext) {
   let points: Point[] | null = null
+  let lockCrossed = false
   return {
     async charge() {
-      points ??= await chargePoints(userId, context)
+      points ??= await chargePoints(userId, context, async () => {
+        lockCrossed = true
+      })
     },
     async run<T>(work: () => Promise<T>): Promise<T> {
       let outcome: { ok: true; value: T } | { ok: false; error: unknown }
@@ -209,6 +227,7 @@ export function deferredTotpThrottle(userId: string, context: MfaAttemptContext)
       } catch (error) {
         outcome = { ok: false, error }
       }
+      if (lockCrossed) await lockAudit(userId, context)
       if (points) return settleAfter(userId, context, points, outcome, 'totp_code')
       if (outcome.ok) return outcome.value
       throw outcome.error

@@ -27,7 +27,7 @@ import {
  * Staff work on courier bookings and readings (docs/06 §13.8; M6), under
  * `platform.orders.intervene`, and the OD-57 order verification. No step-up
  * (07 §3.10 lists none of these). The writes run OD-44's own-shop check
- * (`ownShopGuard`, docs/07 §4.1 rule 4); `adminRefreshCourierStatus` does
+ * (`ownShopGuard`, docs/07 §4.1 item 4); `adminRefreshCourierStatus` does
  * not, because it only asks the courier again and the job applies the
  * courier's own answer, as `recheckPayment` asks the provider (07 §3.10).
  */

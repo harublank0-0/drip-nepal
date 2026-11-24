@@ -304,7 +304,7 @@ async function assertDisableable(
 /*
  * Staff: suspend, resume (back to `pending`, re-verified) or disable any
  * account. A shop-owned account is its shop's data, so OD-44's own-shop
- * check applies to it (`ownShop`, docs/07 §4.1 rule 4); a platform-owned
+ * check applies to it (`ownShop`, docs/07 §4.1 item 4); a platform-owned
  * account is nobody's shop.
  */
 export async function setLogisticsAccountStatus<T>(
@@ -392,10 +392,10 @@ export async function allowShopOnLogisticsAccount<T>(
 ) {
   return withTx(async (trx) => {
     const account = await lockedPlatformAccount(trx, command.accountId)
-    if (account.status === 'disabled') throw new InvalidStateTransition('disabled', [])
     const shop = await trx.from('shops').where('id', command.shopId).select('id').first()
     if (!shop) throw new DomainError('NOT_FOUND')
     const flags = await context.ownShop(trx, [command.shopId])
+    if (account.status === 'disabled') throw new InvalidStateTransition('disabled', [])
     const current = await trx
       .from('logistics_account_shops')
       .where({ account_id: account.id, shop_id: command.shopId })

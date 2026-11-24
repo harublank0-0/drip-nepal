@@ -5,7 +5,7 @@ import { settingIn } from '#modules/platform/settings'
 import { shopsWorkedIn } from '#modules/shops/queries'
 
 /*
- * OD-44's own-shop check for one admin request (docs/07 §4.1 rule 4, §4.5,
+ * OD-44's own-shop check for one admin request (docs/07 §4.1 item 4, §4.5,
  * §4.7; decided 2026-11-23, option (b) with the `single_operator_mode`
  * exception; R1-S part 1c-ii). A platform action on a shop the staff member
  * owns or works in, or on its orders:

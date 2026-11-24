@@ -1,7 +1,7 @@
 import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
 
 /*
- * OD-44's own-shop check (docs/07 §4.1 rule 4, §4.7; decided 2026-11-23,
+ * OD-44's own-shop check (docs/07 §4.1 item 4, §4.7; decided 2026-11-23,
  * option (b) with the `single_operator_mode` exception), as the admin
  * actions receive it. The check needs the shops, the settings and the
  * staff member's TOTP secret, which live above the modules whose actions

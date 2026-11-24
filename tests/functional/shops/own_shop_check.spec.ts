@@ -15,18 +15,18 @@ import { useJobBoss } from '#tests/support/jobs'
 
 /*
  * T-SEC-045: OD-44's own-shop check on the admin operations (docs/07 §4.1
- * rule 4, §4.5, §4.7; decided 2026-11-23, option (b) with the
+ * item 4, §4.5, §4.7; decided 2026-11-23, option (b) with the
  * `single_operator_mode` exception; R1-S part 1c-ii). A platform action on a
  * shop the staff member owns or works in, or on its orders, answers 403
  * while `single_operator_mode` is off; under the mode it needs a fresh
  * `totp_code` in the body, checked in the action's transaction, and its
  * audit row carries the `single_operator` flag. On any other shop nothing
  * changes. Over HTTP against the test server, as staff signed in with a
- * real TOTP secret; the limiter keys a test charged are deleted after it.
- * Here the limiter writes share the test's global transaction and roll back
- * with the action, so what the limiters keep, and two requests racing with
- * one code, are tested with real commits in
- * tests/concurrency/shops/own_shop_check.spec.ts.
+ * real TOTP secret. The limiters write on their own connection and commit
+ * here too (docs/10 §3.3), so each test deletes the keys it charged. What
+ * the limiters keep after an action rolls back, the attempt that starts the
+ * block, and two requests racing with one code are tested with real commits
+ * in tests/concurrency/shops/own_shop_check.spec.ts.
  */
 
 const MODE = 'single_operator_mode'
@@ -297,6 +297,13 @@ test.group('T-SEC-045 OD-44: platform actions on the staff member’s own shop',
     })
     assert.equal(response.status, 403)
     assert.isNull(await lastUsedStep(s.user.id), 'the code was not spent')
+    // A wrong code is not even read: still the 403, and no failure recorded.
+    const wrong = await s.call(op.method, op.path, {
+      ...op.body,
+      totp_code: wrongCode(s.secret),
+    })
+    assert.equal(wrong.status, 403)
+    assert.equal(await mfaFailureCount(s.user.id), 0)
   })
 
   test('T-SEC-045 an active member counts as working in the shop; a removed member does not', async ({
@@ -433,7 +440,9 @@ test.group('T-SEC-045 OD-44: platform actions on the staff member’s own shop',
       const response = await s.call(op.method, op.path, op.body, op.headers)
       assert.include([200, 204], response.status, `${op.name}: ${response.text}`)
     }
-    for (const row of await auditsBy(s.user.id)) {
+    const audits = await auditsBy(s.user.id)
+    assert.lengthOf(audits, operations(s).length)
+    for (const row of audits) {
       assert.notProperty(row.changes, 'flags', row.action)
     }
     // A code sent anyway is not checked.

@@ -248,21 +248,38 @@ test.group('T-UI-035 /admin/logistics lists the courier accounts', () => {
   test('T-SEC-045 an account of the staff member’s own shop needs a code only under single-operator mode', async ({
     assert,
   }) => {
+    const setMode = (on: boolean) =>
+      db.rawQuery(
+        `INSERT INTO platform_settings (key, value) VALUES ('single_operator_mode', ?::jsonb)
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+        [JSON.stringify(on)]
+      )
     const staffId = await staffUser('platform_admin')
     const owned = await ShopFactory.merge({ ownerUserId: staffId }).apply('active').create()
-    const account = await insertNcmAccount(owned.id)
+    const someoneElses = await ShopFactory.apply('active').create()
+    const own = await insertNcmAccount(owned.id)
+    const other = await insertNcmAccount(someoneElses.id)
+    const platform = await platformAccount('DripNepal NCM')
+    await allow(platform, owned.id)
     const browser = await signIn(staffId, minutesAgo(1))
     const needsCode = async () => {
       const props = await pageProps(browser)
       const items = (props.accounts as { items: Account[] }).items
-      return items.find((item) => item.id === account)!.needs_totp_code
+      const of = (id: string) => items.find((item) => item.id === id)!.needs_totp_code
+      return { own: of(own), other: of(other), platform: of(platform) }
     }
-    assert.isFalse(await needsCode(), 'mode off: the action answers 403 instead')
-    await db.rawQuery(
-      `INSERT INTO platform_settings (key, value) VALUES ('single_operator_mode', 'true'::jsonb)
-       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`
+    await setMode(false)
+    assert.deepEqual(
+      await needsCode(),
+      { own: false, other: false, platform: false },
+      'mode off: the action answers 403 instead'
     )
-    assert.isTrue(await needsCode())
+    await setMode(true)
+    assert.deepEqual(
+      await needsCode(),
+      { own: true, other: false, platform: false },
+      'only the staff member’s own shop-owned account'
+    )
   })
 
   test('T-UI-035 one cursor page at a time', async ({ assert }) => {

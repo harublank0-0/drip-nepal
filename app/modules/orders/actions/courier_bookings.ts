@@ -200,10 +200,11 @@ export async function resolveCourierBooking<T>(
 ) {
   return idempotentTx(context.idempotency, async (trx) => {
     const { shipment } = await lockShipmentChain(trx, command.shopOrderNumber)
-    if (!shipment || !shipment.logistics_account_id) {
-      throw conflict(shipment?.status ?? 'none', 'This parcel has no courier booking.')
-    }
+    if (!shipment) throw conflict('none', 'This parcel has no courier booking.')
     const flags = await context.ownShop(trx, [shipment.shop_id])
+    if (!shipment.logistics_account_id) {
+      throw conflict(shipment.status, 'This parcel has no courier booking.')
+    }
     let resultId = shipment.id as string
     let action = 'shipment.booking_resolve'
     const changes: Record<string, string | null> = { outcome: command.outcome }
@@ -338,7 +339,12 @@ export async function resolveCourierEvent(
   const existing = await courierEvent(command.eventId)
   if (!existing) throw new DomainError('NOT_FOUND')
   await withTx(async (trx) => {
-    const flags = await context.ownShop(trx, [existing.shop_id])
+    const current = await trx
+      .from('courier_events')
+      .where('id', command.eventId)
+      .select('shop_id')
+      .first()
+    const flags = await context.ownShop(trx, [current?.shop_id ?? null])
     const closed = await closeHeldEvent(trx, command.eventId, command.status)
     if (!closed) throw new InvalidStateTransition(existing.processing_status, [])
     await recordAudit(trx, {
