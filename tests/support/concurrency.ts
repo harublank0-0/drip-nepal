@@ -13,7 +13,10 @@ import type { OwnerShop } from '#tests/support/shops'
 /*
  * Until another backend of this database waits on a lock in a statement
  * that reads `relation` (at most 10 s), so an unrelated waiter, such as a
- * job worker, does not end the wait early.
+ * job worker, does not end the wait early. `pg_stat_activity.query` shows
+ * only the sessions of the same role (or to a superuser); the server and
+ * the tests connect as one role, and were that to change the wait would
+ * time out, never pass falsely.
  */
 export async function waitForLockWaiter(relation = 'inventory_items') {
   for (let tries = 0; tries < 100; tries++) {

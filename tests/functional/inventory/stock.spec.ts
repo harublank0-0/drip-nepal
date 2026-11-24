@@ -37,7 +37,8 @@ import { addMember, setShopStatus } from '#tests/support/shops'
  *   `stocktake` movement, also when the count confirms the number (0, and
  *   no listing job, AC-J11-08); a stale `expected_on_hand` is 409
  *   `stock_changed` with `on_hand` and `reserved` (AC-J11-03); a refused
- *   request stores no key, so the same key works for the next attempt.
+ *   request stores no key, so the same key works for the next attempt; an
+ *   archived variant of an archived product can still be changed.
  * - T-INV-002: with 2 units committed to an `awaiting_acceptance` shop
  *   order and 1 held for an `awaiting_payment` one, an adjustment or count
  *   below `reserved` is 409 `below_reserved` with the split (the committed
@@ -269,6 +270,7 @@ test.group('T-INV-008 adjustInventory and stocktakeInventory', (group) => {
     assert.deepEqual(again.body, first.body)
     for (const note of [null, '  ']) {
       const sameRequest = await adjust(w, variantId, { ...received(5), note }, idempotencyKey)
+      assert.equal(sameRequest.status, 201, String(note))
       assert.equal(sameRequest.headers.get('idempotency-replayed'), 'true', String(note))
     }
     const reused = await adjust(w, variantId, received(6), idempotencyKey)
@@ -434,6 +436,22 @@ test.group('T-INV-008 adjustInventory and stocktakeInventory', (group) => {
     )
     assert.equal(again.status, 201, again.text)
     assert.equal(again.body.data.on_hand, 12)
+  })
+
+  test('T-INV-008 an archived variant of an archived product can still be adjusted and counted', async ({
+    assert,
+  }) => {
+    const w = await world()
+    const { id: productId, variantId } = await product(w)
+    await adjust(w, variantId, received(1))
+    // Its row stays for restocks (docs/04a §8.1), so the vendor can correct it (05 §5.9).
+    await db.from('product_variants').where('id', variantId).update({ status: 'archived' })
+    await db.from('products').where('id', productId).update({ status: 'archived' })
+    const restocked = await adjust(w, variantId, { delta: 2, reason_code: 'found' })
+    assert.equal(restocked.status, 201, restocked.text)
+    const counted = await stocktake(w, variantId, { counted_quantity: 2, expected_on_hand: 3 })
+    assert.equal(counted.status, 201, counted.text)
+    assert.deepEqual(await stockOf(variantId), { onHand: 2, reserved: 0 })
   })
 
   test('T-INV-008 the stocktake numbers are bounded integers', async ({ assert }) => {
@@ -680,6 +698,7 @@ test.group('T-INV-009 listInventory', (group) => {
     assert.isNull(next.body.meta.next_cursor)
     const foreign = await list(w, `?limit=2&q=pash&cursor=${page.body.meta.next_cursor}`)
     assert.equal(foreign.status, 400, 'a cursor made for other filters')
+    assert.equal(foreign.body.code, 'INVALID_QUERY_PARAMETER')
 
     for (const query of ['?low_stock=true', '?shop_id=x', '?q=', '?status=sold']) {
       const refused = await list(w, query)
