@@ -26,6 +26,8 @@ export type CourierAccount = {
   version: number
   shop: CourierShop | null
   shops: (CourierShop & { is_active: boolean })[]
+  // A status change needs a `totp_code` from this staff member (OD-44's exception).
+  needs_totp_code: boolean
 }
 
 function shopName(shop: CourierShop) {

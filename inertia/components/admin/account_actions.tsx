@@ -30,7 +30,7 @@ const LABEL = {
 export function AccountActions({
   account,
 }: {
-  account: { id: string; name: string; status: string }
+  account: { id: string; name: string; status: string; needs_totp_code?: boolean }
 }) {
   // Mounted from the first choice on, so the dialog is never unmounted while open.
   const [change, setChange] = useState<StatusChange | null>(null)
