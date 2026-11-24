@@ -14,9 +14,10 @@ import { PortAdapter } from '#modules/platform/ports/port_adapter'
  * browser would PUT to the presigned URL, and asserts what was presigned,
  * read and deleted. Like the real adapter it extends `PortAdapter`, so a
  * call inside a `withTx` transaction throws (T-ARCH-003). `failNext` makes
- * the next calls throw, as an outage would; `gateHeads(n)` holds each
- * `head` until `n` of them wait, so concurrent requests all pass the step
- * before it before any goes on (the concurrency suite's races).
+ * the next calls throw, as an outage would, and `failNextOn` the next call
+ * of one operation; `gateHeads(n)` holds each `head` until `n` of them wait,
+ * so concurrent requests all pass the step before it before any goes on
+ * (the concurrency suite's races), and fails after 5 s if they never do.
  *
  *   const storage = fakeObjectStorage()   // in group.each.setup, returning storage.restore
  *   storage.fake.put('private', key, 2048, 'image/jpeg')
@@ -35,6 +36,7 @@ export class MemoryObjectStorage extends PortAdapter implements ObjectStorage {
   readonly deleted: string[] = []
   readonly contexts: CallContext[] = []
   #failures: Error[] = []
+  #operationFailures = new Map<string, Error>()
   #version = 0
   #headGate: { count: number; waiting: (() => void)[] } | null = null
 
@@ -48,19 +50,35 @@ export class MemoryObjectStorage extends PortAdapter implements ObjectStorage {
     return this
   }
 
-  // What the browser's PUT to the presigned URL leaves in the bucket; a new ETag each time.
-  put(bucket: StorageBucket, key: string, bytes: number, contentType: string | null) {
+  failNextOn(operation: 'presignUpload' | 'head' | 'delete', error: Error) {
+    this.#operationFailures.set(operation, error)
+    return this
+  }
+
+  // What the browser's PUT to the presigned URL leaves in the bucket; a new ETag each time unless given.
+  put(
+    bucket: StorageBucket,
+    key: string,
+    bytes: number,
+    contentType: string | null,
+    etag?: string
+  ) {
     this.#version += 1
-    this.objects.set(`${bucket}/${key}`, { bytes, contentType, etag: `"etag-${this.#version}"` })
+    this.objects.set(`${bucket}/${key}`, {
+      bytes,
+      contentType,
+      etag: etag ?? `"etag-${this.#version}"`,
+    })
   }
 
   has(bucket: StorageBucket, key: string) {
     return this.objects.has(`${bucket}/${key}`)
   }
 
-  #call(ctx: CallContext) {
+  #call(operation: string, ctx: CallContext) {
     this.contexts.push(ctx)
-    const failure = this.#failures.shift()
+    const failure = this.#failures.shift() ?? this.#operationFailures.get(operation)
+    this.#operationFailures.delete(operation)
     if (failure) throw failure
   }
 
@@ -71,11 +89,12 @@ export class MemoryObjectStorage extends PortAdapter implements ObjectStorage {
     ctx: CallContext
   ): Promise<PresignedUpload> {
     this.guard('presignUpload')
-    this.#call(ctx)
+    this.#call('presignUpload', ctx)
     this.presigned.push({ bucket, key, ...options })
     return {
       url: `https://storage.test/${bucket}/${key}?X-Amz-Expires=${options.expiresInSeconds}`,
       headers: { 'Content-Type': options.contentType },
+      expiresAt: new Date(Date.now() + options.expiresInSeconds * 1000),
     }
   }
 
@@ -83,21 +102,28 @@ export class MemoryObjectStorage extends PortAdapter implements ObjectStorage {
     this.guard('head')
     const gate = this.#headGate
     if (gate) {
-      await new Promise<void>((resolve) => {
-        gate.waiting.push(resolve)
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(
+          () => reject(new Error(`gateHeads: ${gate.waiting.length} of ${gate.count} arrived`)),
+          5000
+        )
+        gate.waiting.push(() => {
+          clearTimeout(timer)
+          resolve()
+        })
         if (gate.waiting.length >= gate.count) {
           this.#headGate = null
           for (const release of gate.waiting) release()
         }
       })
     }
-    this.#call(ctx)
+    this.#call('head', ctx)
     return this.objects.get(`${bucket}/${key}`) ?? null
   }
 
   async delete(bucket: StorageBucket, key: string, ctx: CallContext): Promise<void> {
     this.guard('delete')
-    this.#call(ctx)
+    this.#call('delete', ctx)
     this.deleted.push(`${bucket}/${key}`)
     this.objects.delete(`${bucket}/${key}`)
   }

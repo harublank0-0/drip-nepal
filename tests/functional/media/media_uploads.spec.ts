@@ -19,13 +19,16 @@ import { addMember, setShopStatus } from '#tests/support/shops'
  *   minutes, and the asset `pending_upload`, without `Location`; a kind
  *   other than `product_image`, another type, a size of 0 or above 10 MB
  *   is 422 and writes nothing; a store that cannot sign is 503 and writes
- *   nothing; the 121st upload of a shop in an hour is 429.
- *   `completeMediaUpload` moves an object as declared to `processing` with
- *   its ETag and size and sends `media.process_upload` (202); no object is
- *   409 `upload_missing` and the seller may finish later; an empty object,
- *   one above 10 MB or of another type is `rejected` with a reason and
- *   deleted, with no job (200); a second finish is 409
- *   `INVALID_STATE_TRANSITION`.
+ *   nothing; a shop's 120th upload in an hour passes and its 121st is 429.
+ *   `completeMediaUpload` moves an object of the declared type to
+ *   `processing` with its ETag and its stored size, which may differ from
+ *   the declared one (that stays `bytes`), and sends `media.process_upload`
+ *   (202); no object is 409 `upload_missing` and the seller may finish
+ *   later; a `HEAD` that fails is 503 and changes nothing; an empty object,
+ *   one above 10 MB, of another type or with an ETag the column cannot hold
+ *   is `rejected` with a reason and deleted, with no job (200), also when
+ *   the delete fails; a second finish is 409 `INVALID_STATE_TRANSITION`; an
+ *   asset of a kind R1-S does not offer is 403.
  * - T-SEC-001: another shop's asset, an unknown one or a non-UUID is 404
  *   and changes nothing.
  * - T-SEC-003: `shop_id` or any other member is `unknown_field`; the finish
@@ -63,15 +66,24 @@ async function jobsFor(mediaAssetId: string) {
   return jobs.filter((job) => job.data.media_asset_id === mediaAssetId)
 }
 
-// A created upload whose object the "browser" has PUT: bytes and type as given.
+// A created upload whose object the "browser" has PUT: bytes, type and ETag as given.
 async function uploaded(
   w: World,
   storage: MemoryObjectStorage,
-  object: { bytes: number; contentType: string | null } = { bytes: 2048, contentType: 'image/jpeg' }
+  object: { bytes: number; contentType: string | null; etag?: string } = {
+    bytes: 2048,
+    contentType: 'image/jpeg',
+  }
 ) {
   const created = await create(w, image())
   const id = created.body.data.media_asset_id as string
-  storage.put('private', `originals/${w.shop.shopId}/${id}`, object.bytes, object.contentType)
+  storage.put(
+    'private',
+    `originals/${w.shop.shopId}/${id}`,
+    object.bytes,
+    object.contentType,
+    object.etag
+  )
   return id
 }
 
@@ -166,15 +178,17 @@ test.group('T-MED-004 createMediaUpload and completeMediaUpload', (group) => {
     const w = await world()
     await rateLimiter('media_upload').set(
       rateLimitKey('media_upload', w.shop.shopId),
-      120,
+      119,
       '1 hour'
     )
     const editor = await signIn(await addMember(w.shop.shopId, 'catalog_editor'))
+    const last = await create(w, image())
+    assert.equal(last.status, 201, 'the 120th upload passes')
     const refused = await create(w, image(), editor)
     assert.equal(refused.status, 429)
     assert.equal(refused.body.code, 'RATE_LIMITED')
     assert.isNotNull(refused.headers.get('retry-after'))
-    assert.lengthOf(await db.from('media_assets').where('shop_id', w.shop.shopId), 0)
+    assert.lengthOf(await db.from('media_assets').where('shop_id', w.shop.shopId), 1)
     const other = await world()
     const elsewhere = await create(other, image())
     assert.equal(elsewhere.status, 201, 'the limit is per shop')
@@ -217,13 +231,49 @@ test.group('T-MED-004 createMediaUpload and completeMediaUpload', (group) => {
     storage.fake.put('private', `originals/${w.shop.shopId}/${id}`, 1024, 'image/jpeg')
     const later = await complete(w, id)
     assert.equal(later.status, 202, later.text)
+    assert.equal(later.body.data.bytes, 2048, 'the declared size stays bytes')
+    const processing = await assetRow(id)
+    assert.deepInclude(processing, { bytes: 2048, upload_bytes: 1024 })
+  })
+
+  test('T-MED-004 a HEAD that fails is 503 and changes nothing', async ({ assert }) => {
+    const w = await world()
+    const id = await uploaded(w, storage.fake)
+    storage.fake.failNextOn('head', new ProviderUnavailableError('s3', 'head'))
+    const response = await complete(w, id)
+    assert.equal(response.status, 503)
+    assert.equal(response.body.code, 'PROVIDER_UNAVAILABLE')
+    const row = await assetRow(id)
+    assert.deepInclude(row, { status: 'pending_upload', upload_etag: null })
+    assert.lengthOf(await jobsFor(id), 0)
+  })
+
+  test('T-MED-004 an asset of a kind R1-S does not offer is 403 to finish', async ({ assert }) => {
+    const w = await world()
+    const [logo] = await db
+      .table('media_assets')
+      .insert({
+        shop_id: w.shop.shopId,
+        kind: 'shop_logo',
+        mime: 'image/png',
+        bytes: 100,
+        original_key: 'originals/x/y',
+        uploaded_by: w.shop.ownerId,
+      })
+      .returning('id')
+    const response = await complete(w, logo.id)
+    assert.equal(response.status, 403)
+    assert.equal(response.body.code, 'FORBIDDEN')
+    const row = await assetRow(logo.id)
+    assert.equal(row.status, 'pending_upload')
+    assert.lengthOf(storage.fake.contexts, 0, 'the store is not asked')
   })
 
   test('T-MED-004 an empty, oversized or retyped object is rejected with a reason and deleted', async ({
     assert,
   }) => {
     const w = await world()
-    const cases: [{ bytes: number; contentType: string | null }, string][] = [
+    const cases: [{ bytes: number; contentType: string | null; etag?: string }, string][] = [
       [{ bytes: 0, contentType: 'image/jpeg' }, 'The file is empty.'],
       [{ bytes: 10_485_761, contentType: 'image/jpeg' }, 'The file is larger than 10 MB.'],
       [
@@ -231,6 +281,11 @@ test.group('T-MED-004 createMediaUpload and completeMediaUpload', (group) => {
         'The file type does not match the type declared.',
       ],
       [{ bytes: 2048, contentType: null }, 'The file type does not match the type declared.'],
+      [{ bytes: 2048, contentType: 'image/jpeg', etag: '' }, 'The file could not be checked.'],
+      [
+        { bytes: 2048, contentType: 'image/jpeg', etag: `"${'a'.repeat(127)}"` },
+        'The file could not be checked.',
+      ],
     ]
     for (const [object, reason] of cases) {
       const id = await uploaded(w, storage.fake, object)
@@ -242,6 +297,14 @@ test.group('T-MED-004 createMediaUpload and completeMediaUpload', (group) => {
       assert.isFalse(storage.fake.has('private', `originals/${w.shop.shopId}/${id}`), reason)
       assert.lengthOf(await jobsFor(id), 0, reason)
     }
+
+    // A delete that fails after the commit is left to the cleanup job; the answer stands.
+    const id = await uploaded(w, storage.fake, { bytes: 0, contentType: 'image/jpeg' })
+    storage.fake.failNextOn('delete', new ProviderUnavailableError('s3', 'delete'))
+    const response = await complete(w, id)
+    assert.equal(response.status, 200, response.text)
+    const row = await assetRow(id)
+    assert.equal(row.status, 'rejected')
   })
 })
 
@@ -266,6 +329,10 @@ test.group('T-SEC-001 T-SEC-003 T-SEC-030 T-SEC-031 upload access', (group) => {
     assert.equal(foreign.body.code, 'NOT_FOUND')
     const unknown = await complete(w, '01929a50-0000-7000-8000-0000000000ff')
     assert.equal(unknown.status, 404)
+    const { request_id: foreignRequest, ...foreignBody } = foreign.body
+    const { request_id: unknownRequest, ...unknownBody } = unknown.body
+    assert.notEqual(foreignRequest, unknownRequest)
+    assert.deepEqual(foreignBody, unknownBody, 'another shop’s asset looks missing')
     const malformed = await complete(w, 'not-a-uuid')
     assert.equal(malformed.status, 404)
     const row = await assetRow(id)

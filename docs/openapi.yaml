@@ -2994,8 +2994,8 @@ paths:
         exactly (07 TM-16). It is signed before the asset is stored, so a store that cannot
         sign is 503 `PROVIDER_UNAVAILABLE` and leaves nothing. No `Location`: no read operation
         serves an asset (06 §3.7). Side effects: one `media_assets` row `pending_upload`; no
-        audit row. T-MED-004, T-SEC-001, T-SEC-003, T-SEC-030, T-SEC-031. Release R1·M2
-        (`product_image` from M3; R1-S part 2d-i).
+        audit row. T-MED-004, T-SEC-003, T-SEC-030, T-SEC-031. Release R1·M2 (`product_image`
+        from M3; R1-S part 2d-i).
       x-release: R1·M2
       x-permission: mediaByKind
       parameters:
@@ -3059,11 +3059,12 @@ paths:
         `INVALID_STATE_TRANSITION` with `current_status`. The body takes no member. A `HEAD` of
         the upload key, outside any transaction (03 §7.5): no object yet is 409 `CONFLICT`
         (`upload_missing`), nothing is written and the seller may PUT again while the URL lasts
-        and finish once more. An object as declared moves the asset to `processing` with its
-        ETag and size (04a §7.13) and sends `media.process_upload` in the same transaction:
-        202. An empty object, one above 10 MB or one whose `Content-Type` differs from the
-        declared mime is `rejected` with a `rejection_reason` the seller sees, and deleted: 200
-        (ADR-0013 decision 2, 07 TM-15, TM-16). T-MED-004, T-SEC-001, T-SEC-003, T-SEC-030,
+        and finish once more. An object of the declared type moves the asset to `processing`
+        with its ETag and stored size (`bytes` stays as declared; 04a §7.13) and sends
+        `media.process_upload` in the same transaction: 202. An empty object, one above 10 MB,
+        one whose `Content-Type` differs from the declared mime or one whose ETag cannot be
+        stored is `rejected` with a `rejection_reason` the seller sees, and deleted: 200
+        (ADR-0013 decision 2, 07 TM-15, TM-16). A store that cannot be asked is 503. T-MED-004, T-SEC-001, T-SEC-003, T-SEC-030,
         T-SEC-031. Release R1·M2 (`product_image` from M3; R1-S part 2d-i).
       x-release: R1·M2
       x-permission: mediaByKind
@@ -7008,7 +7009,7 @@ components:
         `code` is a rule name in snake case (`required`, `regex`, `enum`, `min_length`, `unique`,
         `unknown_field`) or a business reason (`insufficient_stock`, also on the `addCartItem`
         409 `OUT_OF_STOCK`;
-        `below_reserved`, `stock_changed`; `payout_stale` on the `approvePayout` 409,
+        `below_reserved`, `stock_changed`, `upload_missing` (built in R1-S part 2d-i); `payout_stale` on the `approvePayout` 409,
         `shop_frozen` on the `createPayout` and `approvePayout` 409 `CONFLICT` and
         `nothing_to_pay` on the `createPayout` 422, all proposed in 06 §5.2 and §13.6;
         `delivery_not_available` as a `CheckoutQuote.problems` item with `field` `shops.N`, 06

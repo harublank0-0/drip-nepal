@@ -33,7 +33,7 @@ export type CreateMediaUploadCommand = {
   bytes: number
 }
 
-export type MediaUpload = { asset: MediaAssetRow; upload: PresignedUpload; expiresAt: Date }
+export type MediaUpload = { asset: MediaAssetRow; upload: PresignedUpload }
 
 export async function createMediaUpload(
   command: CreateMediaUploadCommand,
@@ -50,7 +50,6 @@ export async function createMediaUpload(
     { contentType: command.mime, expiresInSeconds: UPLOAD_URL_SECONDS },
     { requestId: context.actor.requestId, timeoutMs: 5000 }
   )
-  const expiresAt = new Date(Date.now() + UPLOAD_URL_SECONDS * 1000)
   const asset = await withTx(async (trx) => {
     const [row] = await trx
       .table('media_assets')
@@ -66,5 +65,5 @@ export async function createMediaUpload(
       .returning('*')
     return mediaAssetRow(row)
   })
-  return { asset, upload, expiresAt }
+  return { asset, upload }
 }

@@ -60,6 +60,7 @@ test.group('T-MED-004 two finishes of one upload', (group) => {
     )
     const refused = responses.find((response) => response.status === 409)!
     assert.equal(refused.body.code, 'INVALID_STATE_TRANSITION')
+    assert.equal(refused.body.current_status, 'processing')
     const row = await db.from('media_assets').where('id', id).firstOrFail()
     assert.equal(row.status, 'processing')
     const jobs = await queued<{ media_asset_id: string }>('media.process_upload')

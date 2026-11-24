@@ -24,7 +24,7 @@ export function mediaUploadJson(result: MediaUpload) {
     media_asset_id: result.asset.id,
     upload_url: result.upload.url,
     headers: result.upload.headers,
-    expires_at: result.expiresAt.toISOString(),
+    expires_at: result.upload.expiresAt.toISOString(),
     asset: mediaAssetJson(result.asset),
   }
 }

@@ -1,12 +1,13 @@
 import type { ApplicationService } from '@adonisjs/core/types'
-import { objectStorageConfigured, s3Buckets, s3Client } from '#config/drive'
+import { objectStorage } from '#config/object_storage'
 import { runtime } from '#config/runtime'
 import { EmailSender } from '#modules/platform/ports/email_sender'
 import { ObjectStorage } from '#modules/platform/ports/object_storage'
 import {
-  DriveObjectStorage,
+  S3ObjectStorage,
   UnconfiguredObjectStorage,
-} from '#modules/platform/providers/drive_object_storage'
+  s3ClientFor,
+} from '#modules/platform/providers/s3_object_storage'
 import { emailSenderFor } from '#modules/platform/providers/mail_email_sender'
 
 /*
@@ -24,19 +25,15 @@ export default class PortsProvider {
       const logger = await resolver.make('logger')
       return emailSenderFor(mail.use(), runtime.appEnv, logger)
     })
-    // The drive disks of config/drive.ts, or a store that refuses every call while S3_* is unset.
+    // One S3 client per process (config/object_storage.ts), or a store that refuses every call.
+    const settings = objectStorage
+    const client = settings
+      ? s3ClientFor({ ...settings, secretAccessKey: settings.secretAccessKey.release() })
+      : null
     this.app.container.bind(ObjectStorage, async (resolver) => {
       const logger = await resolver.make('logger')
-      if (!objectStorageConfigured) return new UnconfiguredObjectStorage(logger)
-      const drive = await resolver.make('drive.manager')
-      return new DriveObjectStorage(
-        {
-          private: { driver: drive.use('private').driver, bucket: s3Buckets.private },
-          public: { driver: drive.use('public').driver, bucket: s3Buckets.public },
-        },
-        s3Client,
-        logger
-      )
+      if (!settings || !client) return new UnconfiguredObjectStorage(logger)
+      return new S3ObjectStorage(client, settings.buckets, logger)
     })
   }
 }

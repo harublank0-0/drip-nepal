@@ -20,6 +20,8 @@ export type PresignedUpload = {
   url: string
   // The headers the browser must send with its PUT; the signature binds them.
   headers: Record<string, string>
+  // When the URL stops working: the signing time plus the lifetime.
+  expiresAt: Date
 }
 
 export type StoredObject = {
