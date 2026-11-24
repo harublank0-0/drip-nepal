@@ -17,7 +17,7 @@ import {
   sellerProductJson,
   sellerProductListItemJson,
 } from '#transformers/seller/product_transformer'
-import { closedQuery, invalidParameter, listRequest, oneOf } from '#controllers/support/cursor'
+import { closedQuery, listRequest, oneOf, textFilter } from '#controllers/support/cursor'
 import {
   expectedVersion,
   idempotencyScope,
@@ -69,17 +69,6 @@ import {
  * parameter (the validator reads the query and body merged).
  */
 const LIST_PARAMETERS = ['status', 'q'] as const
-
-function textFilter(ctx: HttpContext, name: string, max: number) {
-  const value = ctx.request.qs()[name]
-  if (value === undefined) return undefined
-  if (typeof value !== 'string') throw invalidParameter(name, 'Send this parameter once.')
-  const trimmed = value.trim()
-  if (trimmed.length < 1 || [...trimmed].length > max) {
-    throw invalidParameter(name, `Send 1 to ${max} characters.`)
-  }
-  return trimmed
-}
 
 export default class ProductsController {
   // The editor view with stock, inside a transaction when the action gives its client.

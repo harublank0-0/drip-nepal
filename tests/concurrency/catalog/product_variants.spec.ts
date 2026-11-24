@@ -2,7 +2,7 @@ import { test } from '@japa/runner'
 import { randomUUID } from 'node:crypto'
 import db from '@adonisjs/lucid/services/db'
 import { ProductFactory } from '#database/factories/product_factory'
-import { MIGRATOR_CONNECTION } from '#tests/support/database'
+import { purgeOwnerShop, waitForLockWaiter } from '#tests/support/concurrency'
 import { send, signIn } from '#tests/support/courier_http'
 import { useJobBoss } from '#tests/support/jobs'
 import { createOwnerShop, type OwnerShop } from '#tests/support/shops'
@@ -16,56 +16,19 @@ import { createOwnerShop, type OwnerShop } from '#tests/support/shops'
  * archives the variant instead of deleting it. Without the lock the action
  * would read no history, wait on the row only at its delete, and fail on
  * the new movement's foreign key (`inventory_movements_stock_fkey`). A
- * transaction stands in for `adjustInventory` (R1-S part 2c). The shop and
- * everything it wrote are deleted after the test, as the migrator with the
- * retention exemption for the append-only rows.
+ * transaction stands in for `adjustInventory` (R1-S part 2c), so the test
+ * can hold the row while the request runs; the other order of the same race
+ * is in tests/concurrency/inventory/stock.spec.ts. The shop and everything
+ * it wrote are deleted after the test (`purgeOwnerShop`).
  */
 
 let made: OwnerShop | null = null
-
-// Until another backend of this database waits on a lock (at most 10 s).
-async function waitForLockWaiter() {
-  for (let tries = 0; tries < 100; tries++) {
-    const result = await db.rawQuery(
-      `SELECT count(*)::int AS waiting FROM pg_stat_activity
-        WHERE datname = current_database() AND wait_event_type = 'Lock'`
-    )
-    if (result.rows[0].waiting > 0) return
-    await new Promise((resolve) => setTimeout(resolve, 100))
-  }
-  throw new Error('the request never waited on the stock row')
-}
 
 async function cleanUp() {
   if (!made) return
   const shop = made
   made = null
-  const trx = await db.connection(MIGRATOR_CONNECTION).transaction()
-  try {
-    await trx.rawQuery(`SET LOCAL dripnepal.retention_purge = 'on'`)
-    await trx.from('audit_logs').where('shop_id', shop.shopId).delete()
-    await trx.from('inventory_movements').where('shop_id', shop.shopId).delete()
-    await trx.from('inventory_items').where('shop_id', shop.shopId).delete()
-    await trx
-      .from('variant_option_values')
-      .whereIn('product_id', trx.from('products').where('shop_id', shop.shopId).select('id'))
-      .delete()
-    await trx.from('product_variants').where('shop_id', shop.shopId).delete()
-    await trx
-      .from('product_option_axes')
-      .whereIn('product_id', trx.from('products').where('shop_id', shop.shopId).select('id'))
-      .delete()
-    await trx.from('products').where('shop_id', shop.shopId).delete()
-    await trx.from('shop_memberships').where('shop_id', shop.shopId).delete()
-    await trx.from('shop_agreements').where('shop_id', shop.shopId).delete()
-    await trx.from('shops').where('id', shop.shopId).delete()
-    await trx.from('sessions').where('user_id', shop.ownerId).delete()
-    await trx.from('users').where('id', shop.ownerId).delete()
-    await trx.commit()
-  } catch (error) {
-    await trx.rollback()
-    throw error
-  }
+  await purgeOwnerShop(shop)
 }
 
 test.group('T-CAT-106 replaceProductVariants against a stock adjustment', (group) => {

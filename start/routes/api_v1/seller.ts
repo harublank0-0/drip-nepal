@@ -6,11 +6,14 @@ const ShippingController = () => import('#controllers/api/v1/seller/shops/shippi
 const LogisticsController = () => import('#controllers/seller/logistics_controller')
 const CourierBookingsController = () => import('#controllers/seller/courier_bookings_controller')
 const ProductsController = () => import('#controllers/api/v1/seller/catalog/products_controller')
+const InventoryItemsController = () =>
+  import('#controllers/api/v1/seller/inventory/inventory_items_controller')
 
 /*
  * Seller JSON operations (docs/06 §13.5, §13.8): the shop reads of R1-S part
  * 1a, the profile edit of part 1b, the shipping of part 1c, the product
- * drafts of part 2a, the variants of part 2b and the M6 courier work.
+ * drafts of part 2a, the variants of part 2b, the stock of part 2c and the
+ * M6 courier work.
  * `listMyShops` is the one seller route outside `{shopSlug}`: `auth` only,
  * the `session` requirement of docs/07 §4.5.
  * Every other route runs `auth`, then `sellerContext` on the exact
@@ -43,6 +46,15 @@ router
       .put('/products/:productId/variants', [ProductsController, 'replaceVariants'])
       .as('replaceProductVariants')
       .where('productId', router.matchers.uuid())
+    router.get('/inventory', [InventoryItemsController, 'index']).as('listInventory')
+    router
+      .post('/inventory/:variantId/adjustments', [InventoryItemsController, 'adjust'])
+      .as('adjustInventory')
+      .where('variantId', router.matchers.uuid())
+    router
+      .post('/inventory/:variantId/stocktake', [InventoryItemsController, 'stocktake'])
+      .as('stocktakeInventory')
+      .where('variantId', router.matchers.uuid())
     router.get('/logistics', [LogisticsController, 'show']).as('getLogisticsSettings')
     router.put('/logistics', [LogisticsController, 'replace']).as('replaceLogisticsSettings')
     router

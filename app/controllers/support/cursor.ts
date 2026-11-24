@@ -61,6 +61,17 @@ export function oneOf<T extends string>(
   return value as T
 }
 
+// A free-text filter, trimmed, of 1 to `max` characters (`q` of docs/06 §6.3).
+export function textFilter(ctx: HttpContext, name: string, max: number) {
+  const value = single(ctx, name)
+  if (value === undefined) return undefined
+  const trimmed = value.trim()
+  if (trimmed.length < 1 || [...trimmed].length > max) {
+    throw invalidParameter(name, `Send 1 to ${max} characters.`)
+  }
+  return trimmed
+}
+
 export function uuidFilter(ctx: HttpContext, name: string) {
   const value = single(ctx, name)
   if (value !== undefined && !UUID.test(value)) throw invalidParameter(name, 'Send a UUID.')

@@ -64,21 +64,26 @@ class ReplayRequested extends Error {
 /*
  * Runs `work` in one `withTx` transaction behind the key of `scope`, or, with
  * no scope, as a plain transaction. `work` returns the HTTP status and the
- * response body (already transformed), which are stored with the key.
+ * response body (already transformed), which are stored with the key. It
+ * receives the key row's `id` (null without a scope): a stock adjustment's
+ * movement references it (`reference_type = 'request'`, docs/04a §8.3).
  */
 export async function idempotentTx<T>(
   scope: IdempotencyScope | null,
-  work: (trx: TransactionClientContract) => Promise<{ status: number; body: T }>,
+  work: (
+    trx: TransactionClientContract,
+    keyId: string | null
+  ) => Promise<{ status: number; body: T }>,
   options: TxOptions = {}
 ): Promise<IdempotentResponse<T>> {
   if (!scope) {
-    const result = await withTx(work, options)
+    const result = await withTx((trx) => work(trx, null), options)
     return { ...result, replayed: false }
   }
   try {
     const result = await withTx(async (trx) => {
-      await claimKey(trx, scope)
-      const answer = await work(trx)
+      const keyId = await claimKey(trx, scope)
+      const answer = await work(trx, keyId)
       await trx
         .from('idempotency_keys')
         .where({ actor_scope: scope.actorScope, operation: scope.operation, key: scope.key })
@@ -95,14 +100,15 @@ export async function idempotentTx<T>(
   }
 }
 
-async function claimKey(trx: TransactionClientContract, scope: IdempotencyScope) {
+// Inserts the key row and returns its `id`; an existing row asks for a replay.
+async function claimKey(trx: TransactionClientContract, scope: IdempotencyScope): Promise<string> {
   const ttl = scope.ttlHours ?? 24
   await trx
     .from('idempotency_keys')
     .where({ actor_scope: scope.actorScope, operation: scope.operation, key: scope.key })
     .where('expires_at', '<=', trx.raw('now()'))
     .delete()
-  let inserted: { rows: unknown[] }
+  let inserted: { rows: { id: string }[] }
   try {
     inserted = await trx.rawQuery(
       `INSERT INTO idempotency_keys (actor_scope, operation, key, fingerprint, status,
@@ -118,6 +124,7 @@ async function claimKey(trx: TransactionClientContract, scope: IdempotencyScope)
     throw error
   }
   if (inserted.rows.length === 0) throw new ReplayRequested()
+  return inserted.rows[0].id
 }
 
 async function replay<T>(scope: IdempotencyScope): Promise<IdempotentResponse<T>> {

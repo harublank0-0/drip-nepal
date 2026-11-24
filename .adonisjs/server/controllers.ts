@@ -41,6 +41,9 @@ export const controllers = {
         catalog: {
           Products: () => import('#controllers/api/v1/seller/catalog/products_controller'),
         },
+        inventory: {
+          InventoryItems: () => import('#controllers/api/v1/seller/inventory/inventory_items_controller'),
+        },
         shops: {
           Shipping: () => import('#controllers/api/v1/seller/shops/shipping_controller'),
           Shops: () => import('#controllers/api/v1/seller/shops/shops_controller'),

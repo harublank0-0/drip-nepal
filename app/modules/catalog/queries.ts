@@ -287,22 +287,7 @@ export async function productEditorData(
     .orderBy('created_at')
     .orderBy('id')
     .select('*')
-  const labelRows: { variant_id: string; name: string; label: string }[] =
-    variantRows.length === 0
-      ? []
-      : await client
-          .from('variant_option_values as o')
-          .join('attribute_values as v', 'v.id', 'o.attribute_value_id')
-          .join('product_option_axes as x', (join) => {
-            join.on('x.product_id', 'o.product_id').andOn('x.attribute_id', 'o.attribute_id')
-          })
-          .whereIn(
-            'o.variant_id',
-            variantRows.map((row) => row.id as string)
-          )
-          .join('attributes as a', 'a.id', 'o.attribute_id')
-          .orderBy('x.position')
-          .select('o.variant_id', 'a.name', 'v.label')
+  const labels = await variantLabels(client, variantRows)
   const mediaRows: {
     media_asset_id: string
     position: number
@@ -322,13 +307,10 @@ export async function productEditorData(
     attributes,
     optionAxes: axisRows.map((row) => row.code),
     variants: variantRows.map((row) => {
-      const labels = labelRows.filter((label) => label.variant_id === row.id)
       return {
         id: row.id as string,
         sku: row.sku as string,
-        label: row.is_default
-          ? 'Default'
-          : labels.map((label) => `${label.name}: ${label.label}`).join(' / '),
+        label: labels.get(row.id as string)!,
         priceMinor: row.price_minor as number,
         compareAtPriceMinor: row.compare_at_price_minor as number | null,
         weightGrams: row.weight_grams as number | null,
@@ -344,6 +326,80 @@ export async function productEditorData(
     })),
     readyMediaCount: mediaRows.filter((row) => row.status === 'ready').length,
   }
+}
+
+/*
+ * The label of each variant row, "Size: M / Colour: Black" in axis order,
+ * or "Default" for the default variant: one query for any number of
+ * products, so the editor and the stock list (`listInventory`) agree.
+ */
+async function variantLabels(
+  client: QueryClientContract,
+  rows: readonly Record<string, unknown>[]
+): Promise<Map<string, string>> {
+  const labelRows: { variant_id: string; name: string; label: string }[] =
+    rows.length === 0
+      ? []
+      : await client
+          .from('variant_option_values as o')
+          .join('attribute_values as v', 'v.id', 'o.attribute_value_id')
+          .join('product_option_axes as x', (join) => {
+            join.on('x.product_id', 'o.product_id').andOn('x.attribute_id', 'o.attribute_id')
+          })
+          .whereIn(
+            'o.variant_id',
+            rows.map((row) => row.id as string)
+          )
+          .join('attributes as a', 'a.id', 'o.attribute_id')
+          .orderBy('x.position')
+          .select('o.variant_id', 'a.name', 'v.label')
+  return new Map(
+    rows.map((row) => [
+      row.id as string,
+      row.is_default
+        ? 'Default'
+        : labelRows
+            .filter((label) => label.variant_id === row.id)
+            .map((label) => `${label.name}: ${label.label}`)
+            .join(' / '),
+    ])
+  )
+}
+
+export type ActiveVariant = { id: string; sku: string; label: string; isDefault: boolean }
+
+/*
+ * The active variants of the shop's products `productIds`, by product, in
+ * the editor's order (creation, then ID), with their labels. `listInventory`
+ * shows these (docs/06 §6.3, docs/04a §8.1).
+ */
+export async function activeVariantsOf(
+  client: QueryClientContract,
+  shopId: string,
+  productIds: readonly string[]
+): Promise<Map<string, ActiveVariant[]>> {
+  if (productIds.length === 0) return new Map()
+  const rows: Record<string, unknown>[] = await client
+    .from('product_variants')
+    .where('shop_id', shopId)
+    .whereIn('product_id', [...productIds])
+    .where('status', 'active')
+    .orderBy('created_at')
+    .orderBy('id')
+    .select('id', 'product_id', 'sku', 'is_default')
+  const labels = await variantLabels(client, rows)
+  const byProduct = new Map<string, ActiveVariant[]>()
+  for (const row of rows) {
+    const list = byProduct.get(row.product_id as string) ?? []
+    list.push({
+      id: row.id as string,
+      sku: row.sku as string,
+      label: labels.get(row.id as string)!,
+      isDefault: row.is_default as boolean,
+    })
+    byProduct.set(row.product_id as string, list)
+  }
+  return byProduct
 }
 
 /*
