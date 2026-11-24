@@ -515,24 +515,24 @@ export interface Registry {
     methods: ["PUT"]
     pattern: '/api/v1/admin/logistics/accounts/:accountId/shops/:shopId'
     types: {
-      body: {}
+      body: ExtractBody<InferInput<(typeof import('#validators/admin/logistics').shopLinkValidator)>>
       paramsTuple: [ParamValue, ParamValue]
       params: { accountId: ParamValue; shopId: ParamValue }
-      query: {}
+      query: ExtractQuery<InferInput<(typeof import('#validators/admin/logistics').shopLinkValidator)>>
       response: ExtractResponse<Awaited<ReturnType<import('#controllers/admin/logistics_controller').default['allowShop']>>>
-      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/admin/logistics_controller').default['allowShop']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/admin/logistics_controller').default['allowShop']>>> | { status: 422; response: { errors: SimpleError[] } }
     }
   }
   'adminRemoveShopFromLogisticsAccount': {
     methods: ["DELETE"]
     pattern: '/api/v1/admin/logistics/accounts/:accountId/shops/:shopId'
     types: {
-      body: {}
+      body: ExtractBody<InferInput<(typeof import('#validators/admin/logistics').shopLinkValidator)>>
       paramsTuple: [ParamValue, ParamValue]
       params: { accountId: ParamValue; shopId: ParamValue }
-      query: {}
+      query: ExtractQuery<InferInput<(typeof import('#validators/admin/logistics').shopLinkValidator)>>
       response: ExtractResponse<Awaited<ReturnType<import('#controllers/admin/logistics_controller').default['removeShop']>>>
-      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/admin/logistics_controller').default['removeShop']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/admin/logistics_controller').default['removeShop']>>> | { status: 422; response: { errors: SimpleError[] } }
     }
   }
   'adminSetLogisticsAccountStatus': {

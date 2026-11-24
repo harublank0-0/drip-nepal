@@ -20,6 +20,7 @@ import {
   fakeCourier,
   NCM_TOKEN,
   NO_RETURN,
+  notOwnShop,
   reading,
   RECIPIENT,
   type CourierWorld,
@@ -406,7 +407,7 @@ test.group('T-FUL-111 an unknown booking outcome is never sent again by itself',
         externalShipmentId: '9001',
         note: 'Found on the NCM portal',
       },
-      { actor: staff(staffUser[0].id), idempotency: null, present: (s) => s }
+      { actor: staff(staffUser[0].id), ownShop: notOwnShop, idempotency: null, present: (s) => s }
     )
     const resolved = await shipment(world.shipmentId)
     assert.deepEqual([resolved.status, resolved.external_shipment_id], ['booked', '9001'])
@@ -470,7 +471,7 @@ test.group('T-FUL-111 an unknown booking outcome is never sent again by itself',
         externalShipmentId: null,
         note: 'Cancelled by NCM support',
       },
-      { actor: staff(staffUser[0].id), idempotency: null, present: (s) => s }
+      { actor: staff(staffUser[0].id), ownShop: notOwnShop, idempotency: null, present: (s) => s }
     )
     assert.equal(await pick(shipment(world.shipmentId), 'status'), 'cancelled')
     assert.equal(await pick(liveShipment(world), 'status'), 'pending')
@@ -580,7 +581,7 @@ test.group('T-FUL-108 replay, the return check and holds', (group) => {
       .returning('id')
     await resolveCourierEvent(
       { eventId: held.id, status: 'ignored', note: 'NCM internal label' },
-      staff(staffUser[0].id)
+      { actor: staff(staffUser[0].id), ownShop: notOwnShop }
     )
     await processLatest(world)
     assert.equal(
@@ -675,7 +676,7 @@ test.group('T-ORD-012 staff record an order verification', (group) => {
         method: 'phone_call',
         notes: 'Customer confirmed',
       },
-      await staffActor()
+      { actor: await staffActor(), ownShop: notOwnShop }
     )
     assert.equal(recorded.verification_status, 'verified')
     const result = await book(world)
@@ -700,7 +701,7 @@ test.group('T-ORD-012 staff record an order verification', (group) => {
     const lines = await captureLogs(async () => {
       await recordOrderVerification(
         { orderNumber: number, status: 'failed', method: 'manual', notes: null },
-        actor
+        { actor, ownShop: notOwnShop }
       )
     })
     const alerts = lines.filter((line) => line.fields.alert === 'order.verification_after_booking')
@@ -713,7 +714,7 @@ test.group('T-ORD-012 staff record an order verification', (group) => {
   test('T-ORD-012 an unknown order number answers 404', async ({ assert }) => {
     const error = await recordOrderVerification(
       { orderNumber: 'DN-ZZZZZZZ', status: 'verified', method: 'manual', notes: null },
-      await staffActor()
+      { actor: await staffActor(), ownShop: notOwnShop }
     ).then(
       () => null,
       (e) => e

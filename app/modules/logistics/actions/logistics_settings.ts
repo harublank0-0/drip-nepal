@@ -2,6 +2,7 @@ import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
 import { DomainError, VersionConflict } from '#exceptions/domain_error'
 import { recordAudit } from '#modules/audit/actions/record_audit'
 import type { Actor } from '#modules/platform/actor'
+import type { OwnShopCheck } from '#modules/platform/own_shop'
 import { withTx } from '#modules/platform/tx'
 import {
   logisticsSettings,
@@ -149,15 +150,17 @@ export async function replaceLogisticsSettings<T>(
   })
 }
 
+// Staff: the platform switch for a shop's courier bookings, checked against OD-44 (`ownShop`).
 export async function setShopLogisticsEnabled<T>(
   command: { shopId: string; isEnabled: boolean; reason: string },
-  context: { actor: Actor; present: (settings: SettingsView) => T }
+  context: { actor: Actor; ownShop: OwnShopCheck; present: (settings: SettingsView) => T }
 ) {
   return withTx(async (trx) => {
     const shop = await trx.rawQuery('SELECT id FROM shops WHERE id = ? FOR NO KEY UPDATE', [
       command.shopId,
     ])
     if (shop.rows.length === 0) throw new DomainError('NOT_FOUND')
+    const flags = await context.ownShop(trx, [command.shopId])
     const current = await trx
       .from('shop_logistics_settings')
       .where('shop_id', command.shopId)
@@ -187,7 +190,7 @@ export async function setShopLogisticsEnabled<T>(
         subjectType: 'shop_logistics_settings',
         subjectId: command.shopId,
         shopId: command.shopId,
-        changes: { is_enabled: { from: before, to: command.isEnabled } },
+        changes: { is_enabled: { from: before, to: command.isEnabled }, ...flags },
         reason: command.reason,
       })
     }

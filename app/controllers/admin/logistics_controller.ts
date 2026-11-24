@@ -30,6 +30,7 @@ import {
   staffActor,
 } from '#controllers/support/http'
 import { listRequest, oneOf } from '#controllers/support/cursor'
+import { ownShopGuard } from '#controllers/support/own_shop'
 import { assertKnownMembers } from '#validators/support/strict_keys'
 import {
   ACCOUNT_STATUS_MEMBERS,
@@ -37,11 +38,13 @@ import {
   CREATE_ACCOUNT_MEMBERS,
   REKEY_ACCOUNT_MEMBERS,
   SHOP_ENABLED_MEMBERS,
+  SHOP_LINK_MEMBERS,
   SYNC_MEMBERS,
   createLogisticsAccountValidator,
   rekeyLogisticsAccountValidator,
   setLogisticsAccountStatusValidator,
   setShopLogisticsEnabledValidator,
+  shopLinkValidator,
   syncBranchesValidator,
   updateBranchValidator,
 } from '#validators/admin/logistics'
@@ -52,7 +55,10 @@ import {
  * create and re-key platform-owned accounts and allow shops on them (OD-58,
  * re-decided 2026-11-22), and suspend, resume and disable any account. They
  * also switch a shop's courier bookings off and keep the branch list. No
- * response carries credentials (T-SEC-040).
+ * response carries credentials (T-SEC-040). The operations that act on a
+ * shop (a shop-owned account's status, a shop's link to an account, the
+ * shop's switch) run OD-44's own-shop check (`ownShopGuard`, docs/07 §4.1
+ * rule 4), whose `totp_code` also stands in for a stale step-up.
  */
 export default class AdminLogisticsController {
   // adminListLogisticsAccounts
@@ -118,50 +124,63 @@ export default class AdminLogisticsController {
     return { data: account }
   }
 
-  // adminAllowShopOnLogisticsAccount (step-up)
+  // adminAllowShopOnLogisticsAccount (step-up; OD-44)
   async allowShop(ctx: HttpContext) {
-    assertStepUp(ctx)
-    assertKnownMembers(ctx.request.body(), [])
-    const link = await allowShopOnLogisticsAccount(
-      { accountId: ctx.params.accountId, shopId: ctx.params.shopId },
-      { actor: staffActor(ctx), present: accountShopJson }
+    assertKnownMembers(ctx.request.body(), SHOP_LINK_MEMBERS)
+    const input = await ctx.request.validateUsing(shopLinkValidator)
+    const guard = ownShopGuard(ctx, input.totp_code ?? undefined, { stepUp: true })
+    const link = await guard.run((ownShop) =>
+      allowShopOnLogisticsAccount(
+        { accountId: ctx.params.accountId, shopId: ctx.params.shopId },
+        { actor: staffActor(ctx), ownShop, present: accountShopJson }
+      )
     )
     return { data: link }
   }
 
-  // adminRemoveShopFromLogisticsAccount (step-up)
+  // adminRemoveShopFromLogisticsAccount (step-up; OD-44)
   async removeShop(ctx: HttpContext) {
-    assertStepUp(ctx)
-    await removeShopFromLogisticsAccount(
-      { accountId: ctx.params.accountId, shopId: ctx.params.shopId },
-      { actor: staffActor(ctx) }
+    assertKnownMembers(ctx.request.body(), SHOP_LINK_MEMBERS)
+    const input = await ctx.request.validateUsing(shopLinkValidator)
+    const guard = ownShopGuard(ctx, input.totp_code ?? undefined, { stepUp: true })
+    await guard.run((ownShop) =>
+      removeShopFromLogisticsAccount(
+        { accountId: ctx.params.accountId, shopId: ctx.params.shopId },
+        { actor: staffActor(ctx), ownShop }
+      )
     )
     return ctx.response.noContent()
   }
 
-  // adminSetLogisticsAccountStatus (step-up)
+  // adminSetLogisticsAccountStatus (step-up; OD-44 on a shop-owned account)
   async setAccountStatus(ctx: HttpContext) {
-    assertStepUp(ctx)
     assertKnownMembers(ctx.request.body(), ACCOUNT_STATUS_MEMBERS)
     const input = await ctx.request.validateUsing(setLogisticsAccountStatusValidator)
-    const account = await setLogisticsAccountStatus(
-      { accountId: ctx.params.accountId, status: input.status, reason: input.reason },
-      {
-        actor: staffActor(ctx),
-        unfinishedShipments: accountHasUnfinishedShipments,
-        present: accountJson,
-      }
+    const guard = ownShopGuard(ctx, input.totp_code ?? undefined, { stepUp: true })
+    const account = await guard.run((ownShop) =>
+      setLogisticsAccountStatus(
+        { accountId: ctx.params.accountId, status: input.status, reason: input.reason },
+        {
+          actor: staffActor(ctx),
+          ownShop,
+          unfinishedShipments: accountHasUnfinishedShipments,
+          present: accountJson,
+        }
+      )
     )
     return { data: account }
   }
 
-  // adminSetShopLogisticsEnabled
+  // adminSetShopLogisticsEnabled (OD-44)
   async setShopEnabled(ctx: HttpContext) {
     assertKnownMembers(ctx.request.body(), SHOP_ENABLED_MEMBERS)
     const input = await ctx.request.validateUsing(setShopLogisticsEnabledValidator)
-    const settings = await setShopLogisticsEnabled(
-      { shopId: ctx.params.shopId, isEnabled: input.is_enabled, reason: input.reason },
-      { actor: staffActor(ctx), present: settingsJson }
+    const guard = ownShopGuard(ctx, input.totp_code ?? undefined, { stepUp: false })
+    const settings = await guard.run((ownShop) =>
+      setShopLogisticsEnabled(
+        { shopId: ctx.params.shopId, isEnabled: input.is_enabled, reason: input.reason },
+        { actor: staffActor(ctx), ownShop, present: settingsJson }
+      )
     )
     return { data: settings }
   }

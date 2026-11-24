@@ -2,6 +2,7 @@ import { randomBytes, randomUUID } from 'node:crypto'
 import db from '@adonisjs/lucid/services/db'
 import hash from '@adonisjs/core/services/hash'
 import { encryptField } from '#modules/platform/crypto/field_encrypter'
+import type { OwnShopCheck } from '#modules/platform/own_shop'
 import { NCM_CAPABILITIES, NcmCourierProvider } from '#modules/logistics/providers/ncm'
 import { swapCourierProvider } from '#modules/logistics/providers/registry'
 import { clearAssignedBranchCache } from '#modules/logistics/actions/courier_calls'
@@ -36,6 +37,13 @@ import {
  * `fakeCourier()` swaps the NCM adapter for a scripted one; nothing leaves
  * the process. Its callback parser is the real NCM one (it is pure).
  */
+
+/*
+ * The own-shop check (OD-44, docs/07 §4.1 rule 4) for tests that call the
+ * admin actions directly with staff who own no shop: it passes and flags
+ * nothing. The check itself is tested over HTTP (T-SEC-045).
+ */
+export const notOwnShop: OwnShopCheck = async () => ({})
 
 export const OWNER_PASSWORD = 'correct horse battery staple'
 export const NCM_TOKEN = 'synthetic-ncm-token-00000000000000'

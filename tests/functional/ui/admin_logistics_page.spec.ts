@@ -88,6 +88,7 @@ type Account = {
   status: string
   shop: { shop_id: string; slug: string | null; name: string | null } | null
   shops: { shop_id: string; slug: string | null; name: string | null; is_active: boolean }[]
+  needs_totp_code: boolean
 }
 
 test.group('T-SEC-030 /admin/logistics access', () => {
@@ -182,6 +183,7 @@ test.group('T-SEC-036 /admin/logistics props', () => {
       'version',
       'shop',
       'shops',
+      'needs_totp_code',
     ])
   })
 
@@ -239,6 +241,28 @@ test.group('T-UI-035 /admin/logistics lists the courier accounts', () => {
       { shop_id: allowed.id, slug: allowed.slug, name: allowed.name, is_active: true },
       { shop_id: removed.id, slug: removed.slug, name: removed.name, is_active: false },
     ])
+    assert.isFalse(shopOwned.needs_totp_code, 'another person’s shop')
+    assert.isFalse(ours.needs_totp_code)
+  })
+
+  test('T-SEC-045 an account of the staff member’s own shop needs a code only under single-operator mode', async ({
+    assert,
+  }) => {
+    const staffId = await staffUser('platform_admin')
+    const owned = await ShopFactory.merge({ ownerUserId: staffId }).apply('active').create()
+    const account = await insertNcmAccount(owned.id)
+    const browser = await signIn(staffId, minutesAgo(1))
+    const needsCode = async () => {
+      const props = await pageProps(browser)
+      const items = (props.accounts as { items: Account[] }).items
+      return items.find((item) => item.id === account)!.needs_totp_code
+    }
+    assert.isFalse(await needsCode(), 'mode off: the action answers 403 instead')
+    await db.rawQuery(
+      `INSERT INTO platform_settings (key, value) VALUES ('single_operator_mode', 'true'::jsonb)
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`
+    )
+    assert.isTrue(await needsCode())
   })
 
   test('T-UI-035 one cursor page at a time', async ({ assert }) => {

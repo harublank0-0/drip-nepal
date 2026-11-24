@@ -3,6 +3,7 @@ import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
 import { DomainError, InvalidStateTransition, VersionConflict } from '#exceptions/domain_error'
 import { recordAudit } from '#modules/audit/actions/record_audit'
 import type { Actor } from '#modules/platform/actor'
+import type { OwnShopCheck } from '#modules/platform/own_shop'
 import { encryptField } from '#modules/platform/crypto/field_encrypter'
 import { idempotentTx, type IdempotencyScope } from '#modules/platform/idempotency'
 import { sendJob } from '#modules/platform/jobs'
@@ -300,11 +301,17 @@ async function assertDisableable(
   }
 }
 
-// Staff: suspend, resume (back to `pending`, re-verified) or disable any account.
+/*
+ * Staff: suspend, resume (back to `pending`, re-verified) or disable any
+ * account. A shop-owned account is its shop's data, so OD-44's own-shop
+ * check applies to it (`ownShop`, docs/07 §4.1 rule 4); a platform-owned
+ * account is nobody's shop.
+ */
 export async function setLogisticsAccountStatus<T>(
   command: { accountId: string; status: 'suspended' | 'pending' | 'disabled'; reason: string },
   context: {
     actor: Actor
+    ownShop: OwnShopCheck
     unfinishedShipments: UnfinishedShipmentsCheck
     present: (account: AccountView) => T
   }
@@ -312,6 +319,7 @@ export async function setLogisticsAccountStatus<T>(
   return withTx(async (trx) => {
     const row = await lockedAccount(trx, command.accountId)
     if (!row) throw new DomainError('NOT_FOUND')
+    const flags = await context.ownShop(trx, [row.shop_id])
     const from = row.status as string
     if (command.status === 'disabled') {
       await assertDisableable(trx, row, context.unfinishedShipments)
@@ -349,7 +357,7 @@ export async function setLogisticsAccountStatus<T>(
       subjectType: 'logistics_account',
       subjectId: row.id,
       shopId: row.shop_id,
-      changes: { status: { from, to: command.status } },
+      changes: { status: { from, to: command.status }, ...flags },
       reason: command.reason,
     })
     return context.present(await viewIn(trx, row.id))
@@ -375,17 +383,19 @@ async function lockedPlatformAccount(trx: TransactionClientContract, accountId: 
  * Staff: let a shop book through a platform-owned account (docs/04a §9.10).
  * Inserts the shop's row or reactivates it; allowing an allowed shop changes
  * nothing and writes no audit row. Whether the shop may then choose the
- * `platform` mode is the settings' rule (`own_account_active`).
+ * `platform` mode is the settings' rule (`own_account_active`). The shop is
+ * checked against OD-44 (`ownShop`) once it is found.
  */
 export async function allowShopOnLogisticsAccount<T>(
   command: { accountId: string; shopId: string },
-  context: { actor: Actor; present: (link: AccountShopView) => T }
+  context: { actor: Actor; ownShop: OwnShopCheck; present: (link: AccountShopView) => T }
 ) {
   return withTx(async (trx) => {
     const account = await lockedPlatformAccount(trx, command.accountId)
     if (account.status === 'disabled') throw new InvalidStateTransition('disabled', [])
     const shop = await trx.from('shops').where('id', command.shopId).select('id').first()
     if (!shop) throw new DomainError('NOT_FOUND')
+    const flags = await context.ownShop(trx, [command.shopId])
     const current = await trx
       .from('logistics_account_shops')
       .where({ account_id: account.id, shop_id: command.shopId })
@@ -412,7 +422,7 @@ export async function allowShopOnLogisticsAccount<T>(
         subjectId: account.id,
         shopId: command.shopId,
         // This branch runs only for a shop that is not allowed now: no row, or an inactive one.
-        changes: { shop_id: command.shopId, is_active: { from: false, to: true } },
+        changes: { shop_id: command.shopId, is_active: { from: false, to: true }, ...flags },
       })
     }
     return context.present(await accountShopIn(trx, account.id, command.shopId))
@@ -423,14 +433,16 @@ export async function allowShopOnLogisticsAccount<T>(
  * Staff: stop a shop using a platform-owned account (docs/04a §9.10). The
  * row is deactivated, a shop whose default it was returns to `manual`, and
  * bookings already made keep the account. Removing a shop that is not
- * allowed changes nothing.
+ * allowed changes nothing. The shop is checked against OD-44 (`ownShop`)
+ * first, whether or not it is allowed.
  */
 export async function removeShopFromLogisticsAccount(
   command: { accountId: string; shopId: string },
-  context: { actor: Actor }
+  context: { actor: Actor; ownShop: OwnShopCheck }
 ) {
   await withTx(async (trx) => {
     const account = await lockedPlatformAccount(trx, command.accountId)
+    const flags = await context.ownShop(trx, [command.shopId])
     const current = await trx
       .from('logistics_account_shops')
       .where({ account_id: account.id, shop_id: command.shopId })
@@ -448,7 +460,7 @@ export async function removeShopFromLogisticsAccount(
       subjectType: 'logistics_account',
       subjectId: account.id,
       shopId: command.shopId,
-      changes: { shop_id: command.shopId, is_active: { from: true, to: false } },
+      changes: { shop_id: command.shopId, is_active: { from: true, to: false }, ...flags },
     })
   })
 }

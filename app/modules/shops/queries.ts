@@ -5,6 +5,7 @@ import type { ShopMemberRole } from '#modules/shops/domain/shop_member_role'
 import { hasShopSlugShape } from '#modules/shops/domain/shop_slug'
 import { CURRENT_SELLER_AGREEMENT } from '#modules/shops/domain/seller_agreements'
 import { shopShipping, type ShopShippingView } from '#modules/logistics/queries'
+import { settingIn } from '#modules/platform/settings'
 
 /*
  * The shops module's reads for other layers (docs/09 §2.2: a module's
@@ -226,6 +227,54 @@ export async function acceptedCurrentAgreement(shopId: string) {
 export async function ownsAnyShop(userId: string) {
   const row = await db.from('shops').where('owner_user_id', userId).select('id').first()
   return row !== null
+}
+
+/*
+ * Which of `shopIds` the user owns or works in (an `active` membership),
+ * in any shop status: OD-44's "their own shop" (docs/07 §4.1 rule 4,
+ * `ownShopCheck`). Read in the caller's transaction, without a lock: a
+ * membership that changes during one admin action is not a race this check
+ * has to win.
+ */
+export async function shopsWorkedIn(
+  client: QueryClientContract,
+  userId: string,
+  shopIds: readonly string[]
+): Promise<string[]> {
+  if (shopIds.length === 0) return []
+  const rows: { id: string }[] = await client
+    .from('shops')
+    .whereIn('id', [...shopIds])
+    .where((query) => {
+      query.where('owner_user_id', userId).orWhereExists((member) => {
+        member
+          .from('shop_memberships')
+          .whereColumn('shop_memberships.shop_id', 'shops.id')
+          .where('shop_memberships.user_id', userId)
+          .where('shop_memberships.status', 'active')
+      })
+    })
+    .select('id')
+  return rows.map((row) => row.id)
+}
+
+/*
+ * For the admin pages (R1-S part 1c-ii): which of `shopIds` an action by
+ * this staff member would need a `totp_code` for, so a dialog asks for the
+ * code with the first send (OD-44's exception, `ownShopCheck`): their own
+ * shops while `single_operator_mode` is on, none while it is off (the
+ * action then answers 403, which the dialog shows). The action checks again
+ * in its transaction.
+ */
+export async function shopsNeedingCode(
+  userId: string,
+  shopIds: readonly string[]
+): Promise<Set<string>> {
+  const client = db.connection()
+  const own = await shopsWorkedIn(client, userId, shopIds)
+  if (own.length === 0) return new Set()
+  const mode = await settingIn(client, 'single_operator_mode', false)
+  return new Set(mode === true ? own : [])
 }
 
 /*

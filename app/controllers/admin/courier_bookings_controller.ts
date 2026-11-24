@@ -11,6 +11,7 @@ import { courierBookingQueue } from '#modules/orders/queries'
 import { attemptJson, courierEventJson, shipmentJson } from '#transformers/courier_transformer'
 import { idempotencyScope, sendIdempotent, staffActor } from '#controllers/support/http'
 import { listRequest, oneOf, uuidFilter } from '#controllers/support/cursor'
+import { ownShopGuard } from '#controllers/support/own_shop'
 import { LIST_FILTER_VALUES } from '#modules/logistics/queries'
 import { assertKnownMembers } from '#validators/support/strict_keys'
 import {
@@ -25,7 +26,10 @@ import {
 /*
  * Staff work on courier bookings and readings (docs/06 §13.8; M6), under
  * `platform.orders.intervene`, and the OD-57 order verification. No step-up
- * (07 §3.10 lists none of these).
+ * (07 §3.10 lists none of these). The writes run OD-44's own-shop check
+ * (`ownShopGuard`, docs/07 §4.1 rule 4); `adminRefreshCourierStatus` does
+ * not, because it only asks the courier again and the job applies the
+ * courier's own answer, as `recheckPayment` asks the provider (07 §3.10).
  */
 export default class AdminCourierBookingsController {
   // adminListCourierBookings
@@ -57,18 +61,24 @@ export default class AdminCourierBookingsController {
   async resolve(ctx: HttpContext) {
     assertKnownMembers(ctx.request.body(), RESOLVE_BOOKING_MEMBERS)
     const input = await ctx.request.validateUsing(resolveCourierBookingValidator)
-    const result = await resolveCourierBooking(
-      {
-        shopOrderNumber: ctx.params.shopOrderNumber,
-        outcome: input.outcome,
-        externalShipmentId: input.external_shipment_id ?? null,
-        note: input.note,
-      },
-      {
-        actor: staffActor(ctx),
-        idempotency: idempotencyScope(ctx, 'adminResolveCourierBooking', input),
-        present: (shipment) => ({ data: shipmentJson(shipment) }),
-      }
+    // `totp_code` is left out of the fingerprint (06 §7.2), so a retry with a fresh code replays.
+    const idempotency = idempotencyScope(ctx, 'adminResolveCourierBooking', input)
+    const guard = ownShopGuard(ctx, input.totp_code ?? undefined, { stepUp: false })
+    const result = await guard.run((ownShop) =>
+      resolveCourierBooking(
+        {
+          shopOrderNumber: ctx.params.shopOrderNumber,
+          outcome: input.outcome,
+          externalShipmentId: input.external_shipment_id ?? null,
+          note: input.note,
+        },
+        {
+          actor: staffActor(ctx),
+          ownShop,
+          idempotency,
+          present: (shipment) => ({ data: shipmentJson(shipment) }),
+        }
+      )
     )
     return sendIdempotent(ctx, result)
   }
@@ -102,9 +112,12 @@ export default class AdminCourierBookingsController {
   async resolveEvent(ctx: HttpContext) {
     assertKnownMembers(ctx.request.body(), RESOLVE_EVENT_MEMBERS)
     const input = await ctx.request.validateUsing(resolveCourierEventValidator)
-    const row = await resolveCourierEvent(
-      { eventId: ctx.params.courierEventId, status: input.processing_status, note: input.note },
-      staffActor(ctx)
+    const guard = ownShopGuard(ctx, input.totp_code ?? undefined, { stepUp: false })
+    const row = await guard.run((ownShop) =>
+      resolveCourierEvent(
+        { eventId: ctx.params.courierEventId, status: input.processing_status, note: input.note },
+        { actor: staffActor(ctx), ownShop }
+      )
     )
     return { data: courierEventJson(row) }
   }
@@ -113,14 +126,17 @@ export default class AdminCourierBookingsController {
   async verify(ctx: HttpContext) {
     assertKnownMembers(ctx.request.body(), VERIFICATION_MEMBERS)
     const input = await ctx.request.validateUsing(recordOrderVerificationValidator)
-    const order = await recordOrderVerification(
-      {
-        orderNumber: ctx.params.orderNumber,
-        status: input.verification_status,
-        method: input.verification_method,
-        notes: input.verification_notes ?? null,
-      },
-      staffActor(ctx)
+    const guard = ownShopGuard(ctx, input.totp_code ?? undefined, { stepUp: false })
+    const order = await guard.run((ownShop) =>
+      recordOrderVerification(
+        {
+          orderNumber: ctx.params.orderNumber,
+          status: input.verification_status,
+          method: input.verification_method,
+          notes: input.verification_notes ?? null,
+        },
+        { actor: staffActor(ctx), ownShop }
+      )
     )
     return {
       data: {
