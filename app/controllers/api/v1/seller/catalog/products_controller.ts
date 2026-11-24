@@ -10,6 +10,7 @@ import {
   type ProductEditorData,
 } from '#modules/catalog/queries'
 import { createProduct } from '#modules/inventory/actions/create_product'
+import { replaceProductVariants } from '#modules/inventory/actions/replace_product_variants'
 import { onHandOf } from '#modules/inventory/queries'
 import { assertShopGate, assertShopPermission } from '#modules/shops/permissions'
 import {
@@ -36,6 +37,11 @@ import {
   createProductValidator,
   updateProductValidator,
 } from '#validators/catalog/products'
+import {
+  VARIANT_MEMBERS,
+  VARIANT_SET_MEMBERS,
+  replaceProductVariantsValidator,
+} from '#validators/catalog/variants'
 
 /*
  * The seller's product drafts (docs/06 §13.5; 01 FR-CAT-003, FR-CAT-011;
@@ -55,6 +61,8 @@ import {
  *   ETag; a replay returns the stored answer with `Idempotency-Replayed`.
  * - `updateProduct` ⟳ (`shop.products.edit`): `If-Match` required (428
  *   when missing), 412 with `current` on a stale version.
+ * - `replaceProductVariants` ⟳ (`shop.products.edit`; R1-S part 2b): the
+ *   axes and the whole variant set, with `If-Match` as `updateProduct`.
  *
  * Unknown members, top-level or in an `attributes` item, are 422
  * `unknown_field` before the validator (T-SEC-003); no write takes a query
@@ -193,6 +201,38 @@ export default class ProductsController {
           warrantyText: input.warranty_text,
           careAndPrecautions: input.care_and_precautions,
         },
+      },
+      { actor: sellerActor(ctx), present: this.presenter(ctx.shop.id) }
+    )
+    setEtag(ctx, result.version)
+    return { data: result.body }
+  }
+
+  // replaceProductVariants ⟳
+  async replaceVariants(ctx: HttpContext) {
+    closedQuery(ctx, [])
+    assertShopPermission(ctx.shop, 'shop.products.edit')
+    assertShopGate(ctx.shop, 'products_edit')
+    const body = ctx.request.body()
+    assertKnownMembers(body, VARIANT_SET_MEMBERS)
+    assertKnownItemMembers(body, 'variants', VARIANT_MEMBERS)
+    const input = await ctx.request.validateUsing(replaceProductVariantsValidator)
+    const version = expectedVersion(ctx)
+    const result = await replaceProductVariants(
+      {
+        shopId: ctx.shop.id,
+        productId: ctx.params.productId,
+        expectedVersion: version,
+        optionAxes: input.option_axes,
+        variants: input.variants.map((variant) => ({
+          // PostgreSQL returns UUIDs in lower case; an upper-case ID names the same variant.
+          id: variant.id?.toLowerCase(),
+          optionValueCodes: variant.option_value_codes,
+          sku: variant.sku,
+          priceMinor: variant.price_minor,
+          compareAtPriceMinor: variant.compare_at_price_minor ?? null,
+          weightGrams: variant.weight_grams ?? null,
+        })),
       },
       { actor: sellerActor(ctx), present: this.presenter(ctx.shop.id) }
     )

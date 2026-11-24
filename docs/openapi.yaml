@@ -2869,6 +2869,14 @@ paths:
         04 §3.5, §16.5; 09 §5.4). An `id` naming an archived variant of this product
         re-activates it; at most two option axes, which may be reordered in place (04a §7.8). Removing or replacing an axis once a variant of the product
         has an inventory movement or an order line answers 409 `CONFLICT` (axis set frozen, 04a §7.8).
+        Built (R1-S part 2b): an axis the category does not offer is 422 `not_allowed` on
+        `option_axes.N`; a live product must keep every required axis of its category (422
+        `required` on `option_axes`); a variant with history keeps its options (422 `history` on
+        `variants.N.option_value_codes`) and, left out, is archived, not deleted; a set that
+        changes nothing writes nothing and keeps the version; audit `product.variants_replace`
+        (proposed) with the axes and the counts, and `catalog.refresh_listing`. An axis the
+        product already has stays usable after its category rule is dropped. T-CAT-011,
+        T-CAT-102, T-CAT-103, T-CAT-106, T-CAT-109, T-API-004, T-SEC-001, T-SEC-003.
         Concurrency: ⟳ `If-Match` on `products.version`; bumps it and each changed variant's
         `version`. Missing, `*` or a list → 428; a stale version, a weak tag (`W/"2"` even when
         2 is current, because the comparison is strong) or any other value → 412 with `current`
@@ -10538,3 +10546,7 @@ components:
 #     row is unchanged otherwise. After the Fable review: `UpdateProductRequest` drops
 #     `minProperties` (an empty body answers 200, changing nothing), both product requests say a
 #     blank text clears the member, and `updateProduct` says what an edit checks.
+# 58. `replaceProductVariants` is built (R1-S part 2b, 2026-11-24; 06 note 68). Its description adds
+#     what the build decided: `not_allowed` on an axis the category does not offer, `required` for a
+#     live product's missing required axis, `history` for a changed option of a variant with
+#     history, the no-op rule, the audit action and the listing job.

@@ -20,3 +20,26 @@ export async function onHandOf(
     .select('variant_id', 'on_hand')
   return new Map(rows.map((row) => [row.variant_id, row.on_hand]))
 }
+
+/*
+ * The variants among `variantIds` that have history: an inventory movement
+ * (`inventory_movements_variant_history_idx`) or an order line
+ * (`order_items_variant_idx`). Such a variant is archived, never deleted,
+ * keeps its options, and fixes its product's axes (docs/04a §7.8, §7.9).
+ * The caller has locked the variants' stock rows, so a concurrent stock
+ * adjustment either committed first and shows here, or waits.
+ */
+export async function variantsWithHistory(
+  client: QueryClientContract,
+  variantIds: readonly string[]
+): Promise<Set<string>> {
+  if (variantIds.length === 0) return new Set()
+  const ids = [...variantIds]
+  const result = await client.rawQuery(
+    `SELECT DISTINCT variant_id FROM inventory_movements WHERE variant_id = ANY(?::uuid[])
+     UNION
+     SELECT DISTINCT variant_id FROM order_items WHERE variant_id = ANY(?::uuid[])`,
+    [ids, ids]
+  )
+  return new Set((result.rows as { variant_id: string }[]).map((row) => row.variant_id))
+}
