@@ -2,7 +2,7 @@ import { test } from '@japa/runner'
 import db from '@adonisjs/lucid/services/db'
 import { ProductFactory } from '#database/factories/product_factory'
 import type { Browser } from '#tests/support/browser'
-import { purgeOwnerShop, waitForLockWaiter } from '#tests/support/concurrency'
+import { commitWhileWaiting, purgeOwnerShop } from '#tests/support/concurrency'
 import { key, send, signIn } from '#tests/support/courier_http'
 import { useJobBoss } from '#tests/support/jobs'
 import { createOwnerShop, type OwnerShop } from '#tests/support/shops'
@@ -16,8 +16,8 @@ import { createOwnerShop, type OwnerShop } from '#tests/support/shops'
  * - T-INV-002: a reservation that commits while an adjustment waits makes
  *   the adjustment 409 `below_reserved` with the new `reserved`, and
  *   nothing is written; three adjustments of -3 against 5 units: one
- *   succeeds, two are refused, and `on_hand` equals the journal's sum
- *   (AC-J11-04).
+ *   succeeds, two are refused, and `on_hand` equals the journal's sum (the
+ *   adjustment half of AC-J11-04; the checkout half is T-INV-003, M5).
  * - T-INV-008: a shipment that commits while a count waits makes the count
  *   409 `stock_changed` with the new `on_hand` (AC-J11-03).
  * - T-CAT-106: `replaceProductVariants` deleting a never-stocked variant
@@ -27,8 +27,9 @@ import { createOwnerShop, type OwnerShop } from '#tests/support/shops'
  *
  * A transaction stands in for the other writer (checkout's reserve, a
  * shipment, the variant delete), so the test holds the row while the
- * request runs. The shop and everything it wrote are deleted after each
- * test (`purgeOwnerShop`).
+ * request runs, and commits once the request waits on `inventory_items`
+ * (`commitWhileWaiting`). The shop and everything it wrote are deleted
+ * after each test (`purgeOwnerShop`).
  */
 
 let made: OwnerShop | null = null
@@ -91,10 +92,19 @@ async function journalSum(variantId: string) {
   return result.rows[0] as { rows: number; on_hand: number }
 }
 
-// A transaction holding the stock row, as another writer's would.
+// A transaction holding the stock row, as another writer's would; rolled back if the lock fails.
 async function holdRow(variantId: string) {
   const trx = await db.transaction()
-  await trx.from('inventory_items').where('variant_id', variantId).forUpdate().select('variant_id')
+  try {
+    await trx
+      .from('inventory_items')
+      .where('variant_id', variantId)
+      .forUpdate()
+      .select('variant_id')
+  } catch (error) {
+    await trx.rollback()
+    throw error
+  }
   return trx
 }
 
@@ -108,12 +118,11 @@ test.group('T-INV-002 T-INV-008 stock changes against other writers', (group) =>
     assert,
   }) => {
     const s = await stocked(5)
-    const checkout = await holdRow(s.variantId)
-    await checkout.from('inventory_items').where('variant_id', s.variantId).increment('reserved', 4)
-    const request = adjust(s, { delta: -3, reason_code: 'damaged' })
-    await waitForLockWaiter()
-    await checkout.commit()
-    const response = await request
+    const response = await commitWhileWaiting(await holdRow(s.variantId), {
+      write: (checkout) =>
+        checkout.from('inventory_items').where('variant_id', s.variantId).increment('reserved', 4),
+      request: () => adjust(s, { delta: -3, reason_code: 'damaged' }),
+    })
     assert.equal(response.status, 409, response.text)
     assert.deepInclude(response.body.errors[0], {
       field: 'delta',
@@ -125,7 +134,7 @@ test.group('T-INV-002 T-INV-008 stock changes against other writers', (group) =>
     assert.deepEqual(await journalSum(s.variantId), { rows: 1, on_hand: 5 })
   })
 
-  test('T-INV-002 three adjustments of -3 against 5 units: one succeeds, the journal matches [AC-J11-04]', async ({
+  test('T-INV-002 three adjustments of -3 against 5 units: one succeeds, the journal matches [AC-J11-04, adjustment half]', async ({
     assert,
   }) => {
     const s = await stocked(5)
@@ -149,21 +158,21 @@ test.group('T-INV-002 T-INV-008 stock changes against other writers', (group) =>
     assert,
   }) => {
     const s = await stocked(5)
-    const shipment = await holdRow(s.variantId)
-    await shipment.from('inventory_items').where('variant_id', s.variantId).decrement('on_hand', 1)
-    const request = stocktake(s, { counted_quantity: 5, expected_on_hand: 5 })
-    await waitForLockWaiter()
-    await shipment.commit()
-    const response = await request
+    const response = await commitWhileWaiting(await holdRow(s.variantId), {
+      write: (shipment) =>
+        shipment.from('inventory_items').where('variant_id', s.variantId).decrement('on_hand', 1),
+      request: () => stocktake(s, { counted_quantity: 5, expected_on_hand: 5 }),
+    })
     assert.equal(response.status, 409, response.text)
     assert.deepInclude(response.body.errors[0], {
       field: 'expected_on_hand',
       code: 'stock_changed',
       on_hand: 4,
+      reserved: 0,
     })
     assert.deepEqual(await stockOf(s.variantId), { onHand: 4, reserved: 0 })
-    const journal = await journalSum(s.variantId)
-    assert.equal(journal.rows, 1)
+    // The stand-in shipment wrote no movement, so the journal still holds only the setup's 5.
+    assert.deepEqual(await journalSum(s.variantId), { rows: 1, on_hand: 5 })
   })
 
   test('T-CAT-106 an adjustment waiting on a variant that a replace deletes answers 404', async ({
@@ -185,19 +194,20 @@ test.group('T-INV-002 T-INV-008 stock changes against other writers', (group) =>
     await db.table('inventory_items').insert({ variant_id: spare.id, shop_id: s.shop.shopId })
     const spareStock: Stocked = { ...s, variantId: spare.id }
 
-    const replace = await db.transaction()
-    await replace.from('products').where('id', s.productId).forUpdate().select('id')
-    await replace
-      .from('inventory_items')
-      .where('variant_id', spare.id)
-      .forUpdate()
-      .select('variant_id')
-    await replace.from('inventory_items').where('variant_id', spare.id).delete()
-    await replace.from('product_variants').where('id', spare.id).delete()
-    const request = adjust(spareStock, { delta: 2, reason_code: 'received_stock' })
-    await waitForLockWaiter()
-    await replace.commit()
-    const response = await request
+    // The replace's order: the product, then the stock row, then the deletes (docs/04a §7.9).
+    const response = await commitWhileWaiting(await db.transaction(), {
+      write: async (replace) => {
+        await replace.from('products').where('id', s.productId).forUpdate().select('id')
+        await replace
+          .from('inventory_items')
+          .where('variant_id', spare.id)
+          .forUpdate()
+          .select('variant_id')
+        await replace.from('inventory_items').where('variant_id', spare.id).delete()
+        await replace.from('product_variants').where('id', spare.id).delete()
+      },
+      request: () => adjust(spareStock, { delta: 2, reason_code: 'received_stock' }),
+    })
     assert.equal(response.status, 404, response.text)
     assert.equal(response.body.code, 'NOT_FOUND')
     assert.isNull(await stockOf(spare.id))

@@ -25,8 +25,10 @@ import { addMember, setShopStatus } from '#tests/support/shops'
  *   movement; one `adjustment` movement with the actor, reason, note,
  *   request ID and the key row as its reference, one `inventory.adjust`
  *   audit row without the note, one `catalog.refresh_listing` job
- *   (AC-J11-02); a replay answers the stored 201 and changes stock once,
- *   the same key with another body is 422, no key is 400 (AC-J11-05); a
+ *   (AC-J11-02's first sentence; append-only is T-INV-006); a replay
+ *   answers the stored 201 and changes stock once, also when it sends the
+ *   omitted note as null or blank, the same key with another body is 422,
+ *   no key is 400 (AC-J11-05); a
  *   delta of 0, a decimal or a string, `correction`, `stocktake` or an
  *   unknown reason and a long note are 422 and write nothing (AC-J11-07);
  *   `data_entry_error` is a vendor reason; a blank note is no note; a
@@ -41,18 +43,21 @@ import { addMember, setShopStatus } from '#tests/support/shops'
  *   below `reserved` is 409 `below_reserved` with the split (the committed
  *   shop order's number, the held units as a count only) and writes
  *   nothing; down to `reserved` is fine (AC-J11-01); `stock_changed` comes
- *   before `below_reserved`.
+ *   before `below_reserved`; the split names the shop orders the vendor can
+ *   act on, oldest first, at most 20, and never an unpaid one.
  * - T-INV-009: `listInventory` lists the shop's products, newest change
  *   first, with their active variants: SKU, label, `on_hand`, `reserved`,
  *   `available` and the latest movement (02 J-11 step 1); archived
- *   products only with `status=archived`; `q` on a title or SKU prefix;
- *   cursor pages; `low_stock` (R2) and unknown parameters are 400.
+ *   products only with `status=archived`; `q` on a title prefix in any
+ *   case or a SKU prefix; cursor pages, and a cursor made for other filters
+ *   is 400; `low_stock` (R2) and unknown parameters are 400.
  * - T-SEC-001: another shop's variant, an unknown one or a non-UUID is 404
  *   and writes nothing; another shop's products are not listed.
  * - T-SEC-003: `shop_id`, `on_hand` or any other member is `unknown_field`.
  * - T-SEC-030: a viewer or order fulfiller lists but cannot change stock; a
  *   catalog editor can.
- * - T-SEC-031: the list opens while suspended; changes need an `active` shop.
+ * - T-SEC-031: the list opens while suspended in either mode and is refused
+ *   while `pending_review`; changes need an `active` shop.
  */
 
 const inventoryPath = (slug: string) => `/api/v1/seller/shops/${slug}/inventory`
@@ -110,8 +115,8 @@ const received = (delta: number) => ({ delta, reason_code: 'received_stock' })
  * Units of `variantId` reserved for a new shop order of the shop, as
  * checkout and the payment flows will reserve them (05 §5.3): `committed`
  * for an `awaiting_acceptance` shop order, `held` for an `awaiting_payment`
- * one (or another shop order status), with `reserved` raised to match.
- * Returns the shop order's number.
+ * one (or another shop order status, and other shop order columns), with
+ * `reserved` raised to match. Returns the shop order's number.
  */
 async function reserve(
   shopId: string,
@@ -121,16 +126,17 @@ async function reserve(
   status: 'committed' | 'held',
   shopOrderStatus: 'awaiting_acceptance' | 'accepted' | 'awaiting_payment' = status === 'held'
     ? 'awaiting_payment'
-    : 'awaiting_acceptance'
+    : 'awaiting_acceptance',
+  shopOrderColumns: Record<string, unknown> = {}
 ) {
-  const shopOrder = await insertShopOrder(
-    shopId,
-    shopOrderStatus === 'awaiting_payment'
+  const shopOrder = await insertShopOrder(shopId, {
+    ...(shopOrderStatus === 'awaiting_payment'
       ? { status: 'awaiting_payment', acceptance_due_at: null }
       : shopOrderStatus === 'accepted'
         ? { status: 'accepted', accepted_at: db.raw('now()') }
-        : {}
-  )
+        : {}),
+    ...shopOrderColumns,
+  })
   const [item] = await db
     .table('order_items')
     .insert({
@@ -172,7 +178,7 @@ test.group('T-INV-008 adjustInventory and stocktakeInventory', (group) => {
     await useJobBoss()
   })
 
-  test('T-INV-008 an adjustment answers the row and its movement and writes the journal, audit and job [AC-J11-02]', async ({
+  test('T-INV-008 an adjustment answers the row and its movement and writes the journal, audit and job [AC-J11-02 first sentence]', async ({
     assert,
   }) => {
     const w = await world()
@@ -230,9 +236,11 @@ test.group('T-INV-008 adjustInventory and stocktakeInventory', (group) => {
     assert.deepInclude(audit, {
       actor_type: 'shop_member',
       actor_user_id: w.shop.ownerId,
+      actor_role: `shop:${w.shop.shopId}:owner`,
       subject_type: 'inventory_item',
       shop_id: w.shop.shopId,
     })
+    assert.isNotNull(audit.ip_hash)
     assert.deepEqual(audit.changes, {
       on_hand: { from: 0, to: 20 },
       reason_code: 'received_stock',
@@ -259,6 +267,10 @@ test.group('T-INV-008 adjustInventory and stocktakeInventory', (group) => {
     assert.equal(again.status, 201, again.text)
     assert.equal(again.headers.get('idempotency-replayed'), 'true')
     assert.deepEqual(again.body, first.body)
+    for (const note of [null, '  ']) {
+      const sameRequest = await adjust(w, variantId, { ...received(5), note }, idempotencyKey)
+      assert.equal(sameRequest.headers.get('idempotency-replayed'), 'true', String(note))
+    }
     const reused = await adjust(w, variantId, received(6), idempotencyKey)
     assert.equal(reused.status, 422)
     assert.equal(reused.body.code, 'IDEMPOTENCY_KEY_REUSED')
@@ -490,16 +502,43 @@ test.group('T-INV-002 a change below reserved', (group) => {
     const { id: productId, variantId } = await product(w)
     await adjust(w, variantId, received(9))
     const waiting = await reserve(w.shop.shopId, productId, variantId, 1, 'committed')
-    const accepted = await reserve(w.shop.shopId, productId, variantId, 2, 'committed', 'accepted')
+    // Placed an hour before the waiting one, though inserted after it: oldest first.
+    const accepted = await reserve(
+      w.shop.shopId,
+      productId,
+      variantId,
+      2,
+      'committed',
+      'accepted',
+      {
+        created_at: db.raw(`now() - interval '1 hour'`),
+      }
+    )
     // Committed units of an unpaid shop order cannot arise (05 §5.3); were they to, the number stays hidden.
     await reserve(w.shop.shopId, productId, variantId, 1, 'committed', 'awaiting_payment')
     const refused = await adjust(w, variantId, { delta: -6, reason_code: 'lost' })
     assert.deepInclude(refused.body.errors[0], {
       reserved: 4,
       reserved_committed: 4,
-      committed_shop_orders: [waiting, accepted],
+      committed_shop_orders: [accepted, waiting],
       reserved_held: 0,
     })
+  })
+
+  test('T-INV-002 the split names at most 20 shop orders and counts every unit', async ({
+    assert,
+  }) => {
+    const w = await world()
+    const { id: productId, variantId } = await product(w)
+    await adjust(w, variantId, received(21))
+    const numbers: string[] = []
+    for (let n = 0; n < 21; n++) {
+      numbers.push(await reserve(w.shop.shopId, productId, variantId, 1, 'committed'))
+    }
+    const refused = await adjust(w, variantId, { delta: -1, reason_code: 'lost' })
+    assert.equal(refused.status, 409)
+    assert.equal(refused.body.errors[0].reserved_committed, 21)
+    assert.deepEqual(refused.body.errors[0].committed_shop_orders, numbers.slice(0, 20))
   })
 
   test('T-INV-002 a count below reserved is 409 on counted_quantity; stock_changed comes first [AC-FR-INV-003-2]', async ({
@@ -604,39 +643,43 @@ test.group('T-INV-009 listInventory', (group) => {
 
   test('T-INV-009 filters, cursor pages and parameters', async ({ assert }) => {
     const w = await world()
-    const first = await product(w, { title: 'Dhaka topi' })
-    const second = await product(w, { title: 'Pashmina shawl' })
-    await db.from('products').where('id', first.id).update({ status: 'archived' })
+    const topi = await product(w, { title: 'Dhaka topi' })
+    const shawl = await product(w, { title: 'Pashmina shawl' })
+    const tee = await product(w)
+    await db.from('products').where('id', topi.id).update({ status: 'archived' })
     const others = await world()
-    await product(others)
+    await product(others, { title: 'Pashmina wrap' })
+    const ids = (response: { body: { data: { product_id: string }[] } }) =>
+      response.body.data.map((item) => item.product_id)
 
-    const all = await list(w)
+    // Newest change first. Inside the suite's one transaction the change times tie and the ID
+    // decides; T-CAT-010 orders the same query by real change times (concurrency suite).
     assert.deepEqual(
-      all.body.data.map((item: { product_id: string }) => item.product_id),
-      [second.id],
+      ids(await list(w)),
+      [tee.id, shawl.id],
       'archived products are left out; another shop’s are never listed'
     )
-    const archived = await list(w, '?status=archived')
+    assert.deepEqual(ids(await list(w, '?status=archived')), [topi.id])
+    assert.deepEqual(ids(await list(w, '?q=PASH')), [shawl.id], 'a title prefix, in any case')
     assert.deepEqual(
-      archived.body.data.map((item: { product_id: string }) => item.product_id),
-      [first.id]
+      ids(await list(w, `?q=${encodeURIComponent(shawl.sku)}`)),
+      [shawl.id],
+      'a SKU prefix'
     )
-    const bySku = await list(w, `?status=archived&q=${encodeURIComponent(first.sku.slice(0, 4))}`)
-    assert.lengthOf(bySku.body.data, 1)
-    const byTitle = await list(w, '?q=pash')
-    assert.deepEqual(
-      byTitle.body.data.map((item: { product_id: string }) => item.product_id),
-      [second.id]
-    )
+    assert.deepEqual(ids(await list(w, '?q=zzz')), [])
+    assert.deepEqual(ids(await list(w, `?status=archived&q=${encodeURIComponent(topi.sku)}`)), [
+      topi.id,
+    ])
 
-    await db.from('products').where('id', first.id).update({ status: 'draft' })
-    const page = await list(w, '?limit=1')
-    assert.lengthOf(page.body.data, 1)
+    await db.from('products').where('id', topi.id).update({ status: 'draft' })
+    const page = await list(w, '?limit=2')
+    assert.deepEqual(ids(page), [tee.id, shawl.id])
     assert.isString(page.body.meta.next_cursor)
-    const next = await list(w, `?limit=1&cursor=${page.body.meta.next_cursor}`)
-    assert.lengthOf(next.body.data, 1)
-    assert.notEqual(next.body.data[0].product_id, page.body.data[0].product_id)
+    const next = await list(w, `?limit=2&cursor=${page.body.meta.next_cursor}`)
+    assert.deepEqual(ids(next), [topi.id])
     assert.isNull(next.body.meta.next_cursor)
+    const foreign = await list(w, `?limit=2&q=pash&cursor=${page.body.meta.next_cursor}`)
+    assert.equal(foreign.status, 400, 'a cursor made for other filters')
 
     for (const query of ['?low_stock=true', '?shop_id=x', '?q=', '?status=sold']) {
       const refused = await list(w, query)
@@ -664,6 +707,8 @@ test.group('T-SEC-001 T-SEC-003 T-SEC-030 T-SEC-031 stock access', (group) => {
     assert.notProperty(foreign.body, 'errors')
     const counted = await stocktake(w, variantId, { counted_quantity: 0, expected_on_hand: 4 })
     assert.equal(counted.status, 404)
+    assert.equal(counted.body.code, 'NOT_FOUND')
+    assert.notProperty(counted.body, 'errors')
     const unknown = await adjust(w, '01929a51-0000-7000-8000-0000000000b1', received(1))
     assert.equal(unknown.status, 404)
     const malformed = await adjust(w, 'not-a-uuid', received(1))
@@ -745,8 +790,14 @@ test.group('T-SEC-001 T-SEC-003 T-SEC-030 T-SEC-031 stock access', (group) => {
     const count = await stocktake(w, variantId, { counted_quantity: 1, expected_on_hand: 0 })
     assert.equal(count.body.code, 'SHOP_NOT_ACTIVE')
     assert.lengthOf(await movements(variantId), 0)
+    await setShopStatus(w.shop.shopId, 'suspended', 'frozen')
+    const frozenRead = await list(w)
+    assert.equal(frozenRead.status, 200, frozenRead.text)
+    const frozenWrite = await adjust(w, variantId, received(1))
+    assert.equal(frozenWrite.body.code, 'SHOP_NOT_ACTIVE')
     await setShopStatus(w.shop.shopId, 'pending_review')
     const pending = await list(w)
     assert.equal(pending.status, 403)
+    assert.equal(pending.body.code, 'SHOP_NOT_ACTIVE')
   })
 })

@@ -1,4 +1,4 @@
-import type { StockChange } from '#modules/inventory/internal/vendor_stock'
+import type { StockChange } from '#modules/inventory/domain/stock_change'
 import type { InventoryListItem } from '#modules/inventory/queries'
 
 /*

@@ -1,25 +1,62 @@
 import db from '@adonisjs/lucid/services/db'
+import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
 import { MIGRATOR_CONNECTION } from '#tests/support/database'
 import type { OwnerShop } from '#tests/support/shops'
 
 /*
  * Helpers of the concurrency suite, whose tests commit for real (docs/10
  * §3.1): a wait for a request to block on a row lock, so a race does not
- * depend on timing, and the removal of an owner's shop with its catalog and
- * stock after a test.
+ * depend on timing, the race itself, and the removal of an owner's shop
+ * with its catalog and stock after a test.
  */
 
-// Until another backend of this database waits on a lock (at most 10 s).
-export async function waitForLockWaiter() {
+/*
+ * Until another backend of this database waits on a lock in a statement
+ * that reads `relation` (at most 10 s), so an unrelated waiter, such as a
+ * job worker, does not end the wait early.
+ */
+export async function waitForLockWaiter(relation = 'inventory_items') {
   for (let tries = 0; tries < 100; tries++) {
     const result = await db.rawQuery(
       `SELECT count(*)::int AS waiting FROM pg_stat_activity
-        WHERE datname = current_database() AND wait_event_type = 'Lock'`
+        WHERE datname = current_database() AND pid <> pg_backend_pid()
+          AND wait_event_type = 'Lock' AND query LIKE ?`,
+      [`%${relation}%`]
     )
     if (result.rows[0].waiting > 0) return
     await new Promise((resolve) => setTimeout(resolve, 100))
   }
-  throw new Error('the request never waited on a lock')
+  throw new Error(`the request never waited on a lock in ${relation}`)
+}
+
+/*
+ * The race of a request against another writer, whose transaction `trx`
+ * already holds its locks: `write` makes the other writer's change, then
+ * the request starts, and once it waits on `relation` the writer commits;
+ * returns the request's answer. If anything fails first, `trx` rolls back
+ * and the request is awaited, so no lock or open request outlives the test
+ * and its clean-up cannot block.
+ */
+export async function commitWhileWaiting<T>(
+  trx: TransactionClientContract,
+  steps: {
+    write: (trx: TransactionClientContract) => Promise<unknown>
+    request: () => Promise<T>
+    relation?: string
+  }
+): Promise<T> {
+  let pending: Promise<T> | null = null
+  try {
+    await steps.write(trx)
+    pending = steps.request()
+    await waitForLockWaiter(steps.relation)
+    await trx.commit()
+  } catch (error) {
+    if (!trx.isCompleted) await trx.rollback()
+    await pending?.catch(() => undefined)
+    throw error
+  }
+  return pending
 }
 
 /*

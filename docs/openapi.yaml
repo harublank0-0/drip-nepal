@@ -2994,8 +2994,8 @@ paths:
         `version` and the latest movement, or `null` for a variant never changed (02 J-11 step
         1). `low_stock` is R2 (FR-INV-004), so in R1 it is an unknown parameter. The parameter
         list is closed: an unknown parameter, a value outside `status`, a `q` out of range or a
-        foreign cursor is 400 `INVALID_QUERY_PARAMETER`. No side effects. T-INV-009. Release
-        R1·M3 (R1-S part 2c).
+        foreign cursor is 400 `INVALID_QUERY_PARAMETER`. No side effects. T-INV-009, T-SEC-001,
+        T-SEC-030, T-SEC-031. Release R1·M3 (R1-S part 2c).
       x-release: R1·M3
       x-permission: shop.products.view
       parameters:
@@ -3087,8 +3087,9 @@ paths:
         idempotency key row as its reference (04a §8.3), one `inventory.adjust` audit row with
         `on_hand` from and to, the reason and the movement (never the note, 04a §15.3),
         `catalog.refresh_listing`. Idempotency: ⚷, 24 h; a replay returns the same 201 and stock
-        changes once (AC-FR-INV-001-4); a refused request stores no key. T-INV-008, T-INV-002,
-        T-SEC-001, T-SEC-003. Release R1·M3.
+        changes once (AC-FR-INV-001-4), and an omitted, null or blank `note` is the same request;
+        a refused request stores no key. An archived variant's stock may still be changed (05
+        §5.9). T-INV-008, T-INV-002, T-SEC-001, T-SEC-003, T-SEC-030, T-SEC-031. Release R1·M3.
       x-release: R1·M3
       x-permission: shop.inventory.adjust
       x-idempotency: { required: true, retention_hours: 24 }

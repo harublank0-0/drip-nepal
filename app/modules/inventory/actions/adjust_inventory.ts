@@ -1,11 +1,11 @@
 import { DomainError } from '#exceptions/domain_error'
 import type { VendorAdjustmentReason } from '#modules/inventory/domain/movement_reasons'
 import { STOCK_MAX } from '#modules/inventory/domain/stock_limits'
+import type { StockChange } from '#modules/inventory/domain/stock_change'
 import {
   belowReserved,
   guardedStockUpdate,
   recordVendorChange,
-  type StockChange,
 } from '#modules/inventory/internal/vendor_stock'
 import type { Actor } from '#modules/platform/actor'
 import { idempotentTx, type IdempotencyScope } from '#modules/platform/idempotency'

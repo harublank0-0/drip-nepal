@@ -84,7 +84,11 @@ export default class InventoryItemsController {
       },
       {
         actor: sellerActor(ctx),
-        idempotency: idempotencyScope(ctx, 'adjustInventory', input),
+        // An omitted, null or blank note is one request (06 §7.2), so a retry replays either way.
+        idempotency: idempotencyScope(ctx, 'adjustInventory', {
+          ...input,
+          note: input.note ?? null,
+        }),
         present: (change) => ({ data: inventoryChangeJson(change) }),
       }
     )

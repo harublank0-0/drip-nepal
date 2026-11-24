@@ -160,8 +160,11 @@ export const COMMITTED_SHOP_ORDERS_SHOWN = 20
  * `committed` and the numbers of their shop orders that the vendor can act
  * on (`awaiting_acceptance`, `accepted`; oldest first, at most 20), and
  * units `held` for gateway payments in progress, as a count only, because a
- * vendor never sees an `awaiting_payment` shop order (07 §5.2 rule 0). Read
- * by `inventory_reservations_open_variant_idx`.
+ * vendor never sees an `awaiting_payment` shop order (07 §5.2 rule 0). A
+ * shop order appears once: it has one line per variant
+ * (`order_items_shop_order_variant_key`) and a line one open reservation
+ * (`inventory_reservations_open_item_key`). Read by
+ * `inventory_reservations_open_variant_idx`.
  */
 export async function reservedSplit(
   client: QueryClientContract,
@@ -189,7 +192,7 @@ export async function reservedSplit(
     .map((row) => row.number)
   return {
     committed: committed.reduce((sum, row) => sum + row.quantity, 0),
-    committedShopOrders: [...new Set(numbers)].slice(0, COMMITTED_SHOP_ORDERS_SHOWN),
+    committedShopOrders: numbers.slice(0, COMMITTED_SHOP_ORDERS_SHOWN),
     held: rows.filter((row) => row.status === 'held').reduce((sum, row) => sum + row.quantity, 0),
   }
 }

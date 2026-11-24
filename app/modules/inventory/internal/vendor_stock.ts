@@ -3,6 +3,7 @@ import { DomainError, type ProblemErrorItem } from '#exceptions/domain_error'
 import { InvariantViolation } from '#exceptions/programming_errors'
 import { recordAudit } from '#modules/audit/actions/record_audit'
 import { reservedSplit } from '#modules/inventory/queries'
+import type { StockChange, StockRow } from '#modules/inventory/domain/stock_change'
 import type { Actor } from '#modules/platform/actor'
 import { sendJob } from '#modules/platform/jobs'
 
@@ -25,19 +26,6 @@ import { sendJob } from '#modules/platform/jobs'
  * adjustment that waits on a variant that request deletes then finds no row
  * and answers 404.
  */
-
-export type StockRow = { variantId: string; onHand: number; reserved: number; version: number }
-
-export type MovementRow = {
-  id: string
-  kind: 'adjustment' | 'stocktake'
-  onHandDelta: number
-  reservedDelta: number
-  reasonCode: string
-  createdAt: Date
-}
-
-export type StockChange = { stock: StockRow; movement: MovementRow }
 
 type UpdateSql = { sql: string; bindings: (string | number)[] }
 
