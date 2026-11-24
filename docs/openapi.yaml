@@ -2874,8 +2874,9 @@ paths:
         `required` on `option_axes`); a variant with history keeps its options (422 `history` on
         `variants.N.option_value_codes`) and, left out, is archived, not deleted; a set that
         changes nothing writes nothing and keeps the version; audit `product.variants_replace`
-        (proposed) with the axes and the counts, and `catalog.refresh_listing`. T-CAT-011,
-        T-CAT-102, T-CAT-103, T-CAT-106, T-SEC-001.
+        (proposed) with the axes and the counts, and `catalog.refresh_listing`. An axis the
+        product already has stays usable after its category rule is dropped. T-CAT-011,
+        T-CAT-102, T-CAT-103, T-CAT-106, T-CAT-109, T-API-004, T-SEC-001, T-SEC-003.
         Concurrency: ⟳ `If-Match` on `products.version`; bumps it and each changed variant's
         `version`. Missing, `*` or a list → 428; a stale version, a weak tag (`W/"2"` even when
         2 is current, because the comparison is strong) or any other value → 412 with `current`

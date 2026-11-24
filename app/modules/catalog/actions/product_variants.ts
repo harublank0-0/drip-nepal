@@ -6,6 +6,7 @@ import { LIVE_STATUSES } from '#modules/catalog/domain/disclosures'
 import { optionSignature } from '#modules/catalog/domain/option_signature'
 import { validationFailed } from '#modules/catalog/actions/product_draft'
 import {
+  attributesByCode,
   attributeValuesOf,
   categoryRef,
   effectiveRules,
@@ -99,10 +100,11 @@ const sameSet = (a: readonly string[], b: readonly string[]) =>
  * compare-at price is above the price; a live product's prices are above
  * zero (AC-FR-CAT-004-3); a variant with history keeps its options (it can
  * be repriced, renamed, archived or re-activated, never turned into
- * another variant). Existing active variants left out are deleted when they
- * have no history (their stock row first, by the caller) and archived
- * otherwise; archived ones left out stay archived, unless the axes are
- * replaced, when every variant left out is deleted (none has history then).
+ * another variant). A variant left out is deleted when it has no history,
+ * whatever its status (its stock row first, by the caller), and archived
+ * otherwise; an archived variant with history stays archived (04a §7.9).
+ * When the axes are replaced no variant has history, so every variant left
+ * out is deleted.
  */
 export async function planVariantSet(
   trx: TransactionClientContract,
@@ -123,15 +125,24 @@ export async function planVariantSet(
   if (!category) throw new InvariantViolation('a product without its category')
   const rules = await effectiveRules(trx, category.path)
   const axisRules: EffectiveRule[] = []
+  // An axis the product already has is kept even if the category's rules changed since, so a
+  // platform rule change never locks a product's variants (as `updateProduct` checks only what
+  // changes, 04 §3.7 rule 4).
+  const currentAxisRules = await attributesByCode(
+    trx,
+    input.optionAxes.filter((code) => input.currentAxes.includes(code))
+  )
   input.optionAxes.forEach((code, index) => {
     const rule = rules.get(code)
-    if (!rule || rule.usage !== 'variant_axis') {
+    if (rule?.usage === 'variant_axis') axisRules.push(rule)
+    else if (currentAxisRules.has(code)) axisRules.push(currentAxisRules.get(code)!)
+    else {
       problems.push({
         field: `option_axes.${index}`,
         code: 'not_allowed',
         message: 'This category does not offer this option.',
       })
-    } else axisRules.push(rule)
+    }
   })
   if (live) {
     const missing = [...rules.values()]
@@ -301,11 +312,8 @@ export async function planVariantSet(
   const archived: string[] = []
   const deleted: string[] = []
   for (const variant of leftOut) {
-    if (change === 'replace' || (variant.status === 'active' && !history.has(variant.id))) {
-      deleted.push(variant.id)
-    } else if (variant.status === 'active') {
-      archived.push(variant.id)
-    }
+    if (!history.has(variant.id)) deleted.push(variant.id)
+    else if (variant.status === 'active') archived.push(variant.id)
   }
   return {
     axes: { from: input.currentAxes, to: input.optionAxes, change },

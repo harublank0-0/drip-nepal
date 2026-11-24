@@ -225,7 +225,8 @@ export default class ProductsController {
         expectedVersion: version,
         optionAxes: input.option_axes,
         variants: input.variants.map((variant) => ({
-          id: variant.id,
+          // PostgreSQL returns UUIDs in lower case; an upper-case ID names the same variant.
+          id: variant.id?.toLowerCase(),
           optionValueCodes: variant.option_value_codes,
           sku: variant.sku,
           priceMinor: variant.price_minor,

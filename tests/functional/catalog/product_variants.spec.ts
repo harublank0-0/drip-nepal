@@ -23,8 +23,10 @@ import { refused } from '#tests/support/schema_rows'
  *   variants on an axis: the axes and variants as sent, the labels, the
  *   default deleted with its stock row, new stock rows at 0, `version + 1`,
  *   one `product.variants_replace` audit row with the counts and the axes,
- *   one `catalog.refresh_listing` job; a kept variant is updated by `id`; a
- *   set that changes nothing keeps the version; a `rejected` product
+ *   one `catalog.refresh_listing` job; a kept variant is updated by `id`
+ *   (an upper-case ID too) and its version moves; two kept variants may
+ *   swap their SKUs or options; a variant left out without history is
+ *   deleted, archived or not; a set that changes nothing keeps the version; a `rejected` product
  *   returns to `draft`; `pending_review`, `archived` and `blocked` are 409;
  *   the compare-at price must be above the price.
  * - T-CAT-102: a duplicate combination is 422 on
@@ -38,7 +40,12 @@ import { refused } from '#tests/support/schema_rows'
  * - T-CAT-106: a stocked product's axes are fixed (409), reordering them is
  *   allowed in place; a stocked variant left out is archived, keeps its
  *   options and is re-activated by its `id`, unless its SKU is now taken;
- *   a live product keeps its required axes and a price above zero.
+ *   an order line is history too; a variant without history on a stocked
+ *   product is deleted; a stocked variant may change its SKU; an inactive
+ *   value stays on its variant; an axis the product has stays usable after
+ *   its rule is dropped; a live product keeps its required axes, a price
+ *   above zero and at least one variant, and never a default variant
+ *   beside axis variants.
  * - T-CAT-109: a variant row pointing at another shop's product is 23503.
  * - T-API-004 (428, 412 with `current`), T-SEC-001 (another shop's product,
  *   and case (c): another shop's variant `id`, both 404), T-SEC-003
@@ -80,7 +87,7 @@ async function draft(w: World) {
 }
 
 // Gives a variant history: stock received through an adjustment (docs/05 §5.2).
-async function stock(shopId: string, variantId: string, quantity = 3) {
+async function stock(shopId: string, variantId: string, quantity = 3, actorUserId?: string) {
   await db
     .from('inventory_items')
     .where({ variant_id: variantId, shop_id: shopId })
@@ -92,6 +99,7 @@ async function stock(shopId: string, variantId: string, quantity = 3) {
     on_hand_delta: quantity,
     reserved_delta: 0,
     reason_code: 'received_stock',
+    actor_user_id: actorUserId ?? null,
     reference_type: 'request',
     reference_id: randomUUID(),
   })
@@ -253,6 +261,70 @@ test.group('T-CAT-011 replaceProductVariants', (group) => {
         [small.id, 'SKU-B', 'apparel_size:m', 'active'],
       ]
     )
+    // The option rows follow the signature, so the labels read them back.
+    const labels = new Map(
+      (options.body.data.variants as Variant[]).map((variant) => [variant.id, variant.label])
+    )
+    assert.equal(labels.get(small.id), 'Size: M')
+    assert.equal(labels.get(medium.id), 'Size: S')
+    const optionRows = await db
+      .from('variant_option_values as o')
+      .join('attribute_values as v', 'v.id', 'o.attribute_value_id')
+      .where('o.variant_id', small.id)
+      .select('v.code')
+    assert.deepEqual(
+      optionRows.map((row) => row.code),
+      ['m']
+    )
+  })
+
+  test('T-CAT-011 an upper-case variant id names the same variant', async ({ assert }) => {
+    const w = await world()
+    const product = await draft(w)
+    const first = await replace(
+      w,
+      product.id,
+      { option_axes: ['apparel_size'], variants: [sized('s', 'TEE-S')] },
+      1
+    )
+    const [small] = first.body.data.variants as Variant[]
+    const response = await replace(
+      w,
+      product.id,
+      {
+        option_axes: ['apparel_size'],
+        variants: [{ ...sized('s', 'TEE-S', { price_minor: 5000 }), id: small.id.toUpperCase() }],
+      },
+      2
+    )
+    assert.equal(response.status, 200, response.text)
+    assert.equal(response.body.data.variants[0].id, small.id)
+    const row = await db.from('product_variants').where('id', small.id).firstOrFail()
+    assert.deepEqual([row.price_minor, row.version], [5000, 2], 'the kept variant’s version moves')
+  })
+
+  test('T-CAT-011 a variant left out without history is deleted, archived or not', async ({
+    assert,
+  }) => {
+    const w = await world()
+    const product = await draft(w)
+    const first = await replace(
+      w,
+      product.id,
+      { option_axes: ['apparel_size'], variants: [sized('s', 'TEE-S'), sized('m', 'TEE-M')] },
+      1
+    )
+    const [small, medium] = first.body.data.variants as Variant[]
+    await db.from('product_variants').where('id', medium.id).update({ status: 'archived' })
+    const response = await replace(
+      w,
+      product.id,
+      { option_axes: ['apparel_size'], variants: [{ ...sized('s', 'TEE-S'), id: small.id }] },
+      2
+    )
+    assert.equal(response.status, 200, response.text)
+    assert.lengthOf(await db.from('product_variants').where('id', medium.id), 0)
+    assert.lengthOf(await db.from('inventory_items').where('variant_id', medium.id), 0)
   })
 
   test('T-CAT-011 a rejected product returns to draft; under review, archived or blocked is 409', async ({
@@ -268,6 +340,8 @@ test.group('T-CAT-011 replaceProductVariants', (group) => {
     const fixed = await replace(w, product.id, body, 1)
     assert.equal(fixed.status, 200, fixed.text)
     assert.equal(fixed.body.data.status, 'draft')
+    const [audit] = await audits(product.id, 'product.variants_replace')
+    assert.deepEqual(audit.changes.status, { from: 'rejected', to: 'draft' })
     await db
       .from('products')
       .where('id', product.id)
@@ -517,7 +591,7 @@ test.group('T-CAT-106 variants with history and live products', (group) => {
       1
     )
     const [small, medium] = response.body.data.variants as Variant[]
-    await stock(w.shop.shopId, small.id)
+    await stock(w.shop.shopId, small.id, 3, w.shop.ownerId)
     return { product, small, medium }
   }
 
@@ -568,6 +642,134 @@ test.group('T-CAT-106 variants with history and live products', (group) => {
       .select('option_signature')
       .firstOrFail()
     assert.equal(signatures.option_signature, 'apparel_size:s|color:black', 'the signature stays')
+    const [, reorder] = await audits(product.id, 'product.variants_replace')
+    assert.deepEqual(reorder.changes, {
+      option_axes: { from: ['apparel_size', 'color'], to: ['color', 'apparel_size'] },
+      created: 0,
+      updated: 0,
+      reactivated: 0,
+      archived: 0,
+      deleted: 0,
+    })
+  })
+
+  test('T-CAT-106 on a stocked product, a variant without history is deleted, and a stocked one may change its SKU', async ({
+    assert,
+  }) => {
+    const w = await world()
+    const { product, small, medium } = await stockedTwoAxes(w)
+    const response = await replace(
+      w,
+      product.id,
+      {
+        option_axes: ['apparel_size', 'color'],
+        variants: [
+          {
+            id: small.id,
+            option_value_codes: { apparel_size: 's', color: 'black' },
+            sku: 'T-S-BLK-2',
+            price_minor: 1,
+          },
+        ],
+      },
+      2
+    )
+    assert.equal(response.status, 200, response.text)
+    assert.lengthOf(await db.from('product_variants').where('id', medium.id), 0)
+    const kept = response.body.data.variants.find((variant: Variant) => variant.id === small.id)
+    assert.deepEqual([kept.sku, kept.on_hand], ['T-S-BLK-2', 3])
+  })
+
+  test('T-CAT-106 an order line is history too: its variant is archived, not deleted', async ({
+    assert,
+  }) => {
+    const { courierWorld } = await import('#tests/support/courier')
+    const { signIn } = await import('#tests/support/courier_http')
+    const ordered = await courierWorld()
+    const line = await db
+      .from('order_items')
+      .where('shop_order_id', ordered.shopOrder.id)
+      .firstOrFail()
+    const owner = await signIn(ordered.ownerId)
+    const product = await db.from('products').where('id', line.product_id).firstOrFail()
+    const response = await send(
+      owner,
+      'PUT',
+      `/api/v1/seller/shops/${ordered.slug}/products/${line.product_id}/variants`,
+      { option_axes: [], variants: [{ option_value_codes: {}, sku: 'NEW-1', price_minor: 100 }] },
+      { 'If-Match': `"${product.version}"` }
+    )
+    assert.equal(response.status, 200, response.text)
+    const row = await db.from('product_variants').where('id', line.variant_id).firstOrFail()
+    assert.equal(row.status, 'archived')
+  })
+
+  test('T-CAT-106 an inactive value stays on the variant that has it; a new variant cannot take it', async ({
+    assert,
+  }) => {
+    const w = await world()
+    const product = await draft(w)
+    const first = await replace(
+      w,
+      product.id,
+      { option_axes: ['apparel_size'], variants: [sized('s', 'TEE-S')] },
+      1
+    )
+    const [small] = first.body.data.variants as Variant[]
+    const size = await db.from('attributes').where('code', 'apparel_size').firstOrFail()
+    await db
+      .from('attribute_values')
+      .where({ attribute_id: size.id, code: 's' })
+      .update({ is_active: false })
+    const kept = await replace(
+      w,
+      product.id,
+      {
+        option_axes: ['apparel_size'],
+        variants: [{ ...sized('s', 'TEE-S', { price_minor: 7 }), id: small.id }],
+      },
+      2
+    )
+    assert.equal(kept.status, 200, kept.text)
+    const fresh = await draft(w)
+    const refusedNew = await replace(
+      w,
+      fresh.id,
+      { option_axes: ['apparel_size'], variants: [sized('s', 'NEW-S')] },
+      1
+    )
+    assert.deepEqual(fields(refusedNew.body), [['variants.0.option_value_codes', 'unknown_value']])
+  })
+
+  test('T-CAT-106 an axis the product has stays usable after the platform drops its rule', async ({
+    assert,
+  }) => {
+    const w = await world()
+    const product = await draft(w)
+    await replace(
+      w,
+      product.id,
+      { option_axes: ['apparel_size'], variants: [sized('s', 'TEE-S')] },
+      1
+    )
+    const size = await db.from('attributes').where('code', 'apparel_size').firstOrFail()
+    // The rule comes from `tops`; dropped, t-shirts no longer offer a size axis.
+    await db.from('category_attributes').where('attribute_id', size.id).delete()
+    const response = await replace(
+      w,
+      product.id,
+      { option_axes: ['apparel_size'], variants: [sized('s', 'TEE-S'), sized('m', 'TEE-M')] },
+      2
+    )
+    assert.equal(response.status, 200, response.text)
+    const fresh = await draft(w)
+    const refusedNew = await replace(
+      w,
+      fresh.id,
+      { option_axes: ['apparel_size'], variants: [sized('s', 'NEW-S')] },
+      1
+    )
+    assert.deepEqual(fields(refusedNew.body), [['option_axes.0', 'not_allowed']])
   })
 
   test('T-CAT-106 a stocked variant left out is archived, keeps its options, and comes back by id', async ({
@@ -694,7 +896,37 @@ test.group('T-CAT-106 variants with history and live products', (group) => {
       1
     )
     assert.deepEqual(fields(noSize.body), [['option_axes', 'required']])
+    const empty = await replace(w, product.id, { option_axes: ['apparel_size'], variants: [] }, 1)
+    assert.equal(empty.status, 422)
+    assert.deepInclude(
+      fields(empty.body).map(([field]) => field),
+      'variants',
+      'an empty active set is refused'
+    )
+    const defaultBeside = await replace(
+      w,
+      product.id,
+      {
+        option_axes: ['apparel_size'],
+        variants: [
+          sized('s', 'LIVE-S'),
+          { option_value_codes: {}, sku: 'LIVE-D', price_minor: 100 },
+        ],
+      },
+      1
+    )
+    assert.deepEqual(fields(defaultBeside.body), [['variants.1.option_value_codes', 'invalid']])
     const row = await db.from('products').where('id', product.id).firstOrFail()
     assert.equal(row.version, 1)
+
+    await db.from('products').where('id', product.id).update({ status: 'unpublished' })
+    const priced = await replace(
+      w,
+      product.id,
+      { option_axes: ['apparel_size'], variants: [sized('s', 'LIVE-S')] },
+      1
+    )
+    assert.equal(priced.status, 200, priced.text)
+    assert.equal(priced.body.data.status, 'unpublished')
   })
 })

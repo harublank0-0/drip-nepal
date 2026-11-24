@@ -317,6 +317,21 @@ test.group('T-API-012 toProblem: PostgreSQL errors', () => {
     })
   })
 
+  test('T-CAT-102 the variant backstops answer field variants, code unique', ({ assert }) => {
+    for (const constraint of [
+      'product_variants_shop_sku_key',
+      'product_variants_product_signature_key',
+    ]) {
+      const problem = toProblem(pgError('23505', constraint), ID)
+      assert.equal(problem.status, 422, constraint)
+      assert.deepEqual(
+        problem.errors?.map((error) => [error.field, error.code]),
+        [['variants', 'unique']],
+        constraint
+      )
+    }
+  })
+
   test('23514 on an allow-listed CHECK is 422; the refund backstop has its own code', ({
     assert,
   }) => {

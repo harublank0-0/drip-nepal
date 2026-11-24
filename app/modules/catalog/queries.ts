@@ -96,6 +96,31 @@ export async function attributeValuesOf(
   return values
 }
 
+// The named attributes as rules of a kept axis (an axis the product already has).
+export async function attributesByCode(
+  client: QueryClientContract,
+  codes: readonly string[]
+): Promise<Map<string, EffectiveRule>> {
+  if (codes.length === 0) return new Map()
+  const rows: { id: string; code: string; name: string; input: AttributeInput }[] = await client
+    .from('attributes')
+    .whereIn('code', [...codes])
+    .select('id', 'code', 'name', 'input')
+  return new Map(
+    rows.map((row) => [
+      row.code,
+      {
+        attributeId: row.id,
+        code: row.code,
+        name: row.name,
+        input: row.input,
+        usage: 'variant_axis',
+        isRequired: false,
+      },
+    ])
+  )
+}
+
 /*
  * A brand a vendor may choose (docs/04a §7.5): `active` only, or null.
  * `requiresModeration` marks a watch-listed brand, whose products always

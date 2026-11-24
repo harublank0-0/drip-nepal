@@ -23,6 +23,19 @@ import { createOwnerShop, type OwnerShop } from '#tests/support/shops'
 
 let made: OwnerShop | null = null
 
+// Until another backend of this database waits on a lock (at most 10 s).
+async function waitForLockWaiter() {
+  for (let tries = 0; tries < 100; tries++) {
+    const result = await db.rawQuery(
+      `SELECT count(*)::int AS waiting FROM pg_stat_activity
+        WHERE datname = current_database() AND wait_event_type = 'Lock'`
+    )
+    if (result.rows[0].waiting > 0) return
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+  throw new Error('the request never waited on the stock row')
+}
+
 async function cleanUp() {
   if (!made) return
   const shop = made
@@ -43,6 +56,7 @@ async function cleanUp() {
       .whereIn('product_id', trx.from('products').where('shop_id', shop.shopId).select('id'))
       .delete()
     await trx.from('products').where('shop_id', shop.shopId).delete()
+    await trx.from('shop_memberships').where('shop_id', shop.shopId).delete()
     await trx.from('shop_agreements').where('shop_id', shop.shopId).delete()
     await trx.from('shops').where('id', shop.shopId).delete()
     await trx.from('sessions').where('user_id', shop.ownerId).delete()
@@ -98,7 +112,8 @@ test.group('T-CAT-106 replaceProductVariants against a stock adjustment', (group
       },
       { 'If-Match': '"1"' }
     )
-    await new Promise((resolve) => setTimeout(resolve, 300))
+    // Commit only once the request waits on a lock, so the race is real on a slow machine too.
+    await waitForLockWaiter()
     await adjustment.commit()
     const response = await request
     assert.equal(response.status, 200, response.text)
@@ -113,6 +128,13 @@ test.group('T-CAT-106 replaceProductVariants against a stock adjustment', (group
     assert.deepEqual(
       active.map((item) => item.sku),
       ['NEW-DEFAULT']
+    )
+    const [audit] = await db
+      .from('audit_logs')
+      .where({ subject_id: product.id, action: 'product.variants_replace' })
+    assert.deepEqual(
+      [audit.changes.archived, audit.changes.created, audit.changes.deleted],
+      [1, 1, 0]
     )
   })
 })
