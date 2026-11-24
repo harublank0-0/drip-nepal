@@ -160,7 +160,6 @@ x-pending-operations:
   - createMediaUpload
   - completeMediaUpload
   - replaceProductMedia
-  - listInventory
   - listShopOrders
   - getShopOrder
   - acceptShopOrder
@@ -2977,6 +2976,90 @@ paths:
         '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/Internal' }
 
+  /api/v1/seller/shops/{shopSlug}/inventory:
+    parameters:
+      - $ref: '#/components/parameters/ShopSlug'
+    get:
+      operationId: listInventory
+      tags: [Seller]
+      summary: The shop's stock, by product
+      description: |
+        Actor: `shop.products.view`; shop status gate of 07 §4.4: `active`, or `suspended` in
+        either mode. Scope: the shop of `{shopSlug}`. One item per product, with the product
+        list's filters, order and cursor (06 §6.3, as `listShopProducts`): `status` (default:
+        every product but the archived ones), `q` (a title or SKU prefix, case-insensitive, 1 to
+        100 characters), newest change first by `(updated_at, id)` on `products_seller_list_idx`.
+        Each item carries all the product's active variants (04a §8.1), in the editor's order:
+        SKU, label, `on_hand`, `reserved`, `available` (`on_hand - reserved`), the stock row's
+        `version` and the latest movement, or `null` for a variant never changed (02 J-11 step
+        1). `low_stock` is R2 (FR-INV-004), so in R1 it is an unknown parameter. The parameter
+        list is closed: an unknown parameter, a value outside `status`, a `q` out of range or a
+        foreign cursor is 400 `INVALID_QUERY_PARAMETER`. No side effects. T-INV-009. Release
+        R1·M3 (R1-S part 2c).
+      x-release: R1·M3
+      x-permission: shop.products.view
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema: { $ref: '#/components/schemas/ProductStatus' }
+        - name: q
+          in: query
+          required: false
+          schema: { type: string, minLength: 1, maxLength: 100 }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: One page of products with their variants' stock.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InventoryList' }
+              examples:
+                onePage:
+                  summary: One product with two sizes, one of them stocked (IDs illustrative)
+                  value:
+                    data:
+                      - product_id: 01929a50-2c3d-7e4f-8a90-1b2c3d4e5f60
+                        public_id: 7K3M9QXA
+                        title: Organic cotton crew tee
+                        status: draft
+                        updated_at: '2026-11-24T06:00:00.000Z'
+                        variants:
+                          - variant_id: 01929a51-0000-7000-8000-0000000000b1
+                            sku: TEE-S
+                            label: 'Size: S'
+                            is_default: false
+                            on_hand: 6
+                            reserved: 0
+                            available: 6
+                            version: 3
+                            last_movement:
+                              kind: adjustment
+                              reason_code: damaged
+                              on_hand_delta: -1
+                              reserved_delta: 0
+                              created_at: '2026-11-24T06:10:00.000Z'
+                          - variant_id: 01929a51-0000-7000-8000-0000000000b2
+                            sku: TEE-M
+                            label: 'Size: M'
+                            is_default: false
+                            on_hand: 0
+                            reserved: 0
+                            available: 0
+                            version: 1
+                            last_movement: null
+                    meta: { limit: 25, next_cursor: null }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/Internal' }
+
   /api/v1/seller/shops/{shopSlug}/inventory/{variantId}/adjustments:
     parameters:
       - $ref: '#/components/parameters/ShopSlug'
@@ -2994,9 +3077,18 @@ paths:
         client links) and `reserved_held` (a count only, no order number; 06 §5.1, 05 §8.13,
         AC-FR-INV-003-2). `reason_code` is one of the six vendor reasons of the
         `inventory_movements_reason_code_check` (04a §8.3).
-        Side effects: `inventory_items` update, `adjustment` movement with `request_id`, audit,
-        listing refresh. Idempotency: ⚷, 24 h; a replay returns the same 201 and stock changes
-        once (AC-FR-INV-001-4). Release R1·M3.
+        Built (R1-S part 2c): the action locks the stock row inside the shop before its guarded
+        update (05 §5.9), so the reason is decided on the row it holds. A result below zero with
+        nothing reserved is the same 409 `below_reserved`, whose message says so; one above the
+        `int` column's limit is 422 `max` on `delta`. `committed_shop_orders` lists at most 20
+        numbers, oldest first. A `delta` of 0 is 422 `not_zero`; `correction`, `stocktake` and
+        any other reason are 422 `enum`.
+        Side effects: `inventory_items` update, `adjustment` movement with `request_id` and the
+        idempotency key row as its reference (04a §8.3), one `inventory.adjust` audit row with
+        `on_hand` from and to, the reason and the movement (never the note, 04a §15.3),
+        `catalog.refresh_listing`. Idempotency: ⚷, 24 h; a replay returns the same 201 and stock
+        changes once (AC-FR-INV-001-4); a refused request stores no key. T-INV-008, T-INV-002,
+        T-SEC-001, T-SEC-003. Release R1·M3.
       x-release: R1·M3
       x-permission: shop.inventory.adjust
       x-idempotency: { required: true, retention_hours: 24 }
@@ -3095,8 +3187,12 @@ paths:
         `reserved_committed`, `committed_shop_orders` (proposed) and `reserved_held` as in
         `adjustInventory` (06 §5.1). Nothing is written and no key is stored on a conflict, so
         the vendor confirms again with a new key.
-        Side effects: `stocktake` movement (delta may be 0), audit. Idempotency: ⚷, 24 h.
-        Stocktake uses `expected_on_hand` instead of `If-Match` (06 §8). Release R1·M3.
+        A stale `expected_on_hand`, higher or lower, is `stock_changed` whatever the count; only
+        then is a count below `reserved` `below_reserved` on `counted_quantity`.
+        Side effects: `stocktake` movement (delta may be 0) referencing the key row, one
+        `inventory.stocktake` audit row, and `catalog.refresh_listing` when `on_hand` changed.
+        Idempotency: ⚷, 24 h. Stocktake uses `expected_on_hand` instead of `If-Match` (06 §8).
+        T-INV-008, T-INV-002, T-SEC-001. Release R1·M3 (R1-S part 2c).
       x-release: R1·M3
       x-permission: shop.inventory.adjust
       x-idempotency: { required: true, retention_hours: 24 }
@@ -6802,9 +6898,11 @@ components:
             (`awaiting_acceptance`, or `accepted` before shipment; 06 §5.1, 05 §8.13).
         committed_shop_orders:
           type: array
+          maxItems: 20
           description: |
             `below_reserved` only (proposed, 06 §5.1): the numbers of the shop orders counted in
-            `reserved_committed`, which the client links to their order pages.
+            `reserved_committed`, which the client links to their order pages; at most 20, oldest
+            first (R1-S part 2c).
           items: { $ref: '#/components/schemas/ShopOrderNumber' }
         reserved_held:
           type: integer
@@ -8417,7 +8515,9 @@ components:
       properties:
         delta:
           type: integer
-          description: Signed quantity change; never 0. A quantity, not money.
+          minimum: -2147483647
+          maximum: 2147483647
+          description: Signed quantity change; never 0 (`not_zero`). A quantity, not money.
           not: { const: 0 }
         reason_code: { $ref: '#/components/schemas/InventoryAdjustmentReason' }
         note: { type: [string, 'null'], maxLength: 500 }
@@ -8426,10 +8526,11 @@ components:
       additionalProperties: false
       required: [counted_quantity, expected_on_hand]
       properties:
-        counted_quantity: { type: integer, minimum: 0 }
+        counted_quantity: { type: integer, minimum: 0, maximum: 2147483647 }
         expected_on_hand:
           type: integer
           minimum: 0
+          maximum: 2147483647
           description: The `on_hand` the vendor's screen showed; a mismatch is 409 `stock_changed`.
     InventoryMovement:
       type: object
@@ -8459,6 +8560,60 @@ components:
       required: [data]
       properties:
         data: { $ref: '#/components/schemas/InventoryChange' }
+
+    # ---------- listInventory ----------
+    InventoryLastMovement:
+      type: object
+      description: The variant's latest movement (02 J-11 step 1).
+      additionalProperties: false
+      required: [kind, reason_code, on_hand_delta, reserved_delta, created_at]
+      properties:
+        kind: { $ref: '#/components/schemas/InventoryMovementKind' }
+        reason_code: { type: string, pattern: '^[a-z][a-z_]{2,39}$' }
+        on_hand_delta: { type: integer }
+        reserved_delta: { type: integer }
+        created_at: { $ref: '#/components/schemas/Timestamp' }
+    InventoryListVariant:
+      type: object
+      additionalProperties: false
+      required:
+        [variant_id, sku, label, is_default, on_hand, reserved, available, version, last_movement]
+      properties:
+        variant_id: { $ref: '#/components/schemas/Uuid' }
+        sku: { type: string, minLength: 1, maxLength: 64 }
+        label: { type: string, maxLength: 200, description: '`Default` for the default variant.' }
+        is_default: { type: boolean }
+        on_hand: { type: integer, minimum: 0 }
+        reserved: { type: integer, minimum: 0 }
+        available: { type: integer, minimum: 0, description: '`on_hand - reserved`.' }
+        version: { type: integer, minimum: 1, description: The stock row's version. }
+        last_movement:
+          oneOf:
+            - { $ref: '#/components/schemas/InventoryLastMovement' }
+            - { type: 'null' }
+    InventoryListItem:
+      type: object
+      description: One product of `listInventory` with all its active variants.
+      additionalProperties: false
+      required: [product_id, public_id, title, status, updated_at, variants]
+      properties:
+        product_id: { $ref: '#/components/schemas/Uuid' }
+        public_id: { $ref: '#/components/schemas/PublicId' }
+        title: { type: string, minLength: 3, maxLength: 120 }
+        status: { $ref: '#/components/schemas/ProductStatus' }
+        updated_at: { type: string, format: date-time }
+        variants:
+          type: array
+          items: { $ref: '#/components/schemas/InventoryListVariant' }
+    InventoryList:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/InventoryListItem' }
+        meta: { $ref: '#/components/schemas/CursorMeta' }
 
     # ---------- quoteCheckout, placeOrder ----------
     QuoteCheckoutRequest:
@@ -10550,3 +10705,12 @@ components:
 #     what the build decided: `not_allowed` on an axis the category does not offer, `required` for a
 #     live product's missing required axis, `history` for a changed option of a variant with
 #     history, the no-op rule, the audit action and the listing job.
+# 59. `listInventory` moves from `x-pending-operations` to `paths`, written from the code (R1-S
+#     part 2c, 2026-11-24; 06 note 69), with the new schemas `InventoryList`, `InventoryListItem`,
+#     `InventoryListVariant` and `InventoryLastMovement`. `adjustInventory` and
+#     `stocktakeInventory` are built; their descriptions add what the build decided: the lock
+#     before the guarded update, a result below zero as `below_reserved`, 422 `max` above the
+#     `int` limit, `not_zero` for a delta of 0, the movement's reference to the key row, the audit
+#     row, the listing refresh (for a count, only when `on_hand` changed), and that a stale
+#     `expected_on_hand` comes before `below_reserved`. The request numbers gain the `int` bounds,
+#     and `committed_shop_orders` at most 20 items, oldest first.

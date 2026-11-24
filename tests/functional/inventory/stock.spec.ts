@@ -411,6 +411,8 @@ test.group('T-INV-008 adjustInventory and stocktakeInventory', (group) => {
         reserved: 0,
       },
     ])
+    const lower = await stocktake(w, variantId, { counted_quantity: 12, expected_on_hand: 10 })
+    assert.deepEqual(fields(lower.body), [['expected_on_hand', 'stock_changed']], 'lower too')
     assert.lengthOf(await movements(variantId), 1)
     const again = await stocktake(
       w,
@@ -541,23 +543,31 @@ test.group('T-INV-009 listInventory', (group) => {
   }) => {
     const w = await world()
     const tee = await product(w)
-    const sized = await send(
-      w.owner,
-      'PUT',
-      `${productPath(w.shop.slug, tee.id)}/variants`,
-      {
-        option_axes: ['apparel_size'],
-        variants: [
-          { option_value_codes: { apparel_size: 's' }, sku: 'TEE-S', price_minor: 129900 },
-          { option_value_codes: { apparel_size: 'm' }, sku: 'TEE-M', price_minor: 129900 },
-        ],
-      },
-      { 'If-Match': '"1"' }
-    )
+    const size = (code: string, sku: string, id?: string) => ({
+      ...(id ? { id } : {}),
+      option_value_codes: { apparel_size: code },
+      sku,
+      price_minor: 129900,
+    })
+    const replace = (variants: unknown[], version: number) =>
+      send(
+        w.owner,
+        'PUT',
+        `${productPath(w.shop.slug, tee.id)}/variants`,
+        { option_axes: ['apparel_size'], variants },
+        { 'If-Match': `"${version}"` }
+      )
+    const sized = await replace([size('s', 'TEE-S'), size('m', 'TEE-M'), size('l', 'TEE-L')], 1)
     assert.equal(sized.status, 200, sized.text)
-    const [small, medium] = sized.body.data.variants as { id: string }[]
+    const [small, medium, large] = sized.body.data.variants as { id: string }[]
     await adjust(w, small.id, received(7))
     await adjust(w, small.id, { delta: -1, reason_code: 'damaged' })
+    await adjust(w, large.id, received(2))
+    // Stocked and left out, the large variant is archived, not deleted (docs/04a §7.9).
+    const kept = await replace([size('s', 'TEE-S', small.id), size('m', 'TEE-M', medium.id)], 2)
+    assert.equal(kept.status, 200, kept.text)
+    const archived = await db.from('product_variants').where('id', large.id).firstOrFail()
+    assert.equal(archived.status, 'archived')
     const response = await list(w)
     assert.equal(response.status, 200, response.text)
     assert.deepEqual(response.body.meta, { limit: 25, next_cursor: null })
@@ -574,7 +584,7 @@ test.group('T-INV-009 listInventory', (group) => {
         [small.id, 'TEE-S', 'Size: S'],
         [medium.id, 'TEE-M', 'Size: M'],
       ],
-      'the replaced default variant is archived and not shown'
+      'the archived variant is not shown'
     )
     assert.deepInclude(variants[0], {
       is_default: false,
