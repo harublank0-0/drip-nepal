@@ -5,7 +5,7 @@ import { TotpField } from '~/components/forms/totp_field'
 
 /*
  * The `totp_code` an admin action on the staff member's own shop needs
- * under single-operator mode (OD-44's exception, docs/07 §4.1 rule 4, §4.7;
+ * under single-operator mode (OD-44's exception, docs/07 §4.1 item 4, §4.7;
  * R1-S part 1c-ii): why the code is asked, and the one TOTP input
  * (`TotpField`). Unlike `StepUpField`, the code travels in the action's own
  * body, so it is spent with that one change and also covers a stale

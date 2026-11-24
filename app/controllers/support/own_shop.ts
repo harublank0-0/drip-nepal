@@ -60,6 +60,8 @@ export function ownShopGuard(
       const result = await guard.run(() => work(guard.check))
       if (guard.codeVerified) recordMfaVerified(ctx, userId)
       else if (stepUpByCode) {
+        // Fires after the commit, as a loud backstop. No step-up route here takes an idempotency
+        // key; one that does must skip this on a replayed key, which spends no code (07 §3.10).
         throw new InvariantViolation(
           'a stale step-up passed by code without the action checking it'
         )

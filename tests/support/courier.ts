@@ -39,7 +39,7 @@ import {
  */
 
 /*
- * The own-shop check (OD-44, docs/07 §4.1 rule 4) for tests that call the
+ * The own-shop check (OD-44, docs/07 §4.1 item 4) for tests that call the
  * admin actions directly with staff who own no shop: it passes and flags
  * nothing. The check itself is tested over HTTP (T-SEC-045).
  */

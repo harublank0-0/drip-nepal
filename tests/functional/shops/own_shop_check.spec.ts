@@ -294,6 +294,26 @@ test.group('T-SEC-045 OD-44: platform actions on the staff member’s own shop',
       {}
     )
     assert.equal(disabled.status, 403, disabled.text)
+    // So does a closed reading, and a booked parcel with no cancellation to resolve.
+    await db
+      .from('courier_events')
+      .where('id', s.eventId)
+      .update({ processing_status: 'ignored', hold_reason: null })
+    await db
+      .from('shipments')
+      .where('id', s.world.shipmentId)
+      .update({
+        status: 'booked',
+        external_shipment_id: '9001',
+        booked_at: db.raw('now()'),
+      })
+    const later = operations(s).filter((item) =>
+      ['adminResolveCourierEvent', 'adminResolveCourierBooking'].includes(item.name)
+    )
+    for (const op of later) {
+      const response = await s.call(op.method, op.path, op.body, op.headers)
+      assert.equal(response.status, 403, `${op.name}: ${response.text}`)
+    }
   })
 
   test('T-SEC-045 with the mode off, a code changes nothing: the refusal comes first and the code is not spent', async ({
