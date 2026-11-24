@@ -321,6 +321,45 @@ export async function productEditorData(
   }
 }
 
+/*
+ * Every variant of a product, active and archived, with its option values
+ * by axis code (R1-S part 2b, `replaceProductVariants`).
+ */
+export async function variantRowsFor(client: QueryClientContract, productId: string) {
+  const rows: Record<string, unknown>[] = await client
+    .from('product_variants')
+    .where('product_id', productId)
+    .orderBy('id')
+    .select('*')
+  const codes: { variant_id: string; attribute_code: string; value_code: string }[] =
+    rows.length === 0
+      ? []
+      : await client
+          .from('variant_option_values as o')
+          .join('attributes as a', 'a.id', 'o.attribute_id')
+          .join('attribute_values as v', 'v.id', 'o.attribute_value_id')
+          .whereIn(
+            'o.variant_id',
+            rows.map((row) => row.id as string)
+          )
+          .select('o.variant_id', 'a.code as attribute_code', 'v.code as value_code')
+  return rows.map((row) => ({
+    id: row.id as string,
+    sku: row.sku as string,
+    priceMinor: row.price_minor as number,
+    compareAtPriceMinor: row.compare_at_price_minor as number | null,
+    weightGrams: row.weight_grams as number | null,
+    isDefault: row.is_default as boolean,
+    optionSignature: row.option_signature as string,
+    status: row.status as string,
+    codes: Object.fromEntries(
+      codes
+        .filter((code) => code.variant_id === row.id)
+        .map((code) => [code.attribute_code, code.value_code])
+    ) as Record<string, string>,
+  }))
+}
+
 // `getShopProduct`: the editor data of a product of the shop, or null (another shop's is null too).
 export async function sellerProductData(shopId: string, productId: string) {
   const client = db.connection()

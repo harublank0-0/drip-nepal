@@ -10,8 +10,9 @@ const ProductsController = () => import('#controllers/api/v1/seller/catalog/prod
 /*
  * Seller JSON operations (docs/06 §13.5, §13.8): the shop reads of R1-S part
  * 1a, the profile edit of part 1b, the shipping of part 1c, the product
- * drafts of part 2a and the M6 courier work. `listMyShops` is the one seller route outside `{shopSlug}`:
- * `auth` only, the `session` requirement of docs/07 §4.5.
+ * drafts of part 2a, the variants of part 2b and the M6 courier work.
+ * `listMyShops` is the one seller route outside `{shopSlug}`: `auth` only,
+ * the `session` requirement of docs/07 §4.5.
  * Every other route runs `auth`, then `sellerContext` on the exact
  * `:shopSlug` segment (T-SEC-005, T-SEC-037); the controllers check the
  * permission and the status gate. Route names are the operationIds
@@ -37,6 +38,10 @@ router
     router
       .patch('/products/:productId', [ProductsController, 'update'])
       .as('updateProduct')
+      .where('productId', router.matchers.uuid())
+    router
+      .put('/products/:productId/variants', [ProductsController, 'replaceVariants'])
+      .as('replaceProductVariants')
       .where('productId', router.matchers.uuid())
     router.get('/logistics', [LogisticsController, 'show']).as('getLogisticsSettings')
     router.put('/logistics', [LogisticsController, 'replace']).as('replaceLogisticsSettings')

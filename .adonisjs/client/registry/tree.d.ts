@@ -38,6 +38,7 @@ export interface ApiDefinition {
   createProduct: typeof routes['createProduct']
   getShopProduct: typeof routes['getShopProduct']
   updateProduct: typeof routes['updateProduct']
+  replaceProductVariants: typeof routes['replaceProductVariants']
   getLogisticsSettings: typeof routes['getLogisticsSettings']
   replaceLogisticsSettings: typeof routes['replaceLogisticsSettings']
   createShopCourierAccount: typeof routes['createShopCourierAccount']

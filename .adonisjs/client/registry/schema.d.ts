@@ -391,6 +391,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/seller/catalog/products_controller').default['update']>>> | { status: 422; response: { errors: SimpleError[] } }
     }
   }
+  'replaceProductVariants': {
+    methods: ["PUT"]
+    pattern: '/api/v1/seller/shops/:shopSlug/products/:productId/variants'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/catalog/variants').replaceProductVariantsValidator)>>
+      paramsTuple: [ParamValue, ParamValue]
+      params: { shopSlug: ParamValue; productId: ParamValue }
+      query: ExtractQuery<InferInput<(typeof import('#validators/catalog/variants').replaceProductVariantsValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/api/v1/seller/catalog/products_controller').default['replaceVariants']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/seller/catalog/products_controller').default['replaceVariants']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
   'getLogisticsSettings': {
     methods: ["GET","HEAD"]
     pattern: '/api/v1/seller/shops/:shopSlug/logistics'

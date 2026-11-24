@@ -3,13 +3,14 @@ import { checkProductAttributes, type EffectiveRule } from '#modules/catalog/dom
 import { originProblems } from '#modules/catalog/domain/disclosures'
 import { PUBLIC_ID_PATTERN, newPublicId, productSlug } from '#modules/catalog/domain/identifiers'
 import { missingForSubmit } from '#modules/catalog/domain/submit_readiness'
+import { optionSignature } from '#modules/catalog/domain/option_signature'
 
 /*
- * The catalog's pure product rules (R1-S part 2a): T-CAT-002
+ * The catalog's pure product rules (R1-S parts 2a and 2b): T-CAT-002
  * (`missingForSubmit`), T-CAT-007 (`public_id` generation), T-CAT-104 (the
  * attribute rule function; the inheritance query is tested on the seeded
- * tree in tests/functional/catalog/products.spec.ts) and the origin rule
- * of `products_country_check`.
+ * tree in tests/functional/catalog/products.spec.ts), the origin rule of
+ * `products_country_check`, and T-CAT-102's option signature.
  */
 
 const complete = {
@@ -188,5 +189,22 @@ test.group('T-CAT-008 the origin rule of products_country_check', () => {
     assert.deepEqual(originProblems({ isImported: true, countryOfOrigin: 'IN' }), [])
     assert.lengthOf(originProblems({ isImported: true, countryOfOrigin: 'NP' }), 1)
     assert.lengthOf(originProblems({ isImported: false, countryOfOrigin: 'CN' }), 1)
+  })
+})
+
+test.group('T-CAT-102 option signature', () => {
+  test('T-CAT-102 pairs sorted by attribute code, joined with |; empty for no options', ({
+    assert,
+  }) => {
+    assert.equal(
+      optionSignature({ color: 'black', apparel_size: 'm' }),
+      'apparel_size:m|color:black'
+    )
+    assert.equal(
+      optionSignature({ apparel_size: 'm', color: 'black' }),
+      optionSignature({ color: 'black', apparel_size: 'm' }),
+      'the axis order does not matter'
+    )
+    assert.equal(optionSignature({}), '')
   })
 })

@@ -198,6 +198,12 @@ const routes = {
     tokens: [{"old":"/api/v1/seller/shops/:shopSlug/products/:productId","type":0,"val":"api","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId","type":0,"val":"v1","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId","type":0,"val":"seller","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId","type":0,"val":"shops","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId","type":1,"val":"shopSlug","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId","type":0,"val":"products","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId","type":1,"val":"productId","end":""}],
     types: placeholder as Registry['updateProduct']['types'],
   },
+  'replaceProductVariants': {
+    methods: ["PUT"],
+    pattern: '/api/v1/seller/shops/:shopSlug/products/:productId/variants',
+    tokens: [{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/variants","type":0,"val":"api","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/variants","type":0,"val":"v1","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/variants","type":0,"val":"seller","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/variants","type":0,"val":"shops","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/variants","type":1,"val":"shopSlug","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/variants","type":0,"val":"products","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/variants","type":1,"val":"productId","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/variants","type":0,"val":"variants","end":""}],
+    types: placeholder as Registry['replaceProductVariants']['types'],
+  },
   'getLogisticsSettings': {
     methods: ["GET","HEAD"],
     pattern: '/api/v1/seller/shops/:shopSlug/logistics',
