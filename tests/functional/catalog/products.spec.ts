@@ -543,6 +543,43 @@ test.group('T-CAT-009 updateProduct', (group) => {
     assert.deepEqual(fields(refused.body), [['brand_id', 'invalid']])
   })
 
+  test('T-CAT-009 a category change checks the stored attributes; a deactivated category does not block a title edit', async ({
+    assert,
+  }) => {
+    const w = await world()
+    const response = await create(
+      w,
+      await draftBody({
+        attributes: [
+          { attribute_code: 'audience', value_codes: ['men'] },
+          { attribute_code: 'fit', value_codes: ['slim'] },
+        ],
+      })
+    )
+    const product = response.body.data
+    // `fit` is a rule of `clothing`; footwear does not use it.
+    const shoes = await db
+      .from('categories as c')
+      .where('c.path', 'like', '/footwear/%')
+      .whereNotExists((child) => child.from('categories as k').whereColumn('k.parent_id', 'c.id'))
+      .select('c.id')
+      .firstOrFail()
+    const moved = await update(w, product.id, { category_id: shoes.id }, 1)
+    assert.equal(moved.status, 422)
+    const notAllowed = (moved.body.errors as { field: string; code: string }[]).filter(
+      (item) => item.code === 'not_allowed'
+    )
+    assert.lengthOf(notAllowed, 1)
+    assert.match(notAllowed[0].field, /^attributes\.\d+\.attribute_code$/)
+
+    await db
+      .from('categories')
+      .where('id', await categoryId('t-shirts'))
+      .update({ is_active: false })
+    const renamed = await update(w, product.id, { title: 'Renamed tee' }, 1)
+    assert.equal(renamed.status, 200, renamed.text)
+  })
+
   test('T-SEC-003 the edit refuses unknown members and a null where a value is required', async ({
     assert,
   }) => {
@@ -678,7 +715,7 @@ test.group('T-CAT-009 updateProduct', (group) => {
     assert.equal(row.version, 1)
   })
 
-  test('T-CAT-105 a live product keeps its category’s required axes and avoids a watch-listed brand', async ({
+  test('T-CAT-009 a live product keeps its category’s required axes and avoids a watch-listed brand', async ({
     assert,
   }) => {
     const w = await world()

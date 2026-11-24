@@ -3,12 +3,12 @@ import { DomainError } from '#exceptions/domain_error'
 import {
   checkProductAttributes,
   type AttributeRequest,
+  type EffectiveRule,
   type ResolvedValue,
   type RuleProblem,
 } from '#modules/catalog/domain/attribute_rules'
 import { newPublicId, productSlug } from '#modules/catalog/domain/identifiers'
 import { originProblems } from '#modules/catalog/domain/disclosures'
-import type { EffectiveRule } from '#modules/catalog/domain/attribute_rules'
 import {
   activeLeafCategory,
   attributeValuesOf,
@@ -73,8 +73,10 @@ export const CHECK_EVERYTHING: FieldChecks = {
  * problem (06 §5.1): an active leaf category (T-CAT-101), a selectable
  * brand, the origin rule of `products_country_check`, and the attribute
  * rules of 04 §3.7 (T-CAT-104). Returns the category, its effective rules,
- * the resolved values (null when the attributes were not checked) and the
- * chosen brand.
+ * the resolved values (null when the attributes were not checked), the
+ * chosen brand and the problems found. It throws nothing for a rule: the
+ * caller adds its own problems and throws one 422 (`validationFailed`), so
+ * a caller must not ignore `problems`.
  */
 export async function checkProductFields(
   trx: TransactionClientContract,

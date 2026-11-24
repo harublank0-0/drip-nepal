@@ -340,12 +340,12 @@ export type ProductListItem = {
 
 /*
  * The seller product list (docs/06 §13.5 `listShopProducts`, §6.2, §6.3):
- * newest change first, by the cursor `(updated_at, id) < (:k0, :k1)`. Without `status` every product but the
- * archived ones; `q` matches a title prefix (case-insensitive) or a SKU
- * prefix of any variant. `variantCount` counts active variants. A `status`
- * filter reads `products_seller_list_idx` in order; the default list reads
- * the shop's rows through its `shop_id` prefix and sorts them, a few hundred
- * at A-03 scale (04a §7.6).
+ * newest change first, by the cursor `(updated_at, id) < (:k0, :k1)`.
+ * Without `status` every product but the archived ones; `q` matches a title
+ * prefix (case-insensitive) or a SKU prefix of any variant. `variantCount`
+ * counts active variants. A `status` filter reads `products_seller_list_idx`
+ * in order; the default list reads the shop's rows through its `shop_id`
+ * prefix and sorts them, a few hundred at A-03 scale (04a §7.6).
  */
 export async function listShopProducts(filters: {
   shopId: string
