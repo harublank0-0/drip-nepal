@@ -26,8 +26,9 @@ import { refused } from '#tests/support/schema_rows'
  *   one `catalog.refresh_listing` job; a kept variant is updated by `id`
  *   (an upper-case ID too) and its version moves; two kept variants may
  *   swap their SKUs or options; a variant left out without history is
- *   deleted, archived or not; a set that changes nothing keeps the version; a `rejected` product
- *   returns to `draft`; `pending_review`, `archived` and `blocked` are 409;
+ *   deleted, archived or not; a set that changes nothing keeps the
+ *   version; a `rejected` product returns to `draft`; `pending_review`,
+ *   `archived` and `blocked` are 409;
  *   the compare-at price must be above the price.
  * - T-CAT-102: a duplicate combination is 422 on
  *   `variants.N.option_value_codes` (`unique`), a duplicate SKU on
@@ -920,6 +921,14 @@ test.group('T-CAT-106 variants with history and live products', (group) => {
     assert.equal(row.version, 1)
 
     await db.from('products').where('id', product.id).update({ status: 'unpublished' })
+    // `unpublished` is live too: a zero price is refused there as well.
+    const zeroUnpublished = await replace(
+      w,
+      product.id,
+      { option_axes: ['apparel_size'], variants: [sized('s', 'LIVE-S', { price_minor: 0 })] },
+      1
+    )
+    assert.deepEqual(fields(zeroUnpublished.body), [['variants.0.price_minor', 'required']])
     const priced = await replace(
       w,
       product.id,
