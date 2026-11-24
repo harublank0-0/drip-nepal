@@ -40,6 +40,15 @@ const violations = environmentPolicyViolations({
   SMTP_USERNAME: env.get('SMTP_USERNAME'),
   SMTP_PASSWORD: Boolean(env.get('SMTP_PASSWORD')),
   MAIL_FROM_ADDRESS: env.get('MAIL_FROM_ADDRESS'),
+  STORAGE: {
+    S3_ENDPOINT: env.get('S3_ENDPOINT'),
+    S3_REGION: env.get('S3_REGION'),
+    S3_ACCESS_KEY_ID: env.get('S3_ACCESS_KEY_ID'),
+    S3_SECRET_ACCESS_KEY: Boolean(env.get('S3_SECRET_ACCESS_KEY')),
+    S3_BUCKET_PRIVATE: env.get('S3_BUCKET_PRIVATE'),
+    S3_BUCKET_PUBLIC: env.get('S3_BUCKET_PUBLIC'),
+    MEDIA_PUBLIC_URL: env.get('MEDIA_PUBLIC_URL'),
+  },
   COURIER_URLS: {
     COURIER_NCM_SANDBOX_URL: env.get('COURIER_NCM_SANDBOX_URL'),
     COURIER_NCM_PRODUCTION_URL: env.get('COURIER_NCM_PRODUCTION_URL'),

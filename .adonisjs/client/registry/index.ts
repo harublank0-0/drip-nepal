@@ -222,6 +222,18 @@ const routes = {
     tokens: [{"old":"/api/v1/seller/shops/:shopSlug/inventory/:variantId/stocktake","type":0,"val":"api","end":""},{"old":"/api/v1/seller/shops/:shopSlug/inventory/:variantId/stocktake","type":0,"val":"v1","end":""},{"old":"/api/v1/seller/shops/:shopSlug/inventory/:variantId/stocktake","type":0,"val":"seller","end":""},{"old":"/api/v1/seller/shops/:shopSlug/inventory/:variantId/stocktake","type":0,"val":"shops","end":""},{"old":"/api/v1/seller/shops/:shopSlug/inventory/:variantId/stocktake","type":1,"val":"shopSlug","end":""},{"old":"/api/v1/seller/shops/:shopSlug/inventory/:variantId/stocktake","type":0,"val":"inventory","end":""},{"old":"/api/v1/seller/shops/:shopSlug/inventory/:variantId/stocktake","type":1,"val":"variantId","end":""},{"old":"/api/v1/seller/shops/:shopSlug/inventory/:variantId/stocktake","type":0,"val":"stocktake","end":""}],
     types: placeholder as Registry['stocktakeInventory']['types'],
   },
+  'createMediaUpload': {
+    methods: ["POST"],
+    pattern: '/api/v1/seller/shops/:shopSlug/media/uploads',
+    tokens: [{"old":"/api/v1/seller/shops/:shopSlug/media/uploads","type":0,"val":"api","end":""},{"old":"/api/v1/seller/shops/:shopSlug/media/uploads","type":0,"val":"v1","end":""},{"old":"/api/v1/seller/shops/:shopSlug/media/uploads","type":0,"val":"seller","end":""},{"old":"/api/v1/seller/shops/:shopSlug/media/uploads","type":0,"val":"shops","end":""},{"old":"/api/v1/seller/shops/:shopSlug/media/uploads","type":1,"val":"shopSlug","end":""},{"old":"/api/v1/seller/shops/:shopSlug/media/uploads","type":0,"val":"media","end":""},{"old":"/api/v1/seller/shops/:shopSlug/media/uploads","type":0,"val":"uploads","end":""}],
+    types: placeholder as Registry['createMediaUpload']['types'],
+  },
+  'completeMediaUpload': {
+    methods: ["POST"],
+    pattern: '/api/v1/seller/shops/:shopSlug/media/:mediaAssetId/complete',
+    tokens: [{"old":"/api/v1/seller/shops/:shopSlug/media/:mediaAssetId/complete","type":0,"val":"api","end":""},{"old":"/api/v1/seller/shops/:shopSlug/media/:mediaAssetId/complete","type":0,"val":"v1","end":""},{"old":"/api/v1/seller/shops/:shopSlug/media/:mediaAssetId/complete","type":0,"val":"seller","end":""},{"old":"/api/v1/seller/shops/:shopSlug/media/:mediaAssetId/complete","type":0,"val":"shops","end":""},{"old":"/api/v1/seller/shops/:shopSlug/media/:mediaAssetId/complete","type":1,"val":"shopSlug","end":""},{"old":"/api/v1/seller/shops/:shopSlug/media/:mediaAssetId/complete","type":0,"val":"media","end":""},{"old":"/api/v1/seller/shops/:shopSlug/media/:mediaAssetId/complete","type":1,"val":"mediaAssetId","end":""},{"old":"/api/v1/seller/shops/:shopSlug/media/:mediaAssetId/complete","type":0,"val":"complete","end":""}],
+    types: placeholder as Registry['completeMediaUpload']['types'],
+  },
   'getLogisticsSettings': {
     methods: ["GET","HEAD"],
     pattern: '/api/v1/seller/shops/:shopSlug/logistics',

@@ -13,5 +13,6 @@
 /// <reference path="../../config/logger.ts" />
 /// <reference path="../../config/logistics.ts" />
 /// <reference path="../../config/mail.ts" />
+/// <reference path="../../config/object_storage.ts" />
 /// <reference path="../../config/runtime.ts" />
 /// <reference path="../../config/storefront.ts" />

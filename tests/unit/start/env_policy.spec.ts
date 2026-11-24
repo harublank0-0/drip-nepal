@@ -32,6 +32,17 @@ const validTest: EnvPolicyValues = {
   KEYS: keys('test'),
 }
 
+// Object storage as staging and production set it (docs/09 §6.1, docs/11 §3.6).
+const storage = {
+  S3_ENDPOINT: 'https://account.r2.cloudflarestorage.com',
+  S3_REGION: 'auto',
+  S3_ACCESS_KEY_ID: 'token-a',
+  S3_SECRET_ACCESS_KEY: true,
+  S3_BUCKET_PRIVATE: 'dripnepal-production-private',
+  S3_BUCKET_PUBLIC: 'dripnepal-production-public',
+  MEDIA_PUBLIC_URL: 'https://media.dripnepal.com',
+}
+
 const validProduction: EnvPolicyValues = {
   NODE_ENV: 'production',
   APP_ENV: 'production',
@@ -46,6 +57,7 @@ const validProduction: EnvPolicyValues = {
   COURIER_CALLBACK_KEY_IDS: ['c1'],
   COURIER_CALLBACK_ACTIVE_KEY_ID: 'c1',
   COURIER_URLS: { COURIER_NCM_PRODUCTION_URL: 'https://portal.nepalcanmove.com' },
+  STORAGE: storage,
   KEYS: { ...keys('prod'), 'COURIER_CALLBACK_KEYS[c1]': 'prod-callback' },
 }
 
@@ -112,6 +124,27 @@ const brokenRules: Case[] = [
     },
     violation:
       'SMTP_PASSWORD is required when SMTP_USERNAME is set in staging and production (docs/09 §6.1)',
+  },
+  {
+    rule: 'production without object storage',
+    base: validProduction,
+    values: { STORAGE: Object.fromEntries(Object.keys(storage).map((name) => [name, undefined])) },
+    violation: 'S3_* and MEDIA_PUBLIC_URL are required in staging and production',
+  },
+  {
+    rule: 'development with object storage partly configured',
+    base: validTest,
+    values: {
+      STORAGE: { ...storage, S3_SECRET_ACCESS_KEY: false, MEDIA_PUBLIC_URL: undefined },
+    },
+    violation:
+      'Object storage is partly configured; set S3_SECRET_ACCESS_KEY, MEDIA_PUBLIC_URL (docs/09 §6.1)',
+  },
+  {
+    rule: 'staging with object storage over http',
+    base: validStaging,
+    values: { STORAGE: { ...storage, S3_ENDPOINT: 'http://storage.internal:9000' } },
+    violation: 'S3_ENDPOINT must use https:// in staging and production',
   },
   {
     rule: 'production with the memory session store',

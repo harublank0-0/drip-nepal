@@ -1,0 +1,47 @@
+import type { QueryClientContract } from '@adonisjs/lucid/types/database'
+import type { MediaKind } from '#modules/media/domain/media_kind'
+import type { MediaStatus } from '#modules/media/domain/media_status'
+
+/*
+ * The media module's reads (docs/09 §2.2). A media asset is shop-scoped:
+ * another shop's asset is null, so the caller answers the 404 of a
+ * missing one (T-SEC-001).
+ */
+export type MediaAssetRow = {
+  id: string
+  shopId: string
+  kind: MediaKind
+  status: MediaStatus
+  mime: string
+  bytes: number
+  originalKey: string
+  rejectionReason: string | null
+  createdAt: Date
+}
+
+export function mediaAssetRow(row: Record<string, unknown>): MediaAssetRow {
+  return {
+    id: row.id as string,
+    shopId: row.shop_id as string,
+    kind: row.kind as MediaKind,
+    status: row.status as MediaStatus,
+    mime: row.mime as string,
+    bytes: row.bytes as number,
+    originalKey: row.original_key as string,
+    rejectionReason: row.rejection_reason as string | null,
+    createdAt: row.created_at as Date,
+  }
+}
+
+export async function shopMediaAsset(
+  client: QueryClientContract,
+  shopId: string,
+  mediaAssetId: string
+): Promise<MediaAssetRow | null> {
+  const row = await client
+    .from('media_assets')
+    .where({ id: mediaAssetId, shop_id: shopId })
+    .select('*')
+    .first()
+  return row ? mediaAssetRow(row) : null
+}

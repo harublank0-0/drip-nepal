@@ -64,6 +64,24 @@ export function definePolicy<const Policy extends Record<string, readonly string
   return Object.freeze(policy)
 }
 
+/*
+ * The storage origins of docs/07 §7.3 (R1-S part 2d-i): the presigned upload
+ * origin for `connect-src`, which is S3_ENDPOINT's because uploads are
+ * path-style, and the public media origin for `img-src`, each the URL's
+ * origin only (no path), and none when its setting is unset or has no
+ * origin of its own (`localhost:9000` parses with the origin "null").
+ */
+export function storageOrigins(settings: { uploadEndpoint?: string; mediaPublicUrl?: string }) {
+  const origin = (url?: string) => {
+    const value = url ? new URL(url).origin : 'null'
+    return value === 'null' ? [] : [value]
+  }
+  return {
+    connectSrc: origin(settings.uploadEndpoint),
+    imgSrc: origin(settings.mediaPublicUrl),
+  }
+}
+
 /** A copy of a policy without one directive; the others keep their order and types. */
 export function omitDirective<Policy extends CspPolicy, Name extends keyof Policy & string>(
   policy: Policy,

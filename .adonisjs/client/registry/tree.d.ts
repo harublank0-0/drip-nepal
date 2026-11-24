@@ -42,6 +42,8 @@ export interface ApiDefinition {
   listInventory: typeof routes['listInventory']
   adjustInventory: typeof routes['adjustInventory']
   stocktakeInventory: typeof routes['stocktakeInventory']
+  createMediaUpload: typeof routes['createMediaUpload']
+  completeMediaUpload: typeof routes['completeMediaUpload']
   getLogisticsSettings: typeof routes['getLogisticsSettings']
   replaceLogisticsSettings: typeof routes['replaceLogisticsSettings']
   createShopCourierAccount: typeof routes['createShopCourierAccount']

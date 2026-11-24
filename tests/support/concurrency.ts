@@ -64,10 +64,11 @@ export async function commitWhileWaiting<T>(
 
 /*
  * Deletes the shop of `createOwnerShop`, its products, variants, stock and
- * journal, its audit rows, and the owner with their sessions and
+ * journal, its media, its audit rows, and the owner with their sessions and
  * idempotency keys, as the migrator with the retention exemption for the
- * append-only rows. The `catalog.refresh_listing` jobs stay; they name rows
- * that no longer exist, which the handler treats as nothing to do.
+ * append-only rows. The jobs stay: the `catalog.refresh_listing` ones name
+ * rows that no longer exist, which the handler treats as nothing to do, and
+ * the `media.process_upload` ones have no handler yet (R1-S part 2d-ii).
  */
 export async function purgeOwnerShop(shop: OwnerShop) {
   const trx = await db.connection(MIGRATOR_CONNECTION).transaction()
@@ -81,7 +82,9 @@ export async function purgeOwnerShop(shop: OwnerShop) {
     await trx.from('product_variants').where('shop_id', shop.shopId).delete()
     await trx.from('product_option_axes').whereIn('product_id', products()).delete()
     await trx.from('product_attribute_values').whereIn('product_id', products()).delete()
+    await trx.from('product_media').where('shop_id', shop.shopId).delete()
     await trx.from('products').where('shop_id', shop.shopId).delete()
+    await trx.from('media_assets').where('shop_id', shop.shopId).delete()
     await trx.from('shop_memberships').where('shop_id', shop.shopId).delete()
     await trx.from('shop_agreements').where('shop_id', shop.shopId).delete()
     await trx.from('shops').where('id', shop.shopId).delete()

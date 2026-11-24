@@ -1,6 +1,13 @@
 import type { ApplicationService } from '@adonisjs/core/types'
+import { objectStorage } from '#config/object_storage'
 import { runtime } from '#config/runtime'
 import { EmailSender } from '#modules/platform/ports/email_sender'
+import { ObjectStorage } from '#modules/platform/ports/object_storage'
+import {
+  S3ObjectStorage,
+  UnconfiguredObjectStorage,
+  s3ClientFor,
+} from '#modules/platform/providers/s3_object_storage'
 import { emailSenderFor } from '#modules/platform/providers/mail_email_sender'
 
 /*
@@ -17,6 +24,21 @@ export default class PortsProvider {
       const mail = await resolver.make('mail.manager')
       const logger = await resolver.make('logger')
       return emailSenderFor(mail.use(), runtime.appEnv, logger)
+    })
+    // One S3 client per process (config/object_storage.ts), or a store that refuses every call.
+    const settings = objectStorage
+    const client = settings
+      ? s3ClientFor({
+          endpoint: settings.endpoint,
+          region: settings.region,
+          accessKeyId: settings.accessKeyId,
+          secretAccessKey: settings.secretAccessKey.release(),
+        })
+      : null
+    this.app.container.bind(ObjectStorage, async (resolver) => {
+      const logger = await resolver.make('logger')
+      if (!settings || !client) return new UnconfiguredObjectStorage(logger)
+      return new S3ObjectStorage(client, settings.buckets, logger)
     })
   }
 }

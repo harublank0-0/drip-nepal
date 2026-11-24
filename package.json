@@ -94,6 +94,8 @@
     "@adonisjs/shield": "^9.0.0",
     "@adonisjs/static": "^2.0.1",
     "@adonisjs/vite": "^6.0.4",
+    "@aws-sdk/client-s3": "^3.1175.0",
+    "@aws-sdk/s3-request-presigner": "^3.1175.0",
     "@fontsource-variable/lora": "^5.2.8",
     "@fontsource-variable/noto-sans": "^5.2.10",
     "@inertiajs/react": "^3.11.0",

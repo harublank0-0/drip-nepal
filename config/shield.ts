@@ -6,6 +6,7 @@ import {
   definePolicy,
   NONCE,
   omitDirective,
+  storageOrigins,
 } from '#modules/platform/content_security_policy'
 
 /*
@@ -20,36 +21,52 @@ import {
  * page, the scroll lock of Radix dialogs) and style attributes (OD-52). M7
  * enforces `target`, once sonner's injection has stopped (docs/07 note 36).
  *
- * The environment-specific origins of 07 §7.3 join with their work: the media
- * origin in img-src and the upload origin in connect-src with uploads (M3),
- * the error tracker's browser ingest origin with @sentry/react.
+ * The environment-specific origins of 07 §7.3 join with their work: the
+ * public media origin (MEDIA_PUBLIC_URL) in img-src and the presigned upload
+ * origin (S3_ENDPOINT, path-style, so the URL's origin is the endpoint's) in
+ * connect-src joined with the uploads (R1-S part 2d-i), each only when set;
+ * the error tracker's browser ingest origin joins with @sentry/react.
  * NONCE is the request's nonce, written unquoted.
  */
-const target = definePolicy({
-  defaultSrc: ["'self'"],
-  // The root view's inline theme script for `system` carries the nonce (docs/08 §1.2).
-  // 'report-sample': a report quotes the first 40 characters of what was refused.
-  scriptSrc: ["'self'", NONCE, "'report-sample'"],
-  styleSrc: ["'self'", NONCE, "'report-sample'"],
-  styleSrcAttr: ["'unsafe-inline'"],
-  // data: for inline images, blob: for the previews of selected files.
-  imgSrc: ["'self'", 'data:', 'blob:'],
-  fontSrc: ["'self'"],
-  connectSrc: ["'self'"],
-  formAction: ["'self'"],
-  frameAncestors: ["'none'"],
-  baseUri: ["'self'"],
-  objectSrc: ["'none'"],
-})
+/*
+ * Both policies for the storage origins of the environment (`storageOrigins`);
+ * a function, so the tests can check them with origins set.
+ */
+export function cspPolicies(storage: { connectSrc: string[]; imgSrc: string[] }) {
+  const target = definePolicy({
+    defaultSrc: ["'self'"],
+    // The root view's inline theme script for `system` carries the nonce (docs/08 §1.2).
+    // 'report-sample': a report quotes the first 40 characters of what was refused.
+    scriptSrc: ["'self'", NONCE, "'report-sample'"],
+    styleSrc: ["'self'", NONCE, "'report-sample'"],
+    styleSrcAttr: ["'unsafe-inline'"],
+    // data: for inline images, blob: for the previews of selected files.
+    imgSrc: ["'self'", ...storage.imgSrc, 'data:', 'blob:'],
+    fontSrc: ["'self'"],
+    connectSrc: ["'self'", ...storage.connectSrc],
+    formAction: ["'self'"],
+    frameAncestors: ["'none'"],
+    baseUri: ["'self'"],
+    objectSrc: ["'none'"],
+  })
+  return {
+    target,
+    // The target with inline styles allowed: `style-src-attr` is then redundant.
+    enforced: definePolicy({
+      ...omitDirective(target, 'styleSrcAttr'),
+      styleSrc: ["'self'", "'unsafe-inline'"],
+    }),
+  }
+}
 
 export const csp = {
   enabled: !app.inDev,
-  target,
-  // The target with inline styles allowed: `style-src-attr` is then redundant.
-  enforced: definePolicy({
-    ...omitDirective(target, 'styleSrcAttr'),
-    styleSrc: ["'self'", "'unsafe-inline'"],
-  }),
+  ...cspPolicies(
+    storageOrigins({
+      uploadEndpoint: env.get('S3_ENDPOINT'),
+      mediaPublicUrl: env.get('MEDIA_PUBLIC_URL'),
+    })
+  ),
   /*
    * The error tracker's CSP report endpoint of the environment's project
    * (docs/11 §9.6). Unset, the browser reports violations only to its console.

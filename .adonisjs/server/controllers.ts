@@ -44,6 +44,9 @@ export const controllers = {
         inventory: {
           InventoryItems: () => import('#controllers/api/v1/seller/inventory/inventory_items_controller'),
         },
+        media: {
+          MediaUploads: () => import('#controllers/api/v1/seller/media/media_uploads_controller'),
+        },
         shops: {
           Shipping: () => import('#controllers/api/v1/seller/shops/shipping_controller'),
           Shops: () => import('#controllers/api/v1/seller/shops/shops_controller'),
