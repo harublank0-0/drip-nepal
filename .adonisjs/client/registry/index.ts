@@ -204,6 +204,24 @@ const routes = {
     tokens: [{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/variants","type":0,"val":"api","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/variants","type":0,"val":"v1","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/variants","type":0,"val":"seller","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/variants","type":0,"val":"shops","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/variants","type":1,"val":"shopSlug","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/variants","type":0,"val":"products","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/variants","type":1,"val":"productId","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/variants","type":0,"val":"variants","end":""}],
     types: placeholder as Registry['replaceProductVariants']['types'],
   },
+  'listInventory': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/v1/seller/shops/:shopSlug/inventory',
+    tokens: [{"old":"/api/v1/seller/shops/:shopSlug/inventory","type":0,"val":"api","end":""},{"old":"/api/v1/seller/shops/:shopSlug/inventory","type":0,"val":"v1","end":""},{"old":"/api/v1/seller/shops/:shopSlug/inventory","type":0,"val":"seller","end":""},{"old":"/api/v1/seller/shops/:shopSlug/inventory","type":0,"val":"shops","end":""},{"old":"/api/v1/seller/shops/:shopSlug/inventory","type":1,"val":"shopSlug","end":""},{"old":"/api/v1/seller/shops/:shopSlug/inventory","type":0,"val":"inventory","end":""}],
+    types: placeholder as Registry['listInventory']['types'],
+  },
+  'adjustInventory': {
+    methods: ["POST"],
+    pattern: '/api/v1/seller/shops/:shopSlug/inventory/:variantId/adjustments',
+    tokens: [{"old":"/api/v1/seller/shops/:shopSlug/inventory/:variantId/adjustments","type":0,"val":"api","end":""},{"old":"/api/v1/seller/shops/:shopSlug/inventory/:variantId/adjustments","type":0,"val":"v1","end":""},{"old":"/api/v1/seller/shops/:shopSlug/inventory/:variantId/adjustments","type":0,"val":"seller","end":""},{"old":"/api/v1/seller/shops/:shopSlug/inventory/:variantId/adjustments","type":0,"val":"shops","end":""},{"old":"/api/v1/seller/shops/:shopSlug/inventory/:variantId/adjustments","type":1,"val":"shopSlug","end":""},{"old":"/api/v1/seller/shops/:shopSlug/inventory/:variantId/adjustments","type":0,"val":"inventory","end":""},{"old":"/api/v1/seller/shops/:shopSlug/inventory/:variantId/adjustments","type":1,"val":"variantId","end":""},{"old":"/api/v1/seller/shops/:shopSlug/inventory/:variantId/adjustments","type":0,"val":"adjustments","end":""}],
+    types: placeholder as Registry['adjustInventory']['types'],
+  },
+  'stocktakeInventory': {
+    methods: ["POST"],
+    pattern: '/api/v1/seller/shops/:shopSlug/inventory/:variantId/stocktake',
+    tokens: [{"old":"/api/v1/seller/shops/:shopSlug/inventory/:variantId/stocktake","type":0,"val":"api","end":""},{"old":"/api/v1/seller/shops/:shopSlug/inventory/:variantId/stocktake","type":0,"val":"v1","end":""},{"old":"/api/v1/seller/shops/:shopSlug/inventory/:variantId/stocktake","type":0,"val":"seller","end":""},{"old":"/api/v1/seller/shops/:shopSlug/inventory/:variantId/stocktake","type":0,"val":"shops","end":""},{"old":"/api/v1/seller/shops/:shopSlug/inventory/:variantId/stocktake","type":1,"val":"shopSlug","end":""},{"old":"/api/v1/seller/shops/:shopSlug/inventory/:variantId/stocktake","type":0,"val":"inventory","end":""},{"old":"/api/v1/seller/shops/:shopSlug/inventory/:variantId/stocktake","type":1,"val":"variantId","end":""},{"old":"/api/v1/seller/shops/:shopSlug/inventory/:variantId/stocktake","type":0,"val":"stocktake","end":""}],
+    types: placeholder as Registry['stocktakeInventory']['types'],
+  },
   'getLogisticsSettings': {
     methods: ["GET","HEAD"],
     pattern: '/api/v1/seller/shops/:shopSlug/logistics',

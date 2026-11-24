@@ -12,6 +12,7 @@ import type IdentityAccountTransformer from '#transformers/identity/account_tran
 import type IdentityAddressTransformer from '#transformers/identity/address_transformer'
 import type LegalDocumentTransformer from '#transformers/legal_document_transformer'
 import type LogisticsLocationTransformer from '#transformers/logistics/location_transformer'
+import type SellerInventoryTransformer from '#transformers/seller/inventory_transformer'
 import type SellerLogisticsTransformer from '#transformers/seller/logistics_transformer'
 import type SellerProductTransformer from '#transformers/seller/product_transformer'
 import type SellerSellerContextTransformer from '#transformers/seller/seller_context_transformer'
@@ -49,6 +50,10 @@ export namespace Data {
     }
   }
   export namespace Seller {
+    export type Inventory = InferData<SellerInventoryTransformer>
+    export namespace Inventory {
+      export type Variants = InferVariants<SellerInventoryTransformer>
+    }
     export type Logistics = InferData<SellerLogisticsTransformer>
     export namespace Logistics {
       export type Variants = InferVariants<SellerLogisticsTransformer>

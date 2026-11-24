@@ -403,6 +403,42 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/seller/catalog/products_controller').default['replaceVariants']>>> | { status: 422; response: { errors: SimpleError[] } }
     }
   }
+  'listInventory': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/seller/shops/:shopSlug/inventory'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { shopSlug: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/api/v1/seller/inventory/inventory_items_controller').default['index']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/seller/inventory/inventory_items_controller').default['index']>>>
+    }
+  }
+  'adjustInventory': {
+    methods: ["POST"]
+    pattern: '/api/v1/seller/shops/:shopSlug/inventory/:variantId/adjustments'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/inventory/adjust_inventory').adjustInventoryValidator)>>
+      paramsTuple: [ParamValue, ParamValue]
+      params: { shopSlug: ParamValue; variantId: ParamValue }
+      query: ExtractQuery<InferInput<(typeof import('#validators/inventory/adjust_inventory').adjustInventoryValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/api/v1/seller/inventory/inventory_items_controller').default['adjust']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/seller/inventory/inventory_items_controller').default['adjust']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
+  'stocktakeInventory': {
+    methods: ["POST"]
+    pattern: '/api/v1/seller/shops/:shopSlug/inventory/:variantId/stocktake'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/inventory/stocktake_inventory').stocktakeInventoryValidator)>>
+      paramsTuple: [ParamValue, ParamValue]
+      params: { shopSlug: ParamValue; variantId: ParamValue }
+      query: ExtractQuery<InferInput<(typeof import('#validators/inventory/stocktake_inventory').stocktakeInventoryValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/api/v1/seller/inventory/inventory_items_controller').default['stocktake']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/seller/inventory/inventory_items_controller').default['stocktake']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
   'getLogisticsSettings': {
     methods: ["GET","HEAD"]
     pattern: '/api/v1/seller/shops/:shopSlug/logistics'
