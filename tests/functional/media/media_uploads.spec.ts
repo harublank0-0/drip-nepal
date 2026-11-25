@@ -77,7 +77,7 @@ async function uploaded(
 ) {
   const created = await create(w, image())
   const id = created.body.data.media_asset_id as string
-  storage.put(
+  storage.upload(
     'private',
     `originals/${w.shop.shopId}/${id}`,
     object.bytes,
@@ -228,7 +228,7 @@ test.group('T-MED-004 createMediaUpload and completeMediaUpload', (group) => {
     const row = await assetRow(id)
     assert.equal(row.status, 'pending_upload')
     assert.lengthOf(await jobsFor(id), 0)
-    storage.fake.put('private', `originals/${w.shop.shopId}/${id}`, 1024, 'image/jpeg')
+    storage.fake.upload('private', `originals/${w.shop.shopId}/${id}`, 1024, 'image/jpeg')
     const later = await complete(w, id)
     assert.equal(later.status, 202, later.text)
     assert.equal(later.body.data.bytes, 2048, 'the declared size stays bytes')

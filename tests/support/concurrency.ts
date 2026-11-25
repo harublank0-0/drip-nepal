@@ -68,7 +68,7 @@ export async function commitWhileWaiting<T>(
  * idempotency keys, as the migrator with the retention exemption for the
  * append-only rows. The jobs stay: the `catalog.refresh_listing` ones name
  * rows that no longer exist, which the handler treats as nothing to do, and
- * the `media.process_upload` ones have no handler yet (R1-S part 2d-ii).
+ * the `media.process_upload` ones name assets that no longer exist, which its handler treats the same way.
  */
 export async function purgeOwnerShop(shop: OwnerShop) {
   const trx = await db.connection(MIGRATOR_CONNECTION).transaction()

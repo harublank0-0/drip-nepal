@@ -1,6 +1,8 @@
+import type { Readable } from 'node:stream'
 import type { Logger } from '@adonisjs/core/logger'
 import {
   DeleteObjectCommand,
+  GetObjectCommand,
   HeadObjectCommand,
   PutObjectCommand,
   S3Client,
@@ -11,6 +13,7 @@ import type { CallContext } from '#modules/platform/ports/call_context'
 import type {
   ObjectStorage,
   PresignedUpload,
+  ReadObject,
   StorageBucket,
   StoredObject,
 } from '#modules/platform/ports/object_storage'
@@ -31,6 +34,11 @@ import { PortAdapter } from '#modules/platform/ports/port_adapter'
  *   `content-type` among its signed headers, so the browser must send the
  *   declared type or the store answers 403 (07 TM-16); `expiresAt` is the
  *   signing time plus the lifetime, exactly.
+ * - `read` sends `If-Match`: a 412 is `changed`, a 404 `missing`; a
+ *   `Content-Length` above `maxBytes` is `too_large` before any byte is
+ *   read, and so is a body that sends more than that, whose stream is
+ *   destroyed as soon as the count passes the limit, so at most one more
+ *   chunk than the limit is ever held (07 TM-15).
  * - Each call is aborted after `ctx.timeoutMs` or with `ctx.signal`, and
  *   logged once as `provider.call` (operation, bucket, outcome, duration,
  *   request ID; never a key, URL or credential). A missing object is null
@@ -68,8 +76,15 @@ type SdkError = { name?: string; code?: string; $metadata?: { httpStatusCode?: n
 
 const isNotFound = (error: unknown) => {
   const failure = error as SdkError
-  return failure?.$metadata?.httpStatusCode === 404 || failure?.name === 'NotFound'
+  return (
+    failure?.$metadata?.httpStatusCode === 404 ||
+    failure?.name === 'NotFound' ||
+    failure?.name === 'NoSuchKey'
+  )
 }
+
+const isPreconditionFailed = (error: unknown) =>
+  (error as SdkError)?.$metadata?.httpStatusCode === 412
 
 const isTimeout = (error: unknown, signal: AbortSignal) => {
   const failure = error as SdkError
@@ -79,6 +94,13 @@ const isTimeout = (error: unknown, signal: AbortSignal) => {
     failure?.name === 'RequestTimeout' ||
     failure?.code === 'ETIMEDOUT'
   )
+}
+
+// What a finished call logs: `not_found` for a missing `head`, a read's outcome other than `read`, else `ok`.
+const outcomeOf = (result: unknown) => {
+  if (result === null) return 'not_found'
+  const outcome = (result as { outcome?: string } | undefined)?.outcome
+  return outcome && outcome !== 'read' ? outcome : 'ok'
 }
 
 export class S3ObjectStorage extends PortAdapter implements ObjectStorage {
@@ -154,6 +176,77 @@ export class S3ObjectStorage extends PortAdapter implements ObjectStorage {
     })
   }
 
+  async read(
+    bucket: StorageBucket,
+    key: string,
+    options: { ifMatch: string; maxBytes: number },
+    ctx: CallContext
+  ): Promise<ReadObject> {
+    this.guard('read')
+    return this.call('read', bucket, ctx, async (abortSignal): Promise<ReadObject> => {
+      let object
+      try {
+        object = await this.client.send(
+          new GetObjectCommand({
+            Bucket: this.buckets[bucket],
+            Key: key,
+            IfMatch: options.ifMatch,
+          }),
+          { abortSignal }
+        )
+      } catch (error) {
+        if (abortSignal.aborted) throw error
+        if (isNotFound(error)) return { outcome: 'missing' }
+        if (isPreconditionFailed(error)) return { outcome: 'changed' }
+        throw error
+      }
+      const body = object.Body as Readable | undefined
+      if ((object.ContentLength ?? 0) > options.maxBytes) {
+        body?.destroy()
+        return { outcome: 'too_large' }
+      }
+      const chunks: Buffer[] = []
+      let total = 0
+      for await (const chunk of body ?? []) {
+        total += (chunk as Buffer).length
+        if (total > options.maxBytes) {
+          body?.destroy()
+          return { outcome: 'too_large' }
+        }
+        chunks.push(chunk as Buffer)
+      }
+      return {
+        outcome: 'read',
+        body: Buffer.concat(chunks, total),
+        contentType: object.ContentType ?? null,
+        etag: object.ETag ?? '',
+      }
+    })
+  }
+
+  async put(
+    bucket: StorageBucket,
+    key: string,
+    body: Buffer,
+    options: { contentType: string; cacheControl?: string },
+    ctx: CallContext
+  ): Promise<void> {
+    this.guard('put')
+    await this.call('put', bucket, ctx, async (abortSignal) => {
+      await this.client.send(
+        new PutObjectCommand({
+          Bucket: this.buckets[bucket],
+          Key: key,
+          Body: body,
+          ContentLength: body.length,
+          ContentType: options.contentType,
+          CacheControl: options.cacheControl,
+        }),
+        { abortSignal }
+      )
+    })
+  }
+
   private async call<T>(
     operation: string,
     bucket: StorageBucket,
@@ -181,7 +274,7 @@ export class S3ObjectStorage extends PortAdapter implements ObjectStorage {
     try {
       if (signal.aborted) throw new Error('aborted before the call')
       const result = await work(signal)
-      this.logger.info(fields(result === null ? 'not_found' : 'ok'), 'provider.call')
+      this.logger.info(fields(outcomeOf(result)), 'provider.call')
       return result
     } catch (error) {
       if (isTimeout(error, signal)) {
@@ -247,5 +340,26 @@ export class UnconfiguredObjectStorage extends PortAdapter implements ObjectStor
   async delete(_bucket: StorageBucket, _key: string, ctx: CallContext): Promise<void> {
     this.guard('delete')
     return this.refuse('delete', ctx)
+  }
+
+  async read(
+    _bucket: StorageBucket,
+    _key: string,
+    _options: { ifMatch: string; maxBytes: number },
+    ctx: CallContext
+  ): Promise<ReadObject> {
+    this.guard('read')
+    return this.refuse('read', ctx)
+  }
+
+  async put(
+    _bucket: StorageBucket,
+    _key: string,
+    _body: Buffer,
+    _options: { contentType: string; cacheControl?: string },
+    ctx: CallContext
+  ): Promise<void> {
+    this.guard('put')
+    return this.refuse('put', ctx)
   }
 }

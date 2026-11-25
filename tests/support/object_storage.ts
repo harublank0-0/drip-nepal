@@ -3,6 +3,7 @@ import type { CallContext } from '#modules/platform/ports/call_context'
 import {
   ObjectStorage,
   type PresignedUpload,
+  type ReadObject,
   type StorageBucket,
   type StoredObject,
 } from '#modules/platform/ports/object_storage'
@@ -10,9 +11,11 @@ import { PortAdapter } from '#modules/platform/ports/port_adapter'
 
 /*
  * The in-memory `ObjectStorage` of docs/03 §11.1 and docs/10 §3.6: it keeps
- * objects in a map instead of a bucket, so a test uploads with `put` as the
- * browser would PUT to the presigned URL, and asserts what was presigned,
- * read and deleted. Like the real adapter it extends `PortAdapter`, so a
+ * objects in a map instead of a bucket, so a test uploads with `upload` as
+ * the browser would PUT to the presigned URL (a size only, or real bytes for
+ * the worker to read), and asserts what was presigned, read, written and
+ * deleted. `read` honours `If-Match` and the size limit as the S3 adapter
+ * does; `put` is the worker's write. Like the real adapter it extends `PortAdapter`, so a
  * call inside a `withTx` transaction throws (T-ARCH-003). `failNext` makes
  * the next calls throw, as an outage would, and `failNextOn` the next call
  * of one operation; `gateHeads(n)` holds each `head` until `n` of them wait,
@@ -20,9 +23,16 @@ import { PortAdapter } from '#modules/platform/ports/port_adapter'
  * (the concurrency suite's races), and fails after 5 s if they never do.
  *
  *   const storage = fakeObjectStorage()   // in group.each.setup, returning storage.restore
- *   storage.fake.put('private', key, 2048, 'image/jpeg')
+ *   storage.fake.upload('private', key, 2048, 'image/jpeg')
+ *   storage.fake.upload('private', key, jpegBytes, 'image/jpeg')
  */
-type Stored = { bytes: number; contentType: string | null; etag: string }
+type Stored = {
+  bytes: number
+  contentType: string | null
+  etag: string
+  body?: Buffer
+  cacheControl?: string
+}
 
 export class MemoryObjectStorage extends PortAdapter implements ObjectStorage {
   protected readonly adapterName = 'MemoryObjectStorage'
@@ -34,6 +44,8 @@ export class MemoryObjectStorage extends PortAdapter implements ObjectStorage {
     expiresInSeconds: number
   }[] = []
   readonly deleted: string[] = []
+  readonly written: string[] = []
+  readonly reads: string[] = []
   readonly contexts: CallContext[] = []
   #failures: Error[] = []
   #operationFailures = new Map<string, Error>()
@@ -50,25 +62,30 @@ export class MemoryObjectStorage extends PortAdapter implements ObjectStorage {
     return this
   }
 
-  failNextOn(operation: 'presignUpload' | 'head' | 'delete', error: Error) {
+  failNextOn(operation: 'presignUpload' | 'head' | 'delete' | 'read' | 'put', error: Error) {
     this.#operationFailures.set(operation, error)
     return this
   }
 
   // What the browser's PUT to the presigned URL leaves in the bucket; a new ETag each time unless given.
-  put(
+  upload(
     bucket: StorageBucket,
     key: string,
-    bytes: number,
+    content: number | Buffer,
     contentType: string | null,
     etag?: string
   ) {
     this.#version += 1
     this.objects.set(`${bucket}/${key}`, {
-      bytes,
+      bytes: typeof content === 'number' ? content : content.length,
+      body: typeof content === 'number' ? undefined : content,
       contentType,
       etag: etag ?? `"etag-${this.#version}"`,
     })
+  }
+
+  object(bucket: StorageBucket, key: string) {
+    return this.objects.get(`${bucket}/${key}`)
   }
 
   has(bucket: StorageBucket, key: string) {
@@ -126,6 +143,48 @@ export class MemoryObjectStorage extends PortAdapter implements ObjectStorage {
     this.#call('delete', ctx)
     this.deleted.push(`${bucket}/${key}`)
     this.objects.delete(`${bucket}/${key}`)
+  }
+
+  async read(
+    bucket: StorageBucket,
+    key: string,
+    options: { ifMatch: string; maxBytes: number },
+    ctx: CallContext
+  ): Promise<ReadObject> {
+    this.guard('read')
+    this.#call('read', ctx)
+    this.reads.push(`${bucket}/${key}`)
+    const stored = this.objects.get(`${bucket}/${key}`)
+    if (!stored) return { outcome: 'missing' }
+    if (stored.etag !== options.ifMatch) return { outcome: 'changed' }
+    if (stored.bytes > options.maxBytes) return { outcome: 'too_large' }
+    if (!stored.body) throw new Error(`MemoryObjectStorage: ${key} was uploaded without bytes`)
+    return {
+      outcome: 'read',
+      body: Buffer.from(stored.body),
+      contentType: stored.contentType,
+      etag: stored.etag,
+    }
+  }
+
+  async put(
+    bucket: StorageBucket,
+    key: string,
+    body: Buffer,
+    options: { contentType: string; cacheControl?: string },
+    ctx: CallContext
+  ): Promise<void> {
+    this.guard('put')
+    this.#call('put', ctx)
+    this.#version += 1
+    this.written.push(`${bucket}/${key}`)
+    this.objects.set(`${bucket}/${key}`, {
+      bytes: body.length,
+      body: Buffer.from(body),
+      contentType: options.contentType,
+      cacheControl: options.cacheControl,
+      etag: `"etag-${this.#version}"`,
+    })
   }
 }
 
