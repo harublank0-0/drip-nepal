@@ -209,6 +209,8 @@ jobs:
   # rebuilds the dripnepal_test database at the start of every run, as
   # dripnepal_migrator, and the suites run as dripnepal_app (docs/07
   # §4.10). The image's superuser, postgres, only creates those roles.
+  # SeaweedFS, from the development Compose file, is the S3 server of
+  # T-MED-005 (OD-65).
   tests:
     name: Tests
     runs-on: ubuntu-24.04
@@ -282,8 +284,16 @@ jobs:
           pnpm exec prettier --write database/schema.ts
           git diff --exit-code database/schema.ts
           if grep -nE '\bany\b' database/schema.ts; then exit 1; fi
-      # The unit suite runs in the Static job.
+      # OD-65 (docs/11 §2.2): the development Compose file's SeaweedFS, so
+      # T-MED-005 runs the S3 adapter against a real S3 API; --wait returns
+      # once its health check passes.
+      - name: S3 server (SeaweedFS)
+        run: docker compose up -d --wait seaweedfs
+      # The unit suite runs in the Static job. S3_CONTRACT_REQUIRED makes a
+      # missing S3 server fail T-MED-005 instead of skipping it.
       - name: Functional and concurrency suites
+        env:
+          S3_CONTRACT_REQUIRED: '1'
         run: node ace test functional concurrency
       # T-ARCH-016 (docs/09 §1.4): the test run regenerated the indexes of
       # .adonisjs/ through the assembler's init hooks; `codegen:routes` writes

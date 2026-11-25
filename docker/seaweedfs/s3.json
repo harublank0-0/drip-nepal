@@ -1,0 +1,26 @@
+{
+  "identities": [
+    {
+      "name": "dripnepal_dev",
+      "credentials": [{ "accessKey": "dripnepal-dev", "secretKey": "dripnepal-dev-secret" }],
+      "actions": [
+        "Read:dripnepal-dev-private",
+        "Write:dripnepal-dev-private",
+        "List:dripnepal-dev-private",
+        "Read:dripnepal-dev-public",
+        "Write:dripnepal-dev-public",
+        "List:dripnepal-dev-public",
+        "Read:dripnepal-test-private",
+        "Write:dripnepal-test-private",
+        "List:dripnepal-test-private",
+        "Read:dripnepal-test-public",
+        "Write:dripnepal-test-public",
+        "List:dripnepal-test-public"
+      ]
+    },
+    {
+      "name": "anonymous",
+      "actions": ["Read:dripnepal-dev-public", "Read:dripnepal-test-public"]
+    }
+  ]
+}
