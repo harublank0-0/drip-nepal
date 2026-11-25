@@ -1,7 +1,7 @@
 import { test } from '@japa/runner'
 import db from '@adonisjs/lucid/services/db'
 import { ProviderUnavailableError } from '#exceptions/provider_errors'
-import { uploadKey } from '#modules/media/domain/media_keys'
+import { finalKey, uploadKey } from '#modules/media/domain/media_keys'
 import { cleanupAbandoned } from '#modules/media/jobs/cleanup_abandoned'
 import { fakeObjectStorage, type MemoryObjectStorage } from '#tests/support/object_storage'
 import { createOwnerShop, type OwnerShop } from '#tests/support/shops'
@@ -11,9 +11,10 @@ import { createOwnerShop, type OwnerShop } from '#tests/support/shops'
  * 04a §7.13; R1-S part 2d-ii). An upload never finished (`pending_upload`)
  * or `rejected`, created more than 24 hours ago, loses its object and
  * becomes `deleted`; one created less than 24 hours ago, and any
- * `processing` or `ready` asset however old, is left as it is. An object
- * already gone is no error. A store failure fails the run, leaving the
- * asset for the next run, which finishes it.
+ * `processing` or `ready` asset however old, is left as it is. A final key
+ * written by a failed attempt goes too. An object already gone is no error.
+ * An asset whose delete fails is skipped, the others are still deleted, and
+ * the run then fails; the next run deletes the skipped one.
  */
 
 type Fixture = { shop: OwnerShop; storage: MemoryObjectStorage }
@@ -74,8 +75,11 @@ test.group('T-MED-003 media.cleanup_abandoned', (group) => {
     const recentRejected = await asset(f, 'rejected', 1)
     const working = await asset(f, 'processing', 72)
     const ready = await asset(f, 'ready', 72)
+    const orphan = finalKey(f.shop.shopId, rejected.id)
+    f.storage.upload('private', orphan, 2048, 'image/jpeg')
 
     await cleanupAbandoned('req-cleanup')
+    assert.isFalse(f.storage.has('private', orphan), 'a final key left by a failed attempt')
 
     for (const gone of [abandoned, rejected, alreadyGone]) {
       assert.equal(await statusOf(gone.id), 'deleted')
@@ -90,16 +94,21 @@ test.group('T-MED-003 media.cleanup_abandoned', (group) => {
     assert.equal(await statusOf(recentRejected.id), 'rejected')
   })
 
-  test('T-MED-003 a store failure fails the run and leaves the asset; the next run deletes it', async ({
+  test('T-MED-003 an asset whose delete fails is skipped, the rest deleted, and the run fails', async ({
     assert,
   }) => {
-    const abandoned = await asset(f, 'pending_upload', 26)
+    const stuck = await asset(f, 'pending_upload', 30)
+    const next = await asset(f, 'pending_upload', 26)
+    // The oldest asset's first delete fails; the newer one must not wait behind it.
     f.storage.failNextOn('delete', new ProviderUnavailableError('s3', 'delete'))
     await assert.rejects(() => cleanupAbandoned(null), ProviderUnavailableError)
-    assert.equal(await statusOf(abandoned.id), 'pending_upload')
+    assert.equal(await statusOf(stuck.id), 'pending_upload')
+    assert.isTrue(f.storage.has('private', stuck.key))
+    assert.equal(await statusOf(next.id), 'deleted')
+    assert.isFalse(f.storage.has('private', next.key))
 
     await cleanupAbandoned(null)
-    assert.equal(await statusOf(abandoned.id), 'deleted')
-    assert.isFalse(f.storage.has('private', abandoned.key))
+    assert.equal(await statusOf(stuck.id), 'deleted')
+    assert.isFalse(f.storage.has('private', stuck.key))
   })
 })

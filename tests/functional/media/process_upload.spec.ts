@@ -26,10 +26,12 @@ import { createOwnerShop, type OwnerShop } from '#tests/support/shops'
  *   An image narrower than 320 px gets one derivative; the EXIF orientation
  *   is applied. Over 40 megapixels (also a 20,000 × 20,000 PNG of a few
  *   hundred bytes), interlaced over 12, and damaged images are rejected
- *   with a reason, nothing written, the upload key deleted. An object
- *   missing, or above 10 MB, is rejected without being decoded. A store
- *   failure throws, so pg-boss retries, and leaves the asset `processing`;
- *   the retry finishes it. A second run does nothing, except delete a
+ *   with a reason, nothing written, the upload key deleted; so is an image
+ *   whose header reads but whose data is cut short, after one decode. An
+ *   object missing, or above 10 MB, is rejected without being decoded. A
+ *   store failure, or a sharp that cannot load, throws, so pg-boss retries,
+ *   and leaves the asset `processing` with its object; the retry finishes
+ *   it. A rejection also deletes a final key an earlier attempt wrote. A second run does nothing, except delete a
  *   `ready` asset's upload key again. `media.ready` sends
  *   `catalog.refresh_listing` for each product showing the asset.
  * - T-SEC-018: an SVG, an HTML page, and a GIF, TIFF or AVIF labelled
@@ -109,6 +111,7 @@ const assetRow = (id: string) => db.from('media_assets').where('id', id).firstOr
 function countingCodec() {
   const calls = { inspect: 0, derive: 0 }
   const codec: ImageCodec = {
+    load: () => sharpImageCodec.load(),
     inspect: (bytes) => {
       calls.inspect += 1
       return sharpImageCodec.inspect(bytes)
@@ -276,6 +279,42 @@ test.group('T-MED-001 media.process_upload validates and derives', (group) => {
       assert.equal(counting.calls.derive, 0, 'never decoded')
     })
 
+  test('T-MED-001 an image whose data is cut short is rejected after one decode attempt', async ({
+    assert,
+  }) => {
+    const noise = Buffer.alloc(400 * 300 * 3)
+    for (let index = 0; index < noise.length; index++) noise[index] = (index * 7919) % 251
+    const whole = await sharp(noise, { raw: { width: 400, height: 300, channels: 3 } })
+      .jpeg({ quality: 90 })
+      .toBuffer()
+    const counting = countingCodec()
+    const asset = await processing(f, whole.subarray(0, Math.floor(whole.length * 0.6)))
+    await processUpload(job(asset.id), { codec: counting.codec })
+    await assertRejected(assert, f, asset, REJECTIONS.unreadable)
+    assert.deepEqual(
+      counting.calls,
+      { inspect: 1, derive: 1 },
+      'the header read, the decode failed'
+    )
+  })
+
+  test('T-MED-001 a sharp that cannot load throws for a retry and rejects nothing', async ({
+    assert,
+  }) => {
+    const asset = await processing(f, await jpeg(64, 48))
+    const broken: ImageCodec = {
+      load: () => Promise.reject(new Error('Could not load the "sharp" module')),
+      inspect: sharpImageCodec.inspect,
+      derive: sharpImageCodec.derive,
+    }
+    await assert.rejects(() => processUpload(job(asset.id), { codec: broken }), /sharp/)
+    const row = await assetRow(asset.id)
+    assert.equal(row.status, 'processing')
+    assert.isTrue(f.storage.has('private', asset.key))
+    assert.deepEqual(f.storage.reads, [], 'nothing read before sharp loads')
+    assert.deepEqual(f.storage.written, [])
+  })
+
   test('T-MED-001 an object missing or above 10 MB is rejected without being decoded', async ({
     assert,
   }) => {
@@ -434,6 +473,22 @@ test.group('T-SEC-018 parsing order, loaders and polyglots', (group) => {
       await assertRejected(assert, f, asset, REJECTIONS.changed)
     }
     assert.deepEqual(counting.calls, { inspect: 0, derive: 0 })
+  })
+
+  test('T-SEC-018 a rejection deletes the final key an earlier, failed attempt wrote', async ({
+    assert,
+  }) => {
+    const asset = await processing(f, await jpeg(64, 48))
+    // Attempt 1 wrote the checked bytes to the final key, then failed before its commit.
+    const final = finalKey(f.shop.shopId, asset.id)
+    f.storage.upload('private', final, await jpeg(64, 48), 'image/jpeg')
+    f.storage.upload('private', asset.key, await jpeg(32, 32), 'image/jpeg')
+    await processUpload(job(asset.id))
+    const row = await assetRow(asset.id)
+    assert.equal(row.status, 'rejected')
+    assert.equal(row.rejection_reason, REJECTIONS.changed)
+    assert.isFalse(f.storage.has('private', final))
+    assert.isFalse(f.storage.has('private', asset.key))
   })
 
   test('T-SEC-018 a JPEG/HTML polyglot gives derivatives without the HTML; the original stays private', async ({

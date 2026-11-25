@@ -46,7 +46,7 @@ import { jobTx } from '#modules/platform/tx'
  *    write is to the same key with the same bytes, so a retry repeats it
  *    harmlessly.
  * 6. One transaction: compare-and-set `processing` → `ready` with the final
- *    key, `derived_keys`, the size, `sha256` and `processed_at`; and
+ *    key, `derived_keys`, `width` and `height`, `sha256` and `processed_at`; and
  *    `media.ready`, which is `catalog.refresh_listing` for each product that
  *    shows the asset (03 §4.1; none yet in R1-S, since `replaceProductMedia`
  *    takes only `ready` assets).
@@ -54,9 +54,13 @@ import { jobTx } from '#modules/platform/tx'
  *    crash before the commit can still read it.
  *
  * A rejection is a compare-and-set to `rejected` with a reason the seller
- * reads, then the upload key is deleted (best effort; `media.cleanup_abandoned`
- * deletes what is left). Logs carry the asset ID and a reason code, never a
- * key or the file's contents (09 §7.2).
+ * reads, then the upload key is deleted, and the final key too, which an
+ * earlier attempt may have written before failing (best effort;
+ * `media.cleanup_abandoned` deletes both again later). sharp is loaded
+ * before anything is read, outside the checks, so a sharp that cannot load
+ * throws and the job is retried rather than rejecting a valid image. Logs
+ * carry the asset ID and a reason code, never a key or the file's contents
+ * (09 §7.2).
  */
 type Payload = JobPayloads['media.process_upload'] & JobEnvelope
 
@@ -159,6 +163,7 @@ async function reject(asset: Asset, code: RejectionCode, storage: ObjectStorage,
   if (rejected.length === 0) return
   logger.info({ media_asset_id: asset.id, reason: code }, 'media.rejected')
   await deleteQuietly(storage, asset.originalKey, asset, ctx)
+  await deleteQuietly(storage, finalKey(asset.shopId, asset.id), asset, ctx)
 }
 
 export async function processUpload(
@@ -177,6 +182,9 @@ export async function processUpload(
     }
     return
   }
+
+  // A sharp that cannot load is an outage of the worker, not a bad file: it throws for a retry.
+  await codec.load()
 
   // A `processing` row always has its ETag (`media_assets_upload_check`).
   const read = await storage.read(

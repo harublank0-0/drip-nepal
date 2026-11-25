@@ -277,4 +277,31 @@ test.group('T-MED-005 the S3 adapter against a real S3 server', (group) => {
     assert.equal(served.headers.get('cache-control'), 'public, max-age=31536000, immutable')
     assert.isTrue(Buffer.from(await served.arrayBuffer()).equals(BYTES))
   }).skip(SKIP, SKIP_REASON)
+
+  test('T-MED-005 the final key under the upload key survives the upload key delete', async ({
+    assert,
+  }) => {
+    // The worker writes `<upload key>/v1` while `<upload key>` exists, then deletes `<upload key>`.
+    const key = uploadKey()
+    written.push(['private', key], ['private', `${key}/v1`])
+    await storage.put('private', key, BYTES, { contentType: 'image/jpeg' }, CTX)
+    await storage.put(
+      'private',
+      `${key}/v1`,
+      Buffer.concat([BYTES, BYTES]),
+      { contentType: 'image/jpeg' },
+      CTX
+    )
+    await storage.delete('private', key, CTX)
+    assert.isNull(await storage.head('private', key, CTX))
+    const final = await storage.head('private', `${key}/v1`, CTX)
+    assert.equal(final?.bytes, BYTES.length * 2)
+    const read = await storage.read(
+      'private',
+      `${key}/v1`,
+      { ifMatch: final?.etag ?? '', maxBytes: 4096 },
+      CTX
+    )
+    assert.equal(read.outcome, 'read')
+  }).skip(SKIP, SKIP_REASON)
 })
