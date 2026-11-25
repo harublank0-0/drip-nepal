@@ -67,7 +67,7 @@ Short, plain sentences. Put identifiers in backticks (Prettier can turn an unquo
 | Command                                                                                    | Use                                                                                |
 | ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
 | `pnpm install`                                                                             | Install dependencies (pnpm 11 is enforced)                                         |
-| `docker compose up -d`                                                                     | Local PostgreSQL 18 (and Mailpit)                                                  |
+| `docker compose up -d`                                                                     | Local PostgreSQL 18, Mailpit and SeaweedFS (S3 storage for photos)                 |
 | `node ace migration:run --no-schema-generate`, `node ace jobs:install`, `node ace db:seed` | Database schema, the pg-boss schema, and seed data                                 |
 | `pnpm dev`                                                                                 | Development server with hot reload on `http://localhost:3333`                      |
 | `pnpm test`                                                                                | Japa test suites                                                                   |

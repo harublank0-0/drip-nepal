@@ -282,8 +282,16 @@ jobs:
           pnpm exec prettier --write database/schema.ts
           git diff --exit-code database/schema.ts
           if grep -nE '\bany\b' database/schema.ts; then exit 1; fi
-      # The unit suite runs in the Static job.
+      # OD-65 (docs/11 §2.2): the development Compose file's SeaweedFS, so
+      # T-MED-005 runs the S3 adapter against a real S3 API; --wait returns
+      # once its health check passes.
+      - name: S3 server (SeaweedFS)
+        run: docker compose up -d --wait seaweedfs
+      # The unit suite runs in the Static job. S3_CONTRACT_REQUIRED makes a
+      # missing S3 server fail T-MED-005 instead of skipping it.
       - name: Functional and concurrency suites
+        env:
+          S3_CONTRACT_REQUIRED: '1'
         run: node ace test functional concurrency
       # T-ARCH-016 (docs/09 §1.4): the test run regenerated the indexes of
       # .adonisjs/ through the assembler's init hooks; `codegen:routes` writes

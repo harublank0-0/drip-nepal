@@ -31,6 +31,39 @@ services:
       - '127.0.0.1:1025:1025'
       - '127.0.0.1:8025:8025'
 
+  # S3-compatible storage for development and for T-MED-005, which runs the
+  # S3 adapter against it in CI too (OD-65, decided 2026-11-25; docs/11
+  # §2.2). SeaweedFS in its all-in-one `mini` mode, with only the S3 port
+  # published. The four buckets are created at start, and a write to any
+  # other bucket fails, as on R2. docker/seaweedfs/s3.json holds the
+  # development credentials (public placeholder values, not secrets) and
+  # the anonymous read of the two public buckets.
+  seaweedfs:
+    image: docker.io/chrislusf/seaweedfs:4.53
+    container_name: dripnepal-seaweedfs
+    restart: unless-stopped
+    command:
+      - mini
+      - -dir=/data
+      - -ip=127.0.0.1
+      - -ip.bind=0.0.0.0
+      - -s3.config=/etc/seaweedfs/s3.json
+      - -s3.autoCreateBucket=false
+      - -bucket=dripnepal-dev-private,dripnepal-dev-public,dripnepal-test-private,dripnepal-test-public
+      - -webdav=false
+      - -admin.ui=false
+      - -s3.port.iceberg=0
+      - -s3.port.lance=0
+    ports:
+      - '127.0.0.1:8333:8333'
+    volumes:
+      - seaweedfs_data:/data
+      - ./docker/seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -q -O /dev/null http://127.0.0.1:8333/healthz']
+      interval: 5s
+      retries: 20
+
   # Nothing in R1 uses Redis (docs/11 §2.2): start it with
   # `docker compose --profile redis up -d` when a spike needs it.
   redis:
@@ -42,3 +75,4 @@ services:
 
 volumes:
   postgres_data:
+  seaweedfs_data:
