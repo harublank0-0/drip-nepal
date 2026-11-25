@@ -209,6 +209,8 @@ jobs:
   # rebuilds the dripnepal_test database at the start of every run, as
   # dripnepal_migrator, and the suites run as dripnepal_app (docs/07
   # §4.10). The image's superuser, postgres, only creates those roles.
+  # SeaweedFS, from the development Compose file, is the S3 server of
+  # T-MED-005 (OD-65).
   tests:
     name: Tests
     runs-on: ubuntu-24.04

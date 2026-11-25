@@ -11,10 +11,12 @@ import { parse } from 'yaml'
  * listens on 127.0.0.1 only, every image is pinned to a minor or patch
  * version (`18.4`, `v1.33.1`; never `latest`, `v1` or `18`), Postgres has a
  * health check and creates `dripnepal_dev`, and Redis starts only with its
- * profile. SeaweedFS (OD-65) publishes only its S3 port, has a health check,
- * creates the buckets `.env.example` names and no others, knows the
- * credentials `.env.example` names, and lets anonymous visitors only read
- * the public buckets, which `MEDIA_PUBLIC_URL` points at.
+ * profile. SeaweedFS (OD-65) publishes only its S3 port; it creates the
+ * development buckets `.env.example` names and the test buckets of
+ * T-MED-005 at start, creates none on write, and its health check waits
+ * for all four; its one credentialed identity is the one `.env.example`
+ * names, limited to those buckets; anonymous visitors may only read the
+ * public buckets, which `MEDIA_PUBLIC_URL` points at.
  */
 
 type Service = {
@@ -74,26 +76,32 @@ test.group('T-OPS-024 the development Compose file', () => {
     assert.deepEqual(compose.services.redis.profiles, ['redis'])
   })
 
-  test('T-OPS-024 SeaweedFS publishes only S3, creates the buckets .env.example names, makes no others', async ({
+  test('T-OPS-024 SeaweedFS publishes only S3, waits for its buckets, and matches .env.example', async ({
     assert,
   }) => {
     const seaweedfs = compose.services.seaweedfs
     assert.deepEqual(seaweedfs.ports, ['127.0.0.1:8333:8333'])
-    assert.include(seaweedfs.healthcheck?.test.join(' ') ?? '', '/healthz')
     const flags = seaweedfs.command ?? []
+    // A write to a bucket not created at start fails, as on R2.
     assert.include(flags, '-s3.autoCreateBucket=false')
-    const buckets = flags.find((flag) => flag.startsWith('-bucket='))?.slice('-bucket='.length)
+    const buckets = (flags.find((flag) => flag.startsWith('-bucket=')) ?? '')
+      .slice('-bucket='.length)
+      .split(',')
     const example = await readFile(
       fileURLToPath(new URL('../../../.env.example', import.meta.url)),
       'utf8'
     )
-    const named = (key: string) => new RegExp(`^${key}=(.*)$`, 'm').exec(example)?.[1]
-    assert.includeMembers(buckets?.split(',') ?? [], [
-      named('S3_BUCKET_PRIVATE'),
-      named('S3_BUCKET_PUBLIC'),
-    ])
-    // The credentials .env.example names are the ones the server knows.
-    const identities = JSON.parse(
+    const named = (key: string) => new RegExp(`^${key}=(.*)$`, 'm').exec(example)?.[1] ?? ''
+    const devBuckets = [named('S3_BUCKET_PRIVATE'), named('S3_BUCKET_PUBLIC')]
+    // The development buckets and the ones T-MED-005 uses, and the health check waits for each.
+    const testBuckets = ['dripnepal-test-private', 'dripnepal-test-public']
+    assert.sameMembers(buckets, [...devBuckets, ...testBuckets])
+    const check = seaweedfs.healthcheck?.test.join(' ') ?? ''
+    assert.include(check, '/healthz')
+    for (const bucket of buckets) assert.include(check, bucket)
+    assert.equal(named('MEDIA_PUBLIC_URL'), `${named('S3_ENDPOINT')}/${named('S3_BUCKET_PUBLIC')}`)
+
+    const config = JSON.parse(
       await readFile(
         fileURLToPath(new URL('../../../docker/seaweedfs/s3.json', import.meta.url)),
         'utf8'
@@ -105,14 +113,22 @@ test.group('T-OPS-024 the development Compose file', () => {
         actions: string[]
       }>
     }
-    const app = identities.identities.find((identity) => identity.credentials)
-    assert.deepEqual(app?.credentials, [
+    // One identity with credentials, the one .env.example names, which may
+    // read, write and list exactly the four buckets.
+    const withCredentials = config.identities.filter((identity) => identity.credentials)
+    assert.lengthOf(withCredentials, 1)
+    assert.deepEqual(withCredentials[0].credentials, [
       { accessKey: named('S3_ACCESS_KEY_ID'), secretKey: named('S3_SECRET_ACCESS_KEY') },
     ])
-    // Anonymous visitors may only read the public buckets.
-    const anonymous = identities.identities.find((identity) => identity.name === 'anonymous')
-    for (const action of anonymous?.actions ?? [])
-      assert.match(action, /^Read:dripnepal-\w+-public$/)
-    assert.equal(named('MEDIA_PUBLIC_URL'), `${named('S3_ENDPOINT')}/${named('S3_BUCKET_PUBLIC')}`)
+    assert.sameMembers(
+      withCredentials[0].actions,
+      buckets.flatMap((bucket) => ['Read', 'Write', 'List'].map((action) => `${action}:${bucket}`))
+    )
+    // Anonymous visitors may only read the two public buckets.
+    const anonymous = config.identities.find((identity) => identity.name === 'anonymous')
+    assert.sameMembers(anonymous?.actions ?? [], [
+      `Read:${named('S3_BUCKET_PUBLIC')}`,
+      'Read:dripnepal-test-public',
+    ])
   })
 })

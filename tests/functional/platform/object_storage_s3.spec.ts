@@ -77,7 +77,8 @@ test.group('T-MED-005 the S3 adapter against a real S3 server', (group) => {
     assert,
   }) => {
     const key = uploadKey()
-    written.push(['private', key])
+    // Refused PUTs should store nothing; the teardown deletes anything a broken store kept.
+    written.push(['private', key], ['private', `${key}-other`])
     const upload = await storage.presignUpload(
       'private',
       key,
@@ -104,13 +105,15 @@ test.group('T-MED-005 the S3 adapter against a real S3 server', (group) => {
     await declared.body?.cancel()
 
     const shortKey = uploadKey()
+    written.push(['private', shortKey])
     const short = await storage.presignUpload(
       'private',
       shortKey,
       { contentType: 'image/jpeg', expiresInSeconds: 1 },
       CTX
     )
-    // Signed at a whole second at most a second ago, so expired after two.
+    // Signed at a whole second at most a second ago, so expired after two
+    // (assuming the server's clock agrees with ours, as it does in CI).
     await new Promise((resolve) => setTimeout(resolve, 2100))
     const expired = await put(short.url, BYTES, 'image/jpeg')
     assert.equal(expired.status, 403)
@@ -156,6 +159,7 @@ test.group('T-MED-005 the S3 adapter against a real S3 server', (group) => {
       CTX
     )
     const first = await put(upload.url, BYTES, 'image/jpeg')
+    assert.equal(first.status, 200)
     await first.body?.cancel()
     const checked = await storage.head('private', key, CTX)
     assert.isNotNull(checked)
@@ -192,7 +196,7 @@ test.group('T-MED-005 the S3 adapter against a real S3 server', (group) => {
     assert,
   }) => {
     const publicKey = `derived/t-med-005/${randomUUID()}.webp`
-    written.push(['public', publicKey])
+    written.push(['public', publicKey], ['public', `${publicKey}-anon`])
     await client.send(
       new PutObjectCommand({
         Bucket: BUCKETS.public,

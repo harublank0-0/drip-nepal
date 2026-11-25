@@ -72,7 +72,7 @@ cp .env.example .env     # the database settings already match docker-compose.ym
 node ace generate:key --show   # paste the key after APP_KEY= in .env
 # An older .env lacks newer variables: boot lists every missing one; copy them from .env.example.
 
-docker compose up -d     # PostgreSQL 18 (dripnepal_dev, dripnepal_test and the three database roles) Mailpit and SeaweedFS (S3 storage for photos), on 127.0.0.1 only; Redis only with --profile redis
+docker compose up -d     # PostgreSQL 18 (dripnepal_dev, dripnepal_test and the three database roles), Mailpit and SeaweedFS (S3 storage for photos), on 127.0.0.1 only; Redis only with --profile redis
 # A volume made before 2026-11-20 holds `dripnepal`, not `dripnepal_dev`: recreate it once with `docker compose down -v` (deletes local data).
 node ace migration:run --no-schema-generate   # the 14 baseline files; leaves the generated database/schema.ts alone
 node ace jobs:install    # the pg-boss schema, its queues and its grants (docs/11 §6.1)

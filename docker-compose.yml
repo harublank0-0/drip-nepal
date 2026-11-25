@@ -34,10 +34,14 @@ services:
   # S3-compatible storage for development and for T-MED-005, which runs the
   # S3 adapter against it in CI too (OD-65, decided 2026-11-25; docs/11
   # §2.2). SeaweedFS in its all-in-one `mini` mode, with only the S3 port
-  # published. The four buckets are created at start, and a write to any
-  # other bucket fails, as on R2. docker/seaweedfs/s3.json holds the
-  # development credentials (public placeholder values, not secrets) and
-  # the anonymous read of the two public buckets.
+  # published. Its other ports (filer, master, volume) have no
+  # authentication and stay reachable from other containers on the Compose
+  # network: fine for a development store with public credentials, never
+  # for anything else. The four buckets are created at start, and a write
+  # to any other bucket fails, as on R2; the health check passes only once
+  # all four exist. docker/seaweedfs/s3.json holds the development
+  # credentials (public placeholder values, not secrets) and the anonymous
+  # read of the two public buckets.
   seaweedfs:
     image: docker.io/chrislusf/seaweedfs:4.53
     container_name: dripnepal-seaweedfs
@@ -60,7 +64,12 @@ services:
       - seaweedfs_data:/data
       - ./docker/seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro
     healthcheck:
-      test: ['CMD-SHELL', 'wget -q -O /dev/null http://127.0.0.1:8333/healthz']
+      test:
+        - CMD-SHELL
+        - >-
+          wget -q -O /dev/null http://127.0.0.1:8333/healthz &&
+          for bucket in dripnepal-dev-private dripnepal-dev-public dripnepal-test-private dripnepal-test-public;
+          do wget -q -O /dev/null "http://127.0.0.1:8888/buckets/$$bucket/" || exit 1; done
       interval: 5s
       retries: 20
 
