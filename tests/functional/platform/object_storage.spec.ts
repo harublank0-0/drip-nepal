@@ -39,7 +39,7 @@ const KEY = 'originals/01929a50-0000-7000-8000-000000000001/01929a50-0000-7000-8
 
 type Line = { level: string; fields: Record<string, unknown>; message: string }
 type Seen = { method: string; path: string; headers: Record<string, string> }
-type Canned = { statusCode: number; headers?: Record<string, string> } | 'hang'
+type Canned = { statusCode: number; headers?: Record<string, string>; body?: Buffer[] } | 'hang'
 
 function recordingLogger() {
   const lines: Line[] = []
@@ -52,6 +52,7 @@ function recordingLogger() {
 // The adapter over the binding's client whose HTTP handler answers from `responses`.
 function storageWith(responses: Canned[]) {
   const seen: Seen[] = []
+  const responseBodies: Readable[] = []
   const handler = {
     handle: (request: Seen, options?: { abortSignal?: AbortSignal }) => {
       seen.push({ method: request.method, path: request.path, headers: request.headers })
@@ -64,11 +65,13 @@ function storageWith(responses: Canned[]) {
           else options?.abortSignal?.addEventListener('abort', fail, { once: true })
         })
       }
+      const stream = Readable.from(next.body ?? [])
+      responseBodies.push(stream)
       return Promise.resolve({
         response: {
           statusCode: next.statusCode,
           headers: next.headers ?? {},
-          body: Readable.from([]),
+          body: stream,
         },
       })
     },
@@ -88,7 +91,7 @@ function storageWith(responses: Canned[]) {
     { private: 'dripnepal-test-private', public: 'dripnepal-test-public' },
     logger
   )
-  return { storage, seen, lines }
+  return { storage, seen, lines, responseBodies }
 }
 
 const failureOf = (promise: Promise<unknown>) =>
@@ -114,6 +117,16 @@ test.group('T-ARCH-003 storage adapters and transactions', () => {
         ),
       (adapter: ObjectStorage) => adapter.head('private', KEY, CTX),
       (adapter: ObjectStorage) => adapter.delete('private', KEY, CTX),
+      (adapter: ObjectStorage) =>
+        adapter.read('private', KEY, { ifMatch: '"e"', maxBytes: 10 }, CTX),
+      (adapter: ObjectStorage) =>
+        adapter.put(
+          'public',
+          'p/a/b-320.webp',
+          Buffer.from('x'),
+          { contentType: 'image/webp' },
+          CTX
+        ),
     ]
     for (const adapter of [bound, storage, new UnconfiguredObjectStorage(logger)]) {
       for (const [index, call] of calls.entries()) {
@@ -263,5 +276,75 @@ test.group('T-MED-004 S3 object storage', () => {
     )
     assert.deepInclude(lines[0].fields, { reason: 'not_configured', outcome: 'unavailable' })
     assert.lengthOf(lines, 3)
+  })
+})
+
+test.group('T-SEC-018 the worker reads only the object it checked', () => {
+  test('T-SEC-018 read sends If-Match; a changed, missing or oversized object is not read', async ({
+    assert,
+  }) => {
+    const body = [Buffer.from('abcd'), Buffer.from('efgh')]
+    const { storage, seen, lines, responseBodies } = storageWith([
+      {
+        statusCode: 200,
+        headers: { 'content-type': 'image/jpeg', 'etag': '"e1"', 'content-length': '8' },
+        body,
+      },
+      { statusCode: 412 },
+      { statusCode: 404 },
+      // Over the limit by its Content-Length: refused before a byte is read.
+      {
+        statusCode: 200,
+        headers: { 'content-length': '11', 'etag': '"e1"' },
+        body: [Buffer.alloc(11)],
+      },
+      // A length that understates the body: the read stops once more than the limit arrived.
+      {
+        statusCode: 200,
+        headers: { 'content-length': '4', 'etag': '"e1"' },
+        body: [Buffer.alloc(6), Buffer.alloc(6), Buffer.alloc(6)],
+      },
+    ])
+    const read = (maxBytes = 10) => storage.read('private', KEY, { ifMatch: '"e1"', maxBytes }, CTX)
+    assert.deepEqual(await read(), {
+      outcome: 'read',
+      body: Buffer.from('abcdefgh'),
+      contentType: 'image/jpeg',
+      etag: '"e1"',
+    })
+    assert.deepInclude(seen[0], { method: 'GET', path: `/dripnepal-test-private/${KEY}` })
+    assert.equal(seen[0].headers['if-match'], '"e1"')
+    assert.deepEqual(await read(), { outcome: 'changed' })
+    assert.deepEqual(await read(), { outcome: 'missing' })
+    assert.deepEqual(await read(), { outcome: 'too_large' })
+    assert.isTrue(responseBodies[3].destroyed, 'the oversized body is dropped unread')
+    assert.deepEqual(await read(), { outcome: 'too_large' })
+    assert.isTrue(responseBodies[4].destroyed, 'the stream is cut off at the limit')
+    assert.deepEqual(
+      lines.map((line) => [line.fields.operation, line.fields.outcome]),
+      [
+        ['read', 'ok'],
+        ['read', 'changed'],
+        ['read', 'missing'],
+        ['read', 'too_large'],
+        ['read', 'too_large'],
+      ]
+    )
+    for (const line of lines) assert.notInclude(JSON.stringify(line.fields), KEY)
+  })
+
+  test('T-SEC-018 put sends the type, the cache policy and the length', async ({ assert }) => {
+    const { storage, seen } = storageWith([{ statusCode: 200, headers: { etag: '"w"' } }])
+    await storage.put(
+      'public',
+      'p/a/b-320.webp',
+      Buffer.from('RIFF....WEBP'),
+      { contentType: 'image/webp', cacheControl: 'public, max-age=31536000, immutable' },
+      CTX
+    )
+    assert.deepInclude(seen[0], { method: 'PUT', path: '/dripnepal-test-public/p/a/b-320.webp' })
+    assert.equal(seen[0].headers['content-type'], 'image/webp')
+    assert.equal(seen[0].headers['cache-control'], 'public, max-age=31536000, immutable')
+    assert.equal(seen[0].headers['content-length'], '12')
   })
 })

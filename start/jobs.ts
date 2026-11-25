@@ -2,6 +2,8 @@ import { refreshListing } from '#modules/catalog/jobs/refresh_listing'
 import { revokeSessions } from '#modules/identity/jobs/revoke_sessions'
 import { verifyAccount } from '#modules/logistics/jobs/verify_account'
 import { syncBranches } from '#modules/logistics/jobs/sync_branches'
+import { cleanupAbandoned } from '#modules/media/jobs/cleanup_abandoned'
+import { processUpload } from '#modules/media/jobs/process_upload'
 import { dispatchNotification } from '#modules/notifications/jobs/dispatch'
 import { sendEmail } from '#modules/notifications/jobs/send_email'
 import { bookCourierShipmentJob } from '#modules/orders/jobs/book_courier_shipment'
@@ -36,6 +38,9 @@ export const JOB_HANDLERS: { [Q in QueueName]?: Handler<Q> } = {
   'identity.revoke_sessions': (payload) => revokeSessions(payload),
   // R1-S part 2a: the listing read model (docs/04a §7.12).
   'catalog.refresh_listing': (payload) => refreshListing(payload),
+  // R1-S part 2d-ii: the image worker and the daily cleanup (ADR-0013 decisions 3 and 6).
+  'media.process_upload': (payload) => processUpload(payload),
+  'media.cleanup_abandoned': (_payload, attempt) => cleanupAbandoned(attempt.requestId),
   'logistics.verify_account': (payload) => verifyAccount(payload),
   'logistics.sync_branches': (payload) => syncBranches(payload),
   'orders.book_courier_shipment': (payload, attempt) => bookCourierShipmentJob(payload, attempt),
@@ -51,4 +56,15 @@ export const JOB_SCHEDULES: { queue: QueueName; cron: string; data: object }[] =
   { queue: 'orders.sweep_courier_events', cron: '*/15 * * * *', data: {} },
   // Daily at 02:30 (docs/04a §9.12).
   { queue: 'logistics.sync_branches', cron: '30 2 * * *', data: { provider_code: 'ncm' } },
+  // Daily at 02:45 (docs/03 §9, ADR-0013 decision 6).
+  { queue: 'media.cleanup_abandoned', cron: '45 2 * * *', data: {} },
 ]
+
+/*
+ * How many jobs of a queue the worker runs at once; 2 unless listed. Images
+ * one at a time (docs/11 §13.2, 03 §7.5): one decode in memory at a time.
+ */
+export const DEFAULT_JOB_CONCURRENCY = 2
+export const JOB_CONCURRENCY: { [Q in QueueName]?: number } = {
+  'media.process_upload': 1,
+}

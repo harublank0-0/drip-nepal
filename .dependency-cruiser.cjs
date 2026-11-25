@@ -128,6 +128,15 @@ module.exports = {
         path: 'node_modules/(@aws-sdk|nodemailer|@adonisjs/mail|ky|undici|axios|got|node-fetch)/',
       },
     },
+    // 8b. sharp, which parses untrusted bytes, only in the media module's
+    // image codec, which allows only three loaders (docs/03 §7.5, 07 TM-15).
+    {
+      name: 'sharp-in-image-codec-only',
+      comment: 'sharp only in app/modules/media/internal/image_codec.ts (docs/03 §7.5, 07 TM-15)',
+      severity: 'error',
+      from: { pathNot: '^app/modules/media/internal/image_codec\\.ts$' },
+      to: { path: 'node_modules/sharp/' },
+    },
     {
       name: 'core-network-in-adapters-only',
       comment: 'Node network modules only in providers/ (T-SEC-016, docs/07 TM-13)',

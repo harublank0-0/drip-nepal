@@ -46,7 +46,7 @@ test.group('T-MED-004 two finishes of one upload', (group) => {
     })
     assert.equal(created.status, 201, created.text)
     const id = created.body.data.media_asset_id as string
-    storage.fake.put('private', `originals/${shop.shopId}/${id}`, 4096, 'image/png')
+    storage.fake.upload('private', `originals/${shop.shopId}/${id}`, 4096, 'image/png')
     storage.fake.gateHeads(2)
 
     const responses = await Promise.all([

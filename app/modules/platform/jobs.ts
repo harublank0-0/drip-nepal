@@ -156,6 +156,8 @@ export const JOB_QUEUES = {
     retryDelay: 30,
     expireInSeconds: 300,
   },
+  // 03 §9: daily, 3 retries; a run deletes up to 1,000 objects one by one, so 15 minutes.
+  'media.cleanup_abandoned': { ...QUEUE_DEFAULTS, retryLimit: 3, expireInSeconds: 900 },
   // M6 courier queues (docs/03 §9 rows added with them, 2026-11-21).
   'logistics.verify_account': { ...QUEUE_DEFAULTS, retryLimit: 5 },
   'logistics.sync_branches': { ...QUEUE_DEFAULTS, retryLimit: 3 },
@@ -187,6 +189,7 @@ export const DEAD_LETTER_RULES = {
   'identity.revoke_sessions': 'redrive',
   'catalog.refresh_listing': 'redrive',
   'media.process_upload': 'redrive',
+  'media.cleanup_abandoned': 'discard',
   'logistics.verify_account': 'redrive',
   'logistics.sync_branches': 'redrive',
   'orders.book_courier_shipment': 'discard',

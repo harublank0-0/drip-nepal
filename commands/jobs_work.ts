@@ -1,14 +1,21 @@
 import { BaseCommand } from '@adonisjs/core/ace'
 import type { CommandOptions } from '@adonisjs/core/types/ace'
 import type { PostgreConfig } from '@adonisjs/lucid/types/database'
-import { JOB_HANDLERS, JOB_SCHEDULES, type JobAttempt } from '#start/jobs'
+import {
+  DEFAULT_JOB_CONCURRENCY,
+  JOB_CONCURRENCY,
+  JOB_HANDLERS,
+  JOB_SCHEDULES,
+  type JobAttempt,
+} from '#start/jobs'
 import { createJobBoss, jobDatabaseOf, setJobBoss, type QueueName } from '#modules/platform/jobs'
 
 /*
  * `node ace jobs:work`: the worker process (docs/03 §9, docs/11 §4.4). It
  * starts the worker's pg-boss instance (it supervises and runs the
  * schedules), registers every handler of `JOB_HANDLERS` and the schedules of
- * `JOB_SCHEDULES`, and runs until it is stopped. A handler that throws is
+ * `JOB_SCHEDULES`, and runs until it is stopped. Each queue runs
+ * `JOB_CONCURRENCY` jobs at once (2 unless listed; images one at a time). A handler that throws is
  * retried by pg-boss up to the queue's `retryLimit`, then moved to the
  * queue's dead-letter queue.
  */
@@ -35,7 +42,8 @@ export default class JobsWork extends BaseCommand {
       QueueName,
       (p: never, a: JobAttempt) => Promise<unknown>,
     ][]) {
-      await boss.work(queue, { includeMetadata: true, localConcurrency: 2 }, async (jobs) => {
+      const localConcurrency = JOB_CONCURRENCY[queue] ?? DEFAULT_JOB_CONCURRENCY
+      await boss.work(queue, { includeMetadata: true, localConcurrency }, async (jobs) => {
         for (const job of jobs) {
           const data = job.data as { request_id?: string | null }
           await handler(job.data as never, {

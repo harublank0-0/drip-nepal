@@ -19,7 +19,10 @@ import { S3ObjectStorage, s3ClientFor } from '#modules/platform/providers/s3_obj
  *   the still-valid URL overwrote the object, which is what lets the worker
  *   read only the object `completeMediaUpload` checked (2d-ii);
  * - the public bucket is readable without credentials, the private one is
- *   not, as `MEDIA_PUBLIC_URL` and 03 §3.5 expect.
+ *   not, as `MEDIA_PUBLIC_URL` and 03 §3.5 expect;
+ * - `read` (R1-S part 2d-ii) returns the bytes only while the ETag matches,
+ *   and refuses a missing object and one above the limit; `put` stores the
+ *   type and cache policy the public bucket then serves.
  *
  * The server's values are the development ones of docker/seaweedfs/s3.json,
  * on the test buckets. Without a server on S3_CONTRACT_ENDPOINT (default
@@ -224,5 +227,81 @@ test.group('T-MED-005 the S3 adapter against a real S3 server', (group) => {
     })
     assert.equal(anonymousWrite.status, 403)
     await anonymousWrite.body?.cancel()
+  }).skip(SKIP, SKIP_REASON)
+
+  test('T-MED-005 read returns the checked object only, and put stores its type and cache policy', async ({
+    assert,
+  }) => {
+    const key = uploadKey()
+    written.push(['private', key])
+    const upload = await storage.presignUpload(
+      'private',
+      key,
+      { contentType: 'image/jpeg', expiresInSeconds: 600 },
+      CTX
+    )
+    const response = await put(upload.url, BYTES, 'image/jpeg')
+    assert.equal(response.status, 200)
+    await response.body?.cancel()
+    const etag = response.headers.get('etag') ?? 'missing'
+
+    assert.deepEqual(
+      await storage.read('private', key, { ifMatch: etag, maxBytes: BYTES.length }, CTX),
+      { outcome: 'read', body: BYTES, contentType: 'image/jpeg', etag }
+    )
+    assert.deepEqual(
+      await storage.read('private', key, { ifMatch: '"0123abcd"', maxBytes: BYTES.length }, CTX),
+      { outcome: 'changed' }
+    )
+    assert.deepEqual(
+      await storage.read('private', key, { ifMatch: etag, maxBytes: BYTES.length - 1 }, CTX),
+      { outcome: 'too_large' }
+    )
+    assert.deepEqual(
+      await storage.read('private', `${key}-none`, { ifMatch: etag, maxBytes: BYTES.length }, CTX),
+      { outcome: 'missing' }
+    )
+
+    const publicKey = `p/t-med-005/${randomUUID()}-320.webp`
+    written.push(['public', publicKey])
+    await storage.put(
+      'public',
+      publicKey,
+      BYTES,
+      { contentType: 'image/webp', cacheControl: 'public, max-age=31536000, immutable' },
+      CTX
+    )
+    const served = await fetch(`${ENDPOINT}/${BUCKETS.public}/${publicKey}`)
+    assert.equal(served.status, 200)
+    assert.equal(served.headers.get('content-type'), 'image/webp')
+    assert.equal(served.headers.get('cache-control'), 'public, max-age=31536000, immutable')
+    assert.isTrue(Buffer.from(await served.arrayBuffer()).equals(BYTES))
+  }).skip(SKIP, SKIP_REASON)
+
+  test('T-MED-005 the final key under the upload key survives the upload key delete', async ({
+    assert,
+  }) => {
+    // The worker writes `<upload key>/v1` while `<upload key>` exists, then deletes `<upload key>`.
+    const key = uploadKey()
+    written.push(['private', key], ['private', `${key}/v1`])
+    await storage.put('private', key, BYTES, { contentType: 'image/jpeg' }, CTX)
+    await storage.put(
+      'private',
+      `${key}/v1`,
+      Buffer.concat([BYTES, BYTES]),
+      { contentType: 'image/jpeg' },
+      CTX
+    )
+    await storage.delete('private', key, CTX)
+    assert.isNull(await storage.head('private', key, CTX))
+    const final = await storage.head('private', `${key}/v1`, CTX)
+    assert.equal(final?.bytes, BYTES.length * 2)
+    const read = await storage.read(
+      'private',
+      `${key}/v1`,
+      { ifMatch: final?.etag ?? '', maxBytes: 4096 },
+      CTX
+    )
+    assert.equal(read.outcome, 'read')
   }).skip(SKIP, SKIP_REASON)
 })

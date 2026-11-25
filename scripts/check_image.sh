@@ -3,7 +3,10 @@
 #   1. it runs as a non-root user;
 #   2. it holds no .env* file;
 #   3. the SSR bundle is present;
-#   4. it boots: /health/live answers 200 with the image's release, and
+#   4. sharp loads and encodes an image: its Linux binary (@img/sharp-*)
+#      came with the production install, which runs no scripts (docs/09
+#      §10.2, §10.6);
+#   5. it boots: /health/live answers 200 with the image's release, and
 #      /health/ready answers 503 because no database is reachable.
 # Any further arguments are a command run while the container listens on
 # http://127.0.0.1:3399; its failure fails the script. CI passes the
@@ -31,6 +34,12 @@ envfiles=$(docker run --rm --entrypoint find "$IMAGE" /app -name '.env*')
 
 docker run --rm --entrypoint test "$IMAGE" -f /app/public/assets/server/.vite/manifest.json ||
   fail "the SSR bundle manifest /app/public/assets/server/.vite/manifest.json is missing"
+
+docker run --rm -w /app --entrypoint node "$IMAGE" -e "
+  import('sharp').then(({ default: sharp }) =>
+    sharp({ create: { width: 2, height: 2, channels: 3, background: '#000' } }).webp().toBuffer()
+  ).then((webp) => { if (webp.length === 0) process.exit(1) })
+" || fail "sharp does not load or encode in the image"
 
 # A staging-shaped environment with throwaway keys; nothing listens on DB_HOST.
 key() { openssl rand -base64 32; }
