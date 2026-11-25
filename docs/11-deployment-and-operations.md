@@ -610,6 +610,7 @@ services:
       ]
     ports: ['127.0.0.1:8333:8333']
     volumes: [seaweedfs_data:/data, ./docker/seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro]
+    healthcheck: { test: <S3 /healthz and each of the four buckets on the filer> }
 
   redis:
     image: docker.io/redis:8.6

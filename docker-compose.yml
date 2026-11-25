@@ -43,6 +43,8 @@ services:
   # credentials (public placeholder values, not secrets) and the anonymous
   # read of the two public buckets.
   seaweedfs:
+    # On an upgrade, recheck the health check: it reads the filer's directory
+    # listing, which a later version could turn off or answer differently.
     image: docker.io/chrislusf/seaweedfs:4.53
     container_name: dripnepal-seaweedfs
     restart: unless-stopped
