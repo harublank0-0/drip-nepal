@@ -412,6 +412,13 @@ module.exports = {
       from: { path: '^app/', pathNot: '^app/modules/[^/]+/providers/' },
       to: { dependencyTypes: ['core'], path: '^(node:)?(http|https|http2|net|tls|dgram)$' },
     },
+    // 8b. sharp only in the media module's image codec (03 §7.5, 07 TM-15; built 2026-11-25)
+    {
+      name: 'sharp-in-image-codec-only',
+      severity: 'error',
+      from: { pathNot: '^app/modules/media/internal/image_codec\\.ts$' },
+      to: { path: 'node_modules/sharp/' },
+    },
   ],
 }
 ```
@@ -2089,6 +2096,8 @@ Built in M0 (E2, 2026-11-15, note 93): CI's Supply chain job runs the audit gate
 ### 10.6 sharp ≥ 0.35.4
 
 sharp is added in M2 with the media upload pipeline ([ADR-0013](adr/0013-media-direct-upload-async-processing.md)), which M2 builds for KYC documents, shop logos and banners ([12 §5.2](12-roadmap-and-backlog.md#52-m2-shop-onboarding--membership-r1)); it is not installed today [Verified-repo: no `sharp@` entry in `pnpm-lock.yaml`]. The first version allowed is **0.35.4**. GHSA-rgj7-g3m4-5g8c (high, libheif) affects sharp < 0.35.4, and GHSA-f88m-g3jw-g9cj (high, libvips) affects < 0.35.0 [Verified-doc <https://github.com/lovell/sharp/security/advisories>, accessed 2026-09-25]. The range is `^0.35.4`, which for a `0.x` version allows only 0.35 patches, so 0.36 arrives as a deliberate PR (§10.1). The runtime settings (`limitInputPixels`, `failOn: 'warning'`, `VIPS_BLOCK_UNTRUSTED`, concurrency 1 in the worker) belong to ADR-0013 and [11](11-deployment-and-operations.md). Verified by the 07 §7.5 checklist item 3 and T-SEC-026 (proposed).
+
+Added 2026-11-25 (R1-S part 2d-ii, note 128): `sharp` `^0.35.5` (0.35.5 resolved, so the range starts at the version the lockfile holds). It has had no install script since 0.33: its native code comes as per-platform packages (`@img/sharp-*`; the libvips ones are LGPL-3.0-or-later, linked dynamically), so `allowBuilds` gains no entry. Only `app/modules/media/internal/image_codec.ts` may import it (`sharp-in-image-codec-only` in `.dependency-cruiser.cjs`), and `T-SEC-018` fails if the lockfile resolves it outside 0.35.4 to 0.35.x.
 
 ### 10.7 Current code → target (dependencies)
 
@@ -3873,3 +3882,4 @@ Changes to this document: (a) §1's tree names the new config files. (b) §6.1 r
 125.  **The stock operations built (2026-11-24, R1-S part 2c).** §3.5 records that its `adjustInventory` sketch is built and how it differs, as §12.1 does for `createProduct`. `idempotentTx` of `platform/idempotency.ts` now hands its work the key row's `id`, which a stock movement references ([04a §8.3](04a-data-dictionary-tables.md#83-inventory_movements)). The `q` filter helper moved to `controllers/support/cursor.ts` (`textFilter`), shared by `listShopProducts` and `listInventory`. Tests: `tests/functional/inventory/stock.spec.ts` and `tests/concurrency/inventory/stock.spec.ts`; the concurrency suite's lock wait, race helper (`commitWhileWaiting`) and shop removal live in `tests/support/concurrency.ts`. The answer's types are pure, in `inventory/domain/stock_change.ts`, so the transformer reads no module-private file.
 126.  **The uploads built (2026-11-24, R1-S part 2d-i).** The `S3_*` and `MEDIA_PUBLIC_URL` rows of §6.1 are built, and the "joining with their owning work" bullet no longer lists them: optional outside staging and production, where they are required over https, and all or none, so a half-configured store stops boot (`start/env_policy.ts`, `T-ARCH-024`); `.env.test` blanks them. `config/object_storage.ts` holds them; `providers/ports_provider.ts` builds one S3 client per process (`s3ClientFor`) and binds `ObjectStorage` to `app/modules/platform/providers/s3_object_storage.ts`, or to an adapter that answers 503 while they are unset. The adapter uses the AWS SDK directly, not the `@adonisjs/drive` disks, which sign an upload URL with `host` only and take no abort signal (ADR-0013 decisions 2 and 7, edited): path-style, checksums only when required (so no checksum of an empty body is signed into a presigned PUT), two attempts, and each call aborted after its time limit. The media module gains `actions/create_media_upload.ts`, `actions/complete_media_upload.ts`, `queries.ts`, `events.ts` and `domain/media_limits.ts`, `media_keys.ts`; the controller is `app/controllers/api/v1/seller/media/media_uploads_controller.ts`, the validator `app/validators/media/create_media_upload.ts`, the transformer `app/transformers/seller/media_transformer.ts`. New dependencies (§10.1): `@aws-sdk/client-s3` and `@aws-sdk/s3-request-presigner` (AWS, Apache-2.0, maintained, no install script), used only in the adapter.
 127.  **Development storage values (2026-11-25, OD-65).** §6.1's `S3_*` rows give the development values of the `seaweedfs` Compose service, which `.env.example` holds as public placeholders, and say `.env.test` blanks them; [risks §2.3](risks-and-open-decisions.md#23-decision-log) logs the decision.
+128.  **sharp added (2026-11-25, R1-S part 2d-ii).** §10.6 records `sharp` `^0.35.5`, with no install script and so no `allowBuilds` entry (note 44's plan assumed one), and §2's rule sketch gains `sharp-in-image-codec-only` ([03 note 42](03-system-architecture.md#consistency-notes-for-editor)).

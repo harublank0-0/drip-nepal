@@ -1195,32 +1195,32 @@ The command starts its own pg-boss instance with a pool of 1 (09 §9.7). With `D
 
 All crons are registered at worker start with `tz: 'Asia/Kathmandu'` (03 §9, §10.6). Minute fields not fixed by 03 or 05 are proposed here to spread load, and are marked.
 
-| Queue                                     | Cron (Asia/Kathmandu) | From                                   | Release |
-| ----------------------------------------- | --------------------- | -------------------------------------- | ------- |
-| `inventory.expire_reservations`           | `* * * * *`           | 05 §5.4, §9.4                          | R1.1    |
-| `platform.heartbeat`                      | `*/5 * * * *`         | 03 §9                                  | R1      |
-| `payments.reconcile_sweeper`              | `*/5 * * * *`         | 05 §9.4                                | R1.1    |
-| `refunds.reconcile_sweeper`               | `*/5 * * * *`         | 05 §9.4                                | R1.1    |
-| `platform.ops_metrics` (proposed, §8.6)   | `*/5 * * * *`         | this document                          | R1      |
-| `orders.sweep_courier_bookings`           | `*/5 * * * *`         | 03 §9, 05 §6.3 (M6)                    | R1      |
-| `orders.acceptance_timeout` (sweeper run) | `*/15 * * * *`        | 05 §8.11, §9.4                         | R1      |
-| `orders.sweep_courier_events`             | `*/15 * * * *`        | 03 §9, 05 §6.3 (M6)                    | R1      |
-| `orders.poll_courier_statuses`            | `*/30 * * * *`        | 03 §9, 05 §6.3 (M6)                    | R1      |
-| `logistics.sync_branches`                 | `30 2 * * *`          | 03 §9, 04a §9.12 (M6)                  | R1      |
-| `platform.purge_idempotency_keys`         | `5 * * * *`           | 05 §9.4                                | R1      |
-| `orders.auto_complete`                    | `15 * * * *`          | 05 §9.4                                | R1      |
-| `platform.support_case_sla`               | `25 * * * *`          | 03 §9                                  | R1      |
-| `refunds.sla_monitor`                     | `35 * * * *`          | 05 §9.4 (hourly; minute proposed here) | R1      |
-| `identity.purge_sessions`                 | `45 * * * *`          | 03 §9 (hourly; minute proposed here)   | R1      |
-| `platform.retention_purge`                | `30 1 * * *`          | 03 §9                                  | R1      |
-| `cart.expire_abandoned`                   | `0 2 * * *`           | 03 §9                                  | R1      |
-| `inventory.drift_check`                   | `30 2 * * *`          | 05 §5.10                               | R1      |
-| `media.cleanup_abandoned`                 | `45 2 * * *`          | 03 §9                                  | R1      |
-| `ledger.integrity_check`                  | `0 3 * * *`           | 05 §7.12                               | R1      |
-| `catalog.rebuild_listings`                | `30 3 * * *`          | 03 §9                                  | R1      |
-| `catalog.generate_sitemap`                | `0 4 * * *`           | 03 §9                                  | R1      |
-| `ledger.availability_digest`              | `0 6 * * *`           | 03 §9                                  | R1      |
-| `payments.daily_reconciliation`           | `0 6 * * *`           | 05 §9.4                                | R1.1    |
+| Queue                                     | Cron (Asia/Kathmandu) | From                                      | Release |
+| ----------------------------------------- | --------------------- | ----------------------------------------- | ------- |
+| `inventory.expire_reservations`           | `* * * * *`           | 05 §5.4, §9.4                             | R1.1    |
+| `platform.heartbeat`                      | `*/5 * * * *`         | 03 §9                                     | R1      |
+| `payments.reconcile_sweeper`              | `*/5 * * * *`         | 05 §9.4                                   | R1.1    |
+| `refunds.reconcile_sweeper`               | `*/5 * * * *`         | 05 §9.4                                   | R1.1    |
+| `platform.ops_metrics` (proposed, §8.6)   | `*/5 * * * *`         | this document                             | R1      |
+| `orders.sweep_courier_bookings`           | `*/5 * * * *`         | 03 §9, 05 §6.3 (M6)                       | R1      |
+| `orders.acceptance_timeout` (sweeper run) | `*/15 * * * *`        | 05 §8.11, §9.4                            | R1      |
+| `orders.sweep_courier_events`             | `*/15 * * * *`        | 03 §9, 05 §6.3 (M6)                       | R1      |
+| `orders.poll_courier_statuses`            | `*/30 * * * *`        | 03 §9, 05 §6.3 (M6)                       | R1      |
+| `logistics.sync_branches`                 | `30 2 * * *`          | 03 §9, 04a §9.12 (M6)                     | R1      |
+| `platform.purge_idempotency_keys`         | `5 * * * *`           | 05 §9.4                                   | R1      |
+| `orders.auto_complete`                    | `15 * * * *`          | 05 §9.4                                   | R1      |
+| `platform.support_case_sla`               | `25 * * * *`          | 03 §9                                     | R1      |
+| `refunds.sla_monitor`                     | `35 * * * *`          | 05 §9.4 (hourly; minute proposed here)    | R1      |
+| `identity.purge_sessions`                 | `45 * * * *`          | 03 §9 (hourly; minute proposed here)      | R1      |
+| `platform.retention_purge`                | `30 1 * * *`          | 03 §9                                     | R1      |
+| `cart.expire_abandoned`                   | `0 2 * * *`           | 03 §9                                     | R1      |
+| `inventory.drift_check`                   | `30 2 * * *`          | 05 §5.10                                  | R1      |
+| `media.cleanup_abandoned`                 | `45 2 * * *`          | 03 §9; built 2026-11-25 (R1-S part 2d-ii) | R1      |
+| `ledger.integrity_check`                  | `0 3 * * *`           | 05 §7.12                                  | R1      |
+| `catalog.rebuild_listings`                | `30 3 * * *`          | 03 §9                                     | R1      |
+| `catalog.generate_sitemap`                | `0 4 * * *`           | 03 §9                                     | R1      |
+| `ledger.availability_digest`              | `0 6 * * *`           | 03 §9                                     | R1      |
+| `payments.daily_reconciliation`           | `0 6 * * *`           | 05 §9.4                                   | R1.1    |
 
 The other queues are event-driven or delayed sends. Two operating notes:
 
@@ -1235,7 +1235,7 @@ A schedule sends at most one job a minute [Verified-doc, [research: infra-ops](r
 | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Overlapping runs tolerated                                              | Every cron in §8.4 (`standard`, except the two keyed by date in the next row)                                                                                                                                                                     | pg-boss sends at most one job a minute per schedule, and a run of `inventory.expire_reservations` stops after 50 s (05 §5.4), so copies cannot pile up. The row claims inside the handlers (`FOR UPDATE SKIP LOCKED`, compare-and-set) keep two overlapping runs correct                                               |
 | At most one job per key in each state (`stately` queue, `singletonKey`) | `payments.verify` (payment ID), `refunds.verify` (refund ID), `payments.daily_reconciliation` and `ledger.availability_digest` (date), `orders.cod_outcome_reminder` (shop order ID); backfills are guarded by their start command instead (§6.4) | Set by 03 §9: a running lookup can send its own successor, and a sweeper re-send is refused while a lookup is already queued, so a second chain never starts. `exclusive` is never used, because it would refuse a running job's successor                                                                             |
-| Worker concurrency 1 for `media.process_upload`                         | `media.process_upload`                                                                                                                                                                                                                            | Image decoding is the worker's largest memory user; sharp itself runs one thread on glibc Linux [Verified-doc, [research: infra-ops](research/infra-ops.md), <https://sharp.pixelplumbing.com/api-utility>, accessed 2026-09-25]                                                                                       |
+| Worker concurrency 1 for `media.process_upload`                         | `media.process_upload`                                                                                                                                                                                                                            | Image decoding is the worker's largest memory user; sharp itself runs one thread on glibc Linux [Verified-doc, [research: infra-ops](research/infra-ops.md), <https://sharp.pixelplumbing.com/api-utility>, accessed 2026-09-25]. Built 2026-11-25: `JOB_CONCURRENCY` in `start/jobs.ts` (R1-S part 2d-ii)             |
 | Default concurrency, `standard` policy, no key                          | Everything else, including `orders.acceptance_timeout` and `catalog.refresh_listing`                                                                                                                                                              | The worker's Lucid pool of 4 bounds parallel handlers anyway (03 §3.4). Their sends inside business transactions carry no `singletonKey`, because a keyed send on a shared row would add a lock to those transactions (03 §9; 05 §4.4, §4.7); each handler's compare-and-set or recompute is the idempotency guarantee |
 
 ### 8.6 Watching the queues
@@ -2427,3 +2427,4 @@ Still to do from §4.2:
 123. **MFA alerts raised (2026-11-23, M1 part 5).** §9.7's `mfa_lockout` and `staff_privilege_change` rows record that the app raises them for the TOTP lock and for `confirmTotpEnrollment`, as `alert` log lines through the platform module's `raiseAlert` (identifiers only), which the log tool alerts on. The `mfa_lockout` email to the platform admin waits for the admin-alert email path ([12 note 65](12-roadmap-and-backlog.md#consistency-notes-for-editor)); the "two-step verification turned on" email to the staff member is built ([07 note 52](07-security-threat-model-and-permissions.md#consistency-notes-for-editor)).
 124. **Object storage settings (2026-11-24, R1-S part 2d-i).** The `S3_*` and `MEDIA_PUBLIC_URL` variables are built (09 §6.1): staging and production must set all of them over https, and a partial set stops boot; `scripts/check_image.sh` and `scripts/check_routes.mjs` boot with throwaway values. §2.2 and §2.3 record that MinIO stopped publishing its container images in October 2025, so the local and CI S3 server is open ([OD-65](risks-and-open-decisions.md#22-decision-table)): the CI service also needs a workflow change, and the tests use the in-memory fake meanwhile. Still naming MinIO as settled, to follow OD-65's decision: §1's environment table and component list, §3.6's token rows, §4.3's Compose table, sketch and setup commands, §5's CI gates and §6.1's environment values, [03 §3.5's environment rows](03-system-architecture.md#35-object-storage-layout) and [ADR-0016](adr/0016-hosting-single-region-portable.md). The bucket CORS of §3.6 is unchanged.
 125. **SeaweedFS for development and CI (2026-11-25, OD-65).** The decision of [risks §2.3](risks-and-open-decisions.md#23-decision-log): §2.2's `seaweedfs` row replaces `minio`, and §1.9's portability row, §2.1's environment table, §2.3, §3.6's token rows and CSP origin, §4.3's Compose table and sketch, §4.4's setup commands, §5.2's workflow rows and §5.7's `S3_ENDPOINT` row follow. Note 124's list of statements still naming MinIO is done. `T-OPS-024` now also checks the SeaweedFS service ([10 note 90](10-testing-and-quality-gates.md#consistency-notes-for-editor)). The CI step changes `.github/workflows/ci.yml`, which needs the `workflow` scope on the token that pushes it.
+126. **The image worker's settings built (2026-11-25, R1-S part 2d-ii).** §8.4's `media.cleanup_abandoned` schedule and §8.6's concurrency of 1 for `media.process_upload` are built; `VIPS_BLOCK_UNTRUSTED` (§4.1, §5.7) still comes with the deploy Compose file ([03 note 42](03-system-architecture.md#consistency-notes-for-editor)).
