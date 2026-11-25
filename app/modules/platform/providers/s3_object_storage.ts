@@ -29,9 +29,10 @@ import { PortAdapter } from '#modules/platform/ports/port_adapter'
  *   the endpoint's (07 §7.3); it computes and validates checksums only when
  *   an operation requires one, so a presigned PUT carries no checksum of an
  *   empty body that a store checking it would refuse the real file against;
- *   it tries twice, with 3 s to connect, and a request idle for 10 s fails
- *   (`throwOnRequestTimeout`; without it the handler only warns on the
- *   console). The whole call is bounded by `ctx.timeoutMs` (below).
+ *   it tries twice, with 3 s to connect. Each call is bounded by
+ *   `ctx.timeoutMs` (below); the HTTP handler's `requestTimeout` is not set,
+ *   since it only warns on the console unless made fatal, and fatal it
+ *   would bound a whole 10 MB upload, not the time without progress.
  * - A presigned upload is signed locally at a whole second, with
  *   `content-type` among its signed headers, so the browser must send the
  *   declared type or the store answers 403 (07 TM-16); `expiresAt` is the
@@ -59,8 +60,6 @@ export function s3ClientFor(
   settings: S3Settings,
   requestHandler: S3Client['config']['requestHandler'] | object = {
     connectionTimeout: 3000,
-    requestTimeout: 10_000,
-    throwOnRequestTimeout: true,
   }
 ) {
   return new S3Client({

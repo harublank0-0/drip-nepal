@@ -56,19 +56,18 @@ let loading: Promise<SharpFactory> | null = null
 
 // sharp, loaded once, with only the three image loaders allowed.
 export function loadSharp(): Promise<SharpFactory> {
-  loading ??= import('sharp').then(
-    ({ default: sharp }) => {
+  loading ??= import('sharp')
+    .then(({ default: sharp }) => {
       sharp.block({ operation: ['VipsForeignLoad'] })
       sharp.unblock({ operation: [...IMAGE_LOADERS] })
       sharp.cache(false)
       sharp.concurrency(1)
       return sharp as unknown as SharpFactory
-    },
-    (error: unknown) => {
+    })
+    .catch((error: unknown) => {
       loading = null
       throw error
-    }
-  )
+    })
   return loading
 }
 

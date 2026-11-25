@@ -11,8 +11,10 @@ import { createOwnerShop, type OwnerShop } from '#tests/support/shops'
  * 04a §7.13; R1-S part 2d-ii). An upload never finished (`pending_upload`)
  * or `rejected`, created more than 24 hours ago, loses its object and
  * becomes `deleted`; one created less than 24 hours ago, and any
- * `processing` or `ready` asset however old, is left as it is. A final key
- * written by a failed attempt goes too. An object already gone is no error.
+ * `processing` or `ready` asset however old, is left as it is. A rejected
+ * asset's final key, written by a failed attempt, goes too; a
+ * `pending_upload` asset's final key is left alone, since the asset may be
+ * finished and processed while the run goes. An object already gone is no error.
  * An asset whose delete fails is skipped, the others are still deleted, and
  * the run then fails; the next run deletes the skipped one.
  */
@@ -77,9 +79,13 @@ test.group('T-MED-003 media.cleanup_abandoned', (group) => {
     const ready = await asset(f, 'ready', 72)
     const orphan = finalKey(f.shop.shopId, rejected.id)
     f.storage.upload('private', orphan, 2048, 'image/jpeg')
+    // As if the seller finished it during the run and the worker wrote its final key.
+    const live = finalKey(f.shop.shopId, abandoned.id)
+    f.storage.upload('private', live, 2048, 'image/jpeg')
 
     await cleanupAbandoned('req-cleanup')
     assert.isFalse(f.storage.has('private', orphan), 'a final key left by a failed attempt')
+    assert.isTrue(f.storage.has('private', live), "a pending upload's final key is never deleted")
 
     for (const gone of [abandoned, rejected, alreadyGone]) {
       assert.equal(await statusOf(gone.id), 'deleted')
