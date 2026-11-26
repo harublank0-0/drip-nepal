@@ -62,9 +62,8 @@ export const runnerHooks: Required<Pick<Config, 'setup' | 'teardown'>> = {
  * Learn more - https://japa.dev/docs/test-suites#lifecycle-hooks
  *
  * Suites that touch the database rebuild it once per run (docs/10 §3.2).
- * Functional and browser tests each run inside a global transaction that
- * is rolled back afterwards; the service transactions become savepoints of
- * it, and the in-process HTTP server the browser talks to uses it too. The
+ * Functional tests each run inside a global transaction that is rolled
+ * back afterwards; the service transactions become savepoints of it. The
  * concurrency suite commits for real on separate connections, because a
  * global transaction would serialise its parallel calls on one connection
  * and hide the races it exists to find (docs/10 §3.3).
@@ -76,7 +75,7 @@ export const configureSuite: Config['configureSuite'] = (suite) => {
     suite.setup(() => () => stopJobBoss())
   }
 
-  if (['functional', 'browser'].includes(suite.name)) {
+  if (suite.name === 'functional') {
     const wrap = () => testUtils.db().wrapInGlobalTransaction()
     suite.onGroup((group) => group.each.setup(wrap))
     suite.onTest((t) => t.setup(wrap))
