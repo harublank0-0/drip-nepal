@@ -28,8 +28,15 @@ export async function rebuildListings(requestId: string | null) {
     } catch (error) {
       counts.failed += 1
       lastError = error
+      const failure = error as { name?: string; code?: string; constraint?: string }
       logger.warn(
-        { product_id: row.id, error: (error as Error).name, request_id: requestId },
+        {
+          product_id: row.id,
+          error: failure.name,
+          code: failure.code,
+          constraint: failure.constraint,
+          request_id: requestId,
+        },
         'catalog.rebuild_listing_failed'
       )
     }

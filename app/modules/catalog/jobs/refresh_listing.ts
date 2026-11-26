@@ -29,12 +29,21 @@ import { jobTx } from '#modules/platform/tx'
  *
  * The listing is catalog's read model, so it reads the other modules'
  * tables it summarises (shops, media, inventory) as source tables; it
- * writes only `product_listings`.
+ * writes only `product_listings` (03 §4.1).
+ *
+ * Two refreshes of one product run one after the other: each first takes a
+ * transaction-scoped advisory lock on the product's ID, which only listing
+ * jobs take (05 §4.7), so business transactions never wait for it. Under
+ * READ COMMITTED each later statement then sees what the earlier refresh
+ * committed, so a slow run can neither delete nor overwrite the row a
+ * fresher run wrote. The nightly `catalog.rebuild_listings` repairs anything
+ * a lost job left.
  */
 export async function refreshProductListing(
   trx: TransactionClientContract,
   productId: string
 ): Promise<'listed' | 'not_visible' | 'no_product'> {
+  await trx.rawQuery('SELECT pg_advisory_xact_lock(hashtextextended(?, 0))', [productId])
   const upserted = await trx.rawQuery(
     `WITH p AS (
        SELECT p.*, s.slug AS shop_slug, s.name AS shop_name, s.status AS shop_status

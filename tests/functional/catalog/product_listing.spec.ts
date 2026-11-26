@@ -3,7 +3,14 @@ import { randomUUID } from 'node:crypto'
 import db from '@adonisjs/lucid/services/db'
 import { rebuildListings } from '#modules/catalog/jobs/rebuild_listings'
 import { refreshListing } from '#modules/catalog/jobs/refresh_listing'
-import { create, draftBody, productPath, world, type World } from '#tests/support/catalog'
+import {
+  create,
+  draftBody,
+  insertBrand,
+  productPath,
+  world,
+  type World,
+} from '#tests/support/catalog'
 import { send } from '#tests/support/courier_http'
 import { useJobBoss } from '#tests/support/jobs'
 import { setShopStatus } from '#tests/support/shops'
@@ -90,6 +97,7 @@ async function publishedProduct(w: World): Promise<Listed> {
           option_value_codes: { color: 'black', apparel_size: 'l' },
           sku: `TEE-BLK-L-${suffix}`,
           price_minor: 139900,
+          compare_at_price_minor: 199900,
         },
         {
           option_value_codes: { color: 'white', apparel_size: 'm' },
@@ -143,6 +151,13 @@ async function publishedProduct(w: World): Promise<Listed> {
 const listing = (productId: string) =>
   db.from('product_listings').where('product_id', productId).first()
 
+// A row without `refreshed_at`, the one column a repeat refresh may move.
+function withoutRefreshedAt(row: Record<string, unknown>) {
+  const copy = { ...row }
+  delete copy.refreshed_at
+  return copy
+}
+
 test.group('T-CAT-012 the listing row', (group) => {
   group.setup(async () => {
     await useJobBoss()
@@ -155,6 +170,10 @@ test.group('T-CAT-012 the listing row', (group) => {
     const { productId } = await publishedProduct(w)
     assert.deepEqual(await refreshListing({ product_id: productId }), { outcome: 'listed' })
     const row = await listing(productId)
+    // A second refresh gives the same row (T-CAT-108), only `refreshed_at` moves.
+    await refreshListing({ product_id: productId })
+    const again = await listing(productId)
+    assert.deepEqual(withoutRefreshedAt(again), withoutRefreshedAt(row))
     const product = await db.from('products').where('id', productId).firstOrFail()
     const category = await db.from('categories').where('id', product.category_id).firstOrFail()
     assert.include(row, {
@@ -249,6 +268,71 @@ test.group('T-CAT-012 the listing row', (group) => {
   })
 })
 
+test('T-CAT-012 a later refresh rewrites every copied column; archived variants never count', async ({
+  assert,
+}) => {
+  const w = await world()
+  const listed = await publishedProduct(w)
+  await refreshListing({ product_id: listed.productId })
+  const brandId = await insertBrand()
+  const brand = await db.from('brands').where('id', brandId).firstOrFail()
+  await db
+    .from('products')
+    .where('id', listed.productId)
+    .update({
+      title: 'Washed crew tee',
+      brand_id: brandId,
+      published_at: db.raw("now() - interval '2 hours'"),
+    })
+  await db.from('shops').where('id', w.shop.shopId).update({ name: 'Renamed Threads' })
+  await db
+    .from('product_variants')
+    .where('id', listed.variants['TEE-BLK-M'])
+    .update({ price_minor: 119900 })
+  await db
+    .from('product_attribute_values')
+    .where({ product_id: listed.productId, attribute_value_id: await valueId('audience', 'women') })
+    .delete()
+  const newKeys = { 320: 'p/z/fedcba9876543210-320.webp' }
+  await db
+    .from('media_assets')
+    .where('id', listed.image)
+    .update({ derived_keys: JSON.stringify(newKeys) })
+  // Cheaper and in stock, but archived: never in the prices or the filters.
+  await db
+    .from('product_variants')
+    .where('id', listed.variants['TEE-WHT-M'])
+    .update({ price_minor: 9900, status: 'archived' })
+  await db
+    .from('inventory_items')
+    .where('variant_id', listed.variants['TEE-WHT-M'])
+    .update({ on_hand: 5 })
+
+  await refreshListing({ product_id: listed.productId })
+  const row = await listing(listed.productId)
+  const product = await db.from('products').where('id', listed.productId).firstOrFail()
+  assert.include(row, {
+    title: 'Washed crew tee',
+    shop_name: 'Renamed Threads',
+    brand_id: brandId,
+    brand_name: brand.name,
+    brand_slug: brand.slug,
+    min_price_minor: 119900,
+    max_price_minor: 139900,
+    compare_at_price_minor: 159900,
+    primary_image_alt: 'Washed crew tee, Black',
+  })
+  assert.deepEqual(row.primary_image_keys, newKeys)
+  assert.deepEqual(row.audience_value_ids, [await valueId('audience', 'men')])
+  assert.deepEqual(row.color_value_ids, [await valueId('color', 'black')])
+  assert.equal(new Date(row.published_at).getTime(), new Date(product.published_at).getTime())
+  const byBrand = await db
+    .from('product_listings')
+    .where('product_id', listed.productId)
+    .whereRaw(`search_tsv @@ websearch_to_tsquery('simple', ?)`, [brand.name.split(' ')[0]])
+  assert.lengthOf(byBrand, 1, 'the brand name is searchable')
+})
+
 test.group('T-CAT-108 the row exists exactly when the product is visible', (group) => {
   group.setup(async () => {
     await useJobBoss()
@@ -328,5 +412,21 @@ test.group('T-CAT-108 the row exists exactly when the product is visible', (grou
     assert.equal(counts.failed, 0)
     assert.isOk(await listing(missing.productId))
     assert.notExists(await listing(stale.productId))
+  })
+
+  test('T-CAT-108 a product the rebuild cannot list fails the run, after the others are done', async ({
+    assert,
+  }) => {
+    const w = await world()
+    const broken = await publishedProduct(w)
+    const fine = await publishedProduct(w)
+    // A zero price breaks the row's price check; the API refuses it on a live product.
+    await db
+      .from('product_variants')
+      .where('product_id', broken.productId)
+      .update({ price_minor: 0 })
+    await assert.rejects(() => rebuildListings(null), /product_listings_price_range_check/)
+    assert.isOk(await listing(fine.productId), 'the other product is listed')
+    assert.notExists(await listing(broken.productId))
   })
 })
