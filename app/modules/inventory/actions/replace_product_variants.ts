@@ -1,9 +1,9 @@
 import type { QueryClientContract } from '@adonisjs/lucid/types/database'
 import { DomainError, VersionConflict } from '#exceptions/domain_error'
 import { recordAudit } from '#modules/audit/actions/record_audit'
+import { assertProductEditable } from '#modules/catalog/actions/product_editable'
 import {
   applyVariantSet,
-  assertVariantsEditable,
   planVariantSet,
   type VariantInput,
 } from '#modules/catalog/actions/product_variants'
@@ -64,7 +64,7 @@ export async function replaceProductVariants<T>(
   return withTx(async (trx) => {
     const product = await shopProduct(trx, command.shopId, command.productId, { lock: true })
     if (!product) throw new DomainError('NOT_FOUND')
-    assertVariantsEditable(product)
+    assertProductEditable(product)
     const current = await productEditorData(trx, product)
     if (product.version !== command.expectedVersion) {
       throw new VersionConflict((await context.present(current, trx)) as Record<string, unknown>)

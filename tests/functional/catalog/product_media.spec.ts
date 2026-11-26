@@ -177,7 +177,10 @@ test.group('T-MED-006 replaceProductMedia', (group) => {
     )
     const [audit, ...more] = await audits(productId, 'product.media_replace')
     assert.lengthOf(more, 0)
-    assert.deepEqual(audit.changes, { media_asset_ids: { from: [], to: [front, back] } })
+    assert.deepEqual(audit.changes, {
+      media_asset_ids: { from: [], to: [front, back] },
+      changed: ['media_asset_ids'],
+    })
     assert.notInclude(JSON.stringify(audit.changes), 'Back view')
     assert.lengthOf(await jobsFor(productId), jobsBefore.length + 1)
   })
@@ -223,6 +226,67 @@ test.group('T-MED-006 replaceProductMedia', (group) => {
     assert.lengthOf(await galleryRows(productId), 0)
     const audit = await audits(productId, 'product.media_replace')
     assert.deepEqual(audit.at(-1)?.changes.media_asset_ids, { from: [second, first], to: [] })
+  })
+
+  test('T-MED-006 an alt text or a colour alone is a change; the same text with spaces is not', async ({
+    assert,
+  }) => {
+    const w = await world()
+    const productId = await blackDraft(w)
+    const black = await colourValue('black')
+    const image = await asset(w.shop.shopId, w.shop.ownerId)
+    const set = (alt: string | null, colour: string | null) => [
+      { media_asset_id: image, position: 1, alt_text: alt, color_value_id: colour },
+    ]
+    const first = await replace(w, productId, set('Front', null), 2)
+    assert.equal(first.headers.get('etag'), '"3"', first.text)
+    const spaced = await replace(w, productId, set('  Front  ', null), 3)
+    assert.equal(spaced.headers.get('etag'), '"3"', 'trimmed, it is the stored text')
+    const altOnly = await replace(w, productId, set('Front view', null), 3)
+    assert.equal(altOnly.headers.get('etag'), '"4"')
+    const colourOnly = await replace(w, productId, set('Front view', black), 4)
+    assert.equal(colourOnly.headers.get('etag'), '"5"')
+    const rows = await audits(productId, 'product.media_replace')
+    assert.deepEqual(
+      rows.map((row) => row.changes.changed),
+      [['media_asset_ids'], ['alt_text'], ['color_value_id']]
+    )
+    assert.deepEqual(rows[1].changes.media_asset_ids, { from: [image], to: [image] })
+  })
+
+  test('T-MED-006 IDs in upper case name the same asset and colour', async ({ assert }) => {
+    const w = await world()
+    const productId = await blackDraft(w)
+    const black = await colourValue('black')
+    const image = await asset(w.shop.shopId, w.shop.ownerId)
+    const upper = await replace(
+      w,
+      productId,
+      [
+        {
+          media_asset_id: image.toUpperCase(),
+          position: 1,
+          alt_text: null,
+          color_value_id: black.toUpperCase(),
+        },
+      ],
+      2
+    )
+    assert.equal(upper.status, 200, upper.text)
+    assert.deepEqual(upper.body.data.media, [
+      { media_asset_id: image, position: 1, alt_text: null, color_value_id: black },
+    ])
+    const twice = await replace(
+      w,
+      productId,
+      [
+        { media_asset_id: image, position: 1, alt_text: null },
+        { media_asset_id: image.toUpperCase(), position: 2, alt_text: null },
+      ],
+      3
+    )
+    assert.equal(twice.status, 422, twice.text)
+    assert.deepEqual(fields(twice.body), [['items.1.media_asset_id', 'duplicate']])
   })
 
   test('T-MED-006 one 422 lists every failing item, and nothing is written', async ({ assert }) => {
@@ -323,13 +387,20 @@ test.group('T-MED-006 replaceProductMedia', (group) => {
       2
     )
     assert.equal(withImage.status, 200, withImage.text)
-    await db
-      .from('products')
-      .where('id', productId)
-      .update({ status: 'unpublished', warranty_text: 'No warranty' })
-    const emptied = await replace(w, productId, [], 3)
-    assert.equal(emptied.status, 422, emptied.text)
-    assert.deepEqual(fields(emptied.body), [['items', 'required']])
+    for (const status of ['unpublished', 'published'] as const) {
+      await db
+        .from('products')
+        .where('id', productId)
+        .update({
+          status,
+          warranty_text: 'No warranty',
+          published_at: db.raw('now()'),
+          first_published_at: db.raw('now()'),
+        })
+      const emptied = await replace(w, productId, [], 3)
+      assert.equal(emptied.status, 422, `${status}: ${emptied.text}`)
+      assert.deepEqual(fields(emptied.body), [['items', 'required']])
+    }
     assert.lengthOf(await galleryRows(productId), 1)
   })
 

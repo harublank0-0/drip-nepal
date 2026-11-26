@@ -2,7 +2,8 @@ import type { QueryClientContract } from '@adonisjs/lucid/types/database'
 import { DomainError, VersionConflict, type ProblemErrorItem } from '#exceptions/domain_error'
 import { InvariantViolation } from '#exceptions/programming_errors'
 import { recordAudit } from '#modules/audit/actions/record_audit'
-import { assertVariantsEditable } from '#modules/catalog/actions/product_variants'
+import { assertProductEditable } from '#modules/catalog/actions/product_editable'
+import { LIVE_STATUSES } from '#modules/catalog/domain/disclosures'
 import {
   productColorValueIds,
   productEditorData,
@@ -24,20 +25,23 @@ import { withTx } from '#modules/platform/tx'
  * 1. the product is locked inside the shop (another shop's product is 404,
  *    T-SEC-001); `pending_review`, `archived` and `blocked` are 409, as for
  *    `updateProduct`; a stale `If-Match` is 412 with `current`;
- * 2. the items are checked together, one 422 for all that fail: the
+ * 2. every asset must be a product image of this shop, else 404 as a missing
+ *    one (T-SEC-001 case (c)), before any 422, so a foreign asset never
+ *    shows as anything but missing;
+ * 3. the items are checked together, one 422 for all that fail: the
  *    positions are 1 to n with no gap or repeat, so position 1 is the
  *    primary image (AC-FR-MED-002-1); an asset appears once; a colour is a
  *    `color` value of one of the product's active variants (AC-FR-MED-002-3);
- *    a product that is `published` or `unpublished` keeps at least one image
+ *    every asset is `ready` (`not_ready`, 06 §13.5); a live product
+ *    (`published` or `unpublished`) keeps at least one image
  *    (AC-FR-MED-002-1); a draft may have none;
- * 3. every asset must be a product image of this shop, else 404 as a missing
- *    one (T-SEC-001 case (c)), and `ready`, else 422 `not_ready` (06 §13.5);
  * 4. a set equal to the current one writes nothing and keeps the version;
  *    otherwise `media.setProductMedia` replaces the rows, the product's
  *    version goes up (and a `rejected` product returns to `draft`, 05
  *    §6.10, AC-FR-CAT-006-2), one `product.media_replace` audit row
- *    (proposed) records the asset IDs before and after, never the alt text,
- *    and `catalog.refresh_listing` is sent.
+ *    (proposed) records the asset IDs before and after and the names of what
+ *    changed (`changed`), never the alt text, and `catalog.refresh_listing`
+ *    is sent.
  *
  * The answer is the editor view (`getShopProduct`) with the new version.
  */
@@ -47,8 +51,6 @@ export type ReplaceProductMediaCommand = {
   expectedVersion: number
   items: ProductMediaItem[]
 }
-
-const LIVE = new Set(['published', 'unpublished'])
 
 function itemProblems(
   items: ProductMediaItem[],
@@ -82,7 +84,7 @@ function itemProblems(
       })
     }
   })
-  if (items.length === 0 && LIVE.has(status)) {
+  if (items.length === 0 && LIVE_STATUSES.includes(status)) {
     problems.push({
       field: 'items',
       code: 'required',
@@ -90,6 +92,25 @@ function itemProblems(
     })
   }
   return problems
+}
+
+// Which parts of the gallery a request changes: the images or their order, an alt text, a colour.
+function changedParts(current: ProductEditorData['media'], next: ProductMediaItem[]) {
+  const before = new Map(current.map((item) => [item.mediaAssetId, item]))
+  const order = (list: { mediaAssetId: string; position: number }[]) =>
+    [...list]
+      .sort((a, b) => a.position - b.position)
+      .map((item) => item.mediaAssetId)
+      .join(',')
+  const changed = new Set<string>()
+  if (order(current) !== order(next)) changed.add('media_asset_ids')
+  for (const item of next) {
+    const existing = before.get(item.mediaAssetId)
+    if (!existing) continue
+    if (existing.altText !== item.altText) changed.add('alt_text')
+    if (existing.colorValueId !== item.colorValueId) changed.add('color_value_id')
+  }
+  return [...changed].sort()
 }
 
 const sameSet = (current: ProductEditorData['media'], next: ProductMediaItem[]) =>
@@ -116,7 +137,7 @@ export async function replaceProductMedia<T>(
   return withTx(async (trx) => {
     const product = await shopProduct(trx, command.shopId, command.productId, { lock: true })
     if (!product) throw new DomainError('NOT_FOUND')
-    assertVariantsEditable(product)
+    assertProductEditable(product)
     const current = await productEditorData(trx, product)
     if (product.version !== command.expectedVersion) {
       throw new VersionConflict((await context.present(current, trx)) as Record<string, unknown>)
@@ -172,6 +193,7 @@ export async function replaceProductMedia<T>(
       shopId: product.shopId,
       changes: {
         media_asset_ids: { from: byPosition(current.media), to: byPosition(command.items) },
+        changed: changedParts(current.media, command.items),
         ...(product.status === 'rejected' ? { status: { from: 'rejected', to: 'draft' } } : {}),
       },
     })

@@ -1,5 +1,6 @@
 import type { QueryClientContract } from '@adonisjs/lucid/types/database'
-import { DomainError, InvalidStateTransition, VersionConflict } from '#exceptions/domain_error'
+import { DomainError, VersionConflict } from '#exceptions/domain_error'
+import { assertProductEditable } from '#modules/catalog/actions/product_editable'
 import { InvariantViolation } from '#exceptions/programming_errors'
 import { recordAudit } from '#modules/audit/actions/record_audit'
 import type { RuleProblem } from '#modules/catalog/domain/attribute_rules'
@@ -55,8 +56,6 @@ export type UpdateProductCommand = {
   changes: Partial<ProductFields>
 }
 
-const EDITABLE = new Set(['draft', 'rejected', 'published', 'unpublished'])
-
 const COLUMNS: Record<Exclude<keyof ProductFields, 'attributes'>, string> = {
   title: 'title',
   description: 'description',
@@ -79,12 +78,7 @@ export async function updateProduct<T>(
   return withTx(async (trx) => {
     const product = await shopProduct(trx, command.shopId, command.productId, { lock: true })
     if (!product) throw new DomainError('NOT_FOUND')
-    if (!EDITABLE.has(product.status)) {
-      throw new InvalidStateTransition(
-        product.status,
-        product.status === 'archived' ? ['restore'] : []
-      )
-    }
+    assertProductEditable(product)
     const current = await productEditorData(trx, product)
     if (product.version !== command.expectedVersion) {
       throw new VersionConflict((await context.present(current, trx)) as Record<string, unknown>)

@@ -1,5 +1,5 @@
 import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
-import { DomainError, InvalidStateTransition } from '#exceptions/domain_error'
+import { DomainError } from '#exceptions/domain_error'
 import { InvariantViolation } from '#exceptions/programming_errors'
 import type { EffectiveRule, RuleProblem } from '#modules/catalog/domain/attribute_rules'
 import { LIVE_STATUSES } from '#modules/catalog/domain/disclosures'
@@ -64,18 +64,6 @@ export type VariantPlan = {
   archived: string[]
   deleted: string[]
   changed: boolean
-}
-
-const EDITABLE = new Set(['draft', 'rejected', 'published', 'unpublished'])
-
-// 409 for a product `pending_review`, `archived` or `blocked` (05 §6.10), as `updateProduct`.
-export function assertVariantsEditable(product: ProductRow) {
-  if (!EDITABLE.has(product.status)) {
-    throw new InvalidStateTransition(
-      product.status,
-      product.status === 'archived' ? ['restore'] : []
-    )
-  }
 }
 
 const sameList = (a: readonly string[], b: readonly string[]) =>
