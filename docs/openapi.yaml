@@ -2984,27 +2984,28 @@ paths:
       description: |
         Actor: `shop.products.edit`; shop status gate of 06 §4.4. Scope: `{productId}` is
         looked up inside the shop; another shop's product is 404 (T-SEC-001). An
-        `items[].media_asset_id` that is not a product image of this shop, such as another shop's
-        asset, is 404 `NOT_FOUND`, exactly as a missing one (T-SEC-001 case (c), ADR-0013).
-        Status gate: a product in `pending_review`, `archived` or `blocked` is 409
-        `INVALID_STATE_TRANSITION`, as `updateProduct` answers (06 §13.5). A `rejected` product
-        moves back to `draft` in the same transaction (05 §6.10, AC-FR-CAT-006-2).
-        Whole-set replacement (PUT): `items` is the whole gallery, at most 12 (04a §7.14); an
-        empty list removes every image. Validation (422 `VALIDATION_FAILED`; the item bounds first, then
-        all of these at once): positions 1 to n with no gap or repeat, so position 1 is the primary image
-        (`positions` on `items`, AC-FR-MED-002-1); an asset at most once (`duplicate` on
-        `items.N.media_asset_id`); every asset `ready` (`not_ready` on `items.N.media_asset_id`);
-        a colour that is a `color` value of one of the product's active variants (`not_allowed`
-        on `items.N.color_value_id`, AC-FR-MED-002-3); a product in `published` or `unpublished`
-        keeps at least one image (`required` on `items`, AC-FR-MED-002-1); `alt_text` at most 150
-        characters, trimmed and NFC-normalised, a blank one stored as null (AC-FR-MED-002-2). A set equal to the
+        `items[].media_asset_id` that is not a product image of this shop, such as another
+        shop's asset, is 404 `NOT_FOUND`, exactly as a missing one (T-SEC-001 case (c),
+        ADR-0013). Status gate: a product in `pending_review`, `archived` or `blocked` is
+        409 `INVALID_STATE_TRANSITION`, as `updateProduct` answers (06 §13.5). A `rejected`
+        product moves back to `draft` in the same transaction (05 §6.10, AC-FR-CAT-006-2).
+        Whole-set replacement (PUT): `items` is the whole gallery, at most 12 (04a §7.14);
+        an empty list removes every image. Validation (422 `VALIDATION_FAILED`; the item
+        bounds first, then all of these at once): positions 1 to n with no gap or repeat, so
+        position 1 is the primary image (`positions` on `items`, AC-FR-MED-002-1); an asset
+        at most once (`duplicate` on `items.N.media_asset_id`); every asset `ready`
+        (`not_ready` on `items.N.media_asset_id`); a colour that is a `color` value of one
+        of the product's active variants (`not_allowed` on `items.N.color_value_id`,
+        AC-FR-MED-002-3); a product in `published` or `unpublished` keeps at least one image
+        (`required` on `items`, AC-FR-MED-002-1); `alt_text` at most 150 characters, trimmed
+        and NFC-normalised, a blank one stored as null (AC-FR-MED-002-2). A set equal to the
         current one writes nothing and keeps the version. Otherwise: audit
         `product.media_replace` (proposed) with the asset IDs before and after and the names
-        of what changed (`changed`), never the alt text, and `catalog.refresh_listing`. Built R1-S part 2d-iii. T-MED-006, T-SEC-001,
-        T-SEC-003, T-SEC-030, T-SEC-031.
-        Concurrency: ⟳ `If-Match` on `products.version`; bumps it. Missing, `*` or a list → 428;
-        a stale version, a weak tag or any other value → 412 with `current` (06 §8, §14.2). Not ⚷
-        (the version check stops a second apply, 06 §7.7). Release R1·M3.
+        of what changed (`changed`), never the alt text, and `catalog.refresh_listing`.
+        Built R1-S part 2d-iii. T-MED-006, T-SEC-001, T-SEC-003, T-SEC-030, T-SEC-031.
+        Concurrency: ⟳ `If-Match` on `products.version`; bumps it. Missing, `*` or a list →
+        428; a stale version, a weak tag or any other value → 412 with `current` (06 §8,
+        §14.2). Not ⚷ (the version check stops a second apply, 06 §7.7). Release R1·M3.
       x-release: R1·M3
       x-permission: shop.products.edit
       x-if-match: true
@@ -11034,4 +11035,4 @@ components:
 #     (R1-S part 2d-iii, 2026-11-26; 06 note 71), with the new schema `ReplaceProductMediaRequest`.
 #     Its description adds what the build decided: positions 1 to n, `duplicate`, `not_ready`, a
 #     colour of an active variant, at least one image on a live product, an empty alt text stored
-#     as null, the no-op rule, the audit action and the listing job.
+#     as null, the no-op rule, the audit action with `changed` and the listing job.
