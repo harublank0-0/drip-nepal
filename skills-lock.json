@@ -1,6 +1,12 @@
 {
   "version": 1,
   "skills": {
+    "accessibility": {
+      "source": "addyosmani/web-quality-skills",
+      "sourceType": "github",
+      "skillPath": "skills/accessibility/SKILL.md",
+      "computedHash": "864d860a3585768c58a555898094c924f2ccc28ce3ced88092cce798d8b2c0a1"
+    },
     "ncm-integration": {
       "source": "harublank0-0/ncm-integration-skill",
       "sourceType": "github",
