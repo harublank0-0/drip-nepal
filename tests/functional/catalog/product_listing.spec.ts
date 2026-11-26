@@ -266,71 +266,74 @@ test.group('T-CAT-012 the listing row', (group) => {
     assert.equal(await set('Front of the tee', null, 3), 'Front of the tee')
     assert.equal(await set(null, null, 4), 'Organic cotton crew tee')
   })
-})
 
-test('T-CAT-012 a later refresh rewrites every copied column; archived variants never count', async ({
-  assert,
-}) => {
-  const w = await world()
-  const listed = await publishedProduct(w)
-  await refreshListing({ product_id: listed.productId })
-  const brandId = await insertBrand()
-  const brand = await db.from('brands').where('id', brandId).firstOrFail()
-  await db
-    .from('products')
-    .where('id', listed.productId)
-    .update({
+  test('T-CAT-012 a later refresh rewrites every copied column; archived variants never count', async ({
+    assert,
+  }) => {
+    const w = await world()
+    const listed = await publishedProduct(w)
+    await refreshListing({ product_id: listed.productId })
+    const brandId = await insertBrand()
+    const brand = await db.from('brands').where('id', brandId).firstOrFail()
+    await db
+      .from('products')
+      .where('id', listed.productId)
+      .update({
+        title: 'Washed crew tee',
+        brand_id: brandId,
+        published_at: db.raw("now() - interval '2 hours'"),
+      })
+    await db.from('shops').where('id', w.shop.shopId).update({ name: 'Renamed Threads' })
+    await db
+      .from('product_variants')
+      .where('id', listed.variants['TEE-BLK-M'])
+      .update({ price_minor: 119900 })
+    await db
+      .from('product_attribute_values')
+      .where({
+        product_id: listed.productId,
+        attribute_value_id: await valueId('audience', 'women'),
+      })
+      .delete()
+    const newKeys = { 320: 'p/z/fedcba9876543210-320.webp' }
+    await db
+      .from('media_assets')
+      .where('id', listed.image)
+      .update({ derived_keys: JSON.stringify(newKeys) })
+    // Cheaper and in stock, but archived: never in the prices or the filters.
+    await db
+      .from('product_variants')
+      .where('id', listed.variants['TEE-WHT-M'])
+      .update({ price_minor: 9900, status: 'archived' })
+    await db
+      .from('inventory_items')
+      .where('variant_id', listed.variants['TEE-WHT-M'])
+      .update({ on_hand: 5 })
+
+    await refreshListing({ product_id: listed.productId })
+    const row = await listing(listed.productId)
+    const product = await db.from('products').where('id', listed.productId).firstOrFail()
+    assert.include(row, {
       title: 'Washed crew tee',
+      shop_name: 'Renamed Threads',
       brand_id: brandId,
-      published_at: db.raw("now() - interval '2 hours'"),
+      brand_name: brand.name,
+      brand_slug: brand.slug,
+      min_price_minor: 119900,
+      max_price_minor: 139900,
+      compare_at_price_minor: 159900,
+      primary_image_alt: 'Washed crew tee, Black',
     })
-  await db.from('shops').where('id', w.shop.shopId).update({ name: 'Renamed Threads' })
-  await db
-    .from('product_variants')
-    .where('id', listed.variants['TEE-BLK-M'])
-    .update({ price_minor: 119900 })
-  await db
-    .from('product_attribute_values')
-    .where({ product_id: listed.productId, attribute_value_id: await valueId('audience', 'women') })
-    .delete()
-  const newKeys = { 320: 'p/z/fedcba9876543210-320.webp' }
-  await db
-    .from('media_assets')
-    .where('id', listed.image)
-    .update({ derived_keys: JSON.stringify(newKeys) })
-  // Cheaper and in stock, but archived: never in the prices or the filters.
-  await db
-    .from('product_variants')
-    .where('id', listed.variants['TEE-WHT-M'])
-    .update({ price_minor: 9900, status: 'archived' })
-  await db
-    .from('inventory_items')
-    .where('variant_id', listed.variants['TEE-WHT-M'])
-    .update({ on_hand: 5 })
-
-  await refreshListing({ product_id: listed.productId })
-  const row = await listing(listed.productId)
-  const product = await db.from('products').where('id', listed.productId).firstOrFail()
-  assert.include(row, {
-    title: 'Washed crew tee',
-    shop_name: 'Renamed Threads',
-    brand_id: brandId,
-    brand_name: brand.name,
-    brand_slug: brand.slug,
-    min_price_minor: 119900,
-    max_price_minor: 139900,
-    compare_at_price_minor: 159900,
-    primary_image_alt: 'Washed crew tee, Black',
+    assert.deepEqual(row.primary_image_keys, newKeys)
+    assert.deepEqual(row.audience_value_ids, [await valueId('audience', 'men')])
+    assert.deepEqual(row.color_value_ids, [await valueId('color', 'black')])
+    assert.equal(new Date(row.published_at).getTime(), new Date(product.published_at).getTime())
+    const byBrand = await db
+      .from('product_listings')
+      .where('product_id', listed.productId)
+      .whereRaw(`search_tsv @@ websearch_to_tsquery('simple', ?)`, [brand.name.split(' ')[0]])
+    assert.lengthOf(byBrand, 1, 'the brand name is searchable')
   })
-  assert.deepEqual(row.primary_image_keys, newKeys)
-  assert.deepEqual(row.audience_value_ids, [await valueId('audience', 'men')])
-  assert.deepEqual(row.color_value_ids, [await valueId('color', 'black')])
-  assert.equal(new Date(row.published_at).getTime(), new Date(product.published_at).getTime())
-  const byBrand = await db
-    .from('product_listings')
-    .where('product_id', listed.productId)
-    .whereRaw(`search_tsv @@ websearch_to_tsquery('simple', ?)`, [brand.name.split(' ')[0]])
-  assert.lengthOf(byBrand, 1, 'the brand name is searchable')
 })
 
 test.group('T-CAT-108 the row exists exactly when the product is visible', (group) => {

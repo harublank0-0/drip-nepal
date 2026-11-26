@@ -20,6 +20,8 @@ export async function rebuildListings(requestId: string | null) {
     .where('status', 'published')
     .union((query) => query.from('product_listings').select('product_id as id'))
     .select('id')
+    // In ID order (UUIDv7, so creation order), so runs and their logs repeat.
+    .orderBy('id')
   const counts = { listed: 0, not_visible: 0, no_product: 0, failed: 0 }
   let lastError: unknown = null
   for (const row of rows) {
