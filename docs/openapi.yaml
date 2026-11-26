@@ -68,8 +68,8 @@ info:
   contact:
     name: DripNepal engineering (docs/06-api-design.md owners)
   license:
-    name: MIT
-    identifier: MIT
+    name: Proprietary, all rights reserved
+    url: https://github.com/harublank0-0/drip-nepal/blob/main/LICENSE
 servers:
   - url: http://localhost:3333
     description: Local development (`HOST`/`PORT` defaults of `.env.example`) [Verified-repo]
@@ -11390,3 +11390,6 @@ components:
 #     from the code (R1-S part 3a, 2026-11-26; 06 note 73), with the schemas `CategoryTree`,
 #     `CategoryNode` and `FilterAttributeList`. `listAttributes` with a category answers the
 #     attributes of its ancestors and its listed descendants (06 note 73).
+# 64. `info.license` says "Proprietary, all rights reserved" and links `LICENSE`: OD-23 was
+#     re-decided on 2026-11-26 as option (b), proprietary with the source public, replacing the
+#     MIT of 2026-09-30 that note 25 records (risks §2.3).
