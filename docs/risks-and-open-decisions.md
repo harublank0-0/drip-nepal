@@ -252,12 +252,16 @@ Evidence: The product owner asked on 2026-11-26 for skills that would help the m
           afa8da9, copied verbatim (3 files). Licence: MIT, declared in its SKILL.md frontmatter
           and in the upstream LICENSE (copyright 2026 Addy Osmani), copied beside it. Read-through
           of all 3 files: Markdown only, no scripts, no `!` command run on load, no allowed-tools,
-          no hooks and no instruction to fetch remote content. It disagrees with 08 on the
-          large-text contrast threshold (its 18 px, or 14 px bold, confuses points with pixels;
-          08 §5.10 says 24 px, or 18.66 px bold), the focus indicator, focus-not-obscured
-          spacing, dialogs, form-error announcements, session expiry, passkeys and how pages are
-          verified (08 §5.10, §6.1, §7.1, §7.4, §9, §11.7; ADR-0005; T-A11Y-001); NOTICE.md
-          lists them. skills-lock.json's computedHash uses the algorithm of the 2026-11-09
+          no hooks and no instruction to fetch remote content. Its testing checklist tells the
+          agent to run `npx lighthouse` and `npm install @axe-core/cli -g` and to use Chrome
+          DevTools MCP's `lighthouse_audit`; NOTICE.md says not to (pnpm, T-A11Y-001,
+          dripnepal-run). Its URLs are W3C, Deque, WebAIM, TPGi and NV Access pages. It
+          disagrees with the documents on the large-text contrast threshold (its 18 px, or 14 px
+          bold, confuses points with pixels; 08 §5.10 says 24 px, or 18.66 px bold), the focus
+          indicator, focus-not-obscured spacing, hand-written widgets, form-error announcements,
+          hard-coded accessible names, session expiry, passkeys and how pages are verified (08
+          §5.10, §6.1, §7.1, §7.4, §9, §11.7, §11.8; 07 §3.4; ADR-0005; ADR-0015; T-A11Y-001);
+          NOTICE.md lists them. skills-lock.json's computedHash uses the algorithm of the 2026-11-09
           ncm-integration entry (4 files: the 3 and LICENSE, NOTICE.md excluded).
           Reviewed the same day and not tracked: the same repository's performance,
           core-web-vitals and seo skills (most of their advice is decided in 08 §10, 03 §12.5 and
