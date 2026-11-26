@@ -516,6 +516,24 @@ const routes = {
     tokens: [{"old":"/seller/:shopSlug/shipping","type":0,"val":"seller","end":""},{"old":"/seller/:shopSlug/shipping","type":1,"val":"shopSlug","end":""},{"old":"/seller/:shopSlug/shipping","type":0,"val":"shipping","end":""}],
     types: placeholder as Registry['seller.shipping']['types'],
   },
+  'seller.products': {
+    methods: ["GET","HEAD"],
+    pattern: '/seller/:shopSlug/products',
+    tokens: [{"old":"/seller/:shopSlug/products","type":0,"val":"seller","end":""},{"old":"/seller/:shopSlug/products","type":1,"val":"shopSlug","end":""},{"old":"/seller/:shopSlug/products","type":0,"val":"products","end":""}],
+    types: placeholder as Registry['seller.products']['types'],
+  },
+  'seller.products.new': {
+    methods: ["GET","HEAD"],
+    pattern: '/seller/:shopSlug/products/new',
+    tokens: [{"old":"/seller/:shopSlug/products/new","type":0,"val":"seller","end":""},{"old":"/seller/:shopSlug/products/new","type":1,"val":"shopSlug","end":""},{"old":"/seller/:shopSlug/products/new","type":0,"val":"products","end":""},{"old":"/seller/:shopSlug/products/new","type":0,"val":"new","end":""}],
+    types: placeholder as Registry['seller.products.new']['types'],
+  },
+  'seller.products.edit': {
+    methods: ["GET","HEAD"],
+    pattern: '/seller/:shopSlug/products/:productId',
+    tokens: [{"old":"/seller/:shopSlug/products/:productId","type":0,"val":"seller","end":""},{"old":"/seller/:shopSlug/products/:productId","type":1,"val":"shopSlug","end":""},{"old":"/seller/:shopSlug/products/:productId","type":0,"val":"products","end":""},{"old":"/seller/:shopSlug/products/:productId","type":1,"val":"productId","end":""}],
+    types: placeholder as Registry['seller.products.edit']['types'],
+  },
   'admin.logistics': {
     methods: ["GET","HEAD"],
     pattern: '/admin/logistics',

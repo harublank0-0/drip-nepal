@@ -543,3 +543,178 @@ export async function productColorValueIds(
     .distinct('o.attribute_value_id')
   return new Set(rows.map((row) => row.attribute_value_id))
 }
+
+export type CategoryOption = {
+  id: string
+  // The names from the top level down: ['Clothing', 'Tops', 'T-Shirts'].
+  names: string[]
+  isActive: boolean
+  rules: { code: string; usage: CategoryAttributeUsage; isRequired: boolean }[]
+}
+
+export type AttributeOption = {
+  code: string
+  name: string
+  input: AttributeInput
+  values: { code: string; label: string; swatchHex: string | null; isActive: boolean }[]
+}
+
+export type BrandOption = { id: string; name: string; requiresModeration: boolean }
+
+export type ProductFormOptions = {
+  categories: CategoryOption[]
+  attributes: AttributeOption[]
+  brands: BrandOption[]
+}
+
+/*
+ * What the product form chooses from (docs/08 §2.5 `/products/new` and
+ * `/products/{productId}`, which read `listCategories` and
+ * `listAttributes`; R1-S part 2f-i): public reference data.
+ *
+ * - `categories`: the leaves a product may go in (`activeLeafCategory`:
+ *   active, no child), in tree order, each with its names from the top
+ *   level down and its effective attribute rules, the deepest row of its
+ *   path winning by the same comparison as `effectiveRules`, so the form
+ *   offers what the actions accept. `keepCategoryId`, the product's own
+ *   category, is listed even when it is no longer an active leaf
+ *   (`isActive` false), so an edit can keep it (04a §7.1).
+ * - `attributes`: the attributes any listed rule names, with every value
+ *   in picker order; an inactive value is marked, so the form offers it only
+ *   to a product that already has it (04a §7.3).
+ * - `brands`: the `active` brands by name (04a §7.5), and `keepBrandId`, the
+ *   product's own brand, whatever its status.
+ */
+export async function productFormOptions(
+  options: { keepCategoryId?: string; keepBrandId?: string | null } = {}
+): Promise<ProductFormOptions> {
+  const client = db.connection()
+  const rows: {
+    id: string
+    parent_id: string | null
+    name: string
+    position: number
+    is_active: boolean
+    has_child: boolean
+  }[] = await client
+    .from('categories as c')
+    .select('c.id', 'c.parent_id', 'c.name', 'c.position', 'c.is_active')
+    .select(client.raw('EXISTS (SELECT 1 FROM categories k WHERE k.parent_id = c.id) AS has_child'))
+  const byId = new Map(rows.map((row) => [row.id, row]))
+  // The chain from the top level down, for the names and the tree order.
+  const chain = (row: (typeof rows)[number]) => {
+    const list = [row]
+    for (let at = row; at.parent_id !== null; ) {
+      const parent = byId.get(at.parent_id)
+      if (!parent) break
+      list.unshift(parent)
+      at = parent
+    }
+    return list
+  }
+  const leaves = rows
+    .filter((row) => (row.is_active && !row.has_child) || row.id === options.keepCategoryId)
+    .map((row) => ({ row, path: chain(row) }))
+    .sort((a, b) => {
+      for (let index = 0; index < Math.min(a.path.length, b.path.length); index++) {
+        const left = a.path[index]
+        const right = b.path[index]
+        if (left.id === right.id) continue
+        return left.position - right.position || left.name.localeCompare(right.name)
+      }
+      return a.path.length - b.path.length
+    })
+  const leafIds = leaves.map((leaf) => leaf.row.id)
+  type RuleRow = {
+    category_id: string
+    code: string
+    usage: CategoryAttributeUsage
+    is_required: boolean
+    attribute_position: number
+  }
+  // The same comparison as `effectiveRules`: the rows on each leaf's path, the deepest winning.
+  const ruleResult =
+    leafIds.length === 0
+      ? { rows: [] }
+      : await client.rawQuery(
+          `SELECT DISTINCT ON (leaf.id, ca.attribute_id)
+                  leaf.id AS category_id, a.code, ca.usage, ca.is_required,
+                  a.position AS attribute_position
+             FROM categories leaf
+             JOIN categories c ON leaf.path LIKE c.path || '%'
+             JOIN category_attributes ca ON ca.category_id = c.id
+             JOIN attributes a ON a.id = ca.attribute_id
+            WHERE leaf.id = ANY(?::uuid[])
+            ORDER BY leaf.id, ca.attribute_id, c.depth DESC`,
+          [leafIds]
+        )
+  const ruleRows = ruleResult.rows as RuleRow[]
+  const rulesOf = new Map<string, typeof ruleRows>()
+  for (const rule of ruleRows) {
+    const list = rulesOf.get(rule.category_id) ?? []
+    list.push(rule)
+    rulesOf.set(rule.category_id, list)
+  }
+  const codes = [...new Set(ruleRows.map((rule) => rule.code))]
+  const attributeRows: { code: string; name: string; input: AttributeInput }[] =
+    codes.length === 0
+      ? []
+      : await client
+          .from('attributes')
+          .whereIn('code', codes)
+          .orderBy('position')
+          .orderBy('code')
+          .select('code', 'name', 'input')
+  const valueRows: {
+    attribute_code: string
+    code: string
+    label: string
+    swatch_hex: string | null
+    is_active: boolean
+  }[] =
+    codes.length === 0
+      ? []
+      : await client
+          .from('attribute_values as v')
+          .join('attributes as a', 'a.id', 'v.attribute_id')
+          .whereIn('a.code', codes)
+          .orderBy('v.position')
+          .orderBy('v.code')
+          .select('a.code as attribute_code', 'v.code', 'v.label', 'v.swatch_hex', 'v.is_active')
+  const brandQuery = client
+    .from('brands')
+    .where('status', 'active')
+    .orderBy('name')
+    .orderBy('id')
+    .select('id', 'name', 'requires_moderation')
+  if (options.keepBrandId) brandQuery.orWhere('id', options.keepBrandId)
+  const brandRows: { id: string; name: string; requires_moderation: boolean }[] = await brandQuery
+  return {
+    categories: leaves.map(({ row, path }) => ({
+      id: row.id,
+      names: path.map((node) => node.name),
+      isActive: row.is_active && !row.has_child,
+      rules: (rulesOf.get(row.id) ?? [])
+        .sort((a, b) => a.attribute_position - b.attribute_position || a.code.localeCompare(b.code))
+        .map((rule) => ({ code: rule.code, usage: rule.usage, isRequired: rule.is_required })),
+    })),
+    attributes: attributeRows.map((attribute) => ({
+      code: attribute.code,
+      name: attribute.name,
+      input: attribute.input,
+      values: valueRows
+        .filter((value) => value.attribute_code === attribute.code)
+        .map((value) => ({
+          code: value.code,
+          label: value.label,
+          swatchHex: value.swatch_hex,
+          isActive: value.is_active,
+        })),
+    })),
+    brands: brandRows.map((brand) => ({
+      id: brand.id,
+      name: brand.name,
+      requiresModeration: brand.requires_moderation,
+    })),
+  }
+}

@@ -1,4 +1,8 @@
-import type { ProductEditorData, ProductListItem } from '#modules/catalog/queries'
+import type {
+  ProductEditorData,
+  ProductFormOptions,
+  ProductListItem,
+} from '#modules/catalog/queries'
 import { missingForSubmit } from '#modules/catalog/domain/submit_readiness'
 
 /*
@@ -67,5 +71,42 @@ export function sellerProductListItemJson(item: ProductListItem) {
     version: item.version,
     variant_count: item.variantCount,
     updated_at: item.updatedAt.toISOString(),
+  }
+}
+
+/*
+ * What the product form chooses from (`productFormOptions`; the seller
+ * product pages of docs/08 §2.5, R1-S part 2f-i): the three props
+ * `categories`, `attributes` and `brands`, public reference data. A
+ * category's `label` joins its names from the top level down with " › ".
+ */
+export function productFormOptionsJson(options: ProductFormOptions) {
+  return {
+    categories: options.categories.map((category) => ({
+      id: category.id,
+      label: category.names.join(' › '),
+      is_active: category.isActive,
+      rules: category.rules.map((rule) => ({
+        attribute_code: rule.code,
+        usage: rule.usage,
+        is_required: rule.isRequired,
+      })),
+    })),
+    attributes: options.attributes.map((attribute) => ({
+      code: attribute.code,
+      name: attribute.name,
+      input: attribute.input,
+      values: attribute.values.map((value) => ({
+        code: value.code,
+        label: value.label,
+        swatch_hex: value.swatchHex,
+        is_active: value.isActive,
+      })),
+    })),
+    brands: options.brands.map((brand) => ({
+      id: brand.id,
+      name: brand.name,
+      requires_moderation: brand.requiresModeration,
+    })),
   }
 }

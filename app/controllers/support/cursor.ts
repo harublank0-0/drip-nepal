@@ -151,3 +151,29 @@ function decode(text: string, sort: string, f: string, keyKind: 'timestamp' | 't
   }
   return { key: k[0], id: k[1] }
 }
+
+/*
+ * A list page's answer to a query parameter it refuses (docs/08 §7.2, the
+ * page equivalent of 400 `INVALID_QUERY_PARAMETER`): the page's own path
+ * with that parameter left out and the others kept, or null when `error`
+ * is not such a refusal. The query parser reads `status[]=x` and
+ * `status[a]=x` as `status`, so every key of that root goes; should
+ * nothing go (a shape the parser reads in some other way), the whole query
+ * does, so the redirect never points back at the same URL. A cursor made
+ * for the filters left in its query is refused on the next pass, so a page
+ * settles in at most two redirects.
+ */
+export function pathWithoutRefused(ctx: HttpContext, error: unknown): string | null {
+  if (!(error instanceof DomainError) || error.problemCode !== 'INVALID_QUERY_PARAMETER') {
+    return null
+  }
+  const refused = error.options.errors?.[0]?.field
+  const query = new URLSearchParams(ctx.request.parsedUrl.query ?? '')
+  const keys = [...new Set(query.keys())]
+  const gone = refused ? keys.filter((key) => key === refused || key.startsWith(`${refused}[`)) : []
+  const rest =
+    gone.length === 0
+      ? ''
+      : new URLSearchParams([...query].filter(([key]) => !gone.includes(key))).toString()
+  return ctx.request.url() + (rest ? `?${rest}` : '')
+}

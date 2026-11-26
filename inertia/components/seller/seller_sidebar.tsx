@@ -10,6 +10,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from '~/components/ui/sidebar'
+import { catalogViewable } from '@shared/ui/shop_access'
 import { t } from '~/lib/i18n'
 import { can, type CurrentShop, type ShopPermission } from '~/lib/permissions'
 
@@ -23,33 +24,46 @@ import { can, type CurrentShop, type ShopPermission } from '~/lib/permissions'
  * (`shop.shipping.manage`): each page itself opens for any member,
  * read-only without the permission, because it reads a `shop.member`
  * operation (`getSellerShop`, `getShopShipping`; 07 §4.5 "Page routes"),
- * but a link to a form one cannot save is noise. Links come from route
- * names through the typed client (docs/08 §2.1), with the shop's current
- * slug.
+ * but a link to a form one cannot save is noise. 2f-i adds Products, shown
+ * to the roles that may view products (`shop.products.view`) while the
+ * shop's status opens the catalogue (`catalogViewable`, the server's
+ * `products_view` gate), and current on the list, the new product and the
+ * editor. Links come from route names through the typed client (docs/08
+ * §2.1), with the shop's current slug.
  */
 type NavItem = {
-  route: 'seller.overview' | 'seller.shipping' | 'seller.settings'
-  component: string
+  route: 'seller.overview' | 'seller.products' | 'seller.shipping' | 'seller.settings'
+  // The page components the item is current on.
+  components: string[]
   label: Parameters<typeof t>[0]
   permission: ShopPermission | null
+  // Whether the shop's status opens the page; every status a member reaches when absent.
+  opens?: (status: string) => boolean
 }
 
 const ITEMS: NavItem[] = [
   {
     route: 'seller.overview',
-    component: 'seller/overview',
+    components: ['seller/overview'],
     label: 'seller.nav.overview',
     permission: null,
   },
   {
+    route: 'seller.products',
+    components: ['seller/products', 'seller/product_new', 'seller/product_edit'],
+    label: 'seller.nav.products',
+    permission: 'shop.products.view',
+    opens: catalogViewable,
+  },
+  {
     route: 'seller.shipping',
-    component: 'seller/shipping',
+    components: ['seller/shipping'],
     label: 'seller.nav.shipping',
     permission: 'shop.shipping.manage',
   },
   {
     route: 'seller.settings',
-    component: 'seller/settings',
+    components: ['seller/settings'],
     label: 'seller.nav.settings',
     permission: 'shop.profile.manage',
   },
@@ -60,7 +74,11 @@ export const SELLER_NAV_ID = 'seller-navigation'
 
 export function SellerSidebar({ shop }: { shop: CurrentShop }) {
   const { component } = usePage()
-  const items = ITEMS.filter((item) => item.permission === null || can(shop, item.permission))
+  const items = ITEMS.filter(
+    (item) =>
+      (item.permission === null || can(shop, item.permission)) &&
+      (item.opens === undefined || item.opens(shop.status))
+  )
 
   return (
     <Sidebar>
@@ -71,14 +89,16 @@ export function SellerSidebar({ shop }: { shop: CurrentShop }) {
             <SidebarGroupContent>
               <SidebarMenu>
                 {items.map((item) => {
-                  const current = component === item.component
+                  const current = item.components.includes(component)
+                  // The item's own page is the current page; a page below it marks it as current.
+                  const page = component === item.components[0]
                   return (
                     <SidebarMenuItem key={item.route}>
                       <SidebarMenuButton asChild isActive={current}>
                         <Link
                           route={item.route}
                           routeParams={{ shopSlug: shop.slug }}
-                          aria-current={current ? 'page' : undefined}
+                          aria-current={page ? 'page' : current ? 'true' : undefined}
                         >
                           {t(item.label)}
                         </Link>

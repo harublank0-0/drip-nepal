@@ -95,6 +95,10 @@ export interface ApiDefinition {
     overview: typeof routes['seller.overview']
     settings: typeof routes['seller.settings']
     shipping: typeof routes['seller.shipping']
+    products: typeof routes['seller.products'] & {
+      new: typeof routes['seller.products.new']
+      edit: typeof routes['seller.products.edit']
+    }
   }
   admin: {
     logistics: typeof routes['admin.logistics']
