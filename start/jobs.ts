@@ -1,3 +1,4 @@
+import { rebuildListings } from '#modules/catalog/jobs/rebuild_listings'
 import { refreshListing } from '#modules/catalog/jobs/refresh_listing'
 import { revokeSessions } from '#modules/identity/jobs/revoke_sessions'
 import { verifyAccount } from '#modules/logistics/jobs/verify_account'
@@ -38,6 +39,8 @@ export const JOB_HANDLERS: { [Q in QueueName]?: Handler<Q> } = {
   'identity.revoke_sessions': (payload) => revokeSessions(payload),
   // R1-S part 2a: the listing read model (docs/04a §7.12).
   'catalog.refresh_listing': (payload) => refreshListing(payload),
+  // R1-S part 2e-i: the nightly full recompute (docs/03 §9, ADR-0014).
+  'catalog.rebuild_listings': (_payload, attempt) => rebuildListings(attempt.requestId),
   // R1-S part 2d-ii: the image worker and the daily cleanup (ADR-0013 decisions 3 and 6).
   'media.process_upload': (payload) => processUpload(payload),
   'media.cleanup_abandoned': (_payload, attempt) => cleanupAbandoned(attempt.requestId),
@@ -58,6 +61,8 @@ export const JOB_SCHEDULES: { queue: QueueName; cron: string; data: object }[] =
   { queue: 'logistics.sync_branches', cron: '30 2 * * *', data: { provider_code: 'ncm' } },
   // Daily at 02:45 (docs/03 §9, ADR-0013 decision 6).
   { queue: 'media.cleanup_abandoned', cron: '45 2 * * *', data: {} },
+  // Daily at 03:30 (docs/03 §9, ADR-0014).
+  { queue: 'catalog.rebuild_listings', cron: '30 3 * * *', data: {} },
 ]
 
 /*

@@ -859,10 +859,10 @@ test.group('T-CAT-007 and T-CAT-108 the draft insert and the listing job', (grou
       published_at: db.raw('now()'),
     })
     const result = await refreshListing({ product_id: product.id })
-    assert.deepEqual(result, { outcome: 'not_visible', removed: 1 })
+    assert.deepEqual(result, { outcome: 'not_visible' })
     assert.lengthOf(await db.from('product_listings').where('product_id', product.id), 0)
     const again = await refreshListing({ product_id: product.id })
-    assert.deepEqual(again, { outcome: 'not_visible', removed: 0 }, 'a repeat is harmless')
+    assert.deepEqual(again, { outcome: 'not_visible' }, 'a repeat is harmless')
     const gone = await refreshListing({ product_id: '01929a50-0000-7000-8000-000000000000' })
     assert.equal(gone.outcome, 'no_product')
   })
