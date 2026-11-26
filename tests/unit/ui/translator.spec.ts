@@ -25,6 +25,7 @@ import { catalogsFor, LATER_CATALOGS } from '#shared/i18n/surface_catalogs'
 
 const CATALOG_DIR = join(process.cwd(), 'resources', 'lang', 'en')
 const FRONTEND_DIR = join(process.cwd(), 'inertia')
+const SHARED_DIR = join(process.cwd(), 'shared')
 
 function catalogs(): Record<string, Catalog> {
   return Object.fromEntries(
@@ -184,14 +185,27 @@ test.group('T-UI-034 message catalogs', () => {
         entry === join('layouts', 'seller_layout.tsx'),
     }
     const all = catalogs()
+    // The browser's code: inertia/, and the shared rules it imports.
+    const sources = [
+      ...readdirSync(FRONTEND_DIR, { recursive: true, encoding: 'utf8' }).map((entry) => ({
+        entry,
+        path: join(FRONTEND_DIR, entry),
+      })),
+      ...readdirSync(SHARED_DIR, { recursive: true, encoding: 'utf8' }).map((entry) => ({
+        entry: join('..', 'shared', entry),
+        path: join(SHARED_DIR, entry),
+      })),
+    ]
     for (const file of Object.keys(LATER_CATALOGS)) {
       const keys = new Set(Object.keys(all[file]).map((key) => `${file}.${key}`))
-      for (const entry of readdirSync(FRONTEND_DIR, { recursive: true, encoding: 'utf8' })) {
+      for (const { entry, path } of sources) {
         if (!/\.tsx?$/.test(entry) || surfaceFiles[file](entry)) continue
-        const source = readFileSync(join(FRONTEND_DIR, entry), 'utf8')
+        const source = readFileSync(path, 'utf8')
         for (const match of source.matchAll(/(['"`])([a-z_]+\.[a-z0-9_.]+)\1/g)) {
           assert.isFalse(keys.has(match[2]), `${entry} uses ${match[2]}`)
         }
+        // A key built at run time: a template literal that starts with the catalog's name.
+        assert.notMatch(source, new RegExp(`\`${file}\\.[^\`]*\\$\\{`), entry)
       }
     }
   })

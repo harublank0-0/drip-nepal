@@ -10,8 +10,8 @@ import { t } from '~/lib/i18n'
  * headers, inside a labelled region that is its own scroll container and is
  * keyboard-focusable, and one card per product below `md`, with the same
  * fields. The title is the row's only link, to the product editor; no row
- * click handler. Publishing, unpublishing, archiving and restoring join
- * as row actions with R1-S part 2e.
+ * click handler. Publishing, unpublishing, archiving and restoring (R1-S
+ * part 2e-ii's operations) join as row actions with part 2f-ii.
  */
 export type ProductListItem = {
   id: string
