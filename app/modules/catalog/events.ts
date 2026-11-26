@@ -7,10 +7,13 @@
  *   row from the source tables (docs/04a §7.12). Sent by every write to a
  *   product, drafts included, without a `singletonKey` (docs/09 §12.2
  *   decision 3).
+ * - `catalog.rebuild_listings`: daily, refreshes every product that is
+ *   published or still listed (R1-S part 2e-i).
  */
 declare module '#modules/platform/jobs' {
   interface JobPayloads {
     'catalog.refresh_listing': { product_id: string }
+    'catalog.rebuild_listings': Record<string, never>
   }
 }
 

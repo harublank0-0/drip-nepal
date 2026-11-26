@@ -149,6 +149,8 @@ export const JOB_QUEUES = {
   'identity.revoke_sessions': { ...QUEUE_DEFAULTS, retryLimit: 5 },
   // 5 retries with backoff (docs/03 §9; R1-S part 2a).
   'catalog.refresh_listing': { ...QUEUE_DEFAULTS, retryLimit: 5 },
+  // 03 §9: daily, 2 retries; one short transaction per product (at most 5,000, A-03), so 30 minutes.
+  'catalog.rebuild_listings': { ...QUEUE_DEFAULTS, retryLimit: 2, expireInSeconds: 1800 },
   // 03 §9: 3 retries from 30 s; image work gets 300 s before it counts as expired.
   'media.process_upload': {
     ...QUEUE_DEFAULTS,
@@ -188,6 +190,7 @@ export const DEAD_LETTER_RULES = {
   'notifications.send_email': 'redrive',
   'identity.revoke_sessions': 'redrive',
   'catalog.refresh_listing': 'redrive',
+  'catalog.rebuild_listings': 'discard',
   'media.process_upload': 'redrive',
   'media.cleanup_abandoned': 'discard',
   'logistics.verify_account': 'redrive',
