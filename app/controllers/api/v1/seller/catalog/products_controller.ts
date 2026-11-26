@@ -1,6 +1,7 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import type { QueryClientContract } from '@adonisjs/lucid/types/database'
 import { DomainError } from '#exceptions/domain_error'
+import { replaceProductMedia } from '#modules/catalog/actions/replace_product_media'
 import { updateProduct } from '#modules/catalog/actions/update_product'
 import type { ProductFields } from '#modules/catalog/actions/product_draft'
 import {
@@ -42,6 +43,11 @@ import {
   VARIANT_SET_MEMBERS,
   replaceProductVariantsValidator,
 } from '#validators/catalog/variants'
+import {
+  PRODUCT_MEDIA_ITEM_MEMBERS,
+  PRODUCT_MEDIA_MEMBERS,
+  replaceProductMediaValidator,
+} from '#validators/catalog/media'
 
 /*
  * The seller's product drafts (docs/06 §13.5; 01 FR-CAT-003, FR-CAT-011;
@@ -221,6 +227,35 @@ export default class ProductsController {
           priceMinor: variant.price_minor,
           compareAtPriceMinor: variant.compare_at_price_minor ?? null,
           weightGrams: variant.weight_grams ?? null,
+        })),
+      },
+      { actor: sellerActor(ctx), present: this.presenter(ctx.shop.id) }
+    )
+    setEtag(ctx, result.version)
+    return { data: result.body }
+  }
+
+  // `replaceProductMedia` ⟳ (docs/06 §13.5; R1-S part 2d-iii): the ordered gallery.
+  async replaceMedia(ctx: HttpContext) {
+    closedQuery(ctx, [])
+    assertShopPermission(ctx.shop, 'shop.products.edit')
+    assertShopGate(ctx.shop, 'products_edit')
+    const body = ctx.request.body()
+    assertKnownMembers(body, PRODUCT_MEDIA_MEMBERS)
+    assertKnownItemMembers(body, 'items', PRODUCT_MEDIA_ITEM_MEMBERS)
+    const input = await ctx.request.validateUsing(replaceProductMediaValidator)
+    const version = expectedVersion(ctx)
+    const result = await replaceProductMedia(
+      {
+        shopId: ctx.shop.id,
+        productId: ctx.params.productId,
+        expectedVersion: version,
+        items: input.items.map((item) => ({
+          // PostgreSQL returns UUIDs in lower case; an upper-case ID names the same row.
+          mediaAssetId: item.media_asset_id.toLowerCase(),
+          position: item.position,
+          altText: item.alt_text,
+          colorValueId: item.color_value_id?.toLowerCase() ?? null,
         })),
       },
       { actor: sellerActor(ctx), present: this.presenter(ctx.shop.id) }

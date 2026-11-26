@@ -157,7 +157,6 @@ x-pending-operations:
   - unpublishProduct
   - archiveProduct
   - restoreProduct
-  - replaceProductMedia
   - listShopOrders
   - getShopOrder
   - acceptShopOrder
@@ -2962,6 +2961,85 @@ paths:
                       media: []
                       missing_for_submit: [media, warranty_text]
                       updated_at: '2026-11-24T06:05:00.000Z'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422': { $ref: '#/components/responses/UnprocessableContent' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /api/v1/seller/shops/{shopSlug}/products/{productId}/media:
+    parameters:
+      - $ref: '#/components/parameters/ShopSlug'
+      - $ref: '#/components/parameters/ProductId'
+    put:
+      operationId: replaceProductMedia
+      tags: [Seller]
+      summary: Set the product's ordered images
+      description: |
+        Actor: `shop.products.edit`; shop status gate of 06 §4.4. Scope: `{productId}` is
+        looked up inside the shop; another shop's product is 404 (T-SEC-001). An
+        `items[].media_asset_id` that is not a product image of this shop, such as another
+        shop's asset, is 404 `NOT_FOUND`, exactly as a missing one (T-SEC-001 case (c),
+        ADR-0013). Status gate: a product in `pending_review`, `archived` or `blocked` is
+        409 `INVALID_STATE_TRANSITION`, as `updateProduct` answers (06 §13.5). A `rejected`
+        product moves back to `draft` in the same transaction (05 §6.10, AC-FR-CAT-006-2).
+        Whole-set replacement (PUT): `items` is the whole gallery, at most 12 (04a §7.14);
+        an empty list removes every image. Validation (422 `VALIDATION_FAILED`; the item
+        bounds first, then all of these at once): positions 1 to n with no gap or repeat, so
+        position 1 is the primary image (`positions` on `items`, AC-FR-MED-002-1); an asset
+        at most once (`duplicate` on `items.N.media_asset_id`); every asset `ready`
+        (`not_ready` on `items.N.media_asset_id`); a colour that is a `color` value of one
+        of the product's active variants (`not_allowed` on `items.N.color_value_id`,
+        AC-FR-MED-002-3); a product in `published` or `unpublished` keeps at least one image
+        (`required` on `items`, AC-FR-MED-002-1); `alt_text` at most 150 characters, trimmed
+        and NFC-normalised, a blank one stored as null (AC-FR-MED-002-2). A set equal to the
+        current one writes nothing and keeps the version. Otherwise: audit
+        `product.media_replace` (proposed) with the asset IDs before and after and the names
+        of what changed (`changed`), never the alt text, and `catalog.refresh_listing`.
+        Built R1-S part 2d-iii. T-MED-006, T-SEC-001, T-SEC-003, T-SEC-030, T-SEC-031.
+        Concurrency: ⟳ `If-Match` on `products.version`; bumps it. Missing, `*` or a list →
+        428; a stale version, a weak tag or any other value → 412 with `current` (06 §8,
+        §14.2). Not ⚷ (the version check stops a second apply, 06 §7.7). Release R1·M3.
+      x-release: R1·M3
+      x-permission: shop.products.edit
+      x-if-match: true
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReplaceProductMediaRequest' }
+            examples:
+              gallery:
+                summary: Two images, the second linked to a colour
+                value:
+                  items:
+                    - media_asset_id: 01929a60-0000-7000-8000-0000000000c1
+                      position: 1
+                      alt_text: Organic cotton crew tee, front
+                      color_value_id: null
+                    - media_asset_id: 01929a60-0000-7000-8000-0000000000c2
+                      position: 2
+                      alt_text: null
+                      color_value_id: 01928f00-2222-7000-8000-00000000b001
+      responses:
+        '200':
+          description: The product with its new gallery and the new `ETag`.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+            ETag: { $ref: '#/components/headers/ETag' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SellerProductResponse' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -8454,6 +8532,28 @@ components:
           maximum: 100000000
           description: Must be greater than `price_minor` (`product_variants_compare_at_check`).
         weight_grams: { type: [integer, 'null'], minimum: 1, maximum: 50000 }
+    ReplaceProductMediaRequest:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          description: |
+            The whole ordered gallery (`product_media`, 04a §7.14), at most 12; positions 1 to n.
+          maxItems: 12
+          items:
+            type: object
+            additionalProperties: false
+            required: [media_asset_id, position, alt_text]
+            properties:
+              media_asset_id: { $ref: '#/components/schemas/Uuid' }
+              position: { type: integer, minimum: 1, maximum: 12 }
+              alt_text: { type: [string, 'null'], maxLength: 150 }
+              color_value_id:
+                oneOf:
+                  - $ref: '#/components/schemas/Uuid'
+                  - type: 'null'
     ReplaceProductVariantsRequest:
       type: object
       additionalProperties: false
@@ -8498,8 +8598,8 @@ components:
     ProductMediaItem:
       type: object
       description: |
-        One ordered product image (fields from `replaceProductMedia`, 06 §13.5; full shape lands
-        with that PR). Bounds follow 04a §7.14: `position` 1–12 with 1 the primary image
+        One ordered product image, as `replaceProductMedia` writes it (06 §13.5; built R1-S part
+        2d-iii). Bounds follow 04a §7.14: `position` 1–12 with 1 the primary image
         (`product_media_position_check`), `alt_text` nullable and at most 150 characters
         (`product_media_alt_text_check`, AC-FR-MED-002-1/2).
       additionalProperties: false
@@ -10931,3 +11031,8 @@ components:
 #     uploads are built. A declared size above 10 MB is 422 `max`. The finish answers 202
 #     `processing`, 200 `rejected` with its reason, or 409 `upload_missing` when no object has
 #     arrived.
+# 61. `replaceProductMedia` moves from `x-pending-operations` to `paths`, written from the code
+#     (R1-S part 2d-iii, 2026-11-26; 06 note 71), with the new schema `ReplaceProductMediaRequest`.
+#     Its description adds what the build decided: positions 1 to n, `duplicate`, `not_ready`, a
+#     colour of an active variant, at least one image on a live product, an empty alt text stored
+#     as null, the no-op rule, the audit action with `changed` and the listing job.

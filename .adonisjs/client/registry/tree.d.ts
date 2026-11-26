@@ -39,6 +39,7 @@ export interface ApiDefinition {
   getShopProduct: typeof routes['getShopProduct']
   updateProduct: typeof routes['updateProduct']
   replaceProductVariants: typeof routes['replaceProductVariants']
+  replaceProductMedia: typeof routes['replaceProductMedia']
   listInventory: typeof routes['listInventory']
   adjustInventory: typeof routes['adjustInventory']
   stocktakeInventory: typeof routes['stocktakeInventory']
