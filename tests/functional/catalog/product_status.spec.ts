@@ -4,6 +4,7 @@ import db from '@adonisjs/lucid/services/db'
 import { ShopFactory } from '#database/factories/shop_factory'
 import { UserFactory } from '#database/factories/user_factory'
 import { refreshListing } from '#modules/catalog/jobs/refresh_listing'
+import { holdsAcceptedAgreement } from '#modules/shops/queries'
 import type { Browser } from '#tests/support/browser'
 import {
   audits,
@@ -255,6 +256,28 @@ test.group('T-CAT-013 publish, unpublish, archive and restore', (group) => {
     assert.deepInclude(fields(response.body), ['agreement', 'required'])
   })
 
+  test('T-CAT-013 an older agreement is accepted through its last Kathmandu day', async ({
+    assert,
+  }) => {
+    const owner = await UserFactory.create()
+    const shop = await ShopFactory.merge({ ownerUserId: owner.id }).create()
+    await db.table('shop_agreements').insert({
+      shop_id: shop.id,
+      agreement_version: '2026-01-01',
+      accepted_by_user_id: owner.id,
+      ip_hash: randomBytes(32),
+      request_id: randomUUID(),
+    })
+    const registry = [
+      { version: '2026-01-01', isFinal: true, acceptedUntil: '2026-12-31' },
+      { version: '2026-11-23', isFinal: true, acceptedUntil: null },
+    ]
+    const holds = (at: string) => holdsAcceptedAgreement(shop.id, { at: new Date(at), registry })
+    assert.isTrue(await holds('2026-12-31T18:14:00Z'), '23:59 on 31 December in Kathmandu')
+    // 00:15 on 1 January in Kathmandu, while it is still 31 December in UTC.
+    assert.isFalse(await holds('2026-12-31T18:30:00Z'))
+  })
+
   test('T-CAT-013 a draft is checked as a new product: an active leaf category and a selectable brand', async ({
     assert,
   }) => {
@@ -305,8 +328,9 @@ test.group('T-CAT-013 publish, unpublish, archive and restore', (group) => {
       .delete()
     const response = await act(w, productId, 'publish')
     assert.equal(response.status, 422, response.text)
-    // The request sent no attributes, so the stored order's index is not given.
+    // The request sent no attributes, so the stored order's index is not given; the message names it.
     assert.deepEqual(fields(response.body), [['attributes', 'not_allowed']])
+    assert.match(response.body.errors[0].message, new RegExp(`^${code}: `))
   })
 
   test('T-CAT-013 republishing runs the gate again, but keeps the category and brand it had', async ({
@@ -414,9 +438,9 @@ test.group('T-CAT-013 publish, unpublish, archive and restore', (group) => {
       .from('product_variants')
       .where({ product_id: other.productId, sku, status: 'active' })
     assert.lengthOf(otherVariants, 1)
-    const restoreRefused = await act(w, productId, 'unpublish')
-    assert.equal(restoreRefused.status, 409)
-    assert.deepEqual(restoreRefused.body.allowed_events, ['restore'])
+    const archivedRefused = await act(w, productId, 'unpublish')
+    assert.equal(archivedRefused.status, 409)
+    assert.deepEqual(archivedRefused.body.allowed_events, ['restore'])
 
     const restored = await act(w, productId, 'restore')
     assert.equal(restored.status, 200, restored.text)

@@ -26,10 +26,10 @@ test.group('T-CAT-013 seller agreement versions still accepted', () => {
     assert.notInclude(versionsAcceptedOn('2026-06-01', REGISTRY), '2026-01-01')
   })
 
-  test('T-CAT-013 the registry today accepts its current version', ({ assert }) => {
-    assert.include(
-      versionsAcceptedOn('2026-11-26'),
-      SELLER_AGREEMENTS[SELLER_AGREEMENTS.length - 1].version
-    )
+  test('T-CAT-013 in the registry, only the last version may leave acceptedUntil null', ({
+    assert,
+  }) => {
+    const open = SELLER_AGREEMENTS.filter((entry) => entry.acceptedUntil === null)
+    assert.deepEqual(open, [SELLER_AGREEMENTS[SELLER_AGREEMENTS.length - 1]])
   })
 })

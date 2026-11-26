@@ -129,13 +129,20 @@ async function publishGate(
       keptValueIds: new Set(keptRows.map((row) => row.attribute_value_id)),
     }
   )
-  // The request sent no attributes, so an indexed field (`attributes.N.…`) means nothing to the client.
-  const seen = new Set<string>()
+  /*
+   * The request sent no attributes, so an indexed field (`attributes.N.…`)
+   * means nothing to the client: it is given on `attributes`, its message
+   * naming the stored attribute.
+   */
   for (const problem of checked.problems) {
-    const field = problem.field.startsWith('attributes.') ? 'attributes' : problem.field
-    if (seen.has(`${field} ${problem.code}`)) continue
-    seen.add(`${field} ${problem.code}`)
-    problems.push({ ...problem, field })
+    const indexed = /^attributes\.(\d+)\./.exec(problem.field)
+    if (!indexed) {
+      problems.push(problem)
+      continue
+    }
+    const code = editor.attributes[Number(indexed[1])]?.code
+    const message = code ? `${code}: ${problem.message}` : problem.message
+    problems.push({ ...problem, field: 'attributes', message })
   }
   const missingAxes = [...checked.rules.values()]
     .filter((rule) => rule.usage === 'variant_axis' && rule.isRequired)

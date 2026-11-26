@@ -3058,31 +3058,29 @@ paths:
       summary: Publish a draft, or republish an unpublished product
       description: |
         Actor: `shop.products.publish`; shop status gate of 06 §4.4. `draft` or `unpublished` →
-        `published` (05 §6.10). A `draft` is published directly only in a shop in `post` review
-        mode and for a brand without `requires_moderation`; otherwise it is 409
+        `published` (05 §6.10). A `draft` is published directly only in a shop in `post` review mode
+        and for a brand without `requires_moderation`; otherwise it is 409
         `INVALID_STATE_TRANSITION` with `allowed_events: [submit]` (AC-J10-07, 04 §3.10).
         Publication gate (AC-FR-CAT-005-2), one 422 `VALIDATION_FAILED` listing every missing item,
         each with code `required`: `agreement` (no agreement for a version the platform still
         accepts: the current one, or an older one up to its `acceptedUntil`, AC-FR-SHOP-013-3),
-        `variants` (an active variant, every active variant priced above zero), `media` (a
-        `ready` image), the disclosures (`description`, `manufacturer_name`, `warranty_text`,
+        `variants` (an active variant, every active variant priced above zero), `media` (a `ready`
+        image), the disclosures (`description`, `manufacturer_name`, `warranty_text`,
         `care_and_precautions`, `country_of_origin` for an imported product), the category's
-        required attributes (`attributes`) and axes (`option_axes`), and `shipping` (coverage with
-        a rate for every covered zone). A rule that fails gives its own code: an origin or
-        attribute rule (an attribute's on `attributes`, without an index) and, for a draft only,
-        `category_id` or `brand_id` `invalid` (a category no longer an active leaf, a brand no
-        longer `active`). An unpublished product keeps its category and brand, and is republished
-        even if its brand is now watch-listed.
-        `published_at` is set to now, and `first_published_at` keeps the first time.
-        Scope: `{productId}` is looked up inside the shop; another shop's product is 404
+        required attributes (`attributes`) and axes (`option_axes`), and `shipping` (coverage with a
+        rate for every covered zone). A rule that fails gives its own code: an origin or attribute
+        rule (an attribute's on `attributes`, without an index) and, for a draft only, `category_id`
+        or `brand_id` `invalid` (a category no longer an active leaf, a brand no longer `active`).
+        An unpublished product keeps its category and brand, and is republished even if its brand is
+        now watch-listed. `published_at` is set to now, and `first_published_at` keeps the first
+        time. Scope: `{productId}` is looked up inside the shop; another shop's product is 404
         (T-SEC-001). No query (400 `INVALID_QUERY_PARAMETER`) and no body: any member is 422
-        `unknown_field` (T-SEC-003). A
-        compare-and-set on `status` and `version` moves the product and bumps its version, so an
-        editor holding the old `ETag` gets 412 on its next edit. Audit `product.publish` (proposed) with
-        the status from and to, and `catalog.refresh_listing`. Not ⚷ and not ⟳: the
-        compare-and-set refuses a second apply with 409 `INVALID_STATE_TRANSITION`, whose
-        `allowed_events` names what the current status allows (05 §6.10). Built R1-S part 2e-ii.
-        T-CAT-013, T-SEC-001, T-SEC-003, T-SEC-030, T-SEC-031. Release R1·M3.
+        `unknown_field` (T-SEC-003). A compare-and-set on `status` and `version` moves the product
+        and bumps its version, so an editor holding the old `ETag` gets 412 on its next edit. Audit
+        `product.publish` (proposed) with the status from and to, and `catalog.refresh_listing`. Not
+        ⚷ and not ⟳: the compare-and-set refuses a second apply with 409 `INVALID_STATE_TRANSITION`,
+        whose `allowed_events` names what the current status allows (05 §6.10). Built R1-S part
+        2e-ii. T-CAT-013, T-SEC-001, T-SEC-003, T-SEC-030, T-SEC-031. Release R1·M3.
       x-release: R1·M3
       x-permission: shop.products.publish
       parameters:
@@ -3115,14 +3113,13 @@ paths:
       tags: [Seller]
       summary: Hide a published product
       description: |
-        Actor: `shop.products.publish`; shop status gate of 06 §4.4. `published` → `unpublished`
-        (05 §6.10, AC-FR-CAT-007-1): the listing row is removed by the listing job.
-        Scope: `{productId}` is looked up inside the shop; another shop's product is 404
-        (T-SEC-001). No query (400 `INVALID_QUERY_PARAMETER`) and no body: any member is 422
-        `unknown_field` (T-SEC-003). A
+        Actor: `shop.products.publish`; shop status gate of 06 §4.4. `published` → `unpublished` (05
+        §6.10, AC-FR-CAT-007-1): the listing row is removed by the listing job. Scope: `{productId}`
+        is looked up inside the shop; another shop's product is 404 (T-SEC-001). No query (400
+        `INVALID_QUERY_PARAMETER`) and no body: any member is 422 `unknown_field` (T-SEC-003). A
         compare-and-set on `status` and `version` moves the product and bumps its version, so an
-        editor holding the old `ETag` gets 412 on its next edit. Audit `product.unpublish` (proposed) with
-        the status from and to, and `catalog.refresh_listing`. Not ⚷ and not ⟳: the
+        editor holding the old `ETag` gets 412 on its next edit. Audit `product.unpublish`
+        (proposed) with the status from and to, and `catalog.refresh_listing`. Not ⚷ and not ⟳: the
         compare-and-set refuses a second apply with 409 `INVALID_STATE_TRANSITION`, whose
         `allowed_events` names what the current status allows (05 §6.10). Built R1-S part 2e-ii.
         T-CAT-013, T-SEC-001, T-SEC-003, T-SEC-030, T-SEC-031. Release R1·M3.
@@ -3161,16 +3158,14 @@ paths:
         Actor: `shop.products.edit`; shop status gate of 06 §4.4. `published` or `unpublished` →
         `archived` (05 §6.10, AC-FR-CAT-007-2). Every active variant is archived in the same
         transaction, which frees its SKU; its stock row stays (04a §7.6). The listing row is
-        removed.
-        Scope: `{productId}` is looked up inside the shop; another shop's product is 404
+        removed. Scope: `{productId}` is looked up inside the shop; another shop's product is 404
         (T-SEC-001). No query (400 `INVALID_QUERY_PARAMETER`) and no body: any member is 422
-        `unknown_field` (T-SEC-003). A
-        compare-and-set on `status` and `version` moves the product and bumps its version, so an
-        editor holding the old `ETag` gets 412 on its next edit. Audit `product.archive` (proposed) with
-        the status from and to, and `catalog.refresh_listing`. Not ⚷ and not ⟳: the
-        compare-and-set refuses a second apply with 409 `INVALID_STATE_TRANSITION`, whose
-        `allowed_events` names what the current status allows (05 §6.10). Built R1-S part 2e-ii.
-        T-CAT-013, T-SEC-001, T-SEC-003, T-SEC-030, T-SEC-031. Release R1·M3.
+        `unknown_field` (T-SEC-003). A compare-and-set on `status` and `version` moves the product
+        and bumps its version, so an editor holding the old `ETag` gets 412 on its next edit. Audit
+        `product.archive` (proposed) with the status from and to, and `catalog.refresh_listing`. Not
+        ⚷ and not ⟳: the compare-and-set refuses a second apply with 409 `INVALID_STATE_TRANSITION`,
+        whose `allowed_events` names what the current status allows (05 §6.10). Built R1-S part
+        2e-ii. T-CAT-013, T-SEC-001, T-SEC-003, T-SEC-030, T-SEC-031. Release R1·M3.
       x-release: R1·M3
       x-permission: shop.products.edit
       parameters:
@@ -3205,16 +3200,14 @@ paths:
       description: |
         Actor: `shop.products.edit`; shop status gate of 06 §4.4. `archived` → `draft` (05 §6.10,
         AC-FR-CAT-007-2). The variants stay archived; `replaceProductVariants` re-activates them
-        (04a §7.9).
-        Scope: `{productId}` is looked up inside the shop; another shop's product is 404
+        (04a §7.9). Scope: `{productId}` is looked up inside the shop; another shop's product is 404
         (T-SEC-001). No query (400 `INVALID_QUERY_PARAMETER`) and no body: any member is 422
-        `unknown_field` (T-SEC-003). A
-        compare-and-set on `status` and `version` moves the product and bumps its version, so an
-        editor holding the old `ETag` gets 412 on its next edit. Audit `product.restore` (proposed) with
-        the status from and to, and `catalog.refresh_listing`. Not ⚷ and not ⟳: the
-        compare-and-set refuses a second apply with 409 `INVALID_STATE_TRANSITION`, whose
-        `allowed_events` names what the current status allows (05 §6.10). Built R1-S part 2e-ii.
-        T-CAT-013, T-SEC-001, T-SEC-003, T-SEC-030, T-SEC-031. Release R1·M3.
+        `unknown_field` (T-SEC-003). A compare-and-set on `status` and `version` moves the product
+        and bumps its version, so an editor holding the old `ETag` gets 412 on its next edit. Audit
+        `product.restore` (proposed) with the status from and to, and `catalog.refresh_listing`. Not
+        ⚷ and not ⟳: the compare-and-set refuses a second apply with 409 `INVALID_STATE_TRANSITION`,
+        whose `allowed_events` names what the current status allows (05 §6.10). Built R1-S part
+        2e-ii. T-CAT-013, T-SEC-001, T-SEC-003, T-SEC-030, T-SEC-031. Release R1·M3.
       x-release: R1·M3
       x-permission: shop.products.edit
       parameters:
