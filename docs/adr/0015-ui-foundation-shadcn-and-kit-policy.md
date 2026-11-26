@@ -6,14 +6,16 @@ Reviewed: 2026-09-25 · consistency review 2026-09-30 to 2026-10-04
 
 ## Status
 
-| Field              | Value                                                                                                                                                                       |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Decision status    | **Accepted** (from Q7). Committing any kit item is gated on **VX-13**; the policy holds for OD-22 option (a), and option (b) would need a superseding ADR.                  |
-| Date               | 2026-09-25                                                                                                                                                                  |
-| Deciders           | Product owner (Q7), lead developer                                                                                                                                          |
-| Supersedes         | —                                                                                                                                                                           |
-| Superseded by      | —                                                                                                                                                                           |
-| Related open items | **VX-13** (free kit items in a public MIT repo), **OD-22** (repo visibility and kit tier), OD-23 (decided 2026-09-30: keep MIT; M0 sets `package.json` to MIT), OD-25, R-15 |
+| Field              | Value                                                                                                                                                                                                                                                        |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Decision status    | **Accepted** (from Q7). Committing any kit item is gated on **VX-13**; the policy holds for OD-22 option (a), and option (b) would need a superseding ADR.                                                                                                   |
+| Date               | 2026-09-25                                                                                                                                                                                                                                                   |
+| Deciders           | Product owner (Q7), lead developer                                                                                                                                                                                                                           |
+| Supersedes         | —                                                                                                                                                                                                                                                            |
+| Superseded by      | —                                                                                                                                                                                                                                                            |
+| Related open items | **VX-13** (free kit items in a public repo whose own code is all rights reserved), **OD-22** (repo visibility and kit tier), OD-23 (decided 2026-09-30: keep MIT; re-decided 2026-11-26: all rights reserved, `package.json` says `UNLICENSED`), OD-25, R-15 |
+
+Edited 2026-11-26 ([risks §2.3](../risks-and-open-decisions.md#23-decision-log)): OD-23 was re-decided as option (b). The code is proprietary, all rights reserved, and the repository stays public. The revisit trigger "the OD-23 ruling is reversed" therefore fired, but no decision here changes: the kit's terms turn on the source being public, not on its licence, so decisions 1 to 5 stand and no superseding ADR is written. VX-13 now asks whether free items may be committed to a public repository whose own code is all rights reserved. The Related open items row, decision 4 and the revisit list follow; the Q7 quote and the Context keep their 2026-09-25 wording.
 
 ## Context
 
@@ -40,7 +42,7 @@ Reviewed: 2026-09-25 · consistency review 2026-09-30 to 2026-10-04
 1. **Remove `@commercn`** from `components.json` in M0 (RF-39).
 2. **Primitives: shadcn/ui core, style `radix-nova`**, copied into `inertia/components/ui` and owned by the repo, with minimal local edits. A quarterly chore runs `shadcn add <component> --diff` with the pinned CLI and merges changes by hand. `~/lib/utils` stays the only `cn` import path [Assumption].
 3. **Storefront commerce blocks are DripNepal-owned** components in `inertia/components/<domain>/`, composed from shadcn primitives, starting from `inertia/components/commerce`: product card, gallery, variant picker, cart grouped by shop, checkout steps, filters, order timeline, seller order table. Premium kit blocks are **visual reference only**: never copied, downloaded or pasted.
-4. **Free kit items are gated on VX-13.** Nothing from `@shadcnuikit`, not even a free item, is committed until Bundui (contact@shadcnuikit.com) confirms in writing that free items may be redistributed in a public MIT repo; the reply is stored with the risk register. Once cleared, each item is previewed with `--dry-run`, moved from repo-root `components/` into `inertia/components/kit/` with a provenance header (source URL, date, licence reference), given its missing primitives and npm dependencies by hand, has `next/*` imports replaced with Inertia `Link` and the project image component, is rewired to TanStack Form, and gets an accessibility review.
+4. **Free kit items are gated on VX-13.** Nothing from `@shadcnuikit`, not even a free item, is committed until Bundui (contact@shadcnuikit.com) confirms in writing that free items may be redistributed in a public repository whose own code is all rights reserved (MIT until 2026-11-26, OD-23); the reply is stored with the risk register. Once cleared, each item is previewed with `--dry-run`, moved from repo-root `components/` into `inertia/components/kit/` with a provenance header (source URL, date, licence reference), given its missing primitives and npm dependencies by hand, has `next/*` imports replaced with Inertia `Link` and the project image component, is rewired to TanStack Form, and gets an accessibility review.
 5. **Premium kit code is never committed while the repository is public.** Going private and buying Pro or Team (OD-22 option b) needs a superseding ADR covering seats, `SHADCNUIKIT_API_KEY` in env only, and whether a private package counts as "closed-source" (unverified).
 6. **Kit dashboards and Page Builder output are reference only**, never ported wholesale. No vendor page-builder feature is built from kit blocks, because of the builder-tools restriction.
 7. **Registry hygiene.** Every third-party `shadcn add` is previewed with `--dry-run`; `components.json` diffs get explicit review; tokens appear only as `${VAR}`.
@@ -77,7 +79,7 @@ Reviewed: 2026-09-25 · consistency review 2026-09-30 to 2026-10-04
 
 ## When to revisit
 
-- OD-22 chooses "private + paid tier", or the OD-23 ruling (keep MIT, decided 2026-09-30) is reversed: write a superseding ADR.
+- OD-22 chooses "private + paid tier", or the repository goes private: write a superseding ADR. Until 2026-11-26 this trigger was a reversal of OD-23's MIT ruling; that ruling was replaced without changing a decision here (dated note above).
 - VX-13 is answered: record the reply or refusal here.
 - Dashboard work exceeds 10 developer-days that premium blocks would have covered [Assumption]: re-open OD-22 with that data.
 - shadcn deprecates Radix, or the OD-25 Inertia upgrade changes `Link`/`Head` usage.

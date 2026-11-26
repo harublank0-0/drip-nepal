@@ -96,6 +96,8 @@ Every other path answers 404 until M1 to M7 add the pages. The `dripnepal-run` a
 
 ## Contributing
 
+DripNepal does not accept outside contributions. This section is for its own developers.
+
 1. Read [AGENTS.md](AGENTS.md) and the documents that own what you are changing ([docs/README.md §3](docs/README.md#3-where-to-find)).
 2. Build what the current milestone of [docs/12](docs/12-roadmap-and-backlog.md) schedules, to the rules of [docs/09](docs/09-code-structure-and-engineering-standards.md).
 3. When the code needs a rule to change, change the owning document in the same pull request ([docs/README.md §4](docs/README.md#4-changing-a-document)).
