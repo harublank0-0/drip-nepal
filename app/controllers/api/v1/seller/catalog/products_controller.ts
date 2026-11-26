@@ -1,6 +1,12 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import type { QueryClientContract } from '@adonisjs/lucid/types/database'
 import { DomainError } from '#exceptions/domain_error'
+import {
+  archiveProduct,
+  publishProduct,
+  restoreProduct,
+  unpublishProduct,
+} from '#modules/catalog/actions/product_status'
 import { replaceProductMedia } from '#modules/catalog/actions/replace_product_media'
 import { updateProduct } from '#modules/catalog/actions/update_product'
 import type { ProductFields } from '#modules/catalog/actions/product_draft'
@@ -13,7 +19,11 @@ import {
 import { createProduct } from '#modules/inventory/actions/create_product'
 import { replaceProductVariants } from '#modules/inventory/actions/replace_product_variants'
 import { onHandOf } from '#modules/inventory/queries'
-import { assertShopGate, assertShopPermission } from '#modules/shops/permissions'
+import {
+  assertShopGate,
+  assertShopPermission,
+  type ShopPermission,
+} from '#modules/shops/permissions'
 import {
   sellerProductJson,
   sellerProductListItemJson,
@@ -258,6 +268,42 @@ export default class ProductsController {
           colorValueId: item.color_value_id?.toLowerCase() ?? null,
         })),
       },
+      { actor: sellerActor(ctx), present: this.presenter(ctx.shop.id) }
+    )
+    setEtag(ctx, result.version)
+    return { data: result.body }
+  }
+
+  // `publishProduct`, `unpublishProduct`, `archiveProduct`, `restoreProduct` (06 §13.5; R1-S part 2e-ii).
+  publish(ctx: HttpContext) {
+    return this.changeStatus(ctx, 'shop.products.publish', publishProduct)
+  }
+
+  unpublish(ctx: HttpContext) {
+    return this.changeStatus(ctx, 'shop.products.publish', unpublishProduct)
+  }
+
+  archive(ctx: HttpContext) {
+    return this.changeStatus(ctx, 'shop.products.edit', archiveProduct)
+  }
+
+  restore(ctx: HttpContext) {
+    return this.changeStatus(ctx, 'shop.products.edit', restoreProduct)
+  }
+
+  // The four take no query and no body; the answer is the product with its new `ETag`.
+  private async changeStatus(
+    ctx: HttpContext,
+    permission: ShopPermission,
+    // The four share one signature.
+    action: typeof publishProduct
+  ) {
+    closedQuery(ctx, [])
+    assertShopPermission(ctx.shop, permission)
+    assertShopGate(ctx.shop, 'products_edit')
+    assertKnownMembers(ctx.request.body(), [])
+    const result = await action(
+      { shopId: ctx.shop.id, productId: ctx.params.productId },
       { actor: sellerActor(ctx), present: this.presenter(ctx.shop.id) }
     )
     setEtag(ctx, result.version)

@@ -3,7 +3,12 @@ import type { QueryClientContract } from '@adonisjs/lucid/types/database'
 import { InvariantViolation } from '#exceptions/programming_errors'
 import type { ShopMemberRole } from '#modules/shops/domain/shop_member_role'
 import { hasShopSlugShape } from '#modules/shops/domain/shop_slug'
-import { CURRENT_SELLER_AGREEMENT } from '#modules/shops/domain/seller_agreements'
+import {
+  CURRENT_SELLER_AGREEMENT,
+  SELLER_AGREEMENTS,
+  versionsAcceptedOn,
+  type SellerAgreementVersion,
+} from '#modules/shops/domain/seller_agreements'
 import { shopShipping, type ShopShippingView } from '#modules/logistics/queries'
 import { settingIn } from '#modules/platform/settings'
 
@@ -208,12 +213,41 @@ export async function hasDefaultPickupAddress(shopId: string) {
 /*
  * Whether the shop holds an agreement row for the current seller agreement
  * version (docs/04a §6.4): the overview's "before you can sell" item, read
- * alone so the page reads no profile column it does not show.
+ * alone so the page reads no profile column it does not show. During a
+ * grace period it says the agreement is missing while the publish gate
+ * (`holdsAcceptedAgreement`) still accepts the older one: the prompt to
+ * accept the new version.
  */
 export async function acceptedCurrentAgreement(shopId: string) {
   const row = await db
     .from('shop_agreements')
     .where({ shop_id: shopId, agreement_version: CURRENT_SELLER_AGREEMENT.version })
+    .select('id')
+    .first()
+  return row !== null
+}
+
+const KATHMANDU_DAY = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kathmandu' })
+
+/*
+ * Whether the shop holds an agreement row for a version the platform still
+ * accepts on the Kathmandu date of `at`, now by default (AC-FR-SHOP-013-3,
+ * docs/04a §6.4): the publish gate's agreement item, read inside its
+ * transaction (`client`). `registry` is for tests.
+ */
+export async function holdsAcceptedAgreement(
+  shopId: string,
+  options: {
+    client?: QueryClientContract
+    at?: Date
+    registry?: readonly SellerAgreementVersion[]
+  } = {}
+) {
+  const day = KATHMANDU_DAY.format(options.at ?? new Date())
+  const row = await (options.client ?? db.connection())
+    .from('shop_agreements')
+    .where('shop_id', shopId)
+    .whereIn('agreement_version', versionsAcceptedOn(day, options.registry ?? SELLER_AGREEMENTS))
     .select('id')
     .first()
   return row !== null

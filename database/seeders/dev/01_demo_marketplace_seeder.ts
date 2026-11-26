@@ -21,8 +21,10 @@ import { placeholderCiphertext } from '#database/factories/placeholder_ciphertex
  *   and the demo approver, recorded as the user who approved `demo-pasal`
  *   (it is not staff); no other user;
  * - the owner's active shop `demo-pasal`, with the manager and fulfiller as
- *   members, and a second shop `demo-pasal-2` still in `pending_review`, both
- *   with a contact address under the same domain;
+ *   members, in `post` review mode like the R1-S owner's shop, so its drafts
+ *   are published directly (docs/09 §9.8), and a second shop `demo-pasal-2`
+ *   still in `pending_review`, both with a contact address under the same
+ *   domain;
  * - for each active staff account without TOTP, a placeholder enrolment that
  *   decrypts under no key, in place of M1's enrolment, so the
  *   development-only sign-in can open the admin pages (docs/07 §3.13). It
@@ -114,6 +116,9 @@ export default class DemoMarketplaceSeeder extends DevSeeder {
         approvedBy: demo.active ? users.approver.id : null,
       })
       const shop = await (demo.active ? builder.apply('active') : builder).create()
+      if (demo.active) {
+        await trx.from('shops').where('id', shop.id).update({ product_review_mode: 'post' })
+      }
       for (const member of demo.members) {
         await trx.insertQuery().table('shop_memberships').insert({
           shop_id: shop.id,

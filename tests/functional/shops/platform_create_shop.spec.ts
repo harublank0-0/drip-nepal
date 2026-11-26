@@ -111,7 +111,11 @@ test.group('T-SHOP-007 platform:create-shop', () => {
     assert.equal(shop.approved_by, owner.id)
     assert.isNotNull(shop.approved_at)
     assert.equal(shop.commission_rate_bp, 0, 'A-62')
-    assert.equal(shop.product_review_mode, 'pre')
+    assert.equal(
+      shop.product_review_mode,
+      'post',
+      'its products are published directly (R1-S part 2e-ii)'
+    )
     assert.equal(shop.name, 'Drip Owner Shop')
     assert.match(shop.contact_email, /^shop\.contact\.\d+@example\.com$/)
     assert.equal(shop.contact_phone_e164, '+97714123456')
