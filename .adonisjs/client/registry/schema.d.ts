@@ -415,6 +415,54 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/seller/catalog/products_controller').default['replaceMedia']>>> | { status: 422; response: { errors: SimpleError[] } }
     }
   }
+  'publishProduct': {
+    methods: ["POST"]
+    pattern: '/api/v1/seller/shops/:shopSlug/products/:productId/publish'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue, ParamValue]
+      params: { shopSlug: ParamValue; productId: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/api/v1/seller/catalog/products_controller').default['publish']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/seller/catalog/products_controller').default['publish']>>>
+    }
+  }
+  'unpublishProduct': {
+    methods: ["POST"]
+    pattern: '/api/v1/seller/shops/:shopSlug/products/:productId/unpublish'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue, ParamValue]
+      params: { shopSlug: ParamValue; productId: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/api/v1/seller/catalog/products_controller').default['unpublish']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/seller/catalog/products_controller').default['unpublish']>>>
+    }
+  }
+  'archiveProduct': {
+    methods: ["POST"]
+    pattern: '/api/v1/seller/shops/:shopSlug/products/:productId/archive'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue, ParamValue]
+      params: { shopSlug: ParamValue; productId: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/api/v1/seller/catalog/products_controller').default['archive']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/seller/catalog/products_controller').default['archive']>>>
+    }
+  }
+  'restoreProduct': {
+    methods: ["POST"]
+    pattern: '/api/v1/seller/shops/:shopSlug/products/:productId/restore'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue, ParamValue]
+      params: { shopSlug: ParamValue; productId: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/api/v1/seller/catalog/products_controller').default['restore']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/seller/catalog/products_controller').default['restore']>>>
+    }
+  }
   'listInventory': {
     methods: ["GET","HEAD"]
     pattern: '/api/v1/seller/shops/:shopSlug/inventory'

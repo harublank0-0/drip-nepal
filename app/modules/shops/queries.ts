@@ -208,10 +208,14 @@ export async function hasDefaultPickupAddress(shopId: string) {
 /*
  * Whether the shop holds an agreement row for the current seller agreement
  * version (docs/04a §6.4): the overview's "before you can sell" item, read
- * alone so the page reads no profile column it does not show.
+ * alone so the page reads no profile column it does not show, and the
+ * publish gate's agreement item, inside its transaction (`client`).
  */
-export async function acceptedCurrentAgreement(shopId: string) {
-  const row = await db
+export async function acceptedCurrentAgreement(
+  shopId: string,
+  options: { client?: QueryClientContract } = {}
+) {
+  const row = await (options.client ?? db.connection())
     .from('shop_agreements')
     .where({ shop_id: shopId, agreement_version: CURRENT_SELLER_AGREEMENT.version })
     .select('id')

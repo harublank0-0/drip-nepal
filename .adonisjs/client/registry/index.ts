@@ -210,6 +210,30 @@ const routes = {
     tokens: [{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/media","type":0,"val":"api","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/media","type":0,"val":"v1","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/media","type":0,"val":"seller","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/media","type":0,"val":"shops","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/media","type":1,"val":"shopSlug","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/media","type":0,"val":"products","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/media","type":1,"val":"productId","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/media","type":0,"val":"media","end":""}],
     types: placeholder as Registry['replaceProductMedia']['types'],
   },
+  'publishProduct': {
+    methods: ["POST"],
+    pattern: '/api/v1/seller/shops/:shopSlug/products/:productId/publish',
+    tokens: [{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/publish","type":0,"val":"api","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/publish","type":0,"val":"v1","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/publish","type":0,"val":"seller","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/publish","type":0,"val":"shops","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/publish","type":1,"val":"shopSlug","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/publish","type":0,"val":"products","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/publish","type":1,"val":"productId","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/publish","type":0,"val":"publish","end":""}],
+    types: placeholder as Registry['publishProduct']['types'],
+  },
+  'unpublishProduct': {
+    methods: ["POST"],
+    pattern: '/api/v1/seller/shops/:shopSlug/products/:productId/unpublish',
+    tokens: [{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/unpublish","type":0,"val":"api","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/unpublish","type":0,"val":"v1","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/unpublish","type":0,"val":"seller","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/unpublish","type":0,"val":"shops","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/unpublish","type":1,"val":"shopSlug","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/unpublish","type":0,"val":"products","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/unpublish","type":1,"val":"productId","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/unpublish","type":0,"val":"unpublish","end":""}],
+    types: placeholder as Registry['unpublishProduct']['types'],
+  },
+  'archiveProduct': {
+    methods: ["POST"],
+    pattern: '/api/v1/seller/shops/:shopSlug/products/:productId/archive',
+    tokens: [{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/archive","type":0,"val":"api","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/archive","type":0,"val":"v1","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/archive","type":0,"val":"seller","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/archive","type":0,"val":"shops","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/archive","type":1,"val":"shopSlug","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/archive","type":0,"val":"products","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/archive","type":1,"val":"productId","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/archive","type":0,"val":"archive","end":""}],
+    types: placeholder as Registry['archiveProduct']['types'],
+  },
+  'restoreProduct': {
+    methods: ["POST"],
+    pattern: '/api/v1/seller/shops/:shopSlug/products/:productId/restore',
+    tokens: [{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/restore","type":0,"val":"api","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/restore","type":0,"val":"v1","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/restore","type":0,"val":"seller","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/restore","type":0,"val":"shops","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/restore","type":1,"val":"shopSlug","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/restore","type":0,"val":"products","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/restore","type":1,"val":"productId","end":""},{"old":"/api/v1/seller/shops/:shopSlug/products/:productId/restore","type":0,"val":"restore","end":""}],
+    types: placeholder as Registry['restoreProduct']['types'],
+  },
   'listInventory': {
     methods: ["GET","HEAD"],
     pattern: '/api/v1/seller/shops/:shopSlug/inventory',

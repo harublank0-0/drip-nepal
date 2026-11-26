@@ -38,6 +38,10 @@ export type ScannedRoutes = {
     'updateProduct': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'productId': ParamValue} }
     'replaceProductVariants': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'productId': ParamValue} }
     'replaceProductMedia': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'productId': ParamValue} }
+    'publishProduct': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'productId': ParamValue} }
+    'unpublishProduct': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'productId': ParamValue} }
+    'archiveProduct': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'productId': ParamValue} }
+    'restoreProduct': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'productId': ParamValue} }
     'listInventory': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'adjustInventory': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'variantId': ParamValue} }
     'stocktakeInventory': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'variantId': ParamValue} }
@@ -183,6 +187,10 @@ export type ScannedRoutes = {
     'confirmTotpEnrollment': { paramsTuple?: []; params?: {} }
     'createAddress': { paramsTuple?: []; params?: {} }
     'createProduct': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
+    'publishProduct': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'productId': ParamValue} }
+    'unpublishProduct': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'productId': ParamValue} }
+    'archiveProduct': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'productId': ParamValue} }
+    'restoreProduct': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'productId': ParamValue} }
     'adjustInventory': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'variantId': ParamValue} }
     'stocktakeInventory': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'variantId': ParamValue} }
     'createMediaUpload': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }

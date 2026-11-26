@@ -20,7 +20,9 @@ import { CURRENT_SELLER_AGREEMENT } from '#modules/shops/domain/seller_agreement
  * 2. the slug must be free: no shop holds it and no shop's retired slug is
  *    it (`slug_redirects`, 04a §6.1, T-SHOP-106);
  * 3. the shop is inserted `pending_review` with `commission_rate_bp = 0`
- *    (A-62: the owner's shop snapshots a zero commission during R1-S);
+ *    (A-62: the owner's shop snapshots a zero commission during R1-S) and
+ *    `product_review_mode = 'post'`, so its products are published directly
+ *    and no moderation queue is needed (12 §9 part 2, AC-FR-CAT-005-1);
  * 4. a `shop_agreements` row records the owner's acceptance of the current
  *    seller agreement version, a draft while OD-04, OD-05 and OD-11 are
  *    open (04a §6.4); `ip_hash` is `HOST_IP_HASH` and `request_id` the
@@ -125,6 +127,7 @@ export default class BootstrapOwnerShop {
             slug: input.slug,
             status: 'pending_review',
             commission_rate_bp: 0,
+            product_review_mode: 'post',
             contact_email: input.contactEmail,
             contact_phone_e164: input.contactPhoneE164,
             return_policy_text: input.returnPolicyText,
