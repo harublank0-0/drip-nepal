@@ -1,6 +1,6 @@
 ![AdonisJS 7](https://img.shields.io/badge/AdonisJS_7-5A45FF?style=for-the-badge&logo=adonisjs&logoColor=white) ![React 19](https://img.shields.io/badge/React_19-61DAFB?style=for-the-badge&logo=react&logoColor=black) ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white) ![Tailwind CSS v4](https://img.shields.io/badge/Tailwind_CSS_v4-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white) ![PostgreSQL 18](https://img.shields.io/badge/PostgreSQL_18-4169E1?style=for-the-badge&logo=postgresql&logoColor=white) ![Inertia.js](https://img.shields.io/badge/Inertia.js-9552EA?style=for-the-badge&logo=inertia&logoColor=white)
 
-![Node >=24](https://img.shields.io/badge/Node-%3E%3D24-339933?style=for-the-badge&logo=node.js&logoColor=white) ![pnpm 11](https://img.shields.io/badge/pnpm_11-F69220?style=for-the-badge&logo=pnpm&logoColor=white) ![MIT License](https://img.shields.io/badge/license-MIT-blue.svg?style=for-the-badge)
+![Node >=24](https://img.shields.io/badge/Node-%3E%3D24-339933?style=for-the-badge&logo=node.js&logoColor=white) ![pnpm 11](https://img.shields.io/badge/pnpm_11-F69220?style=for-the-badge&logo=pnpm&logoColor=white) ![All rights reserved](https://img.shields.io/badge/license-all_rights_reserved-red.svg?style=for-the-badge)
 
 # Drip Nepal 🇳🇵
 
@@ -96,6 +96,8 @@ Every other path answers 404 until M1 to M7 add the pages. The `dripnepal-run` a
 
 ## Contributing
 
+DripNepal does not accept outside contributions. This section is for its own developers.
+
 1. Read [AGENTS.md](AGENTS.md) and the documents that own what you are changing ([docs/README.md §3](docs/README.md#3-where-to-find)).
 2. Build what the current milestone of [docs/12](docs/12-roadmap-and-backlog.md) schedules, to the rules of [docs/09](docs/09-code-structure-and-engineering-standards.md).
 3. When the code needs a rule to change, change the owning document in the same pull request ([docs/README.md §4](docs/README.md#4-changing-a-document)).
@@ -103,7 +105,7 @@ Every other path answers 404 until M1 to M7 add the pages. The `dripnepal-run` a
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+All rights reserved. The source is public so that it can be read, not reused. See [LICENSE](LICENSE).
 
 ## Author
 
