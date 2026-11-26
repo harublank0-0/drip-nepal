@@ -29,7 +29,7 @@ export default function render(page: ReturnType<typeof usePage>) {
           ],
           { eager: true }
         ),
-        layoutFor(name)
+        await layoutFor(name)
       )
       return resolved.default
     },

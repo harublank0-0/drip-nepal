@@ -3390,7 +3390,7 @@ export default function ProductNew({ categories, attributes, current_shop }: Pro
 ```
 
 - **Props are typed from `Data.*`**, the types generated from the transformers (§4). A hand-written prop interface is rejected in review, because it drifts from the transformer.
-- **The layout is chosen by page name**, not imported by the page: `layoutFor(name)` in `inertia/layouts/layout_for.ts` returns the surface layout for the `storefront/`, `auth/`, `payments/`, `account/`, `seller/`, `admin/` and `errors/` prefixes, and `resolvePageComponent(path, pages, layout)` assigns it [Verified-repo `@adonisjs/inertia` 4.2.0 and 5.0.5 `build/src/client/helpers.d.ts`]. This keeps the layout mounted across visits within a surface.
+- **The layout is chosen by page name**, not imported by the page: `layoutFor(name)` in `inertia/layouts/layout_for.ts` returns the surface layout for the `storefront/`, `auth/`, `payments/`, `account/`, `seller/`, `admin/` and `errors/` prefixes, and `resolvePageComponent(path, pages, layout)` assigns it [Verified-repo `@adonisjs/inertia` 4.2.0 and 5.0.5 `build/src/client/helpers.d.ts`]. This keeps the layout mounted across visits within a surface. Edited 2026-11-26 (note 134): `layoutFor` is async; the customer layouts (`storefront/`, `auth/`, `account/`) are static imports, and the dashboard layouts (`seller/`, `admin/`) are dynamic imports that load with their surface's pages, so no customer page carries them. `inertia/app.tsx` loads the page, its layout and its surface's catalog together and sets the layout when the page names none, as the helper does; `inertia/ssr.tsx` awaits `layoutFor`. A module loads once, so the layout keeps its identity across visits.
 - **A page renders; a component does the work.** Forms, tables and panels live in `components/<domain>/`, so the page file stays a list of sections that a reviewer can compare with the 08 screen inventory.
 
 ### 13.3 Reads: Inertia props only
@@ -3646,6 +3646,7 @@ import { TuyauProvider } from '@adonisjs/inertia/react'
 import { resolvePageComponent } from '@adonisjs/inertia/helpers'
 import { client } from '~/client'
 import { layoutFor } from '~/layouts/layout_for'
+import { loadCatalogsFor } from '~/lib/i18n'
 
 const Devtools = import.meta.env.DEV ? lazy(() => import('./dev/devtools')) : null
 
@@ -3653,12 +3654,17 @@ createInertiaApp({
   title: (title) => (title ? `${title} - DripNepal` : 'DripNepal'),
   // includeCSS: false: the bar's CSS is in app.css under style-src 'self', so the per-request nonce is not handed to the client (08 §8.1)
   progress: { includeCSS: false },
-  resolve: (name) =>
-    resolvePageComponent(
-      `./pages/${name}.tsx`,
-      import.meta.glob('./pages/**/*.tsx'),
-      layoutFor(name)
-    ),
+  // Edited 2026-11-26 (note 134): layoutFor is async, because the dashboard layouts load with
+  // their surface; the page, its layout and its surface's catalog load together.
+  resolve: async (name) => {
+    const [page, layout] = await Promise.all([
+      resolvePageComponent(`./pages/${name}.tsx`, import.meta.glob('./pages/**/*.tsx')),
+      layoutFor(name),
+      loadCatalogsFor(name),
+    ])
+    if (!page.default.layout) page.default.layout = layout
+    return page.default
+  },
   setup({ el, App, props }) {
     const tree = (
       <StrictMode>
@@ -3678,7 +3684,7 @@ createInertiaApp({
 })
 ```
 
-`inertia/ssr.tsx` keeps its shape but passes `import.meta.glob(['./pages/storefront/**/*.tsx', './pages/auth/**/*.tsx', './pages/payments/**/*.tsx'], { eager: true })` and the same `layoutFor`. The DEV devtools render inside a `Suspense` with a `null` fallback, so the first client render of an SSR page still matches the server markup.
+`inertia/ssr.tsx` keeps its shape but passes `import.meta.glob(['./pages/storefront/**/*.tsx', './pages/auth/**/*.tsx', './pages/payments/**/*.tsx'], { eager: true })` and awaits the same `layoutFor` (edited 2026-11-26, note 134: it is async). The DEV devtools render inside a `Suspense` with a `null` fallback, so the first client render of an SSR page still matches the server markup.
 
 ### 13.9 Accessibility lint (proposal)
 
@@ -3888,3 +3894,4 @@ Changes to this document: (a) §1's tree names the new config files. (b) §6.1 r
 131.  **The seller product pages built (2026-11-26, R1-S part 2f-i).** The page controller is `app/controllers/seller/catalog/products_controller.ts` (§1's `seller/<module>/` row), and the form's choices are one catalog query, `productFormOptions`, whose rule rows use the same deepest-row comparison as `effectiveRules`. Rules the server and the pages share live in `shared/ui/` (§1's tree): `productEditable` (`shared/ui/product_details.ts`, with the form's pure rules) is `assertProductEditable`'s rule, and `catalogViewable` and `catalogEditable` (`shared/ui/shop_access.ts`) are the `products_view` and `products_edit` gates. `sendIdempotent` (`app/controllers/support/http.ts`) now sets the stored status and returns the body instead of sending it, so the typed client knows an idempotent write's answer (the new draft's ID); the answers are unchanged. `pathWithoutRefused` (`app/controllers/support/cursor.ts`) gives a list page the redirect of [08 §7.2](08-ui-ux-and-design-system.md#72-tables-and-lists) for a refused query parameter. As the earlier pages do (note 111: `Data.*` has no type for the plain-function transformers), the props are typed by hand, apart from §13.2's rule: the product and the form's choices in `shared/ui/product_details.ts`, the list's in its page and `products_table.tsx`; the generated `.adonisjs/server/pages.d.ts` checks the controller's render call against them.
 132.  **The seller catalog loads with the seller pages (2026-11-26, R1-S part 2f-i).** Every catalog was a static import of `inertia/lib/i18n.ts`, so every page carried every surface's strings, and the strings of the product pages took `account/addresses` from 249.1 KB to 252.7 KB of JavaScript, over the 250 KB storefront budget (`T-UI-012`). §13.10's catalog loader now builds `t` with `createSurfaceTranslator` (`shared/i18n/translator.ts`): `seller.json` is a dynamic import, and `inertia/app.tsx` loads it beside any `seller/` page component (`loadCatalogsFor`, by the prefixes of `shared/i18n/surface_catalogs.ts`), so the page and the seller layout render with their strings and no other page fetches them. The key type still covers every catalog. The server-rendered surfaces need no catalog from there. `T-UI-034` checks the loading and that no file outside the seller surface uses a `seller.*` key, which would show raw elsewhere ([10 note 97](10-testing-and-quality-gates.md#consistency-notes-for-editor)).
 133.  **The `supabase-postgres-best-practices` skill (2026-11-26).** The §1.5 `.agents/**` row records the product owner's decision of 2026-11-26 ([risks §2.3](risks-and-open-decisions.md#23-decision-log)) to track Supabase's PostgreSQL skill, copied verbatim with the upstream licence after the licence check and read-through of [AGENTS.md](../AGENTS.md). It has no scripts and fetches nothing. Its `NOTICE.md` lists where it departs from the documents, among them money as `numeric` against [ADR-0007](adr/0007-money-integer-minor-units.md), row-level security against the query scope and composite foreign keys of [04 §2.5](04-domain-model-and-data-dictionary.md#25-tenant-isolation-with-composite-foreign-keys), and idempotent `DO` blocks against the migration rules of §8.
+134.  **The dashboard layouts load with their surface (2026-11-26).** Every page carried every layout, because `inertia/layouts/layout_for.ts` imported them all, so each customer page downloaded the seller and admin shells (the `sidebar` primitive with its sheet, the shop switcher's menu, both sidebars) inside the client entry, which every page loads: the error pages, which add almost nothing to it, weighed about 198 KB in all, and `account/addresses` was a few KB under the 250 KB storefront budget after 2f-i ([08 note 91](08-ui-ux-and-design-system.md#consistency-notes-for-editor)). §13.2's `layoutFor` now imports the seller and admin layouts on demand, and §13.8's `app.tsx` sketch follows. A module loads once, so a layout keeps its identity across visits: checked in a browser for the seller layout (a collapsed sidebar stays collapsed across client visits), and true of the admin layout by the same code, not yet checked in a browser. The bundle check counts them with their pages and refuses a customer page that loads one ([08 note 92](08-ui-ux-and-design-system.md#consistency-notes-for-editor), `T-UI-012`). The SSR bundle holds their chunks too, unused, because `inertia/ssr.tsx` shares `layoutFor`; T-ARCH-002 checks pages, not chunks.

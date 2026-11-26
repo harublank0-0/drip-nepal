@@ -6,7 +6,8 @@ import { fixtureTree, runScript } from '#tests/support/scripts'
 /*
  * The checks of scripts/check_bundle.mjs on a fixture build (docs/08 §10.1,
  * docs/09 §13.8): T-UI-012 (initial JavaScript per route within its gzip
- * budget), T-UI-013 (no devtools strings) and T-ARCH-002's build-output
+ * budget, counting the surface layout and catalog a page loads with it, and
+ * no dashboard layout on a storefront route), T-UI-013 (no devtools strings) and T-ARCH-002's build-output
  * part (the SSR bundle holds only the server-rendered surfaces). CI runs
  * the script on the real build after `node ace build`.
  */
@@ -115,11 +116,94 @@ test.group('T-UI-012 initial JavaScript per route', (group) => {
       chunks: {
         'inertia/pages/storefront/home.tsx': { file: 'home.js', isDynamicEntry: true },
         'inertia/pages/seller/orders/index.tsx': { file: 'orders.js', isDynamicEntry: true },
+        'inertia/layouts/seller_layout.tsx': { file: 'seller_layout.js', isDynamicEntry: true },
       },
-      files: { 'orders.js': heavy() },
+      files: { 'orders.js': heavy(), 'seller_layout.js': small },
     })
     assert.equal(result.code, 0, result.stderr)
     assert.match(result.stdout, /^seller\/orders\/index: .* of 500 KB \(dashboard\)$/m)
+  })
+
+  test('T-UI-012 a dashboard layout that is not a chunk loaded on demand fails', async ({
+    assert,
+  }) => {
+    // A static import inlines the layout into the entry: the manifest then lists no chunk for it.
+    const result = await check({
+      chunks: {
+        'inertia/pages/admin/logistics.tsx': { file: 'logistics.js', isDynamicEntry: true },
+      },
+      files: { 'logistics.js': small },
+    })
+    assert.equal(result.code, 1)
+    assert.include(
+      result.stderr,
+      'T-UI-012: inertia/layouts/admin_layout.tsx is not a chunk loaded on demand'
+    )
+  })
+
+  test('T-UI-012 a catalog loaded on demand that no page counts fails', async ({ assert }) => {
+    const result = await check({
+      chunks: {
+        'resources/lang/en/dashboards.json': { file: 'dashboards.js', isDynamicEntry: true },
+      },
+      files: { 'dashboards.js': small },
+    })
+    assert.equal(result.code, 1)
+    assert.include(
+      result.stderr,
+      'T-UI-012: resources/lang/en/dashboards.json is loaded on demand but no page counts it'
+    )
+  })
+
+  test('T-UI-012 a dashboard page counts the layout and catalog it loads with it', async ({
+    assert,
+  }) => {
+    const result = await check({
+      chunks: {
+        'inertia/pages/seller/products.tsx': { file: 'products.js', isDynamicEntry: true },
+        'inertia/layouts/seller_layout.tsx': {
+          file: 'seller_layout.js',
+          isDynamicEntry: true,
+          imports: ['_sidebar.js'],
+        },
+        '_sidebar.js': { file: 'sidebar.js' },
+        'resources/lang/en/seller.json': { file: 'seller.js', isDynamicEntry: true },
+      },
+      files: {
+        'products.js': heavy(),
+        'seller_layout.js': small,
+        'sidebar.js': heavy(),
+        'seller.js': small,
+      },
+    })
+    assert.equal(result.code, 1)
+    assert.include(result.stderr, 'T-UI-012: seller/products loads')
+    assert.include(result.stderr, 'over the dashboard budget of 500 KB')
+    // The storefront page does not load the seller surface's chunks.
+    assert.notInclude(result.stderr, 'T-UI-012: storefront/home loads')
+  })
+
+  test('T-UI-012 a storefront page that loads a dashboard layout fails, whatever its size', async ({
+    assert,
+  }) => {
+    // Imported statically by a storefront page and on demand by layout_for.ts: Vite gives it a
+    // chunk of its own, which the page's chunk imports.
+    const result = await check({
+      chunks: {
+        'inertia/pages/storefront/home.tsx': {
+          file: 'home.js',
+          isDynamicEntry: true,
+          imports: ['inertia/layouts/admin_layout.tsx'],
+        },
+        'inertia/layouts/admin_layout.tsx': { file: 'admin_layout.js', isDynamicEntry: true },
+      },
+      files: { 'admin_layout.js': small },
+    })
+    assert.equal(result.code, 1)
+    assert.include(
+      result.stderr,
+      'T-UI-012: storefront/home loads the dashboard layout inertia/layouts/admin_layout.tsx'
+    )
   })
 
   test('T-UI-012 an import the manifest does not list fails, not goes uncounted', async ({
