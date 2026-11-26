@@ -120,6 +120,18 @@ const routes = {
     tokens: [{"old":"/api/v1/locations/local-levels","type":0,"val":"api","end":""},{"old":"/api/v1/locations/local-levels","type":0,"val":"v1","end":""},{"old":"/api/v1/locations/local-levels","type":0,"val":"locations","end":""},{"old":"/api/v1/locations/local-levels","type":0,"val":"local-levels","end":""}],
     types: placeholder as Registry['listLocalLevels']['types'],
   },
+  'listCategories': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/v1/catalog/categories',
+    tokens: [{"old":"/api/v1/catalog/categories","type":0,"val":"api","end":""},{"old":"/api/v1/catalog/categories","type":0,"val":"v1","end":""},{"old":"/api/v1/catalog/categories","type":0,"val":"catalog","end":""},{"old":"/api/v1/catalog/categories","type":0,"val":"categories","end":""}],
+    types: placeholder as Registry['listCategories']['types'],
+  },
+  'listAttributes': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/v1/catalog/attributes',
+    tokens: [{"old":"/api/v1/catalog/attributes","type":0,"val":"api","end":""},{"old":"/api/v1/catalog/attributes","type":0,"val":"v1","end":""},{"old":"/api/v1/catalog/attributes","type":0,"val":"catalog","end":""},{"old":"/api/v1/catalog/attributes","type":0,"val":"attributes","end":""}],
+    types: placeholder as Registry['listAttributes']['types'],
+  },
   'listAddresses': {
     methods: ["GET","HEAD"],
     pattern: '/api/v1/me/addresses',

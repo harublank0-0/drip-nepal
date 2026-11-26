@@ -718,3 +718,124 @@ export async function productFormOptions(
     })),
   }
 }
+
+export type CategoryTreeNode = {
+  id: string
+  slug: string
+  name: string
+  children: CategoryTreeNode[]
+}
+
+/*
+ * The storefront's category tree (docs/06 §13.2 `listCategories`; R1-S part
+ * 3a): every active category whose ancestors are all active, within its
+ * parent by `position`, then name. A category under an inactive parent is
+ * left out with its subtree, as the listing never shows it.
+ */
+export async function activeCategoryTree(): Promise<CategoryTreeNode[]> {
+  const rows: { id: string; slug: string; name: string; parent_id: string | null }[] = await db
+    .from('categories')
+    .where('is_active', true)
+    .select('id', 'slug', 'name', 'parent_id')
+    .orderBy([{ column: 'depth' }, { column: 'position' }, { column: 'name' }])
+  const nodes = new Map<string, CategoryTreeNode>()
+  const roots: CategoryTreeNode[] = []
+  // Parents come first (by depth), so a missing parent is an inactive one.
+  for (const row of rows) {
+    const node = { id: row.id, slug: row.slug, name: row.name, children: [] }
+    const siblings = row.parent_id === null ? roots : nodes.get(row.parent_id)?.children
+    if (!siblings) continue
+    siblings.push(node)
+    nodes.set(row.id, node)
+  }
+  return roots
+}
+
+/*
+ * The path of an active category whose ancestors are all active, by slug, or
+ * null: the subtree the storefront lists under it (docs/04a §7.1).
+ */
+export async function listedCategoryPath(slug: string): Promise<string | null> {
+  const row = await db
+    .from('categories as c')
+    .where('c.slug', slug)
+    .where('c.is_active', true)
+    .whereNotExists((inactive) => {
+      inactive
+        .from('categories as a')
+        .where('a.is_active', false)
+        .whereRaw('c.path LIKE a.path || ?', ['%'])
+    })
+    .select('c.path')
+    .first()
+  return row ? (row.path as string) : null
+}
+
+export type FilterAttribute = {
+  code: string
+  name: string
+  input: AttributeInput
+  values: { code: string; label: string; swatchHex: string | null }[]
+}
+
+/*
+ * The storefront's filters (docs/06 §13.2 `listAttributes`; R1-S part 3a):
+ * the filterable attributes (`attributes.is_filterable`) with their active
+ * values, by `position`, then code, or label and code. With a category
+ * path, only the attributes a rule on that category, an ancestor or a
+ * descendant names: the filters a product listed under it can match, since
+ * the listing shows the whole subtree (docs/06 §6.3), so `clothing` offers
+ * the sizes its leaves vary by. A rule counts only on a listed category
+ * (active, every ancestor active), so a hidden subtree adds no filter: the
+ * NOT EXISTS below also matches the rule's category itself when inactive.
+ * Without one, every filterable attribute.
+ */
+export async function filterableAttributes(
+  categoryPath: string | null
+): Promise<FilterAttribute[]> {
+  const query = db
+    .from('attributes as a')
+    .where('a.is_filterable', true)
+    .select('a.id', 'a.code', 'a.name', 'a.input')
+    .orderBy([{ column: 'a.position' }, { column: 'a.code' }])
+  if (categoryPath !== null) {
+    query.whereExists((rule) => {
+      rule
+        .from('category_attributes as ca')
+        .join('categories as c', 'c.id', 'ca.category_id')
+        .whereColumn('ca.attribute_id', 'a.id')
+        .whereNotExists((inactive) => {
+          inactive
+            .from('categories as x')
+            .where('x.is_active', false)
+            .whereRaw('c.path LIKE x.path || ?', ['%'])
+        })
+        .where((related) => {
+          related
+            .whereRaw('? LIKE c.path || ?', [categoryPath, '%'])
+            .orWhereRaw('c.path LIKE ? || ?', [categoryPath, '%'])
+        })
+    })
+  }
+  const attributes: { id: string; code: string; name: string; input: AttributeInput }[] =
+    await query
+  if (attributes.length === 0) return []
+  const values: { attribute_id: string; code: string; label: string; swatch_hex: string | null }[] =
+    await db
+      .from('attribute_values')
+      .whereIn(
+        'attribute_id',
+        attributes.map((attribute) => attribute.id)
+      )
+      .where('is_active', true)
+      .select('attribute_id', 'code', 'label', 'swatch_hex')
+      .orderBy([{ column: 'position' }, { column: 'label' }, { column: 'code' }])
+  return attributes.map((attribute) => ({
+    code: attribute.code,
+    name: attribute.name,
+    input: attribute.input,
+    values: values
+      .filter((value) => value.attribute_id === attribute.id)
+      .map((value) => ({ code: value.code, label: value.label, swatchHex: value.swatch_hex })),
+  }))
+}

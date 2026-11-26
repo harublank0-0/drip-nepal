@@ -124,8 +124,6 @@ x-foundation-page-routes:
 x-pending-operations:
   # Public (06 §13.2)
   - getProduct
-  - listCategories
-  - listAttributes
   - getPublicShop # closed response schema when specified (06 §13.2, 07 TM-29)
   - getCurrentSellerAgreement
   # Customer (06 §13.4)
@@ -583,6 +581,124 @@ paths:
           description: |
             `INVALID_QUERY_PARAMETER`: `district` missing, repeated or not three digits with a
             province digit first, or another parameter; one `invalid` item names it.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem400' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /api/v1/catalog/categories:
+    get:
+      operationId: listCategories
+      tags: [Public]
+      summary: The storefront's category tree
+      description: |
+        Actor: anyone, signed in or not; neither `auth` nor `guest` is on the route (06 §13.2).
+        Answer: every active category whose ancestors are all active (04a §7.1), as a tree of
+        `{id, slug, name, children}`, each level ordered by `position`, then name. A category
+        under an inactive parent is left out with its subtree. The list is bounded by the
+        reference data, so it takes no `cursor` or `limit` and answers `{ "data": [...] }`
+        without `meta` (06 §6.2). Query: none; any parameter is 400 `INVALID_QUERY_PARAMETER`
+        with one `invalid` item naming it (06 §6.3). T-CAT-015.
+        Order: the API limits middleware charges `catalog_ip` (120 per minute per client network,
+        06 §9.1) on every call, signed in or not, instead of `api_user`; past it, 429 before the
+        query is read. A session that fails the account check (06 §4.2) is answered 401 or 403
+        and ended first, as on every route. Side effects: none. Built R1-S part 3a. Release
+        R1·M3.
+      x-release: R1·M3
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: The active category tree.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CategoryTree' }
+        '400':
+          description: '`INVALID_QUERY_PARAMETER`: any query parameter, with one `invalid` item naming it.'
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem400' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/Internal' }
+
+  /api/v1/catalog/attributes:
+    get:
+      operationId: listAttributes
+      tags: [Public]
+      summary: The storefront's filterable attributes
+      description: |
+        Actor: anyone, signed in or not (06 §13.2). Answer: the filterable attributes
+        (`attributes.is_filterable`, 04a §7.2) with their active values (`code`, `label`,
+        `swatch_hex`, null when a value has none); attributes by `position`, then code; values by
+        `position`, then label and code. With `category`, only the attributes a rule on that
+        category, an ancestor or a listed descendant names: the filters a product listed under it
+        can match, since the listing shows the subtree (06 §6.3); a rule on a hidden category adds
+        none. A well-formed slug that names no listed category (unknown, inactive, or under an
+        inactive parent) answers an empty list. Without it, every filterable attribute. Bounded, so
+        `{ "data": [...] }` without `meta` (06 §6.2). Query: `category`, once; any other parameter,
+        a repeated one or a malformed slug is 400 `INVALID_QUERY_PARAMETER` (06 §6.3). T-CAT-015.
+        Order: the API limits middleware charges `catalog_ip` (120 per minute per client network, 06
+        §9.1) on every call, signed in or not, instead of `api_user`; past it, 429 before the query
+        is read. A session that fails the account check (06 §4.2) is answered 401 or 403 and ended
+        first, as on every route. Side effects: none. Built R1-S part 3a. Release R1·M3.
+      x-release: R1·M3
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - name: category
+          in: query
+          required: false
+          description: A category slug (`categories_slug_check`, 04a §7.1).
+          schema: { type: string, pattern: '^[a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])$' }
+      responses:
+        '200':
+          description: The filterable attributes with their values.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FilterAttributeList' }
+              examples:
+                tshirts:
+                  summary: The filters of `t-shirts`, shortened to two values each
+                  value:
+                    data:
+                      - code: audience
+                        name: Audience
+                        input: multi
+                        values:
+                          - { code: men, label: Men, swatch_hex: null }
+                          - { code: women, label: Women, swatch_hex: null }
+                      - code: apparel_size
+                        name: Size
+                        input: single
+                        values:
+                          - { code: xs, label: XS, swatch_hex: null }
+                          - { code: s, label: S, swatch_hex: null }
+                      - code: color
+                        name: Colour
+                        input: single
+                        values:
+                          - { code: black, label: Black, swatch_hex: '#111111' }
+                          - { code: white, label: White, swatch_hex: '#ffffff' }
+        '400':
+          description: '`INVALID_QUERY_PARAMETER`: a parameter other than `category`, a repeated `category` or a malformed slug, with one `invalid` item naming it.'
           headers:
             X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
             Cache-Control: { $ref: '#/components/headers/Cache-Control' }
@@ -7871,6 +7987,56 @@ components:
           properties:
             status: { const: deletion_requested }
 
+    # ---------- the storefront's reference reads (06 §13.2; R1-S part 3a) ----------
+    CategoryTree:
+      type: object
+      description: The 200 of `listCategories`; a bounded list, so no `meta`.
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/CategoryNode' }
+    CategoryNode:
+      type: object
+      description: An active category and its active children (04a §7.1), at most four levels.
+      additionalProperties: false
+      required: [id, slug, name, children]
+      properties:
+        id: { type: string, format: uuid }
+        slug: { type: string, pattern: '^[a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])$' }
+        name: { type: string, minLength: 2, maxLength: 60 }
+        children:
+          type: array
+          items: { $ref: '#/components/schemas/CategoryNode' }
+    FilterAttributeList:
+      type: object
+      description: The 200 of `listAttributes`; a bounded list, so no `meta`.
+      additionalProperties: false
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [code, name, input, values]
+            properties:
+              code: { type: string, pattern: '^[a-z][a-z0-9_]{1,39}$' }
+              name: { type: string, minLength: 1 }
+              input: { type: string, enum: [single, multi] }
+              values:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: false
+                  required: [code, label, swatch_hex]
+                  properties:
+                    code: { type: string, maxLength: 40 }
+                    label: { type: string, minLength: 1, maxLength: 40 }
+                    swatch_hex:
+                      type: [string, 'null']
+                      pattern: '^#[0-9a-f]{6}$'
     # ---------- the address book and the location cascades (06 §13.2, §13.4; M1 part 6b) ----------
     ProvinceList:
       type: object
@@ -11220,3 +11386,7 @@ components:
 #     note 72). Their descriptions add what the build decided: the publication gate's items and
 #     codes, the 409 `allowed_events`, the version bump, and the audit actions. Each lists 422,
 #     which a body member gives.
+# 63. `listCategories` and `listAttributes` move from `x-pending-operations` to `paths`, written
+#     from the code (R1-S part 3a, 2026-11-26; 06 note 73), with the schemas `CategoryTree`,
+#     `CategoryNode` and `FilterAttributeList`. `listAttributes` with a category answers the
+#     attributes of its ancestors and its listed descendants (06 note 73).

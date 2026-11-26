@@ -33,6 +33,9 @@ export const controllers = {
         },
       },
       public: {
+        catalog: {
+          Catalog: () => import('#controllers/api/v1/public/catalog/catalog_controller'),
+        },
         logistics: {
           Locations: () => import('#controllers/api/v1/public/logistics/locations_controller'),
         },

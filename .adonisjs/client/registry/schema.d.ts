@@ -235,6 +235,30 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/public/logistics/locations_controller').default['listLocalLevels']>>> | { status: 422; response: { errors: SimpleError[] } }
     }
   }
+  'listCategories': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/catalog/categories'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/api/v1/public/catalog/catalog_controller').default['listCategories']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/public/catalog/catalog_controller').default['listCategories']>>>
+    }
+  }
+  'listAttributes': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/catalog/attributes'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: ExtractQueryForGet<InferInput<(typeof import('#validators/catalog/storefront').listAttributesValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/api/v1/public/catalog/catalog_controller').default['listAttributes']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/public/catalog/catalog_controller').default['listAttributes']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
   'listAddresses': {
     methods: ["GET","HEAD"]
     pattern: '/api/v1/me/addresses'
