@@ -94,7 +94,14 @@ export function assertStepUp(ctx: HttpContext) {
   }
 }
 
-export function sendIdempotent<T>(ctx: HttpContext, result: IdempotentResponse<T>) {
+/*
+ * An idempotent write's answer (docs/06 §7.5): its stored status, the body
+ * returned from the controller so the typed client knows its shape (R1-S
+ * part 2f-i: the product editor reads the new draft's ID), and
+ * `Idempotency-Replayed` on a replay.
+ */
+export function sendIdempotent<T>(ctx: HttpContext, result: IdempotentResponse<T>): T {
   if (result.replayed) ctx.response.header('Idempotency-Replayed', 'true')
-  return ctx.response.status(result.status).send(result.body)
+  ctx.response.status(result.status)
+  return result.body
 }

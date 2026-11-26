@@ -66,6 +66,9 @@ export const controllers = {
     SignIn: () => import('#controllers/dev/sign_in_controller'),
   },
   seller: {
+    catalog: {
+      Products: () => import('#controllers/seller/catalog/products_controller'),
+    },
     CourierBookings: () => import('#controllers/seller/courier_bookings_controller'),
     Logistics: () => import('#controllers/seller/logistics_controller'),
     shops: {

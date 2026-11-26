@@ -12,6 +12,39 @@ import { promisify } from 'node:util'
 
 const run = promisify(execFile)
 
+/*
+ * The variables that tie git to one repository (`git rev-parse
+ * --local-env-vars`, git 2.x). Git exports some of them to its hooks, and
+ * in a linked worktree `GIT_DIR` is an absolute path: a fixture command run
+ * from the pre-push hook (`node ace test unit`) would then commit, branch
+ * and even re-initialise the real repository instead of its temporary
+ * folder. Every child these helpers start runs without them.
+ */
+const REPOSITORY_VARIABLES = [
+  'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+  'GIT_CONFIG',
+  'GIT_CONFIG_PARAMETERS',
+  'GIT_CONFIG_COUNT',
+  'GIT_OBJECT_DIRECTORY',
+  'GIT_DIR',
+  'GIT_WORK_TREE',
+  'GIT_IMPLICIT_WORK_TREE',
+  'GIT_GRAFT_FILE',
+  'GIT_INDEX_FILE',
+  'GIT_NO_REPLACE_OBJECTS',
+  'GIT_REPLACE_REF_BASE',
+  'GIT_PREFIX',
+  'GIT_SHALLOW_FILE',
+  'GIT_COMMON_DIR',
+]
+
+// `env` (the test process's by default) without the repository variables.
+export function isolatedEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const copy = { ...env }
+  for (const name of REPOSITORY_VARIABLES) delete copy[name]
+  return copy
+}
+
 export type ScriptResult = { code: number; stdout: string; stderr: string }
 
 // Runs a command and returns its exit code and output instead of throwing.
@@ -23,7 +56,7 @@ export async function runCommand(
   try {
     const { stdout, stderr } = await run(command, args, {
       cwd: options.cwd ?? process.cwd(),
-      env: options.env,
+      env: isolatedEnv(options.env),
       maxBuffer: 64 * 1024 * 1024,
     })
     return { code: 0, stdout, stderr }
@@ -65,6 +98,6 @@ export function git(root: string, ...args: string[]) {
       'core.hooksPath=/dev/null',
       ...args,
     ],
-    { cwd: root }
+    { cwd: root, env: isolatedEnv() }
   )
 }

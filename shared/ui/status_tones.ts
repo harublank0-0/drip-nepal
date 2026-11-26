@@ -5,7 +5,8 @@
  * each entity against its domain vocabulary and the catalog, so a new state
  * cannot ship without a label. Entities join with the pages that show them:
  * courier accounts since the admin courier pages (M6), shops since the
- * seller overview (R1-S part 1a).
+ * seller overview (R1-S part 1a), products since the seller product pages
+ * (R1-S part 2f-i).
  */
 export type Tone = 'neutral' | 'info' | 'warning' | 'success' | 'destructive'
 
@@ -16,6 +17,15 @@ export const STATUS_TONES = {
     invalid: 'destructive',
     suspended: 'destructive',
     disabled: 'neutral',
+  },
+  product: {
+    draft: 'neutral',
+    pending_review: 'warning',
+    published: 'success',
+    unpublished: 'neutral',
+    rejected: 'destructive',
+    archived: 'neutral',
+    blocked: 'destructive',
   },
   shop: {
     pending_review: 'warning',

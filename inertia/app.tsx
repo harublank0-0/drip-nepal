@@ -2,6 +2,7 @@ import './css/app.css'
 import { StrictMode, type ComponentType } from 'react'
 import { client } from './client'
 import { layoutFor } from '~/layouts/layout_for'
+import { loadCatalogsFor } from '~/lib/i18n'
 import { createRoot, hydrateRoot } from 'react-dom/client'
 import { createInertiaApp } from '@inertiajs/react'
 import { TuyauProvider } from '@adonisjs/inertia/react'
@@ -20,8 +21,13 @@ createInertiaApp({
   title: (title) => (title ? `${title} - ${appName}` : appName),
   // Inertia 3.11's resolver type takes the component; the adapter's helper
   // returns its module.
+  // A surface's own catalog (seller.json for the seller pages) loads with the page, so the
+  // page and its layout render with their strings (inertia/lib/i18n.ts).
   resolve: async (name) => {
-    const page = await resolvePageComponent(`./pages/${name}.tsx`, pages, layoutFor(name))
+    const [page] = await Promise.all([
+      resolvePageComponent(`./pages/${name}.tsx`, pages, layoutFor(name)),
+      loadCatalogsFor(name),
+    ])
     return page.default
   },
   setup({ el, App, props }) {

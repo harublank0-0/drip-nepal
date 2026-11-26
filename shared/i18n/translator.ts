@@ -20,14 +20,15 @@ export type Translate<K extends string = string> = (
   values?: Record<string, PrimitiveType>
 ) => string
 
-export function createTranslator<C extends Record<string, Catalog>>(
-  catalogs: C,
-  locale = 'en'
-): Translate<CatalogKey<C>> {
-  const messages = new Map<string, string>()
+// Adds every message of `catalogs` to `messages`, under its file name.
+function addCatalogs(messages: Map<string, string>, catalogs: Record<string, Catalog>) {
   for (const [file, catalog] of Object.entries(catalogs)) {
     for (const [key, message] of Object.entries(catalog)) messages.set(`${file}.${key}`, message)
   }
+}
+
+// `t` over `messages`, which may still grow: a message compiles on first use.
+function translateFrom(messages: Map<string, string>, locale: string): Translate {
   const compiled = new Map<string, IntlMessageFormat>()
   return (key, values) => {
     const message = messages.get(key)
@@ -42,5 +43,54 @@ export function createTranslator<C extends Record<string, Catalog>>(
     } catch {
       return key
     }
+  }
+}
+
+export function createTranslator<C extends Record<string, Catalog>>(
+  catalogs: C,
+  locale = 'en'
+): Translate<CatalogKey<C>> {
+  const messages = new Map<string, string>()
+  addCatalogs(messages, catalogs)
+  return translateFrom(messages, locale)
+}
+
+/*
+ * A translator for the browser whose surface catalogs load with their
+ * surface (docs/09 §13.10; R1-S part 2f-i): `catalogs` are in every
+ * bundle, and each of `later` is a dynamic import, fetched by `load(file)`
+ * before the pages that use it render, so its strings stay out of every
+ * other page's JavaScript (T-UI-012). The key type covers both, so a typo
+ * still fails the typecheck. A load runs once; a failed one is tried again
+ * on the next call. Until a catalog has loaded, its keys render as keys,
+ * as a missing key does.
+ */
+export function createSurfaceTranslator<
+  C extends Record<string, Catalog>,
+  L extends Record<string, Catalog>,
+>(
+  catalogs: C,
+  later: { [F in keyof L]: () => Promise<{ default: L[F] }> },
+  locale = 'en'
+): { t: Translate<CatalogKey<C & L>>; load: (file: keyof L & string) => Promise<void> } {
+  const messages = new Map<string, string>()
+  addCatalogs(messages, catalogs)
+  const loading = new Map<string, Promise<void>>()
+  return {
+    t: translateFrom(messages, locale),
+    load(file) {
+      let pending = loading.get(file)
+      if (!pending) {
+        pending = later[file]().then(
+          (module) => addCatalogs(messages, { [file]: module.default }),
+          (error: unknown) => {
+            loading.delete(file)
+            throw error
+          }
+        )
+        loading.set(file, pending)
+      }
+      return pending
+    },
   }
 }

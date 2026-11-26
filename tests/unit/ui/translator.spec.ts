@@ -2,7 +2,13 @@ import { test } from '@japa/runner'
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { IntlMessageFormat } from 'intl-messageformat'
-import { createTranslator, type Catalog, type Translate } from '#shared/i18n/translator'
+import {
+  createSurfaceTranslator,
+  createTranslator,
+  type Catalog,
+  type Translate,
+} from '#shared/i18n/translator'
+import { catalogsFor, LATER_CATALOGS } from '#shared/i18n/surface_catalogs'
 
 /*
  * T-UI-034: the message catalogs of docs/08 §11.8 and the `t()` of
@@ -10,7 +16,11 @@ import { createTranslator, type Catalog, type Translate } from '#shared/i18n/tra
  * file name, a missing key or placeholder value renders the key, every
  * message in resources/lang/en compiles as ICU MessageFormat, and every
  * key the frontend passes to t() exists. The key type catches a typo at
- * typecheck; these cases cover what reaches run time anyway.
+ * typecheck; these cases cover what reaches run time anyway. Since R1-S
+ * part 2f-i a surface catalog may load with its surface (seller.json with
+ * the seller pages): its keys render as keys until it has loaded, it loads
+ * once, a failed load is tried again, and no file outside the surface uses
+ * one of its keys, which would show raw on another page.
  */
 
 const CATALOG_DIR = join(process.cwd(), 'resources', 'lang', 'en')
@@ -114,5 +124,75 @@ test.group('T-UI-034 message catalogs', () => {
     // The error pages and the error screen use 13 keys today.
     assert.isAtLeast(keys.length, 13)
     for (const key of keys) assert.isTrue(known.has(key), key)
+  })
+
+  test('T-UI-034 a surface catalog renders its keys once it has loaded, and loads once', async ({
+    assert,
+  }) => {
+    let calls = 0
+    const translator = createSurfaceTranslator(
+      { common: { ok: 'OK' } },
+      {
+        seller: async () => {
+          calls += 1
+          return { default: { 'nav.products': 'Products' } }
+        },
+      }
+    )
+    assert.equal(translator.t('common.ok'), 'OK')
+    assert.equal(translator.t('seller.nav.products'), 'seller.nav.products')
+    await Promise.all([translator.load('seller'), translator.load('seller')])
+    await translator.load('seller')
+    assert.equal(translator.t('seller.nav.products'), 'Products')
+    assert.equal(calls, 1)
+  })
+
+  test('T-UI-034 a surface catalog that failed to load is tried again', async ({ assert }) => {
+    let calls = 0
+    const translator = createSurfaceTranslator(
+      {},
+      {
+        seller: async () => {
+          calls += 1
+          if (calls === 1) throw new Error('offline')
+          return { default: { 'nav.products': 'Products' } }
+        },
+      }
+    )
+    await assert.rejects(() => translator.load('seller'), 'offline')
+    await translator.load('seller')
+    assert.equal(translator.t('seller.nav.products'), 'Products')
+    assert.equal(calls, 2)
+  })
+
+  test('T-UI-034 the seller pages load seller.json, and no other page does', ({ assert }) => {
+    assert.deepEqual(catalogsFor('seller/products'), ['seller'])
+    assert.deepEqual(catalogsFor('seller/product_edit'), ['seller'])
+    for (const page of ['account/addresses', 'storefront/home', 'auth/login', 'admin/logistics']) {
+      assert.deepEqual(catalogsFor(page), [], page)
+    }
+  })
+
+  test('T-UI-034 only its surface uses a key of a catalog that loads with its surface', ({
+    assert,
+  }) => {
+    // The seller layout renders only around a seller page, after the catalog has loaded.
+    const surfaceFiles: Record<string, (entry: string) => boolean> = {
+      seller: (entry) =>
+        entry.startsWith(join('pages', 'seller')) ||
+        entry.startsWith(join('components', 'seller')) ||
+        entry === join('layouts', 'seller_layout.tsx'),
+    }
+    const all = catalogs()
+    for (const file of Object.keys(LATER_CATALOGS)) {
+      const keys = new Set(Object.keys(all[file]).map((key) => `${file}.${key}`))
+      for (const entry of readdirSync(FRONTEND_DIR, { recursive: true, encoding: 'utf8' })) {
+        if (!/\.tsx?$/.test(entry) || surfaceFiles[file](entry)) continue
+        const source = readFileSync(join(FRONTEND_DIR, entry), 'utf8')
+        for (const match of source.matchAll(/(['"`])([a-z_]+\.[a-z0-9_.]+)\1/g)) {
+          assert.isFalse(keys.has(match[2]), `${entry} uses ${match[2]}`)
+        }
+      }
+    }
   })
 })

@@ -1027,6 +1027,42 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/seller/shops/shop_controller').default['shipping']>>>
     }
   }
+  'seller.products': {
+    methods: ["GET","HEAD"]
+    pattern: '/seller/:shopSlug/products'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { shopSlug: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/seller/catalog/products_controller').default['index']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/seller/catalog/products_controller').default['index']>>>
+    }
+  }
+  'seller.products.new': {
+    methods: ["GET","HEAD"]
+    pattern: '/seller/:shopSlug/products/new'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { shopSlug: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/seller/catalog/products_controller').default['create']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/seller/catalog/products_controller').default['create']>>>
+    }
+  }
+  'seller.products.edit': {
+    methods: ["GET","HEAD"]
+    pattern: '/seller/:shopSlug/products/:productId'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue, ParamValue]
+      params: { shopSlug: ParamValue; productId: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/seller/catalog/products_controller').default['edit']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/seller/catalog/products_controller').default['edit']>>>
+    }
+  }
   'admin.logistics': {
     methods: ["GET","HEAD"]
     pattern: '/admin/logistics'

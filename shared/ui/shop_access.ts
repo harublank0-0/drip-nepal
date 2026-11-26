@@ -27,3 +27,26 @@ export function profileEditable(status: string, role: string) {
   if (status === 'active') return true
   return (status === 'pending_review' || status === 'rejected') && role === 'owner'
 }
+
+/*
+ * Whether the shop's catalogue may be changed: the "products edit,
+ * publish; inventory" column of docs/07 §4.4, open while the shop is
+ * `active` only. The permission (`shop.products.edit`, ...) is checked
+ * besides. The server's gate (`shopGateAllows(shop, 'products_edit')`) and
+ * the seller product pages, which offer the forms or the saved details,
+ * use this one rule (R1-S part 2f-i).
+ */
+export function catalogEditable(status: string) {
+  return status === 'active'
+}
+
+/*
+ * Whether the shop's catalogue may be read (`listShopProducts`,
+ * `getShopProduct`): the `products_view` gate, open while the shop is
+ * `active` or `suspended` (either mode). The server's gate and the seller
+ * navigation, which links the product pages only when they open, use this
+ * one rule (R1-S part 2f-i).
+ */
+export function catalogViewable(status: string) {
+  return status === 'active' || status === 'suspended'
+}
