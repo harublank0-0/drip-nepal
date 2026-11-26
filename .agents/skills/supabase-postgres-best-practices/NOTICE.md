@@ -1,0 +1,15 @@
+# Source and licence
+
+This is the `supabase-postgres-best-practices` skill of [`supabase/agent-skills`](https://github.com/supabase/agent-skills), copied verbatim on 2026-11-26 from its folder `skills/supabase-postgres-best-practices/` at commit `c9be0e931b7930f7d02126d04774d904c381e7d7`. `skills-lock.json` at the repository root records the source and a hash of the copied files. The skill's folder has no licence file of its own; its `SKILL.md` frontmatter declares `license: MIT`, and `LICENSE` in this folder is a copy of the upstream repository's MIT licence (copyright 2026 Supabase). It has no scripts, runs nothing when it loads, pre-approves no tool and fetches no remote instructions; its links are reading references to the PostgreSQL and Supabase documentation. Its `SKILL.md` says version 1.1.1 and its `CHANGELOG.md` reaches 1.6.0; the commit above is what was copied.
+
+It is a general PostgreSQL guide written with Supabase in mind. DripNepal runs plain PostgreSQL 18, not Supabase, so the Supabase parts (`auth.uid()`, the `anon` and `authenticated` roles, the pooler ports) do not apply. Its own description asks to be loaded before any database change. In DripNepal it decides nothing: **where it disagrees with the documents, the documents win.** The differences known when it was copied:
+
+- **Money** is an integer number of paisa (ADR-0007, docs/04 §2.3), never `numeric` as `references/schema-data-types.md` suggests.
+- **Tenant isolation** is the shop scope of every query, an out-of-scope ID answering 404 like a missing one (`T-SEC-001`, docs/07 §1.5), and composite foreign keys that make a cross-shop row impossible to store (docs/04 §2.5). ADR-0006 keeps row-level security only as a later defence in depth, so `references/security-rls-basics.md` and `references/security-rls-performance.md` are not the pattern here.
+- **Primary keys** are `uuid DEFAULT uuidv7()`, built into PostgreSQL 18 with no extension, with the exceptions listed in docs/04 §2.1. `references/schema-primary-keys.md` suggests `bigint` identity columns or the `pg_uuidv7` extension.
+- **Pagination** uses page numbers with a capped count for the public catalogue and cursors everywhere else (docs/06 §6). `references/data-pagination.md` says to use cursors everywhere.
+- **Migrations** are Lucid migration files, one concern each, never edited once applied, with expand and contract for changes made while the previous release runs (docs/09 §8). `references/schema-constraints.md` shows idempotent `DO` blocks instead.
+- **Connections and timeouts**: the pool sizes, `statement_timeout` and `lock_timeout` are in docs/03 §3.4 and §8.2, and pg-boss connects without a transaction-mode pooler. The `conn-*` references describe a different setup.
+- **Lock order** is the global order of docs/05 §4.4.
+
+Its general advice (indexes for foreign keys and filter columns, short transactions, `ON CONFLICT`, reading `EXPLAIN` plans) is useful when reviewing a query, but the tables, columns, constraints and indexes are exactly those of docs/04a: a change the skill suggests goes into docs/04a first.
