@@ -241,6 +241,45 @@ OD-28 to OD-54 register the owner decisions that the three deep audits left open
 Newest first. The entry format is in §1.5. A ruling that is not an OD but changes an owning document or an ADR is logged in the same format, headed "Not an OD".
 
 ```text
+Not an OD — Decided 2026-11-26 by product owner: track the accessibility skill
+Ruling: The `accessibility` skill of addyosmani/web-quality-skills is tracked as a fifth reviewed
+        third-party skill, unchanged: .agents/skills/accessibility/ with a .claude/skills/
+        symlink, ignored by Prettier, and listed in skills-lock.json and AGENTS.md. A NOTICE.md
+        beside it records its source and where it disagrees with the documents, which win. It is
+        a WCAG 2.2 review aid for pages; docs/08 §9 stays the target.
+Evidence: The product owner asked on 2026-11-26 for skills that would help the marketplace and
+          chose to add the recommended ones. Source: folder skills/accessibility/ at commit
+          afa8da9, copied verbatim (3 files). Licence: MIT, declared in its SKILL.md frontmatter
+          and in the upstream LICENSE (copyright 2026 Addy Osmani), copied beside it. Read-through
+          of all 3 files: Markdown only, no scripts, no `!` command run on load, no allowed-tools,
+          no hooks and no instruction to fetch remote content. Its testing checklist tells the
+          agent to run `npx lighthouse` and `npm install @axe-core/cli -g` and to use Chrome
+          DevTools MCP's `lighthouse_audit`; NOTICE.md says not to (pnpm, T-A11Y-001,
+          dripnepal-run). Its URLs are W3C, Deque, WebAIM, TPGi and NV Access pages. It
+          disagrees with the documents on the large-text contrast threshold (its 18 px, or 14 px
+          bold, confuses points with pixels; 08 §5.10 says 24 px, or 18.66 px bold), the focus
+          indicator, focus-not-obscured spacing, hand-written widgets, form-error announcements,
+          hard-coded accessible names, session expiry, passkeys and how pages are verified (08
+          §5.10, §6.1, §7.1, §7.4, §9, §11.7, §11.8; 07 §3.4; ADR-0005; ADR-0015; T-A11Y-001);
+          NOTICE.md lists them. skills-lock.json's computedHash uses the algorithm of the 2026-11-09
+          ncm-integration entry (4 files: the 3 and LICENSE, NOTICE.md excluded).
+          Reviewed the same day and not tracked: the same repository's performance,
+          core-web-vitals and seo skills (most of their advice is decided in 08 §10, 03 §12.5 and
+          FR-SRCH-005, and some contradicts it: edge-cached HTML, prerendering, inline critical
+          CSS against the CSP, third-party scripts, AVIF, a USD Product JSON-LD with ratings),
+          its web-quality-audit (ships a script) and best-practices (repeats 07);
+          currents-dev/playwright-best-practices (MIT, but it assumes the @playwright/test
+          runner, retries, saved sessions, seed endpoints and a test-mode MFA bypass, and its
+          SKILL.md tells the agent to run `npx playwright test --repeat-each=5`; its locator,
+          waiting and axe advice belongs in a browser-suite section of the dripnepal-testing
+          skill when the first browser spec is written); Tailwind skills (they build a new
+          design system or ship project templates; the shadcn skill covers Tailwind v4 theming);
+          medusajs storefront-best-practices and the AdonisJS skills found (no licence).
+ADR: none.
+Docs updated: 09 (§1.5, note 136), 12 (E12, note 86), AGENTS.md, note 61  |  Status: Decided
+```
+
+```text
 OD-23 — Re-decided 2026-11-26 by product owner (replaces the ruling of 2026-09-30)
 Ruling: Option (b). DripNepal's code is proprietary, all rights reserved, and the repository
         stays public: LICENSE is an all-rights-reserved notice, package.json says "license":
@@ -1332,3 +1371,4 @@ This matrix is authoritative for decision gates. [12 §3](12-roadmap-and-backlog
 58. **OD-65 decided (2026-11-25).** §2.2 marks OD-65 decided and §2.3 logs it: SeaweedFS for development and CI, after a probe showed it holds a presigned PUT to its signed `Content-Type` and refuses a stale `If-Match`, as R2 does. §5's R1-S row follows. [00 §7.2](00-context-assumptions-and-questions.md#72-remaining-open-decisions), [03 §3.5](03-system-architecture.md#35-object-storage-layout), [07 §7.3](07-security-threat-model-and-permissions.md#73-csp-and-security-headers), [09 §6.1](09-code-structure-and-engineering-standards.md#61-variable-catalogue), [10 §3.6](10-testing-and-quality-gates.md#36-provider-fakes-email-storage-and-jobs), [11 §2.2](11-deployment-and-operations.md#22-development), [12 §9](12-roadmap-and-backlog.md#9-single-seller-launch-r1-s), ADR-0013 and ADR-0016 follow.
 59. **The `supabase-postgres-best-practices` skill (2026-11-26).** §2.3 logs the product owner's decision to track Supabase's PostgreSQL skill, after the licence check and read-through that [AGENTS.md](../AGENTS.md) requires. It changes no OD, VX or risk: where the skill disagrees with the documents (money, tenant isolation, primary keys, pagination, migrations, enum types, queues, connection settings, roles and server settings, search), the documents win, and its `NOTICE.md` lists the differences.
 60. **OD-23 re-decided (2026-11-26).** The product owner replaced the MIT ruling of 2026-09-30 with option (b): the code is proprietary, all rights reserved, and the repository stays public for GitHub's free CI, branch protection and secret scanning. §2.2 and §2.3 record it; the VX-13 question, R-15 and §5's M0 row no longer call the repository MIT, and ADR-0015 has a dated note: its revisit trigger fired, but OD-22 (a) and its decisions are unchanged, because the source is still public. The documents that restate OD-23 follow in the same pull request.
+61. **The `accessibility` skill (2026-11-26).** §2.3 logs the product owner's decision to track the `accessibility` skill of `addyosmani/web-quality-skills`, after the licence check and read-through that [AGENTS.md](../AGENTS.md) requires, and records the skills reviewed the same day and not tracked, with the reason for each. It changes no OD, VX or risk: where the skill disagrees with [08](08-ui-ux-and-design-system.md), the documents win, and its `NOTICE.md` lists the differences.
