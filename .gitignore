@@ -43,6 +43,7 @@ coverage/
 !.agents/skills/shadcn/
 !.agents/skills/vercel-react-best-practices/
 !.agents/skills/ncm-integration/
+!.agents/skills/supabase-postgres-best-practices/
 
 # Claude Code agent worktrees: temporary full copies of the repository
 .claude/worktrees/
