@@ -18,7 +18,7 @@ import { shippingConfigured } from '#modules/logistics/queries'
 import type { Actor } from '#modules/platform/actor'
 import { sendJob } from '#modules/platform/jobs'
 import { withTx } from '#modules/platform/tx'
-import { acceptedCurrentAgreement } from '#modules/shops/queries'
+import { holdsAcceptedAgreement } from '#modules/shops/queries'
 
 /*
  * The product status operations of docs/06 §13.5 and 05 §6.10 (01
@@ -40,9 +40,13 @@ import { acceptedCurrentAgreement } from '#modules/shops/queries'
  * without `requires_moderation`; otherwise the product goes through review,
  * which R1-S does not build) or `unpublished` to `published`, after the
  * publication gate of AC-FR-CAT-005-2 lists every missing item in one 422:
- * the current seller agreement, a `ready` image, an active variant with
- * every active variant priced above zero, the disclosures, the category's
- * required attributes and axes, and shipping. `published_at` is now, and
+ * an agreement for a version the platform still accepts (AC-FR-SHOP-013-3),
+ * a `ready` image, an active variant with every active variant priced above
+ * zero, the disclosures, the category's required attributes and axes, and
+ * shipping. A draft is also checked as a new product is: an active leaf
+ * category and a selectable brand. An unpublished product was live and keeps
+ * its category and brand, as `updateProduct` does (a platform change does not
+ * lock a vendor out). `published_at` is now, and
  * `first_published_at` keeps the first time. `archiveProduct` also archives
  * every active variant, which frees their SKUs; their stock rows stay
  * (04a §7.6). `restoreProduct` returns an archived product to `draft` and
@@ -70,7 +74,13 @@ type StatusChange = {
   after?: (trx: TransactionClientContract, product: ProductRow) => Promise<void>
 }
 
-// The operations a product in each status allows, for the 409's `allowed_events`.
+/*
+ * The operations of these four a product in each status allows, for the
+ * 409's `allowed_events`. `pending_review`, `rejected` and `blocked` leave by
+ * review, an edit or staff (05 §6.10), so their 409 lists none. A draft is
+ * told `publish`, which a `pre` shop or a watch-listed brand then answers
+ * with `[submit]`.
+ */
 const ALLOWED: Record<string, string[]> = {
   // Archiving needs a product that was live (05 §6.10, AC-FR-CAT-007-2).
   draft: ['publish'],
@@ -86,7 +96,7 @@ async function publishGate(
   editor: ProductEditorData
 ) {
   const problems: ProblemErrorItem[] = []
-  if (!(await acceptedCurrentAgreement(product.shopId, { client: trx }))) {
+  if (!(await holdsAcceptedAgreement(product.shopId, { client: trx }))) {
     problems.push({
       field: 'agreement',
       code: 'required',
@@ -111,15 +121,22 @@ async function publishGate(
       countryOfOrigin: product.countryOfOrigin,
     },
     {
-      category: 'stored',
-      brand: false,
+      category: product.status === 'draft' ? 'active_leaf' : 'stored',
+      brand: product.status === 'draft',
       attributes: true,
       origin: true,
       complete: true,
       keptValueIds: new Set(keptRows.map((row) => row.attribute_value_id)),
     }
   )
-  problems.push(...checked.problems.map((problem) => ({ ...problem })))
+  // The request sent no attributes, so an indexed field (`attributes.N.…`) means nothing to the client.
+  const seen = new Set<string>()
+  for (const problem of checked.problems) {
+    const field = problem.field.startsWith('attributes.') ? 'attributes' : problem.field
+    if (seen.has(`${field} ${problem.code}`)) continue
+    seen.add(`${field} ${problem.code}`)
+    problems.push({ ...problem, field })
+  }
   const missingAxes = [...checked.rules.values()]
     .filter((rule) => rule.usage === 'variant_axis' && rule.isRequired)
     .filter((rule) => !editor.optionAxes.includes(rule.code))
@@ -246,7 +263,12 @@ export function archiveProduct<T>(command: ProductStatusCommand, context: Contex
       from: ['published', 'unpublished'],
       to: 'archived',
       action: 'product.archive',
-      // Every active variant is archived too, which frees its SKU; its stock row stays (04a §7.6).
+      /*
+       * Every active variant is archived too, which frees its SKU; its stock
+       * row stays (04a §7.6). A compare-and-set on `status` under the product
+       * lock. No stock is written, so `inventory_items` (05 §4.4) is not
+       * locked; a change that writes stock here must lock it first.
+       */
       after: async (trx, product) => {
         await trx
           .from('product_variants')

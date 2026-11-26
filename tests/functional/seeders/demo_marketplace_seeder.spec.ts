@@ -94,6 +94,8 @@ test.group('T-ARCH-036 demo marketplace seeder', (group) => {
     const shop = (slug: string) => shops.find((row) => row.slug === slug)
     assert.equal(shop('demo-pasal').status, 'active')
     assert.equal(shop('demo-pasal-2').status, 'pending_review')
+    assert.equal(shop('demo-pasal').product_review_mode, 'post', 'its drafts publish directly')
+    assert.equal(shop('demo-pasal-2').product_review_mode, 'pre')
     for (const row of shops) {
       assert.equal(row.owner_user_id, owner)
       assert.isTrue(row.contact_email.endsWith(`@${DEMO_EMAIL_DOMAIN}`))

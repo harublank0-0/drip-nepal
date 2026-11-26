@@ -163,7 +163,7 @@ export async function updateProduct<T>(
         field: 'brand_id',
         code: 'moderation_required',
         message:
-          'Products of this brand are reviewed before they go live. Unpublish the product first.',
+          'Products of this brand are reviewed before they go live. Archive the product and restore it as a draft first.',
       })
     }
     if (live) problems.push(...liveDisclosureProblems(merged))

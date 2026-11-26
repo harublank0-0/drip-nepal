@@ -25,3 +25,22 @@ export const SELLER_AGREEMENTS: readonly SellerAgreementVersion[] = [
 
 // The version `applyForShop` and `acceptSellerAgreement` will take: the last one issued.
 export const CURRENT_SELLER_AGREEMENT = SELLER_AGREEMENTS[SELLER_AGREEMENTS.length - 1]
+
+/*
+ * The versions a shop may still publish on, on a Kathmandu date `YYYY-MM-DD`
+ * (AC-FR-SHOP-013-3): the current one, and an older one up to and including
+ * its `acceptedUntil`. An older entry without `acceptedUntil` is not
+ * accepted: only the last entry may leave it null.
+ */
+export function versionsAcceptedOn(
+  day: string,
+  registry: readonly SellerAgreementVersion[] = SELLER_AGREEMENTS
+) {
+  return registry
+    .filter(
+      (entry, index) =>
+        index === registry.length - 1 ||
+        (entry.acceptedUntil !== null && entry.acceptedUntil >= day)
+    )
+    .map((entry) => entry.version)
+}
