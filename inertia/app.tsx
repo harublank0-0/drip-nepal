@@ -1,33 +1,40 @@
 import './css/app.css'
-import { StrictMode, type ComponentType } from 'react'
+import { StrictMode } from 'react'
 import { client } from './client'
 import { layoutFor } from '~/layouts/layout_for'
 import { loadCatalogsFor } from '~/lib/i18n'
 import { createRoot, hydrateRoot } from 'react-dom/client'
-import { createInertiaApp } from '@inertiajs/react'
+import { createInertiaApp, type ResolvedComponent } from '@inertiajs/react'
 import { TuyauProvider } from '@adonisjs/inertia/react'
 import { resolvePageComponent } from '@adonisjs/inertia/helpers'
 
 const appName = import.meta.env.VITE_APP_NAME || 'Drip Nepal'
 
+// A page module: its component, with the layout Inertia renders it in (set below when absent).
+type PageModule = { default: ResolvedComponent }
+
 // The development pages (routed only outside production, RF-40) are not built
 // into the production bundle: `vite build` replaces import.meta.env.DEV with
 // false, so the first glob and its chunks drop out (docs/08 §10.1).
 const pages = import.meta.env.DEV
-  ? import.meta.glob<{ default: ComponentType }>('./pages/**/*.tsx')
-  : import.meta.glob<{ default: ComponentType }>(['./pages/**/*.tsx', '!./pages/dev/**'])
+  ? import.meta.glob<PageModule>('./pages/**/*.tsx')
+  : import.meta.glob<PageModule>(['./pages/**/*.tsx', '!./pages/dev/**'])
 
 createInertiaApp({
   title: (title) => (title ? `${title} - ${appName}` : appName),
   // Inertia 3.11's resolver type takes the component; the adapter's helper
   // returns its module.
-  // A surface's own catalog (seller.json for the seller pages) loads with the page, so the
-  // page and its layout render with their strings (inertia/lib/i18n.ts).
+  // The page, its layout (a dashboard layout loads with its surface, inertia/layouts/layout_for.ts)
+  // and its surface's catalog (seller.json for the seller pages, inertia/lib/i18n.ts) load
+  // together, so the page renders in its layout with its strings. The layout is set as the
+  // adapter's helper would, when the page names none.
   resolve: async (name) => {
-    const [page] = await Promise.all([
-      resolvePageComponent(`./pages/${name}.tsx`, pages, layoutFor(name)),
+    const [page, layout] = await Promise.all([
+      resolvePageComponent(`./pages/${name}.tsx`, pages),
+      layoutFor(name),
       loadCatalogsFor(name),
     ])
+    if (!page.default.layout) page.default.layout = layout
     return page.default
   },
   setup({ el, App, props }) {

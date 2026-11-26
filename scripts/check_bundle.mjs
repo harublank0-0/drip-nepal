@@ -12,7 +12,15 @@
 //   budget: 250 KB for a storefront route, 500 KB for a seller or admin
 //   route (1 KB = 1,000 bytes, as Vite reports sizes). Initial JavaScript is
 //   the client entry (inertia/app.tsx) and the page's chunk, with every
-//   chunk they import statically, as Vite's manifest lists them.
+//   chunk they import statically, as Vite's manifest lists them, and the
+//   chunks of what inertia/app.tsx loads with the page before it renders:
+//   its surface's layout (`inertia/layouts/<surface>_layout.tsx`) and
+//   catalog (`resources/lang/en/<surface>.json`) when they are dynamic
+//   imports, `<surface>` being the page name's first segment. A layout or
+//   catalog loaded on demand that no page counts fails, so one named
+//   otherwise cannot go uncounted. A storefront route never loads a
+//   dashboard layout (seller, admin), and a dashboard layout is a chunk
+//   loaded on demand: a static import would put it in every page.
 // - T-UI-013: no devtools code in the build: no file holds the strings
 //   `TanStackDevtools` or `react-form-devtools`.
 // - T-ARCH-002 (rule 4's build-output part): the SSR bundle holds only the
@@ -35,6 +43,7 @@ const SSR_ENTRY = 'inertia/ssr.tsx'
 const KB = 1000
 const BUDGETS = { storefront: 250 * KB, dashboard: 500 * KB }
 const DASHBOARD = /^(seller|admin)\//
+const DASHBOARD_LAYOUTS = ['inertia/layouts/seller_layout.tsx', 'inertia/layouts/admin_layout.tsx']
 const DEVTOOLS = ['TanStackDevtools', 'react-form-devtools']
 
 const problems = []
@@ -72,12 +81,27 @@ function gzipSize(file) {
 
 const pages = Object.keys(manifest).filter((key) => /^inertia\/pages\/.+\.tsx$/.test(key))
 if (pages.length === 0) problems.push('the client manifest lists no page under inertia/pages/')
+// The layouts and catalogs loaded on demand that some page counts.
+const counted = new Set()
 for (const page of pages) {
   const name = page.slice('inertia/pages/'.length, -'.tsx'.length)
   const surface = DASHBOARD.test(name) ? 'dashboard' : 'storefront'
+  const first = name.split('/')[0]
+  // What app.tsx loads with this page: its surface's layout and catalog, when they are dynamic.
+  const withPage = [
+    `inertia/layouts/${first}_layout.tsx`,
+    `resources/lang/en/${first}.json`,
+  ].filter((key) => manifest[key]?.isDynamicEntry)
+  for (const key of withPage) counted.add(key)
+  const keys = new Set([ENTRY, page, ...withPage].flatMap((key) => [...staticClosure(key)]))
   const files = new Set()
-  for (const key of new Set([...staticClosure(ENTRY), ...staticClosure(page)])) {
+  for (const key of keys) {
     if (manifest[key].file.endsWith('.js')) files.add(manifest[key].file)
+  }
+  if (surface === 'storefront') {
+    for (const layout of DASHBOARD_LAYOUTS.filter((key) => keys.has(key))) {
+      problems.push(`T-UI-012: ${name} loads the dashboard layout ${layout}`)
+    }
   }
   const size = [...files].reduce((total, file) => total + gzipSize(file), 0)
   const budget = BUDGETS[surface]
@@ -85,6 +109,25 @@ for (const page of pages) {
   if (size > budget) {
     problems.push(
       `T-UI-012: ${name} loads ${(size / KB).toFixed(1)} KB of JavaScript (gzip), over the ${surface} budget of ${budget / KB} KB`
+    )
+  }
+}
+
+for (const key of Object.keys(manifest)) {
+  if (/^(inertia\/layouts\/|resources\/lang\/)/.test(key) && manifest[key].isDynamicEntry) {
+    if (!counted.has(key)) {
+      problems.push(
+        `T-UI-012: ${key} is loaded on demand but no page counts it: name it inertia/layouts/<surface>_layout.tsx or resources/lang/en/<surface>.json for the pages of <surface>/`
+      )
+    }
+  }
+}
+for (const layout of DASHBOARD_LAYOUTS) {
+  const surface = layout.slice('inertia/layouts/'.length, -'_layout.tsx'.length)
+  const used = pages.some((page) => page.startsWith(`inertia/pages/${surface}/`))
+  if (used && !manifest[layout]?.isDynamicEntry) {
+    problems.push(
+      `T-UI-012: ${layout} is not a chunk loaded on demand: imported statically, or renamed, it would be in every page's JavaScript; load it with its surface (inertia/layouts/layout_for.ts)`
     )
   }
 }
