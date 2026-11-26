@@ -786,7 +786,8 @@ export type FilterAttribute = {
  * descendant names: the filters a product listed under it can match, since
  * the listing shows the whole subtree (docs/06 §6.3), so `clothing` offers
  * the sizes its leaves vary by. A rule counts only on a listed category
- * (active, every ancestor active), so a hidden subtree adds no filter.
+ * (active, every ancestor active), so a hidden subtree adds no filter: the
+ * NOT EXISTS below also matches the rule's category itself when inactive.
  * Without one, every filterable attribute.
  */
 export async function filterableAttributes(
@@ -803,7 +804,6 @@ export async function filterableAttributes(
         .from('category_attributes as ca')
         .join('categories as c', 'c.id', 'ca.category_id')
         .whereColumn('ca.attribute_id', 'a.id')
-        .where('c.is_active', true)
         .whereNotExists((inactive) => {
           inactive
             .from('categories as x')

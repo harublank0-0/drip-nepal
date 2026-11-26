@@ -228,9 +228,9 @@ test.group('T-CAT-015 the category tree and the filterable attributes', (group) 
       .select('id')
       .firstOrFail()
     const bags = await category('bags')
+    // An inactive leaf under `bags`, and an active category under it.
     const hiddenBag = await insertCategory(bags, false)
-    const hiddenRoot = await insertCategory(null, false)
-    const underHidden = await insertCategory(hiddenRoot, true)
+    const underHidden = await insertCategory(hiddenBag, true)
     for (const hidden of [hiddenBag, underHidden]) {
       await db
         .table('category_attributes')
@@ -239,6 +239,7 @@ test.group('T-CAT-015 the category tree and the filterable attributes', (group) 
     const bagFilters = await getJson(visitor(), `${ATTRIBUTES}?category=bags`)
     assert.deepEqual(codesOf(bagFilters.body), ['audience', 'color'])
 
+    const hiddenRoot = await insertCategory(null, false)
     const orphan = await insertCategory(hiddenRoot, true)
     for (const slug of ['no-such-category', hiddenRoot.slug, orphan.slug]) {
       const empty = await getJson(visitor(), `${ATTRIBUTES}?category=${slug}`)

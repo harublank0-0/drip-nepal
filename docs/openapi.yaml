@@ -645,20 +645,17 @@ paths:
         Actor: anyone, signed in or not (06 §13.2). Answer: the filterable attributes
         (`attributes.is_filterable`, 04a §7.2) with their active values (`code`, `label`,
         `swatch_hex`, null when a value has none); attributes by `position`, then code; values by
-        `position`, then label and code.
-        With `category`, only the attributes a rule on that category, an ancestor or a listed
-        descendant names: the filters a product listed under it can match, since the listing
-        shows the subtree (06 §6.3); a rule on a hidden category adds none. A well-formed slug
-        that names no listed category (unknown,
-        inactive, or under an inactive parent) answers an empty list. Without it, every
-        filterable attribute. Bounded, so `{ "data": [...] }` without `meta` (06 §6.2).
-        Query: `category`, once; any other parameter, a repeated one or a malformed slug is 400
-        `INVALID_QUERY_PARAMETER` (06 §6.3). T-CAT-015.
-        Order: the API limits middleware charges `catalog_ip` (120 per minute per client network,
-        06 §9.1) on every call, signed in or not, instead of `api_user`; past it, 429 before the
-        query is read. A session that fails the account check (06 §4.2) is answered 401 or 403
-        and ended first, as on every route. Side effects: none. Built R1-S part 3a. Release
-        R1·M3.
+        `position`, then label and code. With `category`, only the attributes a rule on that
+        category, an ancestor or a listed descendant names: the filters a product listed under it
+        can match, since the listing shows the subtree (06 §6.3); a rule on a hidden category adds
+        none. A well-formed slug that names no listed category (unknown, inactive, or under an
+        inactive parent) answers an empty list. Without it, every filterable attribute. Bounded, so
+        `{ "data": [...] }` without `meta` (06 §6.2). Query: `category`, once; any other parameter,
+        a repeated one or a malformed slug is 400 `INVALID_QUERY_PARAMETER` (06 §6.3). T-CAT-015.
+        Order: the API limits middleware charges `catalog_ip` (120 per minute per client network, 06
+        §9.1) on every call, signed in or not, instead of `api_user`; past it, 429 before the query
+        is read. A session that fails the account check (06 §4.2) is answered 401 or 403 and ended
+        first, as on every route. Side effects: none. Built R1-S part 3a. Release R1·M3.
       x-release: R1·M3
       security: []
       parameters:
@@ -11392,4 +11389,4 @@ components:
 # 63. `listCategories` and `listAttributes` move from `x-pending-operations` to `paths`, written
 #     from the code (R1-S part 3a, 2026-11-26; 06 note 73), with the schemas `CategoryTree`,
 #     `CategoryNode` and `FilterAttributeList`. `listAttributes` with a category answers the
-#     attributes of its ancestors and its descendants (06 note 73).
+#     attributes of its ancestors and its listed descendants (06 note 73).
