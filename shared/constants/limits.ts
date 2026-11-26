@@ -97,3 +97,13 @@ export const PRODUCT_LIMITS = {
   attributes: { max: 30 },
   attributeValues: { max: 20 },
 } as const
+
+/*
+ * A product's gallery (docs/04a §7.14, 01 FR-MED-002; R1-S part 2d-iii): at
+ * most 12 images, positions 1 to 12, alt text of 1 to 150 characters in
+ * code points (`product_media_position_check`, `product_media_alt_text_check`).
+ */
+export const PRODUCT_MEDIA_LIMITS = {
+  items: { max: 12 },
+  altText: { min: 1, max: 150 },
+} as const

@@ -45,3 +45,22 @@ export async function shopMediaAsset(
     .first()
   return row ? mediaAssetRow(row) : null
 }
+
+/*
+ * The product images of `shopId` among `ids`, with their status, for
+ * `replaceProductMedia`: an ID that is not a product image of this shop is
+ * absent, so the caller answers it as a missing one (T-SEC-001 case (c)).
+ */
+export async function shopProductImages(
+  client: QueryClientContract,
+  shopId: string,
+  ids: string[]
+): Promise<Map<string, MediaStatus>> {
+  if (ids.length === 0) return new Map()
+  const rows: { id: string; status: MediaStatus }[] = await client
+    .from('media_assets')
+    .where({ shop_id: shopId, kind: 'product_image' })
+    .whereIn('id', ids)
+    .select('id', 'status')
+  return new Map(rows.map((row) => [row.id, row.status]))
+}

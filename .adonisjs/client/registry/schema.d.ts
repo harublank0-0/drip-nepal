@@ -403,6 +403,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/seller/catalog/products_controller').default['replaceVariants']>>> | { status: 422; response: { errors: SimpleError[] } }
     }
   }
+  'replaceProductMedia': {
+    methods: ["PUT"]
+    pattern: '/api/v1/seller/shops/:shopSlug/products/:productId/media'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/catalog/media').replaceProductMediaValidator)>>
+      paramsTuple: [ParamValue, ParamValue]
+      params: { shopSlug: ParamValue; productId: ParamValue }
+      query: ExtractQuery<InferInput<(typeof import('#validators/catalog/media').replaceProductMediaValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/api/v1/seller/catalog/products_controller').default['replaceMedia']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/seller/catalog/products_controller').default['replaceMedia']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
   'listInventory': {
     methods: ["GET","HEAD"]
     pattern: '/api/v1/seller/shops/:shopSlug/inventory'

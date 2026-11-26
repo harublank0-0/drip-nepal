@@ -526,3 +526,20 @@ export async function listShopProducts(filters: {
 }
 
 export const LIST_PRODUCT_STATUSES: readonly ProductStatus[] = PRODUCT_STATUSES
+
+/*
+ * The `color` values of a product's active variants (04 §3.9): the only
+ * colours `replaceProductMedia` may link an image to (AC-FR-MED-002-3).
+ */
+export async function productColorValueIds(
+  client: QueryClientContract,
+  productId: string
+): Promise<Set<string>> {
+  const rows: { attribute_value_id: string }[] = await client
+    .from('variant_option_values as o')
+    .join('attributes as a', 'a.id', 'o.attribute_id')
+    .join('product_variants as v', 'v.id', 'o.variant_id')
+    .where({ 'o.product_id': productId, 'a.code': 'color', 'v.status': 'active' })
+    .distinct('o.attribute_value_id')
+  return new Set(rows.map((row) => row.attribute_value_id))
+}
