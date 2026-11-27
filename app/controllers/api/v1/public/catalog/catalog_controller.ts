@@ -1,11 +1,18 @@
 import type { HttpContext } from '@adonisjs/core/http'
-import { closedQuery, invalidParameter } from '#controllers/support/cursor'
+import { closedQuery, invalidParameter, invalidParameters } from '#controllers/support/cursor'
+import { cappedTotal, parseListingQuery } from '#modules/catalog/domain/listing_query'
 import {
   activeCategoryTree,
   filterableAttributes,
   listedCategoryPath,
+  listingFilterAttributes,
+  listingPage,
 } from '#modules/catalog/queries'
-import { categoryNodeJson, filterAttributeJson } from '#transformers/catalog/storefront_transformer'
+import {
+  categoryNodeJson,
+  filterAttributeJson,
+  listingCardJson,
+} from '#transformers/catalog/storefront_transformer'
 import { listAttributesValidator } from '#validators/catalog/storefront'
 
 /*
@@ -43,5 +50,30 @@ export default class CatalogController {
     }
     const attributes = await filterableAttributes(path)
     return { data: attributes.map(filterAttributeJson) }
+  }
+
+  /*
+   * listProducts: one page of the storefront listing (06 §6.1, §6.3; R1-S
+   * part 3b). Every problem with the query, an unknown parameter included,
+   * is one 400 `INVALID_QUERY_PARAMETER` naming each parameter. `meta`
+   * carries the page, its size, the capped total and `has_more`; a page past
+   * the last answers an empty `data` with 200.
+   */
+  async listProducts(ctx: HttpContext) {
+    const filterable = await listingFilterAttributes()
+    const { filters, problems } = parseListingQuery(ctx.request.qs(), filterable)
+    if (!filters) throw invalidParameters(problems)
+    const { rows, counted } = await listingPage(filters)
+    const { total, totalIsCapped } = cappedTotal(counted)
+    return {
+      data: rows.slice(0, filters.perPage).map(listingCardJson),
+      meta: {
+        page: filters.page,
+        per_page: filters.perPage,
+        total,
+        total_is_capped: totalIsCapped,
+        has_more: rows.length > filters.perPage,
+      },
+    }
   }
 }

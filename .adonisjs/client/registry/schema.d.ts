@@ -259,6 +259,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/public/catalog/catalog_controller').default['listAttributes']>>> | { status: 422; response: { errors: SimpleError[] } }
     }
   }
+  'listProducts': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/catalog/products'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/api/v1/public/catalog/catalog_controller').default['listProducts']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/public/catalog/catalog_controller').default['listProducts']>>>
+    }
+  }
   'listAddresses': {
     methods: ["GET","HEAD"]
     pattern: '/api/v1/me/addresses'

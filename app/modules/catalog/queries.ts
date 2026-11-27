@@ -4,6 +4,13 @@ import type { AttributeValueRef, EffectiveRule } from '#modules/catalog/domain/a
 import type { AttributeInput } from '#modules/catalog/domain/attribute_input'
 import type { CategoryAttributeUsage } from '#modules/catalog/domain/category_attribute_usage'
 import { PRODUCT_STATUSES, type ProductStatus } from '#modules/catalog/domain/product_status'
+import { withTx } from '#modules/platform/tx'
+import { shopIdBySlug } from '#modules/shops/queries'
+import type {
+  FilterableAttribute,
+  ListingColumn,
+  ListingFilters,
+} from '#modules/catalog/domain/listing_query'
 
 /*
  * The catalog module's reads (docs/09 §2.2: its public surface is
@@ -838,4 +845,197 @@ export async function filterableAttributes(
       .filter((value) => value.attribute_id === attribute.id)
       .map((value) => ({ code: value.code, label: value.label, swatchHex: value.swatch_hex })),
   }))
+}
+
+/*
+ * The filterable attributes the listing can match, by code, with the
+ * `product_listings` array each is matched in and its active value codes
+ * (docs/04a §7.12; R1-S part 3b): `audience` in `audience_value_ids`,
+ * `color` in `color_value_ids`, and every other variant-scope attribute, a
+ * size system, in `size_value_ids`, as `catalog.refresh_listing` fills them.
+ * A filterable product-scope attribute other than `audience` has no column
+ * and is not offered here.
+ */
+export async function listingFilterAttributes(): Promise<Map<string, FilterableAttribute>> {
+  const rows: {
+    code: string
+    scope: string
+    value_code: string | null
+    value_id: string | null
+  }[] = await db
+    .from('attributes as a')
+    .leftJoin('attribute_values as v', (join) => {
+      join.on('v.attribute_id', 'a.id').andOnVal('v.is_active', true)
+    })
+    .where('a.is_filterable', true)
+    .select('a.code', 'a.scope', 'v.code as value_code', 'v.id as value_id')
+  const attributes = new Map<string, { column: ListingColumn; values: Map<string, string> }>()
+  for (const row of rows) {
+    const column: ListingColumn | null =
+      row.code === 'audience'
+        ? 'audience_value_ids'
+        : row.scope !== 'variant'
+          ? null
+          : row.code === 'color'
+            ? 'color_value_ids'
+            : 'size_value_ids'
+    if (column === null) continue
+    const attribute = attributes.get(row.code) ?? { column, values: new Map<string, string>() }
+    if (row.value_code !== null && row.value_id !== null) {
+      attribute.values.set(row.value_code, row.value_id)
+    }
+    attributes.set(row.code, attribute)
+  }
+  return attributes
+}
+
+export type ListingCardRow = {
+  product_id: string
+  public_id: string
+  slug: string
+  title: string
+  shop_slug: string
+  shop_name: string
+  brand_slug: string | null
+  brand_name: string | null
+  min_price_minor: number
+  max_price_minor: number
+  compare_at_price_minor: number | null
+  currency: string
+  in_stock: boolean
+  primary_image_keys: Record<string, string>
+  primary_image_alt: string
+  published_at: Date
+}
+
+const LISTING_COLUMNS = new Set<ListingColumn>([
+  'audience_value_ids',
+  'size_value_ids',
+  'color_value_ids',
+])
+
+// The capped count reads at most this many rows (docs/06 §6.1).
+const COUNT_LIMIT = 10_001
+
+/*
+ * The trigram word similarity at which the typo fallback matches a title
+ * [Assumption]: pg_trgm's default of 0.6 misses a one-letter typo in a
+ * seven-letter word ("snekers" against "sneakers" is 0.55).
+ */
+const TYPO_WORD_SIMILARITY = 0.5
+
+/*
+ * One page of the storefront listing (docs/06 §6.1, §6.3 `listProducts`;
+ * ADR-0014 decisions 3 and 4; R1-S part 3b), read from `product_listings`
+ * alone, and the capped count of every matching row. A category that is not
+ * listed (unknown, inactive, or under an inactive parent) matches nothing.
+ *
+ * - The category subtree is a prefix match on `category_path`
+ *   (`product_listings_category_idx`), and the shop its `shop_id`
+ *   (`product_listings_shop_idx`), read from its slug first; the other
+ *   filters apply to the rows those select. A value filter matches a row
+ *   whose array holds any of the IDs (`&&`); filters all apply. A price
+ *   filter matches a row whose price range overlaps the range asked for.
+ * - It opens its own read transaction for the typo fallback, so it is never
+ *   called inside another transaction.
+ * - `q` matches `search_tsv` with `websearch_to_tsquery('simple', q)`. When
+ *   that finds nothing under the other filters, `q` is matched against the
+ *   closest run of words in the title by trigram word similarity
+ *   (`q <% title`, served by
+ *   `product_listings_title_trgm_idx`), at `TYPO_WORD_SIMILARITY` set for
+ *   that read transaction alone, so a typo such as "snekers" still finds
+ *   "sneakers" (AC-FR-SRCH-002-2); whole-title `similarity` stays far below
+ *   any threshold for a one-word query in a longer title.
+ * - Order: the sort key, then `product_id` (AC-FR-SRCH-001-2). Relevance is
+ *   `ts_rank`, or the word similarity in the fallback. One extra row is read
+ *   for `has_more`; `page × per_page` is at most 4,800, which bounds OFFSET.
+ */
+export async function listingPage(
+  filters: ListingFilters
+): Promise<{ rows: ListingCardRow[]; counted: number }> {
+  let categoryPath: string | null = null
+  if (filters.categorySlug !== null) {
+    categoryPath = await listedCategoryPath(filters.categorySlug)
+    if (categoryPath === null) return { rows: [], counted: 0 }
+  }
+  let shopId: string | null = null
+  if (filters.shopSlug !== null) {
+    shopId = await shopIdBySlug(filters.shopSlug)
+    if (shopId === null) return { rows: [], counted: 0 }
+  }
+  // Used only when a search was sent.
+  const q = filters.q ?? ''
+  const read = async (client: QueryClientContract, match: 'text' | 'trigram' | null) => {
+    const matching = () => {
+      const query = client.from('product_listings')
+      if (categoryPath !== null) query.whereRaw('category_path LIKE ?', [`${categoryPath}%`])
+      for (const filter of filters.valueFilters) {
+        if (!LISTING_COLUMNS.has(filter.column)) throw new Error(`unknown column ${filter.column}`)
+        // The IDs come from `attribute_values`, so the array literal holds UUIDs only.
+        query.whereRaw('?? && ?::uuid[]', [filter.column, `{${filter.ids.join(',')}}`])
+      }
+      if (filters.brandSlugs.length > 0) query.whereIn('brand_slug', filters.brandSlugs)
+      if (shopId !== null) query.where('shop_id', shopId)
+      if (filters.priceMinMinor !== null) {
+        query.where('max_price_minor', '>=', filters.priceMinMinor)
+      }
+      if (filters.priceMaxMinor !== null) {
+        query.where('min_price_minor', '<=', filters.priceMaxMinor)
+      }
+      if (filters.inStock) query.where('in_stock', true)
+      if (match === 'text') {
+        query.whereRaw(`search_tsv @@ websearch_to_tsquery('simple', ?)`, [q])
+      }
+      if (match === 'trigram') query.whereRaw('? <% title', [q])
+      return query
+    }
+    const capped = matching().select(client.raw('1')).limit(COUNT_LIMIT).as('capped')
+    const [countRow] = await client.from(capped).count('* as n')
+    const counted = Number(countRow.n)
+    if (counted === 0) return { rows: [], counted }
+    const page = matching().select(
+      'product_id',
+      'public_id',
+      'slug',
+      'title',
+      'shop_slug',
+      'shop_name',
+      'brand_slug',
+      'brand_name',
+      'min_price_minor',
+      'max_price_minor',
+      'compare_at_price_minor',
+      'currency',
+      'in_stock',
+      'primary_image_keys',
+      'primary_image_alt',
+      'published_at'
+    )
+    if (filters.sort === 'relevance') {
+      if (match === 'text') {
+        page.orderByRaw(`ts_rank(search_tsv, websearch_to_tsquery('simple', ?)) DESC`, [q])
+      } else {
+        page.orderByRaw('word_similarity(?, title) DESC', [q])
+      }
+    } else if (filters.sort === 'newest') {
+      page.orderBy('published_at', 'desc')
+    } else {
+      page.orderBy('min_price_minor', filters.sort === 'price_asc' ? 'asc' : 'desc')
+    }
+    const rows: ListingCardRow[] = await page
+      .orderBy('product_id', 'asc')
+      .limit(filters.perPage + 1)
+      .offset((filters.page - 1) * filters.perPage)
+    return { rows, counted }
+  }
+
+  const first = await read(db.connection(), filters.q === null ? null : 'text')
+  if (filters.q === null || first.counted > 0) return first
+  // The typo fallback, with its own threshold for this transaction only.
+  return withTx(async (trx) => {
+    await trx.rawQuery(`SELECT set_config('pg_trgm.word_similarity_threshold', ?, true)`, [
+      String(TYPO_WORD_SIMILARITY),
+    ])
+    return read(trx, 'trigram')
+  })
 }
