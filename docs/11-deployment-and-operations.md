@@ -1195,32 +1195,32 @@ The command starts its own pg-boss instance with a pool of 1 (09 §9.7). With `D
 
 All crons are registered at worker start with `tz: 'Asia/Kathmandu'` (03 §9, §10.6). Minute fields not fixed by 03 or 05 are proposed here to spread load, and are marked.
 
-| Queue                                     | Cron (Asia/Kathmandu) | From                                      | Release |
-| ----------------------------------------- | --------------------- | ----------------------------------------- | ------- |
-| `inventory.expire_reservations`           | `* * * * *`           | 05 §5.4, §9.4                             | R1.1    |
-| `platform.heartbeat`                      | `*/5 * * * *`         | 03 §9                                     | R1      |
-| `payments.reconcile_sweeper`              | `*/5 * * * *`         | 05 §9.4                                   | R1.1    |
-| `refunds.reconcile_sweeper`               | `*/5 * * * *`         | 05 §9.4                                   | R1.1    |
-| `platform.ops_metrics` (proposed, §8.6)   | `*/5 * * * *`         | this document                             | R1      |
-| `orders.sweep_courier_bookings`           | `*/5 * * * *`         | 03 §9, 05 §6.3 (M6)                       | R1      |
-| `orders.acceptance_timeout` (sweeper run) | `*/15 * * * *`        | 05 §8.11, §9.4                            | R1      |
-| `orders.sweep_courier_events`             | `*/15 * * * *`        | 03 §9, 05 §6.3 (M6)                       | R1      |
-| `orders.poll_courier_statuses`            | `*/30 * * * *`        | 03 §9, 05 §6.3 (M6)                       | R1      |
-| `logistics.sync_branches`                 | `30 2 * * *`          | 03 §9, 04a §9.12 (M6)                     | R1      |
-| `platform.purge_idempotency_keys`         | `5 * * * *`           | 05 §9.4                                   | R1      |
-| `orders.auto_complete`                    | `15 * * * *`          | 05 §9.4                                   | R1      |
-| `platform.support_case_sla`               | `25 * * * *`          | 03 §9                                     | R1      |
-| `refunds.sla_monitor`                     | `35 * * * *`          | 05 §9.4 (hourly; minute proposed here)    | R1      |
-| `identity.purge_sessions`                 | `45 * * * *`          | 03 §9 (hourly; minute proposed here)      | R1      |
-| `platform.retention_purge`                | `30 1 * * *`          | 03 §9                                     | R1      |
-| `cart.expire_abandoned`                   | `0 2 * * *`           | 03 §9                                     | R1      |
-| `inventory.drift_check`                   | `30 2 * * *`          | 05 §5.10                                  | R1      |
-| `media.cleanup_abandoned`                 | `45 2 * * *`          | 03 §9; built 2026-11-25 (R1-S part 2d-ii) | R1      |
-| `ledger.integrity_check`                  | `0 3 * * *`           | 05 §7.12                                  | R1      |
-| `catalog.rebuild_listings`                | `30 3 * * *`          | 03 §9; built 2026-11-26 (R1-S part 2e-i)  | R1      |
-| `catalog.generate_sitemap`                | `0 4 * * *`           | 03 §9                                     | R1      |
-| `ledger.availability_digest`              | `0 6 * * *`           | 03 §9                                     | R1      |
-| `payments.daily_reconciliation`           | `0 6 * * *`           | 05 §9.4                                   | R1.1    |
+| Queue                                     | Cron (Asia/Kathmandu) | From                                         | Release |
+| ----------------------------------------- | --------------------- | -------------------------------------------- | ------- |
+| `inventory.expire_reservations`           | `* * * * *`           | 05 §5.4, §9.4                                | R1.1    |
+| `platform.heartbeat`                      | `*/5 * * * *`         | 03 §9                                        | R1      |
+| `payments.reconcile_sweeper`              | `*/5 * * * *`         | 05 §9.4                                      | R1.1    |
+| `refunds.reconcile_sweeper`               | `*/5 * * * *`         | 05 §9.4                                      | R1.1    |
+| `platform.ops_metrics` (proposed, §8.6)   | `*/5 * * * *`         | this document                                | R1      |
+| `orders.sweep_courier_bookings`           | `*/5 * * * *`         | 03 §9, 05 §6.3 (M6)                          | R1      |
+| `orders.acceptance_timeout` (sweeper run) | `*/15 * * * *`        | 05 §8.11, §9.4                               | R1      |
+| `orders.sweep_courier_events`             | `*/15 * * * *`        | 03 §9, 05 §6.3 (M6)                          | R1      |
+| `orders.poll_courier_statuses`            | `*/30 * * * *`        | 03 §9, 05 §6.3 (M6)                          | R1      |
+| `logistics.sync_branches`                 | `30 2 * * *`          | 03 §9, 04a §9.12 (M6)                        | R1      |
+| `platform.purge_idempotency_keys`         | `5 * * * *`           | 05 §9.4                                      | R1      |
+| `orders.auto_complete`                    | `15 * * * *`          | 05 §9.4                                      | R1      |
+| `platform.support_case_sla`               | `25 * * * *`          | 03 §9                                        | R1      |
+| `refunds.sla_monitor`                     | `35 * * * *`          | 05 §9.4 (hourly; minute proposed here)       | R1      |
+| `identity.purge_sessions`                 | `45 * * * *`          | 03 §9 (hourly; minute proposed here)         | R1      |
+| `platform.retention_purge`                | `30 1 * * *`          | 03 §9                                        | R1      |
+| `cart.expire_abandoned`                   | `0 2 * * *`           | 03 §9                                        | R1      |
+| `inventory.drift_check`                   | `30 2 * * *`          | 05 §5.10                                     | R1      |
+| `media.cleanup_abandoned`                 | `45 2 * * *`          | 03 §9; built 2026-11-25 (R1-S part 2d-ii)    | R1      |
+| `ledger.integrity_check`                  | `0 3 * * *`           | 05 §7.12                                     | R1      |
+| `catalog.rebuild_listings`                | `30 3 * * *`          | 03 §9; built 2026-11-26 (R1-S part 2e-i)     | R1      |
+| `catalog.generate_sitemap`                | `0 4 * * *`           | 03 §9; built 2026-11-27 (R1-S part 3d-iii-a) | R1      |
+| `ledger.availability_digest`              | `0 6 * * *`           | 03 §9                                        | R1      |
+| `payments.daily_reconciliation`           | `0 6 * * *`           | 05 §9.4                                      | R1.1    |
 
 The other queues are event-driven or delayed sends. Two operating notes:
 
@@ -2429,3 +2429,4 @@ Still to do from §4.2:
 125. **SeaweedFS for development and CI (2026-11-25, OD-65).** The decision of [risks §2.3](risks-and-open-decisions.md#23-decision-log): §2.2's `seaweedfs` row replaces `minio`, and §1.9's portability row, §2.1's environment table, §2.3, §3.6's token rows and CSP origin, §4.3's Compose table and sketch, §4.4's setup commands, §5.2's workflow rows and §5.7's `S3_ENDPOINT` row follow. Note 124's list of statements still naming MinIO is done. `T-OPS-024` now also checks the SeaweedFS service ([10 note 90](10-testing-and-quality-gates.md#consistency-notes-for-editor)). The CI step changes `.github/workflows/ci.yml`, which needs the `workflow` scope on the token that pushes it.
 126. **The image worker's settings built (2026-11-25, R1-S part 2d-ii).** §8.4's `media.cleanup_abandoned` schedule and §8.5's concurrency of 1 for `media.process_upload` are built; `VIPS_BLOCK_UNTRUSTED` (§4.1, §5.7) still comes with the deploy Compose file; §4.2's image sketch says `scripts/check_image.sh` now loads sharp in the image ([03 note 42](03-system-architecture.md#consistency-notes-for-editor)).
 127. **The nightly listing rebuild built (2026-11-26, R1-S part 2e-i).** §8.4's `catalog.rebuild_listings` row is built; its dead letters are discarded, as §8.2 already says ([03 note 44](03-system-architecture.md#consistency-notes-for-editor)).
+128. **The sitemap job built (2026-11-27, R1-S part 3d-iii-a).** §8.4's `catalog.generate_sitemap` runs at 04:00 with 2 retries; a failed run is discarded, since the next night's run writes the same keys ([03 note 47](03-system-architecture.md#consistency-notes-for-editor)).

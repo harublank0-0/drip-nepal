@@ -5,6 +5,7 @@ import {
   type ListingCardRow,
   type StorefrontProduct,
 } from '#modules/catalog/queries'
+import { productPath } from '#modules/catalog/domain/identifiers'
 import { minorToRupeesFixed } from '#shared/format/money'
 import { imageSources } from '#shared/ui/image_sources'
 
@@ -144,9 +145,8 @@ export function storefrontProductJson(product: StorefrontProduct) {
 // The image URLs of a storefront page; shared with the seller editor (shared/ui/image_sources.ts).
 export { imageSources }
 
-// The storefront product page's path: the current slug and the lowercase public ID (ADR-0017).
-export const productHref = (slug: string, publicId: string) =>
-  `/p/${slug}-${publicId.toLowerCase()}`
+// The storefront product page's path (ADR-0017), as the catalog module builds it.
+export const productHref = productPath
 
 /*
  * A listing page's card (docs/08 §2.2 `storefront/listing`; R1-S part 3d-i):

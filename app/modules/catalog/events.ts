@@ -14,6 +14,7 @@ declare module '#modules/platform/jobs' {
   interface JobPayloads {
     'catalog.refresh_listing': { product_id: string }
     'catalog.rebuild_listings': Record<string, never>
+    'catalog.generate_sitemap': Record<string, never>
   }
 }
 

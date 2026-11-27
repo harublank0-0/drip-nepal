@@ -55,3 +55,8 @@ export function publicIdFromPath(segment: string): string | null {
     .replaceAll(/[OIL]/g, (letter) => ALIASES[letter])
   return PUBLIC_ID_PATTERN.test(id) ? id : null
 }
+
+// The storefront product page's path: the current slug and the lowercase public ID (ADR-0017).
+export function productPath(slug: string, publicId: string) {
+  return `/p/${slug}-${publicId.toLowerCase()}`
+}

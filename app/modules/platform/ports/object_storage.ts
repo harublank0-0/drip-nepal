@@ -2,8 +2,9 @@ import type { CallContext } from '#modules/platform/ports/call_context'
 
 /*
  * The `ObjectStorage` port (docs/03 §11.1, §11.5; ADR-0013), used by the
- * media module. Two buckets (03 §3.5): `private` holds originals and is
- * reached only through presigned URLs and the worker; `public` holds the
+ * media module and the catalog's sitemap. Two buckets (03 §3.5): `private`
+ * holds originals, reached only through presigned URLs and the worker, and
+ * the sitemap files, which the web process reads; `public` holds the
  * derived WebP images served from the media domain. The adapter is bound in
  * the container (providers/ports_provider.ts), so tests swap in the
  * in-memory fake of tests/support/object_storage.ts without a code branch.

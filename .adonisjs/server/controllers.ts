@@ -91,6 +91,7 @@ export const controllers = {
     },
     platform: {
       LegalDocuments: () => import('#controllers/storefront/platform/legal_documents_controller'),
+      Seo: () => import('#controllers/storefront/platform/seo_controller'),
     },
   },
   webhooks: {
