@@ -103,5 +103,14 @@
   "product.cleared_sold_out": "{axis} {value} is sold out in {primary}. Choose another {axisLower}.",
   "product.cleared_not_available": "{axis} {value} is not available in {primary}. Choose another {axisLower}.",
   "product.link_sold_out": "The option in your link ({values}) is sold out.",
-  "product.only_left_lower": "only {count} left"
+  "product.only_left_lower": "only {count} left",
+  "header.main_nav": "Main",
+  "header.menu": "Menu",
+  "header.categories_of": "{audience} categories",
+  "header.search": "Search",
+  "header.sign_in": "Sign in",
+  "search.dialog_title": "Search products",
+  "search.dialog_hint": "Type at least 2 characters and press Enter.",
+  "search.recent": "Recent searches",
+  "search.clear_recent": "Clear recent searches"
 }
