@@ -17,9 +17,28 @@ export type GalleryImage = { alt: string; src: string; srcset: string; color: st
 // The image sizes of 08 §10.4's table.
 const MAIN_SIZES = '(min-width: 768px) 50vw, 100vw'
 
-export function ProductGallery({ media }: { media: GalleryImage[] }) {
-  const [shown, setShown] = useState(0)
-  const [focus, setFocus] = useState(0)
+// The first image of a colour, else the first image.
+const firstOf = (media: GalleryImage[], color: string | null) =>
+  Math.max(color === null ? 0 : media.findIndex((image) => image.color === color), 0)
+
+export function ProductGallery({
+  media,
+  color = null,
+}: {
+  media: GalleryImage[]
+  // The chosen colour: the gallery shows its first image when it changes (08 §11.2).
+  color?: string | null
+}) {
+  const [shown, setShown] = useState(() => firstOf(media, color))
+  const [focus, setFocus] = useState(() => firstOf(media, color))
+  const [colorSeen, setColorSeen] = useState(color)
+  if (color !== colorSeen) {
+    setColorSeen(color)
+    if (color !== null && media.some((image) => image.color === color)) {
+      setShown(firstOf(media, color))
+      setFocus(firstOf(media, color))
+    }
+  }
   const buttons = useRef<(HTMLButtonElement | null)[]>([])
   const current = media[Math.min(shown, media.length - 1)]
 

@@ -1,15 +1,24 @@
 /* eslint-disable react/no-unknown-property -- Inertia's <Head> replaces tags by their head-key */
-import type { ReactNode } from 'react'
-import { Head } from '@inertiajs/react'
+import { useState, type ReactNode } from 'react'
+import { Head, router } from '@inertiajs/react'
 import { Link } from '@adonisjs/inertia/react'
 import { ChevronRightIcon } from 'lucide-react'
 import { discountPercent, formatNPR } from '@shared/format/money'
+import {
+  axisStates,
+  choose,
+  selectedVariant,
+  selectionOf,
+  type Selection,
+} from '@shared/ui/variant_selection'
 import type { InertiaProps } from '~/types'
+import { announce } from '~/lib/announce'
 import { t } from '~/lib/i18n'
 import { PageSeo } from '~/components/seo/page_seo'
 import { SocialMeta } from '~/components/seo/social_meta'
 import { PriceTag } from '~/components/catalog/price_tag'
 import { ProductGallery, type GalleryImage } from '~/components/catalog/product_gallery'
+import { VariantPicker } from '~/components/catalog/variant_picker'
 
 /*
  * The storefront product page `/p/{slug}-{publicId}` (docs/08 §2.2, §3.1,
@@ -23,8 +32,16 @@ import { ProductGallery, type GalleryImage } from '~/components/catalog/product_
  * policy, the description and the FR-CAT-012 details. The controller gives
  * the canonical URL and the JSON-LD `Product`.
  *
- * The variant picker of 08 §11.2 and `?variant=` come with part 3d-ii-b,
- * "Add to cart" with the cart (part 4).
+ * The variant picker of 08 §11.2 (part 3d-ii-b): what can be chosen comes
+ * from the props (`variant_selection.ts`). A full choice shows that
+ * variant's price, compare-at price and saving, "Only 2 left" at 3 or
+ * fewer, and the colour's first image; it replaces the URL with
+ * `?variant={id}` without a request, so Back leaves the product, and
+ * clearing a choice drops it. Each choice is announced politely, and so is
+ * a secondary choice cleared because the new primary value does not offer
+ * it. The server preselects the variant a shared link names when it can be
+ * bought, and the page says so when it is sold out. "Add to cart" comes
+ * with the cart (part 4).
  */
 type Money = { amount_minor: number; currency: string }
 
@@ -71,8 +88,12 @@ type Product = {
 
 type Props = InertiaProps<{
   product: Product
+  selection: { variant_id: string | null; sold_out_variant_id: string | null }
   seo: { canonical: string; json_ld: string }
 }>
+
+// "Only 2 left" at 3 or fewer available (08 §11.2 [Assumption from J-02 step 4]).
+const LOW_STOCK = 3
 
 function Section({ heading, children }: { heading: string; children: ReactNode }) {
   return (
@@ -106,11 +127,72 @@ function weightText(product: Product) {
     : t('storefront.product.weight_range', { min, max })
 }
 
-export default function ProductPage({ product, seo }: Props) {
+export default function ProductPage({ product, selection: linked, seo }: Props) {
+  const axes = product.option_axes
+  const [selection, setSelection] = useState<Selection>(() =>
+    selectionOf(axes, product.variants.find((variant) => variant.id === linked.variant_id) ?? null)
+  )
+  const states = axisStates(axes, product.variants, selection)
+  const chosen = selectedVariant(axes, product.variants, selection)
+  const primary = axes[0]
+  const primaryLabel = primary
+    ? (primary.values.find((value) => value.code === selection[primary.code])?.label ?? null)
+    : null
+  const labelOf = (axisCode: string, valueCode: string) =>
+    axes.find((axis) => axis.code === axisCode)?.values.find((value) => value.code === valueCode)
+      ?.label ?? valueCode
+  const linkedSoldOut = product.variants.find(
+    (variant) => variant.id === linked.sold_out_variant_id
+  )
+
+  function onChoose(axisCode: string, valueCode: string) {
+    const result = choose(axes, product.variants, selection, axisCode, valueCode)
+    setSelection(result.selection)
+    const variant = selectedVariant(axes, product.variants, result.selection)
+    const path = new URL(seo.canonical).pathname
+    router.replace({
+      url: variant ? `${path}?variant=${variant.id}` : path,
+      preserveScroll: true,
+      preserveState: true,
+    })
+    const axis = axes.find((item) => item.code === axisCode)!
+    const label = labelOf(axisCode, valueCode)
+    if (result.cleared) {
+      const cleared = axes.find((item) => item.code === result.cleared!.axis)!
+      announce(
+        t(
+          result.cleared.reason === 'not_offered'
+            ? 'storefront.product.cleared_not_available'
+            : 'storefront.product.cleared_sold_out',
+          {
+            axis: cleared.name,
+            value: labelOf(cleared.code, result.cleared.value),
+            primary: label,
+            axisLower: cleared.name.toLowerCase(),
+          }
+        )
+      )
+    } else if (variant) {
+      announce(
+        t('storefront.product.selected_full', {
+          axis: axis.name,
+          value: label,
+          price: formatNPR(variant.price.amount_minor),
+          stock:
+            variant.available_capped <= LOW_STOCK
+              ? t('storefront.product.only_left', { count: variant.available_capped })
+              : t('storefront.product.in_stock'),
+        })
+      )
+    } else {
+      announce(t('storefront.product.selected', { axis: axis.name, value: label }))
+    }
+  }
+
   const prices = product.variants.map((variant) => variant.price.amount_minor)
-  const min = Math.min(...prices)
-  const max = Math.max(...prices)
-  const single = onePrice(product)
+  const min = chosen ? chosen.price.amount_minor : Math.min(...prices)
+  const max = chosen ? chosen.price.amount_minor : Math.max(...prices)
+  const single = chosen ?? onePrice(product)
   const saving = single
     ? discountPercent(single.price.amount_minor, single.compare_at?.amount_minor ?? null)
     : null
@@ -179,7 +261,10 @@ export default function ProductPage({ product, seo }: Props) {
           </ol>
         </nav>
         <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
-          <ProductGallery media={product.media} />
+          <ProductGallery
+            media={product.media}
+            color={primary?.code === 'color' ? (selection.color ?? null) : null}
+          />
           <div className="flex min-w-0 flex-col gap-4">
             <div>
               {product.brand ? (
@@ -214,34 +299,29 @@ export default function ProductPage({ product, seo }: Props) {
               {soldOut ? (
                 <p className="text-sm font-medium">{t('storefront.product.sold_out')}</p>
               ) : null}
+              {chosen && chosen.in_stock && chosen.available_capped <= LOW_STOCK ? (
+                <p className="text-sm font-medium">
+                  {t('storefront.product.only_left', { count: chosen.available_capped })}
+                </p>
+              ) : null}
             </div>
-            {product.option_axes.length > 0 ? (
-              <dl className="flex flex-col gap-2 text-sm">
-                {product.option_axes.map((axis) => (
-                  <div key={axis.code}>
-                    <dt className="font-medium">{axis.name}</dt>
-                    <dd>
-                      <ul className="mt-1 flex flex-wrap gap-2">
-                        {axis.values.map((value) => (
-                          <li
-                            key={value.code}
-                            className="inline-flex items-center gap-1.5 rounded-md border px-2 py-1"
-                          >
-                            {value.swatch_hex ? (
-                              <span
-                                aria-hidden="true"
-                                className="size-3.5 rounded-full border"
-                                style={{ backgroundColor: value.swatch_hex }}
-                              />
-                            ) : null}
-                            {value.label}
-                          </li>
-                        ))}
-                      </ul>
-                    </dd>
-                  </div>
-                ))}
-              </dl>
+            {linkedSoldOut ? (
+              <p role="status" className="bg-muted rounded-md px-3 py-2 text-sm">
+                {t('storefront.product.link_sold_out', {
+                  values: axes
+                    .map((axis) => labelOf(axis.code, linkedSoldOut.option_values[axis.code]))
+                    .join(', '),
+                })}
+              </p>
+            ) : null}
+            {axes.length > 0 ? (
+              <VariantPicker
+                axes={axes}
+                states={states}
+                selection={selection}
+                primaryLabel={primaryLabel}
+                onChoose={onChoose}
+              />
             ) : null}
             {product.delivery.length > 0 ? (
               <Section heading={t('storefront.product.delivery_heading')}>

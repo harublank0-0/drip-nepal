@@ -89,5 +89,18 @@
   "product.warranty": "Warranty",
   "product.care": "Care and precautions",
   "product.images": "Product images",
-  "product.no_image": "No photo yet"
+  "product.no_image": "No photo yet",
+  "product.value_sold_out": "Sold out",
+  "product.value_not_available": "Not available in {primary}",
+  "product.value_with_reason": "{value}, {reason}",
+  "product.summary_sold_out": "Sold out: {values}",
+  "product.summary_sold_out_in": "Sold out in {primary}: {values}",
+  "product.summary_not_available": "Not available in {primary}: {values}",
+  "product.selected": "{axis} {value} selected",
+  "product.selected_full": "{axis} {value} selected, {price}, {stock}",
+  "product.in_stock": "in stock",
+  "product.only_left": "Only {count} left",
+  "product.cleared_sold_out": "{axis} {value} is sold out in {primary}. Choose another {axisLower}.",
+  "product.cleared_not_available": "{axis} {value} is not available in {primary}. Choose another {axisLower}.",
+  "product.link_sold_out": "The option in your link ({values}) is sold out."
 }

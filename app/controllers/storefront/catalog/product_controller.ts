@@ -23,6 +23,10 @@ import {
  *   with `Cache-Control: public, max-age=86400`, keeping only `variant`,
  *   the page's one parameter (08 §11.2).
  * - The page names its canonical URL and carries the JSON-LD `Product`.
+ * - `?variant={id}` preselects that variant when it is one of the product's
+ *   active variants with stock, so a shared link renders its price and
+ *   colour on the server; a sold-out one is named for the page's notice
+ *   instead, and any other value is ignored (08 §11.2, part 3d-ii-b).
  */
 const PAGE_PARAMETERS = ['variant']
 
@@ -48,11 +52,20 @@ export default class ProductController {
         .toPath(search === '' ? path : `${path}?${search}`)
     }
 
+    const asked = ctx.request.qs().variant
+    const linked =
+      typeof asked === 'string'
+        ? product.variants.find((variant) => variant.id === asked)
+        : undefined
     const page = storefrontProductPageJson(product, mediaPublicUrl)
     const canonical = `${appUrl}${path}`
     const images = page.media.map((item) => item.src).filter((src) => src !== '')
     return ctx.inertia.render('storefront/product', {
       product: page,
+      selection: {
+        variant_id: linked && linked.available > 0 ? linked.id : null,
+        sold_out_variant_id: linked && linked.available <= 0 ? linked.id : null,
+      },
       seo: {
         canonical,
         json_ld: jsonLdScript(productJsonLd(product, canonical, images)),
