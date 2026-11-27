@@ -1447,6 +1447,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/seller/catalog/products_controller').default['edit']>>>
     }
   }
+  'seller.inventory': {
+    methods: ["GET","HEAD"]
+    pattern: '/seller/:shopSlug/inventory'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { shopSlug: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/seller/inventory/inventory_controller').default['index']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/seller/inventory/inventory_controller').default['index']>>>
+    }
+  }
   'admin.logistics': {
     methods: ["GET","HEAD"]
     pattern: '/admin/logistics'

@@ -73,6 +73,9 @@ export const controllers = {
       Products: () => import('#controllers/seller/catalog/products_controller'),
     },
     CourierBookings: () => import('#controllers/seller/courier_bookings_controller'),
+    inventory: {
+      Inventory: () => import('#controllers/seller/inventory/inventory_controller'),
+    },
     Logistics: () => import('#controllers/seller/logistics_controller'),
     shops: {
       Shop: () => import('#controllers/seller/shops/shop_controller'),

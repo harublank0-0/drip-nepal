@@ -18,7 +18,9 @@ import { ChoiceField } from '~/components/forms/choice_field'
  * characters (a client rule, 08 §7.2 [Assumption]), and takes at most
  * 100 (06 §6.3). Each change builds on the filters last asked for, so a
  * change made while another visit is in flight never undoes it. The new
- * count is announced politely ("12 products shown", 08 §7.4).
+ * count is announced politely ("12 products shown", 08 §7.4). The stock
+ * page (R1-S part 2f-iv-a) lists products with the same two filters
+ * (`listInventory`, 06 §6.3), so `list` names the page and prop it drives.
  */
 export const PRODUCT_STATUS_FILTERS = [
   'draft',
@@ -42,10 +44,12 @@ export function ProductFilters({
   shopSlug,
   status,
   q,
+  list = 'products',
 }: {
   shopSlug: string
   status: string | null
   q: string | null
+  list?: 'products' | 'inventory'
 }) {
   const [search, setSearch] = useState(q ?? '')
   // The search this box last sent, and the URL's search as last rendered.
@@ -83,14 +87,15 @@ export function ProductFilters({
     if (next.q) query.q = next.q
     chosen.current = next
     setSent(next.q)
-    router.get(urlFor('seller.products', { shopSlug }), query, {
+    const route = list === 'inventory' ? 'seller.inventory' : 'seller.products'
+    router.get(urlFor(route, { shopSlug }), query, {
       preserveState: true,
       preserveScroll: true,
       replace: true,
-      only: ['products', 'filters'],
+      only: [list, 'filters'],
       onSuccess: (page) => {
-        const products = page.props.products as { items: unknown[] }
-        announce(t('seller.products.shown', { count: products.items.length }))
+        const shown = page.props[list] as { items: unknown[] }
+        announce(t('seller.products.shown', { count: shown.items.length }))
       },
     })
   }

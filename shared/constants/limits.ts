@@ -123,3 +123,14 @@ export const PRODUCT_MEDIA_LIMITS = {
   items: { max: 12 },
   altText: { min: 1, max: 150 },
 } as const
+
+/*
+ * Stock (docs/04a §8.1, §8.3; R1-S parts 2c and 2f-iv-a): a quantity fits the
+ * `int` columns `inventory_items.on_hand` and `reserved`, and a movement's
+ * note is 1 to 500 characters (`inventory_movements_note_check`). The stock
+ * validators and the stock page's dialogs read these.
+ */
+export const STOCK_LIMITS = {
+  units: { max: 2_147_483_647 },
+  note: { max: 500 },
+} as const

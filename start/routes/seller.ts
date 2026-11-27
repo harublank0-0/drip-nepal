@@ -3,6 +3,7 @@ import { middleware } from '#start/kernel'
 
 const ShopController = () => import('#controllers/seller/shops/shop_controller')
 const ProductsController = () => import('#controllers/seller/catalog/products_controller')
+const InventoryController = () => import('#controllers/seller/inventory/inventory_controller')
 
 /*
  * Seller pages (docs/08 §2.5), GET only (ADR-0004 decision 6), rendered in
@@ -12,11 +13,11 @@ const ProductsController = () => import('#controllers/seller/catalog/products_co
  * guest is sent to `/login` with the page as `return_to` (docs/09 §5.4),
  * and a caller who is not the shop's owner or an active member gets the
  * 404 page of an unknown slug (T-SEC-001). R1-S part 1a builds the
- * overview, 1b `/settings`, 1c `/shipping` and 2f-i the product list, the
- * new product and the product editor, whose controller checks the
- * permission and the status gate of the operation that serves each page
- * (docs/07 §4.5 "Page routes"). Page routes keep dotted names (docs/09
- * §4.3).
+ * overview, 1b `/settings`, 1c `/shipping`, 2f-i the product list, the
+ * new product and the product editor, and 2f-iv-a `/inventory`. Each
+ * page's controller checks the permission and the status gate of the
+ * operation that serves it (docs/07 §4.5 "Page routes"). Page routes keep
+ * dotted names (docs/09 §4.3).
  */
 router
   .group(() => {
@@ -29,6 +30,7 @@ router
       .get('/products/:productId', [ProductsController, 'edit'])
       .as('products.edit')
       .where('productId', router.matchers.uuid())
+    router.get('/inventory', [InventoryController, 'index']).as('inventory')
   })
   .prefix('/seller/:shopSlug')
   .as('seller')

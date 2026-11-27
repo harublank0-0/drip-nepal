@@ -28,11 +28,18 @@ import { can, type CurrentShop, type ShopPermission } from '~/lib/permissions'
  * to the roles that may view products (`shop.products.view`) while the
  * shop's status opens the catalogue (`catalogViewable`, the server's
  * `products_view` gate), and current on the list, the new product and the
- * editor. Links come from route names through the typed client (docs/08
+ * editor. 2f-iv-a adds Stock under the same rule as Products, the stock
+ * list reading `listInventory` (`shop.products.view`, `products_view`).
+ * Links come from route names through the typed client (docs/08
  * §2.1), with the shop's current slug.
  */
 type NavItem = {
-  route: 'seller.overview' | 'seller.products' | 'seller.shipping' | 'seller.settings'
+  route:
+    | 'seller.overview'
+    | 'seller.products'
+    | 'seller.inventory'
+    | 'seller.shipping'
+    | 'seller.settings'
   // The page components the item is current on.
   components: string[]
   label: Parameters<typeof t>[0]
@@ -52,6 +59,13 @@ const ITEMS: NavItem[] = [
     route: 'seller.products',
     components: ['seller/products', 'seller/product_new', 'seller/product_edit'],
     label: 'seller.nav.products',
+    permission: 'shop.products.view',
+    opens: catalogViewable,
+  },
+  {
+    route: 'seller.inventory',
+    components: ['seller/inventory'],
+    label: 'seller.nav.inventory',
     permission: 'shop.products.view',
     opens: catalogViewable,
   },
