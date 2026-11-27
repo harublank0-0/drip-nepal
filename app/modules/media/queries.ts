@@ -1,3 +1,4 @@
+import db from '@adonisjs/lucid/services/db'
 import type { QueryClientContract } from '@adonisjs/lucid/types/database'
 import type { MediaKind } from '#modules/media/domain/media_kind'
 import type { MediaStatus } from '#modules/media/domain/media_status'
@@ -16,6 +17,8 @@ export type MediaAssetRow = {
   bytes: number
   originalKey: string
   rejectionReason: string | null
+  // The public derivatives by width, once the asset is `ready` (docs/04a §7.13).
+  derivedKeys: Record<string, string> | null
   createdAt: Date
 }
 
@@ -29,6 +32,7 @@ export function mediaAssetRow(row: Record<string, unknown>): MediaAssetRow {
     bytes: row.bytes as number,
     originalKey: row.original_key as string,
     rejectionReason: row.rejection_reason as string | null,
+    derivedKeys: (row.derived_keys as Record<string, string> | null) ?? null,
     createdAt: row.created_at as Date,
   }
 }
@@ -44,6 +48,11 @@ export async function shopMediaAsset(
     .select('*')
     .first()
   return row ? mediaAssetRow(row) : null
+}
+
+// One asset of the shop, for `getMediaUpload` (R1-S part 2g-i); null when the shop has none.
+export function mediaUploadOf(shopId: string, mediaAssetId: string) {
+  return shopMediaAsset(db.connection(), shopId, mediaAssetId)
 }
 
 /*

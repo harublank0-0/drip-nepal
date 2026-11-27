@@ -288,6 +288,12 @@ const routes = {
     tokens: [{"old":"/api/v1/seller/shops/:shopSlug/media/:mediaAssetId/complete","type":0,"val":"api","end":""},{"old":"/api/v1/seller/shops/:shopSlug/media/:mediaAssetId/complete","type":0,"val":"v1","end":""},{"old":"/api/v1/seller/shops/:shopSlug/media/:mediaAssetId/complete","type":0,"val":"seller","end":""},{"old":"/api/v1/seller/shops/:shopSlug/media/:mediaAssetId/complete","type":0,"val":"shops","end":""},{"old":"/api/v1/seller/shops/:shopSlug/media/:mediaAssetId/complete","type":1,"val":"shopSlug","end":""},{"old":"/api/v1/seller/shops/:shopSlug/media/:mediaAssetId/complete","type":0,"val":"media","end":""},{"old":"/api/v1/seller/shops/:shopSlug/media/:mediaAssetId/complete","type":1,"val":"mediaAssetId","end":""},{"old":"/api/v1/seller/shops/:shopSlug/media/:mediaAssetId/complete","type":0,"val":"complete","end":""}],
     types: placeholder as Registry['completeMediaUpload']['types'],
   },
+  'getMediaUpload': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/v1/seller/shops/:shopSlug/media/:mediaAssetId',
+    tokens: [{"old":"/api/v1/seller/shops/:shopSlug/media/:mediaAssetId","type":0,"val":"api","end":""},{"old":"/api/v1/seller/shops/:shopSlug/media/:mediaAssetId","type":0,"val":"v1","end":""},{"old":"/api/v1/seller/shops/:shopSlug/media/:mediaAssetId","type":0,"val":"seller","end":""},{"old":"/api/v1/seller/shops/:shopSlug/media/:mediaAssetId","type":0,"val":"shops","end":""},{"old":"/api/v1/seller/shops/:shopSlug/media/:mediaAssetId","type":1,"val":"shopSlug","end":""},{"old":"/api/v1/seller/shops/:shopSlug/media/:mediaAssetId","type":0,"val":"media","end":""},{"old":"/api/v1/seller/shops/:shopSlug/media/:mediaAssetId","type":1,"val":"mediaAssetId","end":""}],
+    types: placeholder as Registry['getMediaUpload']['types'],
+  },
   'getLogisticsSettings': {
     methods: ["GET","HEAD"],
     pattern: '/api/v1/seller/shops/:shopSlug/logistics',

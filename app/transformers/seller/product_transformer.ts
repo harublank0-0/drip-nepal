@@ -63,6 +63,7 @@ export function sellerProductJson(data: ProductEditorData, stock: VariantStock) 
       position: item.position,
       alt_text: item.altText,
       color_value_id: item.colorValueId,
+      keys: item.keys,
     })),
     missing_for_submit: missingForSubmit(p, data.variants, data.readyMediaCount),
     updated_at: p.updatedAt.toISOString(),

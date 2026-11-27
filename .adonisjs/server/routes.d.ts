@@ -51,6 +51,7 @@ export type ScannedRoutes = {
     'stocktakeInventory': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'variantId': ParamValue} }
     'createMediaUpload': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'completeMediaUpload': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'mediaAssetId': ParamValue} }
+    'getMediaUpload': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'mediaAssetId': ParamValue} }
     'getLogisticsSettings': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'replaceLogisticsSettings': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'createShopCourierAccount': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
@@ -151,6 +152,7 @@ export type ScannedRoutes = {
     'listShopProducts': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'getShopProduct': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'productId': ParamValue} }
     'listInventory': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
+    'getMediaUpload': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'mediaAssetId': ParamValue} }
     'getLogisticsSettings': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'getCourierBookingOptions': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'shopOrderNumber': ParamValue} }
     'adminListLogisticsAccounts': { paramsTuple?: []; params?: {} }
@@ -227,6 +229,7 @@ export type ScannedRoutes = {
     'listShopProducts': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'getShopProduct': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'productId': ParamValue} }
     'listInventory': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
+    'getMediaUpload': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'mediaAssetId': ParamValue} }
     'getLogisticsSettings': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'getCourierBookingOptions': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'shopOrderNumber': ParamValue} }
     'adminListLogisticsAccounts': { paramsTuple?: []; params?: {} }

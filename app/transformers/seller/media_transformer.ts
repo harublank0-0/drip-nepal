@@ -5,7 +5,9 @@ import type { MediaAssetRow } from '#modules/media/queries'
  * The seller views of an upload (docs/06 §13.5; `MediaUpload` and
  * `SellerMediaAsset` in openapi.yaml; R1-S part 2d-i). Never an object key
  * or a URL to a private object: the presigned URL is the only way in, and
- * it targets the one upload key for 10 minutes.
+ * it targets the one upload key for 10 minutes. `keys` are the public
+ * derivatives by width once the asset is `ready`, else null: public object
+ * keys under `p/`, which the editor shows (R1-S part 2g-i; 03 §3.5).
  */
 export function mediaAssetJson(asset: MediaAssetRow) {
   return {
@@ -15,6 +17,7 @@ export function mediaAssetJson(asset: MediaAssetRow) {
     mime: asset.mime,
     bytes: asset.bytes,
     rejection_reason: asset.rejectionReason,
+    keys: asset.status === 'ready' ? asset.derivedKeys : null,
     created_at: asset.createdAt.toISOString(),
   }
 }

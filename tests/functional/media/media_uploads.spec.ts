@@ -104,7 +104,6 @@ test.group('T-MED-004 createMediaUpload and completeMediaUpload', (group) => {
     const before = Date.now()
     const response = await create(w, image({ mime: 'image/webp', bytes: 3_000_000 }))
     assert.equal(response.status, 201, response.text)
-    assert.isNull(response.headers.get('location'))
     const {
       media_asset_id: id,
       upload_url: url,
@@ -112,6 +111,11 @@ test.group('T-MED-004 createMediaUpload and completeMediaUpload', (group) => {
       expires_at: expiresAt,
       asset,
     } = response.body.data
+    // The asset, which getMediaUpload reads (06 §3.7; R1-S part 2g-i).
+    assert.equal(
+      response.headers.get('location'),
+      `/api/v1/seller/shops/${w.shop.slug}/media/${id}`
+    )
     const key = `originals/${w.shop.shopId}/${id}`
     assert.deepEqual(storage.fake.presigned, [
       { bucket: 'private', key, contentType: 'image/webp', expiresInSeconds: 600 },
@@ -403,5 +407,108 @@ test.group('T-SEC-001 T-SEC-003 T-SEC-030 T-SEC-031 upload access', (group) => {
     assert.equal(finished.body.code, 'SHOP_NOT_ACTIVE')
     const row = await assetRow(id)
     assert.equal(row.status, 'pending_upload')
+  })
+})
+
+const statusPath = (w: World, id: string) => `/api/v1/seller/shops/${w.shop.slug}/media/${id}`
+
+test.group('T-MED-007 getMediaUpload', (group) => {
+  let storage: ReturnType<typeof fakeObjectStorage>
+  group.setup(async () => {
+    await useJobBoss()
+  })
+  group.each.setup(() => {
+    storage = fakeObjectStorage()
+    return () => storage.restore()
+  })
+
+  test('T-MED-007 an upload answers its state; its keys show only once it is ready', async ({
+    assert,
+  }) => {
+    const w = await world()
+    const id = await uploaded(w, storage.fake)
+    const pending = await send(w.owner, 'GET', statusPath(w, id))
+    assert.equal(pending.status, 200, pending.text)
+    assert.deepEqual(Object.keys(pending.body.data).sort(), [
+      'bytes',
+      'created_at',
+      'id',
+      'keys',
+      'kind',
+      'mime',
+      'rejection_reason',
+      'status',
+    ])
+    assert.deepInclude(pending.body.data, { id, status: 'pending_upload', keys: null })
+    const finished = await complete(w, id)
+    assert.equal(finished.status, 202)
+    const processing = await send(w.owner, 'GET', statusPath(w, id))
+    assert.deepInclude(processing.body.data, { status: 'processing', keys: null })
+    // As the worker leaves it (T-MED-001 builds the derivatives).
+    await db
+      .from('media_assets')
+      .where('id', id)
+      .update({
+        status: 'ready',
+        sha256: Buffer.alloc(32),
+        processed_at: new Date(),
+        width: 800,
+        height: 800,
+        derived_keys: JSON.stringify({ 320: `p/${id}/ab-320.webp`, 640: `p/${id}/ab-640.webp` }),
+      })
+    const ready = await send(w.owner, 'GET', statusPath(w, id))
+    assert.deepInclude(ready.body.data, {
+      status: 'ready',
+      keys: { 320: `p/${id}/ab-320.webp`, 640: `p/${id}/ab-640.webp` },
+    })
+    const other = await uploaded(w, storage.fake)
+    await db
+      .from('media_assets')
+      .where('id', other)
+      .update({ status: 'rejected', rejection_reason: 'The file is empty.' })
+    const rejected = await send(w.owner, 'GET', statusPath(w, other))
+    assert.deepInclude(rejected.body.data, {
+      status: 'rejected',
+      rejection_reason: 'The file is empty.',
+      keys: null,
+    })
+    // A deleted image keeps its derivatives' keys in the row; they are not shown.
+    await db.from('media_assets').where('id', id).update({ status: 'deleted' })
+    const deleted = await send(w.owner, 'GET', statusPath(w, id))
+    assert.deepInclude(deleted.body.data, { status: 'deleted', keys: null })
+  })
+
+  test('T-SEC-001 another shop’s upload, or an unknown one, is 404', async ({ assert }) => {
+    const w = await world()
+    const theirs = await world()
+    const id = await uploaded(theirs, storage.fake)
+    const foreign = await send(w.owner, 'GET', statusPath(w, id))
+    assert.equal(foreign.status, 404)
+    assert.equal(foreign.body.code, 'NOT_FOUND')
+    const unknown = await send(
+      w.owner,
+      'GET',
+      statusPath(w, '01929a51-0000-7000-8000-000000000000')
+    )
+    assert.equal(unknown.status, 404)
+  })
+
+  test('T-SEC-030 T-SEC-031 a product image’s state needs products.edit in an active shop; no query', async ({
+    assert,
+  }) => {
+    const w = await world()
+    const id = await uploaded(w, storage.fake)
+    const viewer = await signIn(await addMember(w.shop.shopId, 'viewer'))
+    const refused = await send(viewer, 'GET', statusPath(w, id))
+    assert.equal(refused.status, 403)
+    const editor = await signIn(await addMember(w.shop.shopId, 'catalog_editor'))
+    const allowed = await send(editor, 'GET', statusPath(w, id))
+    assert.equal(allowed.status, 200)
+    const queried = await send(w.owner, 'GET', `${statusPath(w, id)}?status=ready`)
+    assert.equal(queried.status, 400)
+    assert.equal(queried.body.code, 'INVALID_QUERY_PARAMETER')
+    await setShopStatus(w.shop.shopId, 'suspended', 'fulfill_existing')
+    const suspended = await send(w.owner, 'GET', statusPath(w, id))
+    assert.equal(suspended.status, 403)
   })
 })

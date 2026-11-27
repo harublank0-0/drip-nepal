@@ -7,6 +7,7 @@ import {
   sellerProductData,
 } from '#modules/catalog/queries'
 import { variantStock } from '#modules/inventory/queries'
+import { mediaPublicUrl } from '#config/storefront'
 import { assertShopGate, assertShopPermission } from '#modules/shops/permissions'
 import {
   productFormOptionsJson,
@@ -118,6 +119,8 @@ export default class ProductsController {
     return ctx.inertia.render('seller/product_edit', {
       product: sellerProductJson(data, stock),
       ...productFormOptionsJson(options),
+      // The public bucket's base URL, for the gallery's images built from their keys (R1-S part 2g-i).
+      media_base: mediaPublicUrl,
     })
   }
 }

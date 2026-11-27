@@ -14,6 +14,7 @@ import {
   world,
 } from '#tests/support/catalog'
 import { addMember, createOwnerShop, setShopStatus } from '#tests/support/shops'
+import { mediaPublicUrl } from '#config/storefront'
 
 /*
  * The seller product pages (docs/08 §2.5; R1-S part 2f-i): what the server
@@ -443,9 +444,12 @@ test.group('T-UI-042 the product editor page', (group) => {
       'categories',
       'attributes',
       'brands',
+      'media_base',
     ])
     const api = await send(w.owner, 'GET', productPath(w.shop.slug, id))
     assert.deepEqual(props.product, api.body.data)
+    // The public bucket's base URL, for the gallery's images (R1-S part 2g-i).
+    assert.equal(props.media_base, mediaPublicUrl)
   })
 
   test('T-SEC-036 the editor keeps the product’s own category and brand when they are no longer offered', async ({

@@ -207,6 +207,8 @@ export type ProductEditorData = {
     position: number
     altText: string | null
     colorValueId: string | null
+    // The image's public derivatives by width, for the editor's gallery (R1-S part 2g-i).
+    keys: Record<string, string> | null
   }[]
   readyMediaCount: number
 }
@@ -322,12 +324,20 @@ export async function productEditorData(
     alt_text: string | null
     color_value_id: string | null
     status: string
+    derived_keys: Record<string, string> | null
   }[] = await client
     .from('product_media as m')
     .join('media_assets as a', 'a.id', 'm.media_asset_id')
     .where('m.product_id', product.id)
     .orderBy('m.position')
-    .select('m.media_asset_id', 'm.position', 'm.alt_text', 'm.color_value_id', 'a.status')
+    .select(
+      'm.media_asset_id',
+      'm.position',
+      'm.alt_text',
+      'm.color_value_id',
+      'a.status',
+      'a.derived_keys'
+    )
   return {
     product,
     category: { id: category.id, path: category.path, name: category.name },
@@ -352,6 +362,7 @@ export async function productEditorData(
       position: row.position,
       altText: row.alt_text,
       colorValueId: row.color_value_id,
+      keys: row.status === 'ready' ? (row.derived_keys ?? null) : null,
     })),
     readyMediaCount: mediaRows.filter((row) => row.status === 'ready').length,
   }

@@ -571,6 +571,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/seller/media/media_uploads_controller').default['complete']>>>
     }
   }
+  'getMediaUpload': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/seller/shops/:shopSlug/media/:mediaAssetId'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue, ParamValue]
+      params: { shopSlug: ParamValue; mediaAssetId: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/api/v1/seller/media/media_uploads_controller').default['show']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/api/v1/seller/media/media_uploads_controller').default['show']>>>
+    }
+  }
   'getLogisticsSettings': {
     methods: ["GET","HEAD"]
     pattern: '/api/v1/seller/shops/:shopSlug/logistics'
