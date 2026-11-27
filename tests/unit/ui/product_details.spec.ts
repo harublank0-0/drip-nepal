@@ -11,6 +11,7 @@ import {
   offeredValues,
   productAttributesFor,
   productEditable,
+  unusedAttributeCodes,
   type AttributeOption,
   type CategoryOption,
   type SellerProduct,
@@ -259,7 +260,7 @@ test.group('T-UI-042 product details rules', () => {
     assert.deepEqual(changedMembers(detailsFrom(saved), saved, CATEGORY, ATTRIBUTES), {})
   })
 
-  test('T-UI-042 values of an attribute the category no longer uses are left alone by an edit elsewhere', ({
+  test('T-UI-044 values of an attribute the category no longer uses leave with the next save; typed changes leave them out', ({
     assert,
   }) => {
     const saved = product({
@@ -268,8 +269,24 @@ test.group('T-UI-042 product details rules', () => {
         { attribute_code: 'sleeve_length', value_codes: ['short'] },
       ],
     })
+    assert.deepEqual(unusedAttributeCodes(saved, CATEGORY), ['sleeve_length'])
+    assert.deepEqual(unusedAttributeCodes(saved, undefined), [])
+    assert.deepEqual(unusedAttributeCodes(product(), CATEGORY), [])
     const values = { ...detailsFrom(saved), warranty_text: 'No warranty' }
+    // The save sends the attributes the category uses, which removes the rest.
     assert.deepEqual(changedMembers(values, saved, CATEGORY, ATTRIBUTES), {
+      attributes: [{ attribute_code: 'audience', value_codes: ['men'] }],
+      warranty_text: 'No warranty',
+    })
+    assert.deepEqual(changedMembers(detailsFrom(saved), saved, CATEGORY, ATTRIBUTES), {
+      attributes: [{ attribute_code: 'audience', value_codes: ['men'] }],
+    })
+    // What the user typed: nothing until they change something.
+    assert.deepEqual(
+      changedMembers(detailsFrom(saved), saved, CATEGORY, ATTRIBUTES, { typedOnly: true }),
+      {}
+    )
+    assert.deepEqual(changedMembers(values, saved, CATEGORY, ATTRIBUTES, { typedOnly: true }), {
       warranty_text: 'No warranty',
     })
     // A change to one of the category's attributes sends the list it uses.

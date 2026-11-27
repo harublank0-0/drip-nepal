@@ -6,6 +6,7 @@ import {
   placeNames,
   shippingConfigured,
 } from '#modules/logistics/queries'
+import { hasPublishedProduct } from '#modules/catalog/queries'
 import { livePickupAddresses } from '#modules/shops/actions/pickup_addresses'
 import { assertShopGate, shopGateAllows, shopMay } from '#modules/shops/permissions'
 import {
@@ -46,17 +47,19 @@ export default class ShopController {
    *   part 1c);
    * - `pickup_address`: a default pickup address exists (the pickup
    *   addresses of `getLogisticsSettings`: `shop.shipping.manage`, shop
-   *   `active`).
+   *   `active`);
+   * - `product_live`: the shop has a `published` product
+   *   (`listShopProducts`: `shop.products.view`, the `products_view` gate;
+   *   R1-S part 2f-iii).
    * The profile adds no item: every column the law or the publish gate
    * needs is NOT NULL and set when the shop is created (04a §6.1), so it
-   * cannot be missing. Products (part 2) join with the part that builds
-   * them.
+   * cannot be missing.
    */
   async overview(ctx: HttpContext) {
     ctx.response.header('Cache-Control', 'private, no-store')
     assertShopGate(ctx.shop, 'member')
     const checklist: {
-      item: 'seller_agreement' | 'shipping_rates' | 'pickup_address'
+      item: 'seller_agreement' | 'shipping_rates' | 'pickup_address' | 'product_live'
       done: boolean
     }[] = [
       { item: 'seller_agreement', done: await acceptedCurrentAgreement(ctx.shop.id) },
@@ -64,6 +67,12 @@ export default class ShopController {
     ]
     if (shopMay(ctx.shop.actor, 'shop.shipping.manage') && shopGateAllows(ctx.shop, 'logistics')) {
       checklist.push({ item: 'pickup_address', done: await hasDefaultPickupAddress(ctx.shop.id) })
+    }
+    if (
+      shopMay(ctx.shop.actor, 'shop.products.view') &&
+      shopGateAllows(ctx.shop, 'products_view')
+    ) {
+      checklist.push({ item: 'product_live', done: await hasPublishedProduct(ctx.shop.id) })
     }
     return ctx.inertia.render('seller/overview', { checklist })
   }

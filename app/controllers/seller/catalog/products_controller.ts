@@ -110,7 +110,10 @@ export default class ProductsController {
     const options = await productFormOptions({
       keepCategoryId: data.product.categoryId,
       keepBrandId: data.product.brandId,
-      keepAxisCodes: data.optionAxes,
+      keepAttributeCodes: [
+        ...data.optionAxes,
+        ...data.attributes.map((attribute) => attribute.code),
+      ],
     })
     return ctx.inertia.render('seller/product_edit', {
       product: sellerProductJson(data, stock),

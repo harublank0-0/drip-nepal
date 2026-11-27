@@ -609,11 +609,13 @@ export type ProductFormOptions = {
  *   offers what the actions accept. `keepCategoryId`, the product's own
  *   category, is listed even when it is no longer an active leaf
  *   (`isActive` false), so an edit can keep it (04a §7.1).
- * - `attributes`: the attributes any listed rule names, and `keepAxisCodes`,
- *   the product's own axes, which the server keeps when no rule names them
- *   any more (R1-S part 2f-ii), each with every value in picker order; an
- *   inactive value is marked, so the form offers it only to a product that
- *   already has it (04a §7.3).
+ * - `attributes`: the attributes any listed rule names, and
+ *   `keepAttributeCodes`, the product's own axes and attributes, which it
+ *   keeps when no rule names them any more (the axes, R1-S part 2f-ii), or
+ *   whose values the details form names to remove (the attributes, part
+ *   2f-iii), each with every value in picker order; an inactive value is
+ *   marked, so the form offers it only to a product that already has it
+ *   (04a §7.3).
  * - `brands`: the `active` brands by name (04a §7.5), and `keepBrandId`, the
  *   product's own brand, whatever its status.
  */
@@ -621,7 +623,7 @@ export async function productFormOptions(
   options: {
     keepCategoryId?: string
     keepBrandId?: string | null
-    keepAxisCodes?: readonly string[]
+    keepAttributeCodes?: readonly string[]
   } = {}
 ): Promise<ProductFormOptions> {
   const client = db.connection()
@@ -692,7 +694,7 @@ export async function productFormOptions(
     rulesOf.set(rule.category_id, list)
   }
   const codes = [
-    ...new Set([...ruleRows.map((rule) => rule.code), ...(options.keepAxisCodes ?? [])]),
+    ...new Set([...ruleRows.map((rule) => rule.code), ...(options.keepAttributeCodes ?? [])]),
   ]
   const attributeRows: { code: string; name: string; input: AttributeInput }[] =
     codes.length === 0
@@ -1381,4 +1383,18 @@ async function readStorefrontProduct(
     currency: 'NPR',
     publishedAt: product.published_at,
   }
+}
+
+/*
+ * Whether the shop has a `published` product: the overview's "A product
+ * live" item (docs/08 §2.5; R1-S part 2f-iii), read through
+ * `products_seller_list_idx` (`shop_id`, `status`, ...).
+ */
+export async function hasPublishedProduct(shopId: string): Promise<boolean> {
+  const row = await db
+    .from('products')
+    .where({ shop_id: shopId, status: 'published' })
+    .select('id')
+    .first()
+  return row !== null
 }
