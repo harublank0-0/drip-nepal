@@ -648,6 +648,24 @@ const routes = {
     tokens: [{"old":"/p/:segment","type":0,"val":"p","end":""},{"old":"/p/:segment","type":1,"val":"segment","end":""}],
     types: placeholder as Registry['product.show']['types'],
   },
+  'seo.robots': {
+    methods: ["GET","HEAD"],
+    pattern: '/robots.txt',
+    tokens: [{"old":"/robots.txt","type":0,"val":"robots.txt","end":""}],
+    types: placeholder as Registry['seo.robots']['types'],
+  },
+  'seo.sitemap': {
+    methods: ["GET","HEAD"],
+    pattern: '/sitemap.xml',
+    tokens: [{"old":"/sitemap.xml","type":0,"val":"sitemap.xml","end":""}],
+    types: placeholder as Registry['seo.sitemap']['types'],
+  },
+  'seo.sitemap_file': {
+    methods: ["GET","HEAD"],
+    pattern: '/sitemaps/:file',
+    tokens: [{"old":"/sitemaps/:file","type":0,"val":"sitemaps","end":""},{"old":"/sitemaps/:file","type":1,"val":"file","end":""}],
+    types: placeholder as Registry['seo.sitemap_file']['types'],
+  },
   'login': {
     methods: ["GET","HEAD"],
     pattern: '/login',

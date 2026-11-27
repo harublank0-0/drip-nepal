@@ -1291,6 +1291,42 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/product_controller').default['show']>>>
     }
   }
+  'seo.robots': {
+    methods: ["GET","HEAD"]
+    pattern: '/robots.txt'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/storefront/platform/seo_controller').default['robots']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/storefront/platform/seo_controller').default['robots']>>>
+    }
+  }
+  'seo.sitemap': {
+    methods: ["GET","HEAD"]
+    pattern: '/sitemap.xml'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/storefront/platform/seo_controller').default['sitemapIndex']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/storefront/platform/seo_controller').default['sitemapIndex']>>>
+    }
+  }
+  'seo.sitemap_file': {
+    methods: ["GET","HEAD"]
+    pattern: '/sitemaps/:file'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { file: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/storefront/platform/seo_controller').default['sitemapFile']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/storefront/platform/seo_controller').default['sitemapFile']>>>
+    }
+  }
   'login': {
     methods: ["GET","HEAD"]
     pattern: '/login'

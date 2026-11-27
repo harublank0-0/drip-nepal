@@ -119,7 +119,7 @@ const MULTIPART = [
 ].join('\r\n')
 
 // A value each parameter's matcher accepts: a UUID, or a public ID (04a §7.6) for `:publicId`.
-const PARAMETER_VALUES: Record<string, string> = { publicId: 'ZZZZZZZZ' }
+const PARAMETER_VALUES: Record<string, string> = { publicId: 'ZZZZZZZZ', file: 'urls-1.xml' }
 
 // Every route the router knows, with each parameter filled in.
 function everyRoute() {

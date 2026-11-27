@@ -16,6 +16,32 @@ import { REPORT_GROUP, serializePolicy } from '#modules/platform/content_securit
  * M7, the target policy in report-only mode (RF-34). CSP is off in
  * development, where Vite injects inline scripts and a websocket.
  */
+/*
+ * The pages search engines must not index (ADR-0017 decision 8, docs/03
+ * §6.1; R1-S part 3d-iii-a): the seller, account and admin surfaces, the
+ * cart and checkout, the sign-in pages and the payment return. Each answer
+ * there carries `X-Robots-Tag: noindex`, redirects and errors included,
+ * and `robots.txt` does not disallow them, so a crawler sees the header.
+ */
+export const NOINDEX_PREFIXES = [
+  '/seller',
+  '/account',
+  '/admin',
+  '/cart',
+  '/checkout',
+  '/payments',
+  '/login',
+  '/signup',
+  '/verify-email',
+  '/forgot-password',
+  '/reset-password',
+  '/mfa',
+]
+
+export function isNoindexPath(path: string) {
+  return NOINDEX_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`))
+}
+
 export default class SecurityHeadersMiddleware {
   async handle(ctx: HttpContext, next: NextFn) {
     const { response } = ctx
@@ -42,6 +68,8 @@ export default class SecurityHeadersMiddleware {
     // Every API answer is private and never stored (docs/03 §12.5); a handler may not loosen it.
     if (ctx.request.url().startsWith('/api/v1/'))
       response.header('Cache-Control', 'private, no-store')
+    // The private and non-content pages are never indexed, redirects included (ADR-0017 decision 8).
+    if (isNoindexPath(ctx.request.url())) response.header('X-Robots-Tag', 'noindex')
 
     return next()
   }

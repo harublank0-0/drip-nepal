@@ -6,6 +6,7 @@ const ProductController = () => import('#controllers/storefront/catalog/product_
 import { NAVIGATION } from '#modules/catalog/navigation'
 const LegalDocumentsController = () =>
   import('#controllers/storefront/platform/legal_documents_controller')
+const SeoController = () => import('#controllers/storefront/platform/seo_controller')
 
 /*
  * Storefront and public pages (docs/08 §2.2), GET only (ADR-0004 decision
@@ -41,3 +42,14 @@ router.get('/search', [ListingController, 'search']).as('listing.search')
  * holding no public ID.
  */
 router.get('/p/:segment', [ProductController, 'show']).as('product.show')
+
+/*
+ * The crawler files (ADR-0017 decision 8; R1-S part 3d-iii-a): `robots.txt`
+ * and the sitemap the nightly job writes, an index and its numbered files.
+ */
+router.get('/robots.txt', [SeoController, 'robots']).as('seo.robots')
+router.get('/sitemap.xml', [SeoController, 'sitemapIndex']).as('seo.sitemap')
+router
+  .get('/sitemaps/:file', [SeoController, 'sitemapFile'])
+  .as('seo.sitemap_file')
+  .where('file', { match: /^urls-[1-9]\d{0,3}\.xml$/ })
