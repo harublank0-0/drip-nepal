@@ -6,7 +6,7 @@ Reviewed: 2026-09-26 · consistency review 2026-09-30 to 2026-10-04
 
 This document is the single source of truth for three registers:
 
-- **Open decisions (OD-01 … OD-65).** Questions a named owner must answer before a milestone can start or finish.
+- **Open decisions (OD-01 … OD-66).** Questions a named owner must answer before a milestone can start or finish.
 - **External verifications (VX-01 … VX-18).** Legal, tax, provider and pricing facts that an authoritative party must confirm before the design relies on them.
 - **Risks (R-01 … R-33).** Things that could go wrong for DripNepal specifically, with scores, mitigations, owners and early warnings.
 
@@ -252,7 +252,7 @@ Evidence: 12 §9 part 3 asked for the two to be reconciled before the storefront
           The product owner was offered (a) show the return policy publicly, the other details
           staying private, or (b) keep it private for now, and chose (a) on 2026-11-27.
 ADR: none
-Docs updated: this entry; 01 AC-FR-SHOP-013-4 and 12 §9 with R1-S part 3c  |  Status: Decided
+Docs to update in R1-S part 3c: 01 AC-FR-SHOP-013-4, 12 §9  |  Status: Decided
 ```
 
 ```text

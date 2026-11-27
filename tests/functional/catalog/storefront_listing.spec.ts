@@ -268,7 +268,7 @@ test.group('T-CAT-014 the storefront listing', (group) => {
 
   test('T-CAT-014 the sorts, with product_id breaking ties', async ({ assert }) => {
     const shop = await activeShop()
-    const a = await listed(shop, {
+    await listed(shop, {
       title: 'Tee A',
       min: 200000,
       publishedAt: '2026-11-03T00:00:00Z',
@@ -278,7 +278,7 @@ test.group('T-CAT-014 the storefront listing', (group) => {
       min: 100000,
       publishedAt: '2026-11-01T00:00:00Z',
     })
-    const c = await listed(shop, {
+    await listed(shop, {
       title: 'Tee C',
       min: 300000,
       publishedAt: '2026-11-02T00:00:00Z',
@@ -296,7 +296,6 @@ test.group('T-CAT-014 the storefront listing', (group) => {
     assert.deepEqual(titles(cheap.body), [first.title, second.title, 'Tee A', 'Tee C'])
     const dear = await list('?sort=price_desc')
     assert.deepEqual(titles(dear.body), ['Tee C', 'Tee A', first.title, second.title])
-    assert.notEqual(a.productId, c.productId)
   })
 
   test('T-CAT-014 pages never repeat or skip a card; past the last is empty', async ({
@@ -369,6 +368,7 @@ test.group('T-CAT-014 the storefront listing', (group) => {
   })
 
   test('T-CAT-014 the filterable attributes and their listing arrays', async ({ assert }) => {
+    // Pinned to the seeded attributes: a new filterable attribute must be mapped here on purpose.
     const attributes = await listingFilterAttributes()
     assert.deepEqual(
       Object.fromEntries([...attributes].map(([code, attribute]) => [code, attribute.column])),

@@ -5,6 +5,7 @@ import type { AttributeInput } from '#modules/catalog/domain/attribute_input'
 import type { CategoryAttributeUsage } from '#modules/catalog/domain/category_attribute_usage'
 import { PRODUCT_STATUSES, type ProductStatus } from '#modules/catalog/domain/product_status'
 import { withTx } from '#modules/platform/tx'
+import { shopIdBySlug } from '#modules/shops/queries'
 import type {
   FilterableAttribute,
   ListingColumn,
@@ -938,8 +939,9 @@ const TYPO_WORD_SIMILARITY = 0.5
  * - It opens its own read transaction for the typo fallback, so it is never
  *   called inside another transaction.
  * - `q` matches `search_tsv` with `websearch_to_tsquery('simple', q)`. When
- *   that finds nothing under the other filters, the words of `q` are matched
- *   against the title by trigram word similarity (`q <% title`, served by
+ *   that finds nothing under the other filters, `q` is matched against the
+ *   closest run of words in the title by trigram word similarity
+ *   (`q <% title`, served by
  *   `product_listings_title_trgm_idx`), at `TYPO_WORD_SIMILARITY` set for
  *   that read transaction alone, so a typo such as "snekers" still finds
  *   "sneakers" (AC-FR-SRCH-002-2); whole-title `similarity` stays far below
@@ -958,9 +960,8 @@ export async function listingPage(
   }
   let shopId: string | null = null
   if (filters.shopSlug !== null) {
-    const shop = await db.from('shops').where('slug', filters.shopSlug).select('id').first()
-    if (!shop) return { rows: [], counted: 0 }
-    shopId = shop.id as string
+    shopId = await shopIdBySlug(filters.shopSlug)
+    if (shopId === null) return { rows: [], counted: 0 }
   }
   // Used only when a search was sent.
   const q = filters.q ?? ''

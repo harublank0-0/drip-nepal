@@ -148,6 +148,11 @@ test.group('T-CAT-014 the listing query', () => {
     assert.equal(parse({ q: '  -tee ' }).filters?.q, 'tee')
     assert.equal(parse({ q: 'red --tee' }).filters?.q, 'red tee')
     assert.equal(parse({ q: 'crew-neck tee' }).filters?.q, 'crew-neck tee')
+    // A hyphen after a quote would make an exclusion too.
+    assert.equal(parse({ q: '""-tee' }).filters?.q, '""tee')
+    // The length is counted after the hyphens go.
+    assert.deepEqual(parameters({ q: '--' }), ['q'])
+    assert.deepEqual(parameters({ q: '-a' }), ['q'])
     assert.deepEqual(parameters({ q: 'ab\u0000' }), ['q'])
     assert.deepEqual(parameters({ q: 'ab\tcd' }), ['q'])
   })

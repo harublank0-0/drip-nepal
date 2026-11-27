@@ -18,9 +18,9 @@ import { navigationEntry } from '#modules/catalog/navigation'
  * - `brand` (slugs, any of them), `shop` (a slug), `price_min_minor` and
  *   `price_max_minor` (paisa; a product matches when its price range, from
  *   its lowest to its highest price, overlaps the range asked for),
- *   `in_stock` (`true` only), `q` (2 to 100 characters after trimming, no
- *   control character; a leading `-` on a word is dropped, so a search never
- *   becomes a pure exclusion).
+ *   `in_stock` (`true` only), `q` (2 to 100 characters after a hyphen that
+ *   does not join two letters or digits is dropped and the rest trimmed, so
+ *   a search never becomes a pure exclusion; no control character).
  * - Numbers are written without leading zeros, so each query has one form
  *   the storefront pages can redirect to.
  * - Problems name each parameter once, at most 20 of them, and quote no
@@ -208,11 +208,12 @@ export function parseListingQuery(
   let q: string | null = null
   const qText = one('q')
   if (qText !== undefined) {
-    const trimmed = qText.trim()
-    const length = [...trimmed].length
-    if (CONTROL.test(trimmed)) refuse('q', 'Send letters, numbers and punctuation only.')
+    // A hyphen that does not join two letters or digits is dropped: `-` means NOT to websearch_to_tsquery.
+    const searched = qText.replaceAll(/(^|[^\p{L}\p{N}])-+/gu, '$1').trim()
+    const length = [...searched].length
+    if (CONTROL.test(searched)) refuse('q', 'Send letters, numbers and punctuation only.')
     else if (length < 2 || length > 100) refuse('q', 'Send 2 to 100 characters.')
-    else q = trimmed.replaceAll(/(^|\s)-+/g, '$1')
+    else q = searched
   }
 
   const sortText = one('sort')

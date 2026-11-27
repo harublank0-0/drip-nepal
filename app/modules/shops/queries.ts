@@ -339,3 +339,13 @@ export async function shopShippingState(
   const shipping = await shopShipping(shopId, { client })
   return { ...shipping, version: shop.version }
 }
+
+/*
+ * A shop's ID by its current slug, in any status, or null: the storefront
+ * listing's `shop` filter (docs/06 §6.3; R1-S part 3b), which then reads
+ * `product_listings` by `shop_id`. Only an active shop has listing rows.
+ */
+export async function shopIdBySlug(slug: string): Promise<string | null> {
+  const row = await db.from('shops').where('slug', slug).select('id').first()
+  return row ? (row.id as string) : null
+}
