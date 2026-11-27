@@ -81,6 +81,34 @@ export type ScannedRoutes = {
     'receiveCourierCallback': { paramsTuple: [ParamValue,ParamValue]; params: {'providerCode': ParamValue,'accountId': ParamValue} }
     'home': { paramsTuple?: []; params?: {} }
     'legal.document': { paramsTuple: [ParamValue]; params: {'documentSlug': ParamValue} }
+    'listing.men': { paramsTuple?: []; params?: {} }
+    'listing.men.clothing': { paramsTuple?: []; params?: {} }
+    'listing.men.t-shirts': { paramsTuple?: []; params?: {} }
+    'listing.men.shirts': { paramsTuple?: []; params?: {} }
+    'listing.men.hoodies': { paramsTuple?: []; params?: {} }
+    'listing.men.jeans': { paramsTuple?: []; params?: {} }
+    'listing.men.joggers': { paramsTuple?: []; params?: {} }
+    'listing.men.traditional-wear': { paramsTuple?: []; params?: {} }
+    'listing.men.footwear': { paramsTuple?: []; params?: {} }
+    'listing.men.sneakers': { paramsTuple?: []; params?: {} }
+    'listing.men.bags': { paramsTuple?: []; params?: {} }
+    'listing.men.watches': { paramsTuple?: []; params?: {} }
+    'listing.men.accessories': { paramsTuple?: []; params?: {} }
+    'listing.women': { paramsTuple?: []; params?: {} }
+    'listing.women.clothing': { paramsTuple?: []; params?: {} }
+    'listing.women.tops': { paramsTuple?: []; params?: {} }
+    'listing.women.dresses': { paramsTuple?: []; params?: {} }
+    'listing.women.jeans': { paramsTuple?: []; params?: {} }
+    'listing.women.traditional-wear': { paramsTuple?: []; params?: {} }
+    'listing.women.sarees': { paramsTuple?: []; params?: {} }
+    'listing.women.kurtas': { paramsTuple?: []; params?: {} }
+    'listing.women.footwear': { paramsTuple?: []; params?: {} }
+    'listing.women.sneakers': { paramsTuple?: []; params?: {} }
+    'listing.women.bags': { paramsTuple?: []; params?: {} }
+    'listing.women.watches': { paramsTuple?: []; params?: {} }
+    'listing.women.accessories': { paramsTuple?: []; params?: {} }
+    'listing.category': { paramsTuple: [ParamValue]; params: {'categorySlug': ParamValue} }
+    'listing.search': { paramsTuple?: []; params?: {} }
     'login': { paramsTuple?: []; params?: {} }
     'signup': { paramsTuple?: []; params?: {} }
     'verify_email': { paramsTuple?: []; params?: {} }
@@ -128,6 +156,34 @@ export type ScannedRoutes = {
     'adminListCourierEvents': { paramsTuple?: []; params?: {} }
     'home': { paramsTuple?: []; params?: {} }
     'legal.document': { paramsTuple: [ParamValue]; params: {'documentSlug': ParamValue} }
+    'listing.men': { paramsTuple?: []; params?: {} }
+    'listing.men.clothing': { paramsTuple?: []; params?: {} }
+    'listing.men.t-shirts': { paramsTuple?: []; params?: {} }
+    'listing.men.shirts': { paramsTuple?: []; params?: {} }
+    'listing.men.hoodies': { paramsTuple?: []; params?: {} }
+    'listing.men.jeans': { paramsTuple?: []; params?: {} }
+    'listing.men.joggers': { paramsTuple?: []; params?: {} }
+    'listing.men.traditional-wear': { paramsTuple?: []; params?: {} }
+    'listing.men.footwear': { paramsTuple?: []; params?: {} }
+    'listing.men.sneakers': { paramsTuple?: []; params?: {} }
+    'listing.men.bags': { paramsTuple?: []; params?: {} }
+    'listing.men.watches': { paramsTuple?: []; params?: {} }
+    'listing.men.accessories': { paramsTuple?: []; params?: {} }
+    'listing.women': { paramsTuple?: []; params?: {} }
+    'listing.women.clothing': { paramsTuple?: []; params?: {} }
+    'listing.women.tops': { paramsTuple?: []; params?: {} }
+    'listing.women.dresses': { paramsTuple?: []; params?: {} }
+    'listing.women.jeans': { paramsTuple?: []; params?: {} }
+    'listing.women.traditional-wear': { paramsTuple?: []; params?: {} }
+    'listing.women.sarees': { paramsTuple?: []; params?: {} }
+    'listing.women.kurtas': { paramsTuple?: []; params?: {} }
+    'listing.women.footwear': { paramsTuple?: []; params?: {} }
+    'listing.women.sneakers': { paramsTuple?: []; params?: {} }
+    'listing.women.bags': { paramsTuple?: []; params?: {} }
+    'listing.women.watches': { paramsTuple?: []; params?: {} }
+    'listing.women.accessories': { paramsTuple?: []; params?: {} }
+    'listing.category': { paramsTuple: [ParamValue]; params: {'categorySlug': ParamValue} }
+    'listing.search': { paramsTuple?: []; params?: {} }
     'login': { paramsTuple?: []; params?: {} }
     'signup': { paramsTuple?: []; params?: {} }
     'verify_email': { paramsTuple?: []; params?: {} }
@@ -173,6 +229,34 @@ export type ScannedRoutes = {
     'adminListCourierEvents': { paramsTuple?: []; params?: {} }
     'home': { paramsTuple?: []; params?: {} }
     'legal.document': { paramsTuple: [ParamValue]; params: {'documentSlug': ParamValue} }
+    'listing.men': { paramsTuple?: []; params?: {} }
+    'listing.men.clothing': { paramsTuple?: []; params?: {} }
+    'listing.men.t-shirts': { paramsTuple?: []; params?: {} }
+    'listing.men.shirts': { paramsTuple?: []; params?: {} }
+    'listing.men.hoodies': { paramsTuple?: []; params?: {} }
+    'listing.men.jeans': { paramsTuple?: []; params?: {} }
+    'listing.men.joggers': { paramsTuple?: []; params?: {} }
+    'listing.men.traditional-wear': { paramsTuple?: []; params?: {} }
+    'listing.men.footwear': { paramsTuple?: []; params?: {} }
+    'listing.men.sneakers': { paramsTuple?: []; params?: {} }
+    'listing.men.bags': { paramsTuple?: []; params?: {} }
+    'listing.men.watches': { paramsTuple?: []; params?: {} }
+    'listing.men.accessories': { paramsTuple?: []; params?: {} }
+    'listing.women': { paramsTuple?: []; params?: {} }
+    'listing.women.clothing': { paramsTuple?: []; params?: {} }
+    'listing.women.tops': { paramsTuple?: []; params?: {} }
+    'listing.women.dresses': { paramsTuple?: []; params?: {} }
+    'listing.women.jeans': { paramsTuple?: []; params?: {} }
+    'listing.women.traditional-wear': { paramsTuple?: []; params?: {} }
+    'listing.women.sarees': { paramsTuple?: []; params?: {} }
+    'listing.women.kurtas': { paramsTuple?: []; params?: {} }
+    'listing.women.footwear': { paramsTuple?: []; params?: {} }
+    'listing.women.sneakers': { paramsTuple?: []; params?: {} }
+    'listing.women.bags': { paramsTuple?: []; params?: {} }
+    'listing.women.watches': { paramsTuple?: []; params?: {} }
+    'listing.women.accessories': { paramsTuple?: []; params?: {} }
+    'listing.category': { paramsTuple: [ParamValue]; params: {'categorySlug': ParamValue} }
+    'listing.search': { paramsTuple?: []; params?: {} }
     'login': { paramsTuple?: []; params?: {} }
     'signup': { paramsTuple?: []; params?: {} }
     'verify_email': { paramsTuple?: []; params?: {} }
