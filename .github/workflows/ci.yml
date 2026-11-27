@@ -340,9 +340,12 @@ jobs:
   # fails when a page cannot be measured, never on a budget, and it is not a
   # required check (docs/10 §5.4); the table is in the job summary and the
   # reports are an artifact. The perf suite rebuilds the test database and
-  # commits the launch catalogue, with its photos in SeaweedFS; the build then
-  # runs with APP_ENV=development over http, because staging and production
-  # need https (start/env_policy.ts), and serves its built assets either way.
+  # commits a stand-in for the launch catalogue, with its photos in SeaweedFS;
+  # the build then runs with APP_ENV=development over http, because staging
+  # and production need https (start/env_policy.ts). It serves its built
+  # assets either way, but development turns the CSP off (config/shield.ts),
+  # so a CSP violation cannot show here (T-ARCH-002 runs the image under
+  # staging settings). Lighthouse uses the Chrome of the runner image.
   lighthouse:
     name: Lighthouse
     runs-on: ubuntu-24.04
@@ -389,7 +392,7 @@ jobs:
         run: docker compose up -d --wait seaweedfs
       - name: T-PERF-003 the launch catalogue
         env:
-          PERF_CATALOGUE_REQUIRED: '1'
+          PERF_CATALOGUE: '1'
         run: node ace test perf
       - name: Production build
         run: node ace build
@@ -398,6 +401,14 @@ jobs:
           NODE_ENV: development
           APP_ENV: development
           DB_DEBUG: 'false'
+          # SeaweedFS's development values (docker/seaweedfs/s3.json), on the test buckets:
+          # public placeholders, and all of them, since a partial set fails start/env.ts.
+          S3_ENDPOINT: http://localhost:8333
+          S3_REGION: auto
+          S3_ACCESS_KEY_ID: dripnepal-dev
+          S3_SECRET_ACCESS_KEY: dripnepal-dev-secret
+          S3_BUCKET_PRIVATE: dripnepal-test-private
+          S3_BUCKET_PUBLIC: dripnepal-test-public
           MEDIA_PUBLIC_URL: http://localhost:8333/dripnepal-test-public
         run: |
           cp .env.test build/.env

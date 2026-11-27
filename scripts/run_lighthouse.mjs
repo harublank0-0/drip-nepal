@@ -59,12 +59,16 @@ function startProxy() {
       new URL(incoming.url ?? '/', base),
       { method: incoming.method, headers: { ...incoming.headers, host: base.host } },
       (response) => {
+        response.on('error', () => outgoing.destroy())
         const headers = { ...response.headers }
         const type = String(headers['content-type'] ?? '')
         const accepts = /\bgzip\b/.test(String(incoming.headers['accept-encoding'] ?? ''))
-        if (accepts && COMPRESSIBLE.test(type) && !headers['content-encoding']) {
+        const body = incoming.method !== 'HEAD' && ![204, 304].includes(response.statusCode ?? 0)
+        if (body && accepts && COMPRESSIBLE.test(type) && !headers['content-encoding']) {
           delete headers['content-length']
           headers['content-encoding'] = 'gzip'
+          // The compressed bytes differ, so a strong ETag becomes weak, as a compressing proxy does.
+          if (headers.etag && !headers.etag.startsWith('W/')) headers.etag = `W/${headers.etag}`
           headers.vary = headers.vary ? `${headers.vary}, Accept-Encoding` : 'Accept-Encoding'
           outgoing.writeHead(response.statusCode ?? 502, headers)
           response.pipe(createGzip()).pipe(outgoing)
@@ -110,14 +114,22 @@ async function lighthouse(url, prefix) {
   const report = JSON.parse(readFileSync(`${prefix}.report.json`, 'utf8'))
   if (report.runtimeError)
     return { error: `${report.runtimeError.code}: ${report.runtimeError.message}` }
-  const value = (id) => report.audits[id]?.numericValue
-  return {
-    score: Math.round((report.categories.performance.score ?? 0) * 100),
-    lcp: value('largest-contentful-paint'),
-    tbt: value('total-blocking-time'),
-    cls: value('cumulative-layout-shift'),
-    transfer: value('total-byte-weight'),
+  // A run without a score or one of the metrics is a failed run, never a row of blanks.
+  const score = report.categories.performance.score
+  if (typeof score !== 'number') return { error: 'no performance score' }
+  const metrics = {
+    lcp: 'largest-contentful-paint',
+    tbt: 'total-blocking-time',
+    cls: 'cumulative-layout-shift',
+    transfer: 'total-byte-weight',
   }
+  const result = { score: Math.round(score * 100) }
+  for (const [name, id] of Object.entries(metrics)) {
+    const value = report.audits[id]?.numericValue
+    if (!Number.isFinite(value)) return { error: `no ${id}` }
+    result[name] = value
+  }
+  return result
 }
 
 const seconds = (ms) => `${(ms / 1000).toFixed(1)} s`
@@ -183,6 +195,8 @@ try {
     `### Lighthouse, mobile (T-PERF-003, report only)`,
     '',
     `Median of ${runs} run(s) per page; simulated slow 4G and a 4× slower CPU. Budgets (docs/08 §10.1): LCP ≤ 2.5 s, CLS ≤ 0.1, the listing's first-load transfer ≤ 1 MB; INP ≤ 200 ms needs real input, so Total Blocking Time stands in for it here.`,
+    '',
+    `A lab run, unlike production: HTTP/1.1 without TLS behind a gzip proxy (Caddy serves HTTP/2 over TLS), the runner's Chrome, a synthetic catalogue, and development mode, which has no CSP. Compare its figures from run to run, not with field data.`,
     '',
     '| Page | Score | LCP | TBT | CLS | Transfer |',
     '| --- | --- | --- | --- | --- | --- |',

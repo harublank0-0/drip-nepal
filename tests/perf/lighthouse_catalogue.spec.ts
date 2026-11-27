@@ -24,10 +24,13 @@ import { act, configureShipping } from '#tests/support/storefront_products'
 
 /*
  * The launch catalogue the Lighthouse run measures (T-PERF-003, docs/08
- * §10.1; R1-S part 3d-iii-c): the owner's shop with one listing page of
- * published products (`DEFAULT_PER_PAGE`), each with two photos, made through
- * the seller API, the media pipeline and the listing refresh as a seller's
- * would be. The photos are synthetic, sized like product photos (about 20,
+ * §10.1; R1-S part 3d-iii-c), a stand-in for the launch catalogue until there
+ * is one: the owner's shop with one listing page of published products
+ * (`DEFAULT_PER_PAGE`), each with two photos, made through the seller API, the
+ * media pipeline and the listing refresh as a seller's would be. The newest,
+ * so the home page's first card and the product page measured, is a tee in
+ * four sizes and two colours, so that page renders its variant picker; the
+ * others are accessories with one variant. The photos are synthetic, sized like product photos (about 20,
  * 50, 100 and 165 KB of WebP at 320, 640, 1024 and 1600 px), and go through
  * `processUpload` into the public bucket of an S3 server, which serves them
  * to the browser at `MEDIA_PUBLIC_URL`.
@@ -35,25 +38,30 @@ import { act, configureShipping } from '#tests/support/storefront_products'
  * The suite commits, and its rows stay for the Lighthouse run that follows
  * (scripts/run_lighthouse.mjs, the Lighthouse job of ci.yml); the next test
  * run rebuilds the database. The S3 server is the development one of
- * docker/seaweedfs/s3.json, on the test buckets, as in T-MED-005: without a
- * server on S3_CONTRACT_ENDPOINT (default http://127.0.0.1:8333) the test is
- * skipped, unless PERF_CATALOGUE_REQUIRED=1, as in CI, where it fails.
+ * docker/seaweedfs/s3.json, on the test buckets, as in T-MED-005, on
+ * S3_CONTRACT_ENDPOINT (default http://127.0.0.1:8333). The test runs only
+ * with PERF_CATALOGUE=1, which the Lighthouse job sets, so a local `pnpm test`
+ * skips it; with it set, a missing S3 server fails it.
  */
 
 const ENDPOINT = process.env.S3_CONTRACT_ENDPOINT ?? 'http://127.0.0.1:8333'
-const REQUIRED = process.env.PERF_CATALOGUE_REQUIRED === '1'
+const OPTED_IN = process.env.PERF_CATALOGUE === '1'
 const BUCKETS = { private: 'dripnepal-test-private', public: 'dripnepal-test-public' }
 const CTX = { requestId: 'req-t-perf-003', timeoutMs: 30_000 }
 const PHOTOS = 2
 const SIZE = 1600
 
-const reachable = await fetch(`${ENDPOINT}/healthz`, { signal: AbortSignal.timeout(1500) }).then(
-  (response) => response.ok,
-  () => false
-)
-const SKIP_REASON = `no S3 server at ${ENDPOINT}: docker compose up -d seaweedfs`
+// Probed only when the catalogue is asked for, so a plain `pnpm test` waits for nothing.
+const reachable =
+  OPTED_IN &&
+  (await fetch(`${ENDPOINT}/healthz`, { signal: AbortSignal.timeout(1500) }).then(
+    (response) => response.ok,
+    () => false
+  ))
+const SKIP_REASON = 'the Lighthouse catalogue runs with PERF_CATALOGUE=1 (the Lighthouse job)'
+const MISSING = `no S3 server at ${ENDPOINT}: docker compose up -d seaweedfs`
 
-// Men's products whose categories need no size axis (06_category_attributes_seeder), so one variant each.
+// Men's accessories, whose categories need no size axis (06_category_attributes_seeder): one variant each.
 const SHAPES = [
   { category: 'backpacks', material: 'canvas', noun: 'daypack', price: 349_900 },
   { category: 'analog-watches', material: 'nylon', noun: 'field watch', price: 489_900 },
@@ -61,6 +69,9 @@ const SHAPES = [
   { category: 'caps-hats', material: 'cotton', noun: 'cap', price: 89_900 },
 ] as const
 const ADJECTIVES = ['Everyday', 'Heritage', 'Trail', 'Studio', 'Monsoon', 'Himalayan']
+// The tee's variants: four sizes in two colours, as clothing is listed.
+const TEE_SIZES = ['s', 'm', 'l', 'xl']
+const TEE_COLORS = ['black', 'white']
 
 // An RGB colour of a hue, at a saturation and lightness between 0 and 1.
 function rgb(hue: number, saturation: number, lightness: number): [number, number, number] {
@@ -148,8 +159,31 @@ async function readyPhoto(w: World, storage: ObjectStorage, hue: number): Promis
   return id
 }
 
-async function publishedProduct(w: World, storage: ObjectStorage, n: number) {
-  const shape = SHAPES[n % SHAPES.length]
+// The variants of product `n`: the tee's sizes and colours, or an accessory's one variant.
+function variantsBody(n: number, sized: boolean, price: number) {
+  const sku = () => `PERF-${randomUUID().slice(0, 8)}`
+  if (!sized) {
+    return {
+      option_axes: [],
+      variants: [{ option_value_codes: {}, sku: sku(), price_minor: price + (n % 4) * 10_000 }],
+    }
+  }
+  return {
+    option_axes: ['apparel_size', 'color'],
+    variants: TEE_COLORS.flatMap((color) =>
+      TEE_SIZES.map((size) => ({
+        option_value_codes: { color, apparel_size: size },
+        sku: sku(),
+        price_minor: size === 'xl' ? price + 10_000 : price,
+      }))
+    ),
+  }
+}
+
+async function publishedProduct(w: World, storage: ObjectStorage, n: number, sized = false) {
+  const shape = sized
+    ? { category: 't-shirts', material: 'cotton', noun: 'crew tee', price: 149_900 }
+    : SHAPES[n % SHAPES.length]
   const title = `${ADJECTIVES[n % ADJECTIVES.length]} ${shape.noun} ${n + 1}`
   const created = await create(
     w,
@@ -171,22 +205,13 @@ async function publishedProduct(w: World, storage: ObjectStorage, n: number) {
     w.owner,
     'PUT',
     `${path}/variants`,
-    {
-      option_axes: [],
-      variants: [
-        {
-          option_value_codes: {},
-          sku: `PERF-${randomUUID().slice(0, 8)}`,
-          price_minor: shape.price + (n % 4) * 10_000,
-        },
-      ],
-    },
+    variantsBody(n, sized, shape.price),
     { 'If-Match': '"1"' }
   )
   if (variants.status !== 200) throw new Error(`variants: ${variants.text}`)
   await db
     .from('inventory_items')
-    .where('variant_id', variants.body.data.variants[0].id as string)
+    .whereIn('variant_id', db.from('product_variants').where('product_id', productId).select('id'))
     .update({ on_hand: 10 })
   const items = []
   for (let position = 1; position <= PHOTOS; position++) {
@@ -208,7 +233,7 @@ async function publishedProduct(w: World, storage: ObjectStorage, n: number) {
 test.group('T-PERF-003 the launch catalogue for the Lighthouse run', (group) => {
   let restore = () => {}
   group.setup(() => {
-    if (REQUIRED && !reachable) throw new Error(`PERF_CATALOGUE_REQUIRED=1 but ${SKIP_REASON}`)
+    if (OPTED_IN && !reachable) throw new Error(`PERF_CATALOGUE=1 but ${MISSING}`)
     const quiet = { info: () => {}, warn: () => {} } as unknown as Logger
     const client = s3ClientFor({
       endpoint: ENDPOINT,
@@ -229,7 +254,9 @@ test.group('T-PERF-003 the launch catalogue for the Lighthouse run', (group) => 
     const storage = await app.container.make(ObjectStorage)
     const w = await world()
     await configureShipping(w)
-    for (let n = 0; n < DEFAULT_PER_PAGE; n++) await publishedProduct(w, storage, n)
+    // The tee is made last, so it is the newest: the home page's first card.
+    for (let n = 0; n < DEFAULT_PER_PAGE - 1; n++) await publishedProduct(w, storage, n)
+    await publishedProduct(w, storage, DEFAULT_PER_PAGE - 1, true)
 
     const listed = await db
       .from('product_listings')
@@ -243,6 +270,6 @@ test.group('T-PERF-003 the launch catalogue for the Lighthouse run', (group) => 
     assert.equal(served.status, 200)
     assert.equal(served.headers.get('content-type'), 'image/webp')
   })
-    .skip(!reachable && !REQUIRED, SKIP_REASON)
+    .skip(!OPTED_IN, SKIP_REASON)
     .timeout(300_000)
 })
