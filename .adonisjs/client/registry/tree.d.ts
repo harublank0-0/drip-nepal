@@ -53,6 +53,7 @@ export interface ApiDefinition {
   stocktakeInventory: typeof routes['stocktakeInventory']
   createMediaUpload: typeof routes['createMediaUpload']
   completeMediaUpload: typeof routes['completeMediaUpload']
+  getMediaUpload: typeof routes['getMediaUpload']
   getLogisticsSettings: typeof routes['getLogisticsSettings']
   replaceLogisticsSettings: typeof routes['replaceLogisticsSettings']
   createShopCourierAccount: typeof routes['createShopCourierAccount']

@@ -163,8 +163,21 @@ test.group('T-MED-006 replaceProductMedia', (group) => {
     assert.equal(response.headers.get('etag'), '"3"')
     assert.equal(response.body.data.version, 3)
     assert.deepEqual(response.body.data.media, [
-      { media_asset_id: front, position: 1, alt_text: null, color_value_id: null },
-      { media_asset_id: back, position: 2, alt_text: 'Back view', color_value_id: black },
+      // Each image carries its public derivatives' keys, for the editor's gallery (R1-S part 2g-i).
+      {
+        media_asset_id: front,
+        position: 1,
+        alt_text: null,
+        color_value_id: null,
+        keys: { 320: 'p/x/y-320.webp' },
+      },
+      {
+        media_asset_id: back,
+        position: 2,
+        alt_text: 'Back view',
+        color_value_id: black,
+        keys: { 320: 'p/x/y-320.webp' },
+      },
     ])
     assert.notInclude(response.body.data.missing_for_submit, 'media')
     const rows = await galleryRows(productId)
@@ -175,6 +188,12 @@ test.group('T-MED-006 replaceProductMedia', (group) => {
         [back, 2, 'Back view', black],
       ]
     )
+    // A gallery image that is no longer ready shows no keys (R1-S part 2g-i).
+    await db.from('media_assets').where('id', back).update({ status: 'deleted' })
+    const read = await send(w.owner, 'GET', productPath(w.shop.slug, productId))
+    const media = read.body.data.media as { media_asset_id: string; keys: unknown }[]
+    assert.isNull(media.find((item) => item.media_asset_id === back)?.keys)
+    await db.from('media_assets').where('id', back).update({ status: 'ready' })
     const [audit, ...more] = await audits(productId, 'product.media_replace')
     assert.lengthOf(more, 0)
     assert.deepEqual(audit.changes, {
@@ -274,7 +293,13 @@ test.group('T-MED-006 replaceProductMedia', (group) => {
     )
     assert.equal(upper.status, 200, upper.text)
     assert.deepEqual(upper.body.data.media, [
-      { media_asset_id: image, position: 1, alt_text: null, color_value_id: black },
+      {
+        media_asset_id: image,
+        position: 1,
+        alt_text: null,
+        color_value_id: black,
+        keys: { 320: 'p/x/y-320.webp' },
+      },
     ])
     const twice = await replace(
       w,

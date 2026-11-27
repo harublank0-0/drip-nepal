@@ -71,6 +71,8 @@ type Props = InertiaProps<{
   categories: CategoryOption[]
   attributes: AttributeOption[]
   brands: BrandOption[]
+  // The public bucket's base URL for the gallery's images ('' when none is set up).
+  media_base: string
 }>
 
 const moveId = (move: ProductMove) => `product-move-${move}`

@@ -95,6 +95,8 @@ export type SellerProduct = {
     position: number
     alt_text: string | null
     color_value_id: string | null
+    // The image's public derivatives by width (R1-S part 2g-i).
+    keys: Record<string, string> | null
   }[]
   missing_for_submit: string[]
   updated_at: string

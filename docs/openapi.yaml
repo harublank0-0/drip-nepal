@@ -3451,10 +3451,10 @@ paths:
         upload key `originals/<shop_id>/<media_asset_id>` in the private bucket for 10 minutes,
         with `content-type` among its signed headers, so the browser must send `headers`
         exactly (07 TM-16). It is signed before the asset is stored, so a store that cannot
-        sign is 503 `PROVIDER_UNAVAILABLE` and leaves nothing. No `Location`: no read operation
-        serves an asset (06 §3.7). Side effects: one `media_assets` row `pending_upload`; no
-        audit row. T-MED-004, T-SEC-003, T-SEC-030, T-SEC-031. Release R1·M2 (`product_image`
-        from M3; R1-S part 2d-i).
+        sign is 503 `PROVIDER_UNAVAILABLE` and leaves nothing. `Location` is the asset, which
+        `getMediaUpload` reads (06 §3.7; R1-S part 2g-i). Side effects: one `media_assets` row
+        `pending_upload`; no audit row. T-MED-004, T-SEC-003, T-SEC-030, T-SEC-031. Release R1·M2
+        (`product_image` from M3; R1-S part 2d-i).
       x-release: R1·M2
       x-permission: mediaByKind
       parameters:
@@ -3474,6 +3474,7 @@ paths:
           headers:
             X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
             Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+            Location: { $ref: '#/components/headers/Location' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/MediaUploadResponse' }
@@ -3493,6 +3494,7 @@ paths:
                         mime: image/jpeg
                         bytes: 2400000
                         rejection_reason: null
+                        keys: null
                         created_at: '2026-11-24T06:00:00.000Z'
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
@@ -3503,6 +3505,56 @@ paths:
         '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/Internal' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/seller/shops/{shopSlug}/media/{mediaAssetId}:
+    parameters:
+      - $ref: '#/components/parameters/ShopSlug'
+      - $ref: '#/components/parameters/MediaAssetId'
+    get:
+      operationId: getMediaUpload
+      tags: [Seller]
+      summary: An upload's state
+      description: |
+        Actor: `mediaByKind`, with the `kind` of the asset loaded inside the shop, as
+        `completeMediaUpload` (07 §4.8); an asset of another shop, or none, is 404 (T-SEC-001).
+        The editor polls it while the worker processes an image (06 §2.1, the upload handshake):
+        the asset's state, its `rejection_reason`, and its public derivatives' `keys` once it is
+        `ready` (03 §3.5). No query (400 `INVALID_QUERY_PARAMETER`), no side effects. T-MED-007,
+        T-SEC-001, T-SEC-030, T-SEC-031. Release R1·M3 (R1-S part 2g-i).
+      x-release: R1·M3
+      x-permission: mediaByKind
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: The asset as it is now.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SellerMediaAssetResponse' }
+              examples:
+                ready:
+                  summary: IDs illustrative
+                  value:
+                    data:
+                      id: 01929a70-0000-7000-8000-0000000000c1
+                      kind: product_image
+                      status: ready
+                      mime: image/jpeg
+                      bytes: 2400000
+                      rejection_reason: null
+                      keys:
+                        '320': p/01929a70-0000-7000-8000-0000000000c1/9f2c4e1a-320.webp
+                        '640': p/01929a70-0000-7000-8000-0000000000c1/9f2c4e1a-640.webp
+                      created_at: '2026-11-24T06:00:00.000Z'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/Internal' }
 
   /api/v1/seller/shops/{shopSlug}/media/{mediaAssetId}/complete:
     parameters:
@@ -3558,6 +3610,7 @@ paths:
                       mime: image/jpeg
                       bytes: 2400000
                       rejection_reason: null
+                      keys: null
                       created_at: '2026-11-24T06:00:00.000Z'
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
@@ -9217,6 +9270,13 @@ components:
           propertyNames: { pattern: '^[a-z][a-z0-9_]{1,39}$' }
           additionalProperties: { type: string, pattern: '^[a-z0-9][a-z0-9_-]{0,39}$' }
         has_history: { type: boolean }
+    ImageKeys:
+      type: object
+      description: >-
+        An image's public derivatives: object keys under `p/` by width in pixels (03 §3.5), as the
+        storefront's `srcset_keys` are.
+      propertyNames: { pattern: '^[0-9]{2,4}$' }
+      additionalProperties: { type: string, maxLength: 300 }
     ProductMediaItem:
       type: object
       description: |
@@ -9225,7 +9285,7 @@ components:
         (`product_media_position_check`), `alt_text` nullable and at most 150 characters
         (`product_media_alt_text_check`, AC-FR-MED-002-1/2).
       additionalProperties: false
-      required: [media_asset_id, position, alt_text, color_value_id]
+      required: [media_asset_id, position, alt_text, color_value_id, keys]
       properties:
         media_asset_id: { $ref: '#/components/schemas/Uuid' }
         position: { type: integer, minimum: 1, maximum: 12 }
@@ -9234,6 +9294,14 @@ components:
           oneOf:
             - $ref: '#/components/schemas/Uuid'
             - type: 'null'
+        keys:
+          description: >-
+            The image's public derivatives by width, for the editor (R1-S part 2g-i); `null` only for
+            an asset that is not `ready`, which a gallery item never is (`replaceProductMedia` takes
+            `ready` assets only).
+          oneOf:
+            - { $ref: '#/components/schemas/ImageKeys' }
+            - { type: 'null' }
     SellerProduct:
       type: object
       description: |
@@ -9451,7 +9519,7 @@ components:
     SellerMediaAsset:
       type: object
       additionalProperties: false
-      required: [id, kind, status, mime, bytes, rejection_reason, created_at]
+      required: [id, kind, status, mime, bytes, rejection_reason, keys, created_at]
       properties:
         id: { $ref: '#/components/schemas/Uuid' }
         kind: { type: string, enum: [product_image, shop_logo, shop_banner, kyc_document] }
@@ -9459,6 +9527,13 @@ components:
         mime: { type: string, enum: [image/jpeg, image/png, image/webp, application/pdf] }
         bytes: { type: integer, minimum: 1, maximum: 10485760 }
         rejection_reason: { type: [string, 'null'], maxLength: 500 }
+        keys:
+          description: >-
+            The public derivatives' object keys by width once the asset is `ready`, else `null`
+            (03 §3.5; R1-S part 2g-i).
+          oneOf:
+            - { $ref: '#/components/schemas/ImageKeys' }
+            - { type: 'null' }
         created_at: { $ref: '#/components/schemas/Timestamp' }
     SellerMediaAssetResponse:
       type: object
@@ -11702,3 +11777,8 @@ components:
 # 68. `listInventory` also lists, after the active variants, the archived variants that still hold
 #     stock, and `InventoryListVariant` gains the required `status` (`active`, `archived`; R1-S part
 #     2f-iv-b, 2026-11-27; 06 note 78). The example shows an archived variant holding 2 units.
+# 69. `getMediaUpload` (`GET …/media/{mediaAssetId}`) is added for the editor to poll an upload's
+#     state; `SellerMediaAsset` gains the required `keys` (the public derivatives by width once
+#     `ready`, else `null`), and `ProductMediaItem`, the items of `SellerProduct.media`, gains
+#     `keys` too, through the new `ImageKeys` schema, and `createMediaUpload`'s 201 sends `Location`
+#     (R1-S part 2g-i, 2026-11-27; 06 note 79).

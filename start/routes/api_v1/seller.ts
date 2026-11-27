@@ -16,7 +16,7 @@ const MediaUploadsController = () =>
  * 1a, the profile edit of part 1b, the shipping of part 1c, the product
  * drafts of part 2a, the variants of part 2b, the stock of part 2c, the
  * uploads and the product gallery of part 2d, the publish lifecycle of part
- * 2e and the M6 courier work.
+ * 2e, the upload state read of part 2g-i and the M6 courier work.
  * `listMyShops` is the one seller route outside `{shopSlug}`: `auth` only,
  * the `session` requirement of docs/07 §4.5.
  * Every other route runs `auth`, then `sellerContext` on the exact
@@ -82,6 +82,10 @@ router
     router
       .post('/media/:mediaAssetId/complete', [MediaUploadsController, 'complete'])
       .as('completeMediaUpload')
+      .where('mediaAssetId', router.matchers.uuid())
+    router
+      .get('/media/:mediaAssetId', [MediaUploadsController, 'show'])
+      .as('getMediaUpload')
       .where('mediaAssetId', router.matchers.uuid())
     router.get('/logistics', [LogisticsController, 'show']).as('getLogisticsSettings')
     router.put('/logistics', [LogisticsController, 'replace']).as('replaceLogisticsSettings')

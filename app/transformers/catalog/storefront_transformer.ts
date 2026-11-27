@@ -6,6 +6,7 @@ import {
   type StorefrontProduct,
 } from '#modules/catalog/queries'
 import { minorToRupeesFixed } from '#shared/format/money'
+import { imageSources } from '#shared/ui/image_sources'
 
 /*
  * The storefront's reference reads as the public API answers them (docs/06
@@ -140,25 +141,8 @@ export function storefrontProductJson(product: StorefrontProduct) {
   }
 }
 
-/*
- * The image of a storefront page as `<img>` takes it: every derived width
- * in `srcset` and a fallback `src` (the widest at most 640 px, else the
- * narrowest), from the public bucket's base URL (`MEDIA_PUBLIC_URL`, docs/09
- * §6.1). Page props carry URLs; the JSON API carries keys (06 §14.1).
- */
-export function imageSources(keys: Record<string, string>, mediaBase: string) {
-  // No public store set up (tests): no URL, rather than a path on this site.
-  if (mediaBase === '') return { src: '', srcset: '' }
-  const base = mediaBase.replace(/\/$/, '')
-  const widths = Object.entries(keys)
-    .map(([width, key]) => ({ width: Number(width), url: `${base}/${key}` }))
-    .sort((a, b) => a.width - b.width)
-  const fallback = widths.filter((item) => item.width <= 640).at(-1) ?? widths[0]
-  return {
-    src: fallback?.url ?? '',
-    srcset: widths.map((item) => `${item.url} ${item.width}w`).join(', '),
-  }
-}
+// The image URLs of a storefront page; shared with the seller editor (shared/ui/image_sources.ts).
+export { imageSources }
 
 // The storefront product page's path: the current slug and the lowercase public ID (ADR-0017).
 export const productHref = (slug: string, publicId: string) =>
