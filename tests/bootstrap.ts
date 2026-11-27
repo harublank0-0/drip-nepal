@@ -68,10 +68,14 @@ export const runnerHooks: Required<Pick<Config, 'setup' | 'teardown'>> = {
  * global transaction would serialise its parallel calls on one connection
  * and hide the races it exists to find (docs/10 §3.3). The perf suite
  * commits too: its catalogue stays for the Lighthouse run that follows it
- * (T-PERF-003, the Lighthouse job of ci.yml).
+ * (T-PERF-003, the Lighthouse job of ci.yml). Without PERF_CATALOGUE=1 its
+ * test is skipped, so the suite neither rebuilds the database nor starts
+ * the server.
  */
+const PERF = process.env.PERF_CATALOGUE === '1' ? ['perf'] : []
+
 export const configureSuite: Config['configureSuite'] = (suite) => {
-  if (['functional', 'concurrency', 'browser', 'perf'].includes(suite.name)) {
+  if (['functional', 'concurrency', 'browser', ...PERF].includes(suite.name)) {
     suite.setup(() => prepareTestDatabase())
     // A suite that started the shared pg-boss stops it before the next suite rebuilds its schema.
     suite.setup(() => () => stopJobBoss())
@@ -83,7 +87,7 @@ export const configureSuite: Config['configureSuite'] = (suite) => {
     suite.onTest((t) => t.setup(wrap))
   }
 
-  if (['browser', 'functional', 'concurrency', 'e2e', 'perf'].includes(suite.name)) {
+  if (['browser', 'functional', 'concurrency', 'e2e', ...PERF].includes(suite.name)) {
     return suite.setup(() => testUtils.httpServer().start())
   }
 }
