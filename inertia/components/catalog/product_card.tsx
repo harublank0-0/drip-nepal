@@ -21,7 +21,20 @@ export type ListingCard = {
  * not move while it loads (§10.4); nothing appears only on hover. A sold
  * out product says so in text, not by colour alone.
  */
-export function ProductCard({ card, eager = false }: { card: ListingCard; eager?: boolean }) {
+// The image's displayed width in the listing grid beside its filter sidebar (08 §10.4).
+export const LISTING_CARD_SIZES =
+  '(min-width: 1280px) 228px, (min-width: 1024px) calc((100vw - 320px) / 3), (min-width: 640px) 33vw, 50vw'
+
+export function ProductCard({
+  card,
+  eager = false,
+  sizes = LISTING_CARD_SIZES,
+}: {
+  card: ListingCard
+  eager?: boolean
+  // A grid without the sidebar (the home page) passes its own widths.
+  sizes?: string
+}) {
   return (
     <Link
       href={card.href}
@@ -32,7 +45,7 @@ export function ProductCard({ card, eager = false }: { card: ListingCard; eager?
           <img
             src={card.image.src}
             srcSet={card.image.srcset}
-            sizes="(min-width: 1280px) 228px, (min-width: 1024px) calc((100vw - 320px) / 3), (min-width: 640px) 33vw, 50vw"
+            sizes={sizes}
             alt={card.image.alt}
             loading={eager ? 'eager' : 'lazy'}
             decoding="async"

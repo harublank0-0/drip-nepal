@@ -471,7 +471,7 @@ Docs updated: as the first entry of 2026-11-23 above  |  Status: Decided
 ```
 
 ```text
-Not an OD — Decided 2026-11-23 by tech lead: interim home page until M4
+Not an OD — Decided 2026-11-23 by tech lead: interim home page until M4 (replaced 2026-11-27 by the storefront home, R1-S part 3d-iii-b-2, note 65)
 Ruling: GET / (route name home) renders the storefront/home component as an interim page
         until M4 builds the storefront home in the same component: it says the store is
         being built, with no date; a guest gets links to sign up and sign in; a signed-in
@@ -1392,3 +1392,4 @@ This matrix is authoritative for decision gates. [12 §3](12-roadmap-and-backlog
 62. **OD-66 and a return-policy ruling (2026-11-27, R1-S part 3b).** §2.2 adds OD-66: whether keyword search matches attribute labels, as 01 AC-FR-SRCH-002-1 says, or only what `search_tsv` holds; it blocks nothing for R1-S. §2.3 logs a ruling that is not an OD: the product owner chose to show a shop's return policy on its storefront product pages, the other business details staying private; R1-S part 3c records it in 01 ([06 note 74](06-api-design.md#consistency-notes-for-editor)).
 63. **VX-12 moves from the build to go-live (2026-11-27, R1-S part 3d-i-a).** §5's R1-S row no longer lists VX-12 as blocking part 3: the shared formatter `formatNPR` exists (08 §5.11, `T-UI-020`) and the storefront pages use it. VX-12 itself stays undecided, and the pages now show prices to the public in its recommended form, so it joins the row's "Before go-live" list ([12 note 90](12-roadmap-and-backlog.md#consistency-notes-for-editor)).
 64. **OD-67 registered (2026-11-27, R1-S part 2f-iv-b).** §2.2 adds OD-67: whether a variant's stock history shows team members' names, found while building the history page, which names people by role only ([08 note 103](08-ui-ux-and-design-system.md#consistency-notes-for-editor)). Nothing blocks R1-S go-live; it is due before a shop with staff members joins. 00 §7.2 mirrors the row ([00 note 39](00-context-assumptions-and-questions.md#consistency-notes-for-editor)), and 02 J-11 step 4 points to it.
+65. **The interim home page replaced (2026-11-27, R1-S part 3d-iii-b-2).** The 2026-11-23 decision of §2.3, an interim home page until M4, ends early: the R1-S storefront home replaced it in the same component, and the redirects that land on `/` still do ([08 note 108](08-ui-ux-and-design-system.md#consistency-notes-for-editor)).

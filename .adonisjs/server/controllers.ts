@@ -83,11 +83,9 @@ export const controllers = {
   },
   storefront: {
     catalog: {
+      Home: () => import('#controllers/storefront/catalog/home_controller'),
       Listing: () => import('#controllers/storefront/catalog/listing_controller'),
       Product: () => import('#controllers/storefront/catalog/product_controller'),
-    },
-    identity: {
-      Home: () => import('#controllers/storefront/identity/home_controller'),
     },
     platform: {
       LegalDocuments: () => import('#controllers/storefront/platform/legal_documents_controller'),

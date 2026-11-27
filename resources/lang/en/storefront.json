@@ -1,12 +1,5 @@
 {
-  "home.title": "Welcome",
-  "home.guest_heading": "DripNepal is being built",
-  "home.guest_body": "A marketplace for fashion from independent shops across Nepal. The shops aren't open yet. You can create your account now, and sign in whenever you like.",
-  "home.sign_up": "Create an account",
-  "home.sign_in": "Sign in",
-  "home.greeting": "Welcome, {name}",
-  "home.greeting_plain": "Welcome",
-  "home.member_body": "You're signed in. The shops aren't open yet: products and shops will appear here when they are.",
+  "home.title": "Fashion from shops across Nepal",
   "home.admin": "Open the admin pages",
   "legal_document.draft_title": "Draft",
   "legal_document.draft_body": "This is a draft, published so you can read it before you sign up. The final text will replace it before DripNepal opens to the public.",
@@ -112,5 +105,10 @@
   "search.dialog_title": "Search products",
   "search.dialog_hint": "Type at least 2 characters and press Enter.",
   "search.recent": "Recent searches",
-  "search.clear_recent": "Clear recent searches"
+  "search.clear_recent": "Clear recent searches",
+  "home.body": "Streetwear, sneakers and traditional wear, paid in cash on delivery.",
+  "home.shop_men": "Shop men",
+  "home.shop_women": "Shop women",
+  "home.new_arrivals": "New arrivals",
+  "home.categories": "Shop by category"
 }

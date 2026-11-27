@@ -1,6 +1,6 @@
 import router from '@adonisjs/core/services/router'
 
-const HomeController = () => import('#controllers/storefront/identity/home_controller')
+const HomeController = () => import('#controllers/storefront/catalog/home_controller')
 const ListingController = () => import('#controllers/storefront/catalog/listing_controller')
 const ProductController = () => import('#controllers/storefront/catalog/product_controller')
 import { NAVIGATION } from '#modules/catalog/navigation'
@@ -11,9 +11,9 @@ const SeoController = () => import('#controllers/storefront/platform/seo_control
 /*
  * Storefront and public pages (docs/08 §2.2), GET only (ADR-0004 decision
  * 6), server-rendered (config/inertia.ts), open to everyone: no `guest`
- * here (T-UI-025). M1 adds the interim home page `/` (until M4's home
- * replaces it) and the draft terms of use and privacy notice; the
- * catalogue pages come with M4 and `/legal` with M7. An unknown document
+ * here (T-UI-025): the storefront home `/` (R1-S part 3d-iii-b-2, which
+ * replaced M1's interim page), the draft terms of use and privacy notice,
+ * the catalogue pages below; `/legal` comes with M7. An unknown document
  * slug answers the 404 page from the controller.
  */
 router.get('/', [HomeController, 'show']).as('home')
