@@ -3,7 +3,6 @@ import db from '@adonisjs/lucid/services/db'
 import { appUrl } from '#config/storefront'
 import { generateSitemap } from '#modules/catalog/jobs/generate_sitemap'
 import { SITEMAP_INDEX_KEY, sitemapEntries, sitemapFileKey } from '#modules/catalog/sitemap'
-import { NOINDEX_PREFIXES } from '#middleware/security_headers_middleware'
 import { testBrowser } from '#tests/support/browser'
 import { activeShop, listed, valueId } from '#tests/support/listings'
 import { fakeObjectStorage } from '#tests/support/object_storage'
@@ -128,8 +127,23 @@ test.group('T-CAT-006 the crawler headers', () => {
   test('T-CAT-006 private pages answer noindex, redirects included; storefront pages do not', async ({
     assert,
   }) => {
-    // Each prefix and a page below it: redirects, sign-in pages and 404s alike.
-    for (const prefix of NOINDEX_PREFIXES) {
+    // The pages of ADR-0017 decision 8, listed here, not read from the code under test;
+    // each and a page below it: redirects, sign-in pages and 404s alike.
+    const privatePages = [
+      '/seller',
+      '/account',
+      '/admin',
+      '/cart',
+      '/checkout',
+      '/payments',
+      '/login',
+      '/signup',
+      '/verify-email',
+      '/forgot-password',
+      '/reset-password',
+      '/mfa',
+    ]
+    for (const prefix of privatePages) {
       for (const path of [prefix, `${prefix}/anything`]) {
         const response = await request(path)
         assert.equal(
