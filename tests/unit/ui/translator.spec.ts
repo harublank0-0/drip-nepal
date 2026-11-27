@@ -166,10 +166,14 @@ test.group('T-UI-034 message catalogs', () => {
     assert.equal(calls, 2)
   })
 
-  test('T-UI-034 the seller pages load seller.json, and no other page does', ({ assert }) => {
+  test('T-UI-034 the seller and admin pages load their catalogs, and no other page does', ({
+    assert,
+  }) => {
     assert.deepEqual(catalogsFor('seller/products'), ['seller'])
     assert.deepEqual(catalogsFor('seller/product_edit'), ['seller'])
-    for (const page of ['account/addresses', 'storefront/home', 'auth/login', 'admin/logistics']) {
+    assert.deepEqual(catalogsFor('admin/logistics'), ['admin'])
+    assert.deepEqual(catalogsFor('admin/forbidden'), ['admin'])
+    for (const page of ['account/addresses', 'storefront/home', 'auth/login', 'errors/forbidden']) {
       assert.deepEqual(catalogsFor(page), [], page)
     }
   })
@@ -177,12 +181,16 @@ test.group('T-UI-034 message catalogs', () => {
   test('T-UI-034 only its surface uses a key of a catalog that loads with its surface', ({
     assert,
   }) => {
-    // The seller layout renders only around a seller page, after the catalog has loaded.
+    // A surface's layout renders only around its pages, after the catalog has loaded.
     const surfaceFiles: Record<string, (entry: string) => boolean> = {
       seller: (entry) =>
         entry.startsWith(join('pages', 'seller')) ||
         entry.startsWith(join('components', 'seller')) ||
         entry === join('layouts', 'seller_layout.tsx'),
+      admin: (entry) =>
+        entry.startsWith(join('pages', 'admin')) ||
+        entry.startsWith(join('components', 'admin')) ||
+        entry === join('layouts', 'admin_layout.tsx'),
     }
     const all = catalogs()
     // The browser's code: inertia/, and the shared rules it imports.

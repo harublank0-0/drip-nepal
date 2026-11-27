@@ -927,8 +927,8 @@ export interface Registry {
       paramsTuple: []
       params: {}
       query: {}
-      response: ExtractResponse<Awaited<ReturnType<import('#controllers/storefront/identity/home_controller').default['show']>>>
-      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/storefront/identity/home_controller').default['show']>>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/home_controller').default['show']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/home_controller').default['show']>>>
     }
   }
   'legal.document': {

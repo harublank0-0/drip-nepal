@@ -1072,6 +1072,42 @@ const COUNT_LIMIT = 10_001
  */
 const TYPO_WORD_SIMILARITY = 0.5
 
+// A listing card's columns of the read model (04a §7.12), as `ListingCardRow` holds them.
+const LISTING_CARD_COLUMNS = [
+  'product_id',
+  'public_id',
+  'slug',
+  'title',
+  'shop_slug',
+  'shop_name',
+  'brand_slug',
+  'brand_name',
+  'min_price_minor',
+  'max_price_minor',
+  'compare_at_price_minor',
+  'currency',
+  'in_stock',
+  'primary_image_keys',
+  'primary_image_alt',
+  'published_at',
+] as const
+
+/*
+ * The newest listed products, at most `limit`, as cards (docs/08 §3.1 Home;
+ * R1-S part 3d-iii-b-2): the home page's row, in the listing pages' newest
+ * order (`published_at`, then `product_id`), without their count.
+ */
+export async function newestListings(limit: number): Promise<ListingCardRow[]> {
+  return db
+    .from('product_listings')
+    .select(...LISTING_CARD_COLUMNS)
+    .orderBy([
+      { column: 'published_at', order: 'desc' },
+      { column: 'product_id', order: 'asc' },
+    ])
+    .limit(limit)
+}
+
 /*
  * One page of the storefront listing (docs/06 §6.1, §6.3 `listProducts`;
  * ADR-0014 decisions 3 and 4; R1-S part 3b), read from `product_listings`
@@ -1141,24 +1177,7 @@ export async function listingPage(
     const [countRow] = await client.from(capped).count('* as n')
     const counted = Number(countRow.n)
     if (counted === 0) return { rows: [], counted }
-    const page = matching().select(
-      'product_id',
-      'public_id',
-      'slug',
-      'title',
-      'shop_slug',
-      'shop_name',
-      'brand_slug',
-      'brand_name',
-      'min_price_minor',
-      'max_price_minor',
-      'compare_at_price_minor',
-      'currency',
-      'in_stock',
-      'primary_image_keys',
-      'primary_image_alt',
-      'published_at'
-    )
+    const page = matching().select(...LISTING_CARD_COLUMNS)
     if (filters.sort === 'relevance') {
       if (match === 'text') {
         page.orderByRaw(`ts_rank(search_tsv, websearch_to_tsquery('simple', ?)) DESC`, [q])
