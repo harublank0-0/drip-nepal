@@ -240,35 +240,34 @@ paths:
       tags: [Public]
       summary: Storefront listing and search
       description: |
-        Actor: anyone; a session, if present, is ignored for authorization (06 §2.2).
-        Scope: only `product_listings` rows (published product, `active` shop, ready image).
-        Pagination: page numbers (06 §6.1); ordering is the chosen sort key, then `product_id`
-        (AC-FR-SRCH-001-2), so pages never repeat a row. A page beyond the last returns
-        200 with empty `data`. `meta.total` is a capped count (at most 10,000, then
-        `total_is_capped: true`) [Assumption].
-        Filters and sorts are a closed allowlist (06 §6.3); anything else, or a repeated
-        parameter with more than 20 values, is 400 `INVALID_QUERY_PARAMETER`. Attribute filters
-        are named by the filterable attribute's code with value codes.
-        As built (R1-S part 3b, 2026-11-27; 06 note 74): every problem with the query is one 400
-        naming each parameter at fault once, at most 20 items, item code `invalid`. `nav` is a navigation entry path
-        without its leading slash (`men/t-shirts`), sent without `category` or `audience`; it
-        sets the audience, and the category below the audience pages. Repeated
-        values of one attribute match any of them, and attributes all apply; `brand` repeats
-        the same way. A product matches a price range its own range, from its lowest to its
-        highest price, overlaps; a lowest price above the highest is 400. Numbers have no
-        leading zero, and amounts at most 15 digits. `in_stock` takes `true` only; `relevance`
-        without `q` is 400. A `-` that does not follow a letter or digit is dropped from `q`,
-        which is then trimmed and counted; a control character is 400. `price_desc` orders by the lowest price. A category of no
-        listing answers an empty page. `q` matches `search_tsv` with
-        `websearch_to_tsquery('simple', q)`, ranked by `ts_rank`; when that finds nothing, `q` is
-        matched against the closest run of words in the title (`q <% title`) at 00 A-64's
-        threshold [Assumption], under the same filters and sort (ADR-0014 decision 3). T-CAT-014, T-CAT-003.
-        Side effects: none. Rate limit `catalog_ip` 120/min per IP [Assumption]. The read is
-        cancelled after 2 s and at most 4 of the web process's 8 connections run it at once; a
-        read that waits more than 1 s for a slot, or that the 2 s limit cancels, gets 503
-        `SERVICE_BUSY` with `Retry-After`, never 500 `INTERNAL` (all proposed, 07 TM-24; 06 §5.2,
-        §5.3, §9.1) [Assumption]; the timeout, the slot limit and the 503 are not built yet.
-        `Cache-Control: private, no-store` in R1 (06 §3.8). Release R1·M4.
+        Actor: anyone; a session, if present, is ignored for authorization (06 §2.2). Scope: only
+        `product_listings` rows (published product, `active` shop, ready image). Pagination: page
+        numbers (06 §6.1); ordering is the chosen sort key, then `product_id` (AC-FR-SRCH-001-2), so
+        pages never repeat a row. A page beyond the last returns 200 with empty `data`. `meta.total`
+        is a capped count (at most 10,000, then `total_is_capped: true`) [Assumption]. Filters and
+        sorts are a closed allowlist (06 §6.3); anything else, or a repeated parameter with more
+        than 20 values, is 400 `INVALID_QUERY_PARAMETER`. Attribute filters are named by the
+        filterable attribute's code with value codes. As built (R1-S part 3b, 2026-11-27; 06 note
+        74): every problem with the query is one 400 naming each parameter at fault once, at most 20
+        items, item code `invalid`. `nav` is a navigation entry path without its leading slash
+        (`men/t-shirts`), sent without `category` or `audience`; it sets the audience, and the
+        category below the audience pages. Repeated values of one attribute match any of them, and
+        attributes all apply; `brand` repeats the same way. A product matches a price range its own
+        range, from its lowest to its highest price, overlaps; a lowest price above the highest is
+        400. Numbers have no leading zero, and amounts at most 15 digits. `in_stock` takes `true`
+        only; `relevance` without `q` is 400. A `-` that does not follow a letter (a Devanagari
+        vowel sign included) or a digit is dropped from `q`, which is then trimmed and counted; a
+        control character is 400. `price_desc` orders by the lowest price. A category of no listing
+        answers an empty page. `q` matches `search_tsv` with `websearch_to_tsquery('simple', q)`,
+        ranked by `ts_rank`; when that finds nothing, `q` is matched against the closest run of
+        words in the title (`q <% title`) at 00 A-64's threshold [Assumption], under the same
+        filters and sort (ADR-0014 decision 3). T-CAT-014, T-CAT-003. Side effects: none. Rate limit
+        `catalog_ip` 120/min per IP [Assumption]. The read is cancelled after 2 s and at most 4 of
+        the web process's 8 connections run it at once; a read that waits more than 1 s for a slot,
+        or that the 2 s limit cancels, gets 503 `SERVICE_BUSY` with `Retry-After`, never 500
+        `INTERNAL` (all proposed, 07 TM-24; 06 §5.2, §5.3, §9.1) [Assumption]; the timeout, the slot
+        limit and the 503 are not built yet. `Cache-Control: private, no-store` in R1 (06 §3.8).
+        Release R1·M4.
       x-release: R1·M4
       security: []
       parameters:
