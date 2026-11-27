@@ -28,6 +28,7 @@ export interface ApiDefinition {
   listCategories: typeof routes['listCategories']
   listAttributes: typeof routes['listAttributes']
   listProducts: typeof routes['listProducts']
+  getProduct: typeof routes['getProduct']
   listAddresses: typeof routes['listAddresses']
   createAddress: typeof routes['createAddress']
   updateAddress: typeof routes['updateAddress']

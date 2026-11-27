@@ -1,4 +1,5 @@
 import type { HttpContext } from '@adonisjs/core/http'
+import { DomainError } from '#exceptions/domain_error'
 import { closedQuery, invalidParameter, invalidParameters } from '#controllers/support/cursor'
 import { cappedTotal, parseListingQuery } from '#modules/catalog/domain/listing_query'
 import {
@@ -7,11 +8,13 @@ import {
   listedCategoryPath,
   listingFilterAttributes,
   listingPage,
+  storefrontProduct,
 } from '#modules/catalog/queries'
 import {
   categoryNodeJson,
   filterAttributeJson,
   listingCardJson,
+  storefrontProductJson,
 } from '#transformers/catalog/storefront_transformer'
 import { listAttributesValidator } from '#validators/catalog/storefront'
 
@@ -75,5 +78,18 @@ export default class CatalogController {
         has_more: rows.length > filters.perPage,
       },
     }
+  }
+
+  /*
+   * getProduct: the storefront product by its public ID (06 §13.2; R1-S part
+   * 3c). A product that is not published, or of a shop that is not active,
+   * is 404 like a missing one; the route matches the public ID's shape
+   * (04a §7.6), so any other path segment is 404 before this runs.
+   */
+  async getProduct(ctx: HttpContext) {
+    closedQuery(ctx, [])
+    const product = await storefrontProduct(ctx.params.publicId)
+    if (!product) throw new DomainError('NOT_FOUND')
+    return { data: storefrontProductJson(product) }
   }
 }

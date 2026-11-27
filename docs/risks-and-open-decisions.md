@@ -243,8 +243,8 @@ Newest first. The entry format is in §1.5. A ruling that is not an OD but chang
 
 ```text
 Not an OD — Decided 2026-11-27 by product owner: show the return policy on the storefront
-Ruling: A shop's return policy text is shown on its storefront product pages (01 FR-SHOP-003,
-        AC-FR-CAT-012-2). The other business details of AC-FR-SHOP-013-2 (business type,
+Ruling: A shop's return policy text is shown on the storefront: its product pages (01
+        FR-SHOP-003, AC-FR-CAT-012-2) and, when built, its shop page (AC-FR-SRCH-003-1). The other business details of AC-FR-SHOP-013-2 (business type,
         registration and PAN/VAT numbers, VAT flag) and the grievance contact stay visible to the
         owner and reviewing staff only (AC-FR-SHOP-013-4), as getSellerShop shows them since
         R1-S part 1a.
@@ -252,7 +252,8 @@ Evidence: 12 §9 part 3 asked for the two to be reconciled before the storefront
           The product owner was offered (a) show the return policy publicly, the other details
           staying private, or (b) keep it private for now, and chose (a) on 2026-11-27.
 ADR: none
-Docs to update in R1-S part 3c: 01 AC-FR-SHOP-013-4, 12 §9  |  Status: Decided
+Docs updated: 01 AC-FR-SHOP-013-4 (note 46), 02 J-02, 06 getProduct, openapi, 07 §4.3 and §5.5,
+              12 §9 (R1-S part 3c)  |  Status: Decided
 ```
 
 ```text
