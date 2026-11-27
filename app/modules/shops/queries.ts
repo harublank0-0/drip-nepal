@@ -349,3 +349,32 @@ export async function shopIdBySlug(slug: string): Promise<string | null> {
   const row = await db.from('shops').where('slug', slug).select('id').first()
   return row ? (row.id as string) : null
 }
+
+/*
+ * How the stock history names the people among `userIds` (R1-S part
+ * 2f-iv-b): `owner` for the shop's owner, the member's role while the
+ * membership is active, `former_member` once it is not, and nothing for
+ * anyone else (staff). Roles only, never a name or an email address
+ * (docs/07 §5.1 minimisation).
+ */
+export async function shopRolesOf(
+  shopId: string,
+  userIds: readonly string[]
+): Promise<Map<string, string>> {
+  const roles = new Map<string, string>()
+  if (userIds.length === 0) return roles
+  const shop: { owner_user_id: string } = await db
+    .from('shops')
+    .where('id', shopId)
+    .select('owner_user_id')
+    .firstOrFail()
+  const rows: { user_id: string; role: string; status: string }[] = await db
+    .from('shop_memberships')
+    .where('shop_id', shopId)
+    .whereIn('user_id', [...userIds])
+    .select('user_id', 'role', 'status')
+  for (const row of rows)
+    roles.set(row.user_id, row.status === 'active' ? row.role : 'former_member')
+  if (userIds.includes(shop.owner_user_id)) roles.set(shop.owner_user_id, 'owner')
+  return roles
+}

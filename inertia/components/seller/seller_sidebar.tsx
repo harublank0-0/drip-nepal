@@ -64,7 +64,7 @@ const ITEMS: NavItem[] = [
   },
   {
     route: 'seller.inventory',
-    components: ['seller/inventory'],
+    components: ['seller/inventory', 'seller/stock_history'],
     label: 'seller.nav.inventory',
     permission: 'shop.products.view',
     opens: catalogViewable,

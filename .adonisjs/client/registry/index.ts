@@ -738,6 +738,12 @@ const routes = {
     tokens: [{"old":"/seller/:shopSlug/inventory","type":0,"val":"seller","end":""},{"old":"/seller/:shopSlug/inventory","type":1,"val":"shopSlug","end":""},{"old":"/seller/:shopSlug/inventory","type":0,"val":"inventory","end":""}],
     types: placeholder as Registry['seller.inventory']['types'],
   },
+  'seller.inventory.history': {
+    methods: ["GET","HEAD"],
+    pattern: '/seller/:shopSlug/inventory/:variantId',
+    tokens: [{"old":"/seller/:shopSlug/inventory/:variantId","type":0,"val":"seller","end":""},{"old":"/seller/:shopSlug/inventory/:variantId","type":1,"val":"shopSlug","end":""},{"old":"/seller/:shopSlug/inventory/:variantId","type":0,"val":"inventory","end":""},{"old":"/seller/:shopSlug/inventory/:variantId","type":1,"val":"variantId","end":""}],
+    types: placeholder as Registry['seller.inventory.history']['types'],
+  },
   'admin.logistics': {
     methods: ["GET","HEAD"],
     pattern: '/admin/logistics',

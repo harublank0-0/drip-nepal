@@ -42,9 +42,10 @@ import { ProblemAlert } from '~/components/forms/problem_alert'
 import { RateLimitNotice } from '~/components/forms/rate_limit_notice'
 
 /*
- * The stock page's two changes (docs/08 §2.5 `/inventory`, §7.1, §7.3; 02
- * J-11 steps 2 and 3; R1-S part 2f-iv-a), each a form dialog opened from a
- * variant's actions menu.
+ * The stock changes (docs/08 §2.5 `/inventory` and `/inventory/{variantId}`,
+ * §7.1, §7.3; 02 J-11 steps 2 and 3; R1-S parts 2f-iv-a and 2f-iv-b), each a
+ * form dialog opened from a variant's actions menu on the stock list, or
+ * from its buttons on the variant's stock history page.
  *
  * - "Adjust stock" sends `adjustInventory` ⚷: a direction, a quantity, a
  *   reason that fits the direction (`REASONS_FOR`) and an optional note.
@@ -128,8 +129,7 @@ type DialogProps = {
 
 // A failure that tells the page its data is stale: the variant left, or the shop's status changed.
 function reloadFor(problem: Problem) {
-  if (problem.code === 'NOT_FOUND') router.reload({ only: ['inventory'] })
-  if (problem.code === 'SHOP_NOT_ACTIVE') router.reload()
+  if (problem.code === 'NOT_FOUND' || problem.code === 'SHOP_NOT_ACTIVE') router.reload()
 }
 
 const ADJUST_FIELDS = [

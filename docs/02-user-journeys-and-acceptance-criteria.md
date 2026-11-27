@@ -771,21 +771,21 @@ E-Commerce Act 2081 s16 requires each seller to sign a written or electronic con
 
 ### J-11 Inventory management
 
-| Field         | Value                                                                                  |
-| ------------- | -------------------------------------------------------------------------------------- |
-| Actors        | Owner, manager, catalog editor; system (drift detection job)                           |
-| Release       | R1 (M3). Low-stock alerts R2; multi-location R3.                                       |
-| Related FRs   | FR-INV-001, 002, 003, 005                                                              |
-| Entry points  | `/seller/{shopSlug}/inventory`; "Stock" tab on the product editor                      |
-| Preconditions | Product has variants. `inventory_items` exists per variant (created with the variant). |
-| Permissions   | `shop.inventory.adjust` to change; `shop.products.view` to view                        |
+| Field         | Value                                                                                                                                                                                                           |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Actors        | Owner, manager, catalog editor; system (drift detection job)                                                                                                                                                    |
+| Release       | R1 (M3). Low-stock alerts R2; multi-location R3.                                                                                                                                                                |
+| Related FRs   | FR-INV-001, 002, 003, 005                                                                                                                                                                                       |
+| Entry points  | `/seller/{shopSlug}/inventory`; "Stock" tab on the product editor (built as links from each variant's stock count to its stock page, [08 note 103](08-ui-ux-and-design-system.md#consistency-notes-for-editor)) |
+| Preconditions | Product has variants. `inventory_items` exists per variant (created with the variant).                                                                                                                          |
+| Permissions   | `shop.inventory.adjust` to change; `shop.products.view` to view                                                                                                                                                 |
 
 #### Main success flow
 
 1. `listInventory` shows each variant: SKU, option label, `on_hand`, `reserved`, available (`on_hand − reserved`), and last movement.
 2. **Adjust:** pick a variant, enter a signed non-zero delta (the stock page asks for a direction and a quantity and sends the signed `delta`, [08 note 100](08-ui-ux-and-design-system.md#consistency-notes-for-editor)) and a reason code (`received_stock`, `damaged`, `lost`, `found`, `sold_offline`, `data_entry_error`, with an optional note; list owned by [05 §5.2](05-order-payment-and-inventory-lifecycles.md#52-movement-kinds)) and call `adjustInventory` ⚷. One conditional update (`WHERE on_hand + delta >= reserved`) changes `inventory_items`, one `adjustment` movement is appended, and an `audit_logs` row `inventory.adjust` is written. `correction` is not a vendor reason: it is the movement kind for platform-admin drift repair only.
 3. **Stocktake:** enter the counted quantity; the client sends `{counted_quantity, expected_on_hand}` to `stocktakeInventory` ⚷. If `on_hand` still equals `expected_on_hand`, `on_hand` is set to `counted` and a `stocktake` movement records the delta.
-4. The variant's movement history (page props from the inventory module's queries) shows who changed what, why, and with which request ID.
+4. The variant's movement history (page props from the inventory module's queries, on the variant's own stock page `/seller/{shopSlug}/inventory/{variantId}`, [08 note 103](08-ui-ux-and-design-system.md#consistency-notes-for-editor)) shows who changed what, why, and with which request ID; "who" is a role, not a name, while [OD-67](risks-and-open-decisions.md#22-decision-table) is open.
 5. The `inventory.drift_check` job (daily 02:30 Asia/Kathmandu, [05 §5.10](05-order-payment-and-inventory-lifecycles.md#510-drift-detection-and-repair)) compares each projection with the sum of its movements and alerts on any mismatch (FR-INV-005; docs/11).
 
 #### State coverage
@@ -1390,3 +1390,4 @@ Checked against 01, 04a, 05 and the [research notes](research/README.md) on 2026
 36. **J-02 step 2 follows the built `getProduct` (2026-11-27, R1-S part 3c).** `available_capped` is built, so it loses its "(proposed)"; the props name the shop's return policy and the delivery fee with its estimate, as `getProduct` answers them; accepted payment methods are a page prop of the storefront pages (R1-S part 3d), not part of `getProduct` ([06 note 76](06-api-design.md#consistency-notes-for-editor)).
 37. **J-11 step 2 points at the stock page (2026-11-27, R1-S part 2f-iv-a).** The step keeps the signed `delta` that `adjustInventory` takes, and says that the stock page asks for a direction and a quantity and narrows the reasons to those that fit the direction ([08 note 100](08-ui-ux-and-design-system.md#consistency-notes-for-editor) (c)). The "Stock" entry point on the product editor is 2f-iv-b's ([12 note 92](12-roadmap-and-backlog.md#consistency-notes-for-editor)).
 38. **The product page's criteria (2026-11-27, R1-S part 3d-ii-a).** AC-J02-07 names the default variant's price, but only a product without option axes has a default variant (01 glossary). A product with axes now offers an `AggregateOffer` with its lowest and highest variant prices. AC-J02-01's example redirects to the lowercase ID, ADR-0017's canonical form, and AC-J02-02's delivery estimate lists every zone the shop delivers to, since a visitor's zone is not known on the product page (it had named a default zone, which nothing defines) ([08 note 102](08-ui-ux-and-design-system.md#consistency-notes-for-editor)).
+39. **J-11's history page and editor entry point (2026-11-27, R1-S part 2f-iv-b).** Step 4 says the movement history is on the variant's own stock page, and the "Stock" entry point on the product editor is built as links from each variant's stock count to that page ([08 note 103](08-ui-ux-and-design-system.md#consistency-notes-for-editor)). The step also says that "who" is a role while OD-67, whether names show, is open.

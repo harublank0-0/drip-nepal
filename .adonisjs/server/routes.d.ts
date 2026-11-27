@@ -126,6 +126,7 @@ export type ScannedRoutes = {
     'seller.products.new': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'seller.products.edit': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'productId': ParamValue} }
     'seller.inventory': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
+    'seller.inventory.history': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'variantId': ParamValue} }
     'admin.logistics': { paramsTuple?: []; params?: {} }
     'dev.design_system': { paramsTuple?: []; params?: {} }
     'dev.overlays': { paramsTuple?: []; params?: {} }
@@ -203,6 +204,7 @@ export type ScannedRoutes = {
     'seller.products.new': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'seller.products.edit': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'productId': ParamValue} }
     'seller.inventory': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
+    'seller.inventory.history': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'variantId': ParamValue} }
     'admin.logistics': { paramsTuple?: []; params?: {} }
     'dev.design_system': { paramsTuple?: []; params?: {} }
     'dev.overlays': { paramsTuple?: []; params?: {} }
@@ -278,6 +280,7 @@ export type ScannedRoutes = {
     'seller.products.new': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
     'seller.products.edit': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'productId': ParamValue} }
     'seller.inventory': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
+    'seller.inventory.history': { paramsTuple: [ParamValue,ParamValue]; params: {'shopSlug': ParamValue,'variantId': ParamValue} }
     'admin.logistics': { paramsTuple?: []; params?: {} }
     'dev.design_system': { paramsTuple?: []; params?: {} }
     'dev.overlays': { paramsTuple?: []; params?: {} }
