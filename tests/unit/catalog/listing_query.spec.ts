@@ -142,6 +142,45 @@ test.group('T-CAT-014 the listing query', () => {
     }
   })
 
+  test('T-CAT-014 a search is trimmed, loses leading hyphens, and refuses control characters', ({
+    assert,
+  }) => {
+    assert.equal(parse({ q: '  -tee ' }).filters?.q, 'tee')
+    assert.equal(parse({ q: 'red --tee' }).filters?.q, 'red tee')
+    assert.equal(parse({ q: 'crew-neck tee' }).filters?.q, 'crew-neck tee')
+    assert.deepEqual(parameters({ q: 'ab\u0000' }), ['q'])
+    assert.deepEqual(parameters({ q: 'ab\tcd' }), ['q'])
+  })
+
+  test('T-CAT-014 numbers have one form, without leading zeros', ({ assert }) => {
+    assert.deepEqual(parameters({ page: '01' }), ['page'])
+    assert.deepEqual(parameters({ per_page: '024' }), ['per_page'])
+    assert.deepEqual(parameters({ price_min_minor: '007' }), ['price_min_minor'])
+    assert.equal(parse({ price_min_minor: '0' }).filters?.priceMinMinor, 0)
+  })
+
+  test('T-CAT-014 problems name each parameter once, at most 20, and quote no value', ({
+    assert,
+  }) => {
+    const brands = parse({ brand: ['Bad!', 'Worse!'] })
+    assert.deepEqual(brands.problems, [{ parameter: 'brand', message: 'Send brand slugs.' }])
+    const value = parse({ audience: 'x'.repeat(500) })
+    assert.notInclude(value.problems[0].message, 'xxx')
+    const many = Object.fromEntries(Array.from({ length: 30 }, (_, i) => [`p${i}`, '1']))
+    assert.lengthOf(parse(many).problems, 20)
+    const long = parse({ ['n'.repeat(500)]: '1' })
+    assert.lengthOf(long.problems[0].parameter, 64)
+  })
+
+  test('T-CAT-014 a navigation entry needs the audience filter', ({ assert }) => {
+    const withoutAudience = new Map([...FILTERABLE].filter(([code]) => code !== 'audience'))
+    const result = parseListingQuery({ nav: 'men' }, withoutAudience)
+    assert.deepEqual(
+      result.problems.map((problem) => problem.parameter),
+      ['nav']
+    )
+  })
+
   test('T-CAT-014 the total is capped at 10,000', ({ assert }) => {
     assert.deepEqual(cappedTotal(0), { total: 0, totalIsCapped: false })
     assert.deepEqual(cappedTotal(10_000), { total: 10_000, totalIsCapped: false })

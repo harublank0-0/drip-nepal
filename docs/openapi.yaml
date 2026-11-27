@@ -250,20 +250,24 @@ paths:
         parameter with more than 20 values, is 400 `INVALID_QUERY_PARAMETER`. Attribute filters
         are named by the filterable attribute's code with value codes.
         As built (R1-S part 3b, 2026-11-27; 06 note 74): every problem with the query is one 400
-        naming each parameter at fault. `nav` is a navigation entry path without its leading
-        slash (`men/t-shirts`), sent without `category` or `audience`, which it sets. Repeated
+        naming each parameter at fault, item code `invalid`. `nav` is a navigation entry path
+        without its leading slash (`men/t-shirts`), sent without `category` or `audience`; it
+        sets the audience, and the category below the audience pages. Repeated
         values of one attribute match any of them, and attributes all apply; `brand` repeats
-        the same way. A product matches the price range when one of its prices lies in it.
-        `in_stock` takes `true` only. `price_desc` orders by the lowest price. A category of no
+        the same way. A product matches a price range its own range, from its lowest to its
+        highest price, overlaps; a lowest price above the highest is 400. Numbers have no
+        leading zero, and amounts at most 15 digits. `in_stock` takes `true` only; `relevance`
+        without `q` is 400. `q` is trimmed before it is counted, a control character is 400, and
+        a leading `-` on a word is dropped. `price_desc` orders by the lowest price. A category of no
         listing answers an empty page. `q` matches `search_tsv` with
-        `websearch_to_tsquery('simple', q)`, ranked by `ts_rank`; when that finds nothing, the
-        words of `q` are matched against the title by trigram word similarity at 00 A-64's
-        threshold (ADR-0014 decision 3). T-CAT-014, T-CAT-003.
+        `websearch_to_tsquery('simple', q)`, ranked by `ts_rank`; when that finds nothing, `q` is
+        matched against the closest run of words in the title (`q <% title`) at 00 A-64's
+        threshold [Assumption], under the same filters and sort (ADR-0014 decision 3). T-CAT-014, T-CAT-003.
         Side effects: none. Rate limit `catalog_ip` 120/min per IP [Assumption]. The read is
         cancelled after 2 s and at most 4 of the web process's 8 connections run it at once; a
         read that waits more than 1 s for a slot, or that the 2 s limit cancels, gets 503
         `SERVICE_BUSY` with `Retry-After`, never 500 `INTERNAL` (all proposed, 07 TM-24; 06 §5.2,
-        §5.3, §9.1) [Assumption]; the timeout and the slot limit are not built yet.
+        §5.3, §9.1) [Assumption]; the timeout, the slot limit and the 503 are not built yet.
         `Cache-Control: private, no-store` in R1 (06 §3.8). Release R1·M4.
       x-release: R1·M4
       security: []
@@ -272,7 +276,7 @@ paths:
         - name: category
           in: query
           description: Category slug; matches the category and its subtree.
-          schema: { type: string, minLength: 1, maxLength: 80 }
+          schema: { type: string, pattern: '^[a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])$' }
         - name: nav
           in: query
           description: A navigation entry path without its leading slash (04 §3.12), such as `men/t-shirts`; sent without `category` or `audience`.
@@ -322,11 +326,11 @@ paths:
           schema: { type: string, minLength: 3, maxLength: 40 }
         - name: price_min_minor
           in: query
-          description: Lower bound in paisa; a product with any price at or above it matches.
+          description: Lower bound in paisa; a product whose highest price is at or above it matches.
           schema: { type: integer, format: int64, minimum: 0 }
         - name: price_max_minor
           in: query
-          description: Upper bound in paisa; a product with any price at or below it matches.
+          description: Upper bound in paisa; a product whose lowest price is at or below it matches.
           schema: { type: integer, format: int64, minimum: 0 }
         - name: in_stock
           in: query
@@ -388,11 +392,15 @@ paths:
                     type: https://dripnepal.com/problems/invalid-query-parameter
                     title: Invalid query parameter
                     status: 400
-                    detail: sort must be one of newest, price_asc, price_desc, relevance.
+                    detail: 'Use one of: newest, price_asc, price_desc, relevance.'
                     code: INVALID_QUERY_PARAMETER
                     request_id: 01929a4e-9d02-7a41-8c33-0e5b6f7a8b90
                     errors:
-                      - { field: sort, code: enum, message: Unsupported sort. }
+                      - {
+                          field: sort,
+                          code: invalid,
+                          message: 'Use one of: newest, price_asc, price_desc, relevance.',
+                        }
         '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/Internal' }
         '503':

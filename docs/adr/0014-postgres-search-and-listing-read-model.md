@@ -17,7 +17,7 @@ Reviewed: 2026-09-25 · consistency review 2026-09-30 to 2026-10-04
 
 Edited 2026-09-30 (consistency review): decision 1 follows the queue policies of [03 §9](../03-system-architecture.md#9-asynchronous-work) (`catalog.refresh_listing` sends carry no `singletonKey`); the decision is unchanged.
 
-Edited 2026-11-27 (R1-S part 3b, built): decision 3's fallback is trigram word similarity, `:q <% title` ordered by `word_similarity(:q, title)`, at a threshold of 0.5 set for that read alone ([00 A-64](../00-context-assumptions-and-questions.md#6-proposed-defaults-and-assumptions-register)), not `title % :q`: whole-title similarity stays far below any useful threshold for a one-word query in a longer title, and the AC-FR-SRCH-002-2 fixture "snekers" scores 0.55 against "sneakers". The index is unchanged; the decision is otherwise unchanged ([06 note 74](../06-api-design.md#consistency-notes-for-editor)).
+Edited 2026-11-27 (R1-S part 3b, built): decision 3's fallback is trigram word similarity, `:q <% title`, which compares `:q` with the closest run of words in the title, ordered by `word_similarity(:q, title)` under `sort=relevance`, at a threshold of 0.5 set for that read alone ([00 A-64](../00-context-assumptions-and-questions.md#6-proposed-defaults-and-assumptions-register)), not `title % :q`: whole-title similarity stays far below any useful threshold for a one-word query in a longer title, and the AC-FR-SRCH-002-2 fixture "snekers" scores 0.55 against "sneakers". The index is unchanged; the decision is otherwise unchanged ([06 note 74](../06-api-design.md#consistency-notes-for-editor)). Decision 5 stands: the built test finds a Devanagari word in a title and in a brand name, one sample each, and the real samples remain.
 
 ## Context
 

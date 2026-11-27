@@ -16,8 +16,15 @@ import { navigationEntry } from '#modules/catalog/navigation'
  * - One parameter per filterable attribute, named by its code, with value
  *   codes; repeated values match any of them, and attributes all apply.
  * - `brand` (slugs, any of them), `shop` (a slug), `price_min_minor` and
- *   `price_max_minor` (paisa; a product matches when one of its prices lies
- *   in the range), `in_stock` (`true` only), `q` (2 to 100 characters).
+ *   `price_max_minor` (paisa; a product matches when its price range, from
+ *   its lowest to its highest price, overlaps the range asked for),
+ *   `in_stock` (`true` only), `q` (2 to 100 characters after trimming, no
+ *   control character; a leading `-` on a word is dropped, so a search never
+ *   becomes a pure exclusion).
+ * - Numbers are written without leading zeros, so each query has one form
+ *   the storefront pages can redirect to.
+ * - Problems name each parameter once, at most 20 of them, and quote no
+ *   value back.
  * - `sort`: `newest` (the default), `price_asc`, `price_desc`, or
  *   `relevance`, which needs `q` and is then the default. `page` 1 to 100,
  *   `per_page` 1 to 48 (default 24).
@@ -70,20 +77,30 @@ export type ListingProblem = { parameter: string; message: string }
 
 export const MAX_FILTER_VALUES = 20
 export const DEFAULT_PER_PAGE = 24
+const MAX_PROBLEMS = 20
 
 const CATEGORY_SLUG = /^[a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])$/
 const BRAND_SLUG = /^[a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])$/
 const SHOP_SLUG = /^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/
 const NAV_PATH = /^[a-z]+(?:\/[a-z0-9]+(?:-[a-z0-9]+)*)?$/
-// Fifteen digits stay below Number.MAX_SAFE_INTEGER.
-const MINOR = /^\d{1,15}$/
+// Fifteen digits stay below Number.MAX_SAFE_INTEGER; no leading zero.
+const MINOR = /^(?:0|[1-9]\d{0,14})$/
+const WHOLE = /^[1-9]\d{0,2}$/
+// PostgreSQL refuses a NUL in text, so control characters are refused before any query.
+// eslint-disable-next-line no-control-regex -- control characters are what this refuses
+const CONTROL = /[\u0000-\u001f\u007f]/
 
 export function parseListingQuery(
   query: Record<string, unknown>,
   filterable: ReadonlyMap<string, FilterableAttribute>
 ): { filters: ListingFilters | null; problems: ListingProblem[] } {
   const problems: ListingProblem[] = []
-  const refuse = (parameter: string, message: string) => problems.push({ parameter, message })
+  // One problem per parameter, at most MAX_PROBLEMS; a parameter name is cut to 64 characters.
+  const refuse = (parameter: string, message: string) => {
+    const name = parameter.slice(0, 64)
+    if (problems.length >= MAX_PROBLEMS || problems.some((p) => p.parameter === name)) return
+    problems.push({ parameter: name, message })
+  }
   const known = new Set<string>([...LISTING_PARAMETERS, ...filterable.keys()])
   for (const name of Object.keys(query)) {
     if (!known.has(name)) refuse(name, 'Unknown query parameter.')
@@ -126,7 +143,7 @@ export function parseListingQuery(
   const bounded = (name: string, min: number, max: number, fallback: number) => {
     const value = one(name)
     if (value === undefined) return fallback
-    const number = /^\d{1,3}$/.test(value) ? Number(value) : Number.NaN
+    const number = WHOLE.test(value) ? Number(value) : Number.NaN
     if (!(number >= min && number <= max)) {
       refuse(name, `Send a whole number from ${min} to ${max}.`)
       return fallback
@@ -167,7 +184,7 @@ export function parseListingQuery(
     const ids: string[] = []
     for (const valueCode of codes) {
       const id = attribute.values.get(valueCode)
-      if (id === undefined) refuse(code, `${valueCode} is not a value of ${code}.`)
+      if (id === undefined) refuse(code, 'A value sent is not one this filter offers.')
       else ids.push(id)
     }
     if (ids.length === codes.length) valueFilters.push({ column: attribute.column, ids })
@@ -193,8 +210,9 @@ export function parseListingQuery(
   if (qText !== undefined) {
     const trimmed = qText.trim()
     const length = [...trimmed].length
-    if (length < 2 || length > 100) refuse('q', 'Send 2 to 100 characters.')
-    else q = trimmed
+    if (CONTROL.test(trimmed)) refuse('q', 'Send letters, numbers and punctuation only.')
+    else if (length < 2 || length > 100) refuse('q', 'Send 2 to 100 characters.')
+    else q = trimmed.replaceAll(/(^|\s)-+/g, '$1')
   }
 
   const sortText = one('sort')

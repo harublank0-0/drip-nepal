@@ -930,9 +930,13 @@ const TYPO_WORD_SIMILARITY = 0.5
  * listed (unknown, inactive, or under an inactive parent) matches nothing.
  *
  * - The category subtree is a prefix match on `category_path`
- *   (`product_listings_category_idx`); the other filters apply to the rows
- *   it or the shop selects. A value filter matches a row whose array holds
- *   any of the IDs (`&&`); filters all apply.
+ *   (`product_listings_category_idx`), and the shop its `shop_id`
+ *   (`product_listings_shop_idx`), read from its slug first; the other
+ *   filters apply to the rows those select. A value filter matches a row
+ *   whose array holds any of the IDs (`&&`); filters all apply. A price
+ *   filter matches a row whose price range overlaps the range asked for.
+ * - It opens its own read transaction for the typo fallback, so it is never
+ *   called inside another transaction.
  * - `q` matches `search_tsv` with `websearch_to_tsquery('simple', q)`. When
  *   that finds nothing under the other filters, the words of `q` are matched
  *   against the title by trigram word similarity (`q <% title`, served by
@@ -952,6 +956,12 @@ export async function listingPage(
     categoryPath = await listedCategoryPath(filters.categorySlug)
     if (categoryPath === null) return { rows: [], counted: 0 }
   }
+  let shopId: string | null = null
+  if (filters.shopSlug !== null) {
+    const shop = await db.from('shops').where('slug', filters.shopSlug).select('id').first()
+    if (!shop) return { rows: [], counted: 0 }
+    shopId = shop.id as string
+  }
   // Used only when a search was sent.
   const q = filters.q ?? ''
   const read = async (client: QueryClientContract, match: 'text' | 'trigram' | null) => {
@@ -964,7 +974,7 @@ export async function listingPage(
         query.whereRaw('?? && ?::uuid[]', [filter.column, `{${filter.ids.join(',')}}`])
       }
       if (filters.brandSlugs.length > 0) query.whereIn('brand_slug', filters.brandSlugs)
-      if (filters.shopSlug !== null) query.where('shop_slug', filters.shopSlug)
+      if (shopId !== null) query.where('shop_id', shopId)
       if (filters.priceMinMinor !== null) {
         query.where('max_price_minor', '>=', filters.priceMinMinor)
       }

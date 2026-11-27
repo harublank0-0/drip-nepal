@@ -25,9 +25,18 @@ export type ListRequest = {
 const UUID = /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i
 
 export function invalidParameter(parameter: string, message: string) {
+  return invalidParameters([{ parameter, message }])
+}
+
+// Several parameters at fault, one `invalid` item each (docs/06 §6.3); the first gives the detail.
+export function invalidParameters(problems: readonly { parameter: string; message: string }[]) {
   return new DomainError('INVALID_QUERY_PARAMETER', {
-    detail: message,
-    errors: [{ field: parameter, code: 'invalid', message }],
+    detail: problems[0].message,
+    errors: problems.map((problem) => ({
+      field: problem.parameter,
+      code: 'invalid',
+      message: problem.message,
+    })),
   })
 }
 

@@ -2,6 +2,8 @@ import { test } from '@japa/runner'
 import db from '@adonisjs/lucid/services/db'
 import { ProductFactory } from '#database/factories/product_factory'
 import { ShopFactory } from '#database/factories/shop_factory'
+import { LISTING_PARAMETERS } from '#modules/catalog/domain/listing_query'
+import { listingFilterAttributes } from '#modules/catalog/queries'
 import { clientNetwork, rateLimiter, rateLimitKey } from '#modules/platform/rate_limits'
 import { testBrowser } from '#tests/support/browser'
 import { insertBrand } from '#tests/support/catalog'
@@ -259,7 +261,9 @@ test.group('T-CAT-014 the storefront listing', (group) => {
     ])
     assert.deepEqual(await sorted('?price_max_minor=110000'), ['Black M tee'])
     assert.deepEqual(await sorted('?price_min_minor=250000'), ['Branded tee'])
-    assert.notInclude(await sorted('?in_stock=true'), 'Branded tee')
+    assert.deepEqual(await sorted('?in_stock=true'), ['Black M tee', 'L tee', 'Other shop tee'])
+    const noShop = await list('?shop=no-such-shop')
+    assert.deepEqual(noShop.body.data, [])
   })
 
   test('T-CAT-014 the sorts, with product_id breaking ties', async ({ assert }) => {
@@ -292,8 +296,7 @@ test.group('T-CAT-014 the storefront listing', (group) => {
     assert.deepEqual(titles(cheap.body), [first.title, second.title, 'Tee A', 'Tee C'])
     const dear = await list('?sort=price_desc')
     assert.deepEqual(titles(dear.body), ['Tee C', 'Tee A', first.title, second.title])
-    assert.isString(a.productId)
-    assert.isString(c.productId)
+    assert.notEqual(a.productId, c.productId)
   })
 
   test('T-CAT-014 pages never repeat or skip a card; past the last is empty', async ({
@@ -346,9 +349,40 @@ test.group('T-CAT-014 the storefront listing', (group) => {
       '?in_stock=false',
       '?price_min_minor=3&price_max_minor=2',
       '?category=tops&category=jeans',
+      '?q=ab%00',
+      '?page=01',
+      '?a[b]=1',
+      '?page[]=1',
     ]) {
       const refused = await list(query)
       assert.equal(refused.status, 400, query)
+    }
+  })
+
+  test('T-CAT-014 bracket forms of a filter are read as repeats', async ({ assert }) => {
+    const shop = await activeShop()
+    const men = await valueId('audience', 'men')
+    await listed(shop, { title: 'Men tee', audience: [men] })
+    const response = await list('?audience[]=men')
+    assert.equal(response.status, 200, response.text)
+    assert.deepEqual(titles(response.body), ['Men tee'])
+  })
+
+  test('T-CAT-014 the filterable attributes and their listing arrays', async ({ assert }) => {
+    const attributes = await listingFilterAttributes()
+    assert.deepEqual(
+      Object.fromEntries([...attributes].map(([code, attribute]) => [code, attribute.column])),
+      {
+        audience: 'audience_value_ids',
+        apparel_size: 'size_value_ids',
+        shoe_size_eu: 'size_value_ids',
+        waist_size_in: 'size_value_ids',
+        color: 'color_value_ids',
+      }
+    )
+    // No attribute code shadows a fixed parameter.
+    for (const code of attributes.keys()) {
+      assert.notInclude(LISTING_PARAMETERS as readonly string[], code)
     }
   })
 
@@ -379,6 +413,29 @@ test.group('T-CAT-003 keyword search', (group) => {
     assert.equal(typo.body.meta.total, 1)
     const nothing = await list('?q=zzzzqqq')
     assert.deepEqual(nothing.body.data, [])
+    const punctuation = await list('?q=!!')
+    assert.equal(punctuation.status, 200, punctuation.text)
+    assert.deepEqual(punctuation.body.data, [])
+  })
+
+  test('T-CAT-003 the fallback keeps the other filters and the chosen sort', async ({ assert }) => {
+    const shop = await activeShop()
+    await listed(shop, {
+      title: 'Old sneakers',
+      category: 'sneakers',
+      publishedAt: '2026-10-01T00:00:00Z',
+    })
+    await listed(shop, {
+      title: 'New sneakers',
+      category: 'sneakers',
+      publishedAt: '2026-11-01T00:00:00Z',
+    })
+    const newest = await list('?q=snekers&sort=newest')
+    assert.deepEqual(titles(newest.body), ['New sneakers', 'Old sneakers'])
+    // The typo's only matches are footwear, so a clothing listing stays empty.
+    const clothing = await list('?q=snekers&category=clothing')
+    assert.equal(clothing.status, 200, clothing.text)
+    assert.deepEqual(clothing.body.data, [])
   })
 
   test('T-CAT-003 a Devanagari word is found by an exact query', async ({ assert }) => {
@@ -388,6 +445,14 @@ test.group('T-CAT-003 keyword search', (group) => {
     const response = await list(`?q=${encodeURIComponent('टोपी')}`)
     assert.equal(response.status, 200, response.text)
     assert.deepEqual(titles(response.body), ['ढाका टोपी classic'])
+    // In a brand name, which the title fallback never reads: only full-text search finds it.
+    const [brand] = await db
+      .table('brands')
+      .insert({ slug: `test-dhaka-${Date.now()}`, name: 'ढाका कपडा', status: 'active' })
+      .returning(['id', 'name', 'slug'])
+    await listed(shop, { title: 'Woven shawl', brand })
+    const byBrand = await list(`?q=${encodeURIComponent('कपडा')}`)
+    assert.deepEqual(titles(byBrand.body), ['Woven shawl'])
   })
 
   test('T-CAT-003 a search matches title, brand, category and shop names, by relevance', async ({

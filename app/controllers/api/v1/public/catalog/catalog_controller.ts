@@ -1,6 +1,5 @@
 import type { HttpContext } from '@adonisjs/core/http'
-import { DomainError } from '#exceptions/domain_error'
-import { closedQuery, invalidParameter } from '#controllers/support/cursor'
+import { closedQuery, invalidParameter, invalidParameters } from '#controllers/support/cursor'
 import { cappedTotal, parseListingQuery } from '#modules/catalog/domain/listing_query'
 import {
   activeCategoryTree,
@@ -63,16 +62,7 @@ export default class CatalogController {
   async listProducts(ctx: HttpContext) {
     const filterable = await listingFilterAttributes()
     const { filters, problems } = parseListingQuery(ctx.request.qs(), filterable)
-    if (!filters) {
-      throw new DomainError('INVALID_QUERY_PARAMETER', {
-        detail: problems[0].message,
-        errors: problems.map((problem) => ({
-          field: problem.parameter,
-          code: 'invalid',
-          message: problem.message,
-        })),
-      })
-    }
+    if (!filters) throw invalidParameters(problems)
     const { rows, counted } = await listingPage(filters)
     const { total, totalIsCapped } = cappedTotal(counted)
     return {
