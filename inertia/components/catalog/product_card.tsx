@@ -32,7 +32,7 @@ export function ProductCard({ card, eager = false }: { card: ListingCard; eager?
           <img
             src={card.image.src}
             srcSet={card.image.srcset}
-            sizes="(min-width: 1280px) 304px, (min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw"
+            sizes="(min-width: 1280px) 228px, (min-width: 1024px) calc((100vw - 320px) / 3), (min-width: 640px) 33vw, 50vw"
             alt={card.image.alt}
             loading={eager ? 'eager' : 'lazy'}
             decoding="async"

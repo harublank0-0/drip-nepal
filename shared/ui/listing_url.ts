@@ -103,3 +103,70 @@ export function isUnrefined(state: ListingUrlState) {
     state.perPage === LISTING_DEFAULT_PER_PAGE
   )
 }
+
+/*
+ * What the filter controls change (docs/08 §11.1; R1-S part 3d-i-b). Each
+ * returns the next state; the visit drops `page` (`applyFilters`).
+ */
+
+// A refinement "Clear all" removes: a category on `/search`, any filter, the price, in stock.
+export function hasRefinements(state: ListingUrlState) {
+  return (
+    state.category !== null ||
+    Object.values(state.values).some((values) => values.length > 0) ||
+    state.brand.length > 0 ||
+    state.shop !== null ||
+    state.priceMinMinor !== null ||
+    state.priceMaxMinor !== null ||
+    state.inStock
+  )
+}
+
+// "Clear all": every refinement goes; the search, the sort and the page size stay.
+export function clearRefinements(state: ListingUrlState): ListingUrlState {
+  return { ...EMPTY_LISTING_STATE, q: state.q, sort: state.sort, perPage: state.perPage }
+}
+
+export function toggleValue(
+  state: ListingUrlState,
+  code: string,
+  value: string,
+  on: boolean
+): ListingUrlState {
+  const current = state.values[code] ?? []
+  const next = on ? sorted([...current, value]) : current.filter((item) => item !== value)
+  return { ...state, values: { ...state.values, [code]: next } }
+}
+
+export function toggleBrand(state: ListingUrlState, slug: string, on: boolean): ListingUrlState {
+  const next = on ? sorted([...state.brand, slug]) : state.brand.filter((item) => item !== slug)
+  return { ...state, brand: next }
+}
+
+/*
+ * A new search keeps every refinement. Sorting by relevance needs a search,
+ * so clearing it takes an explicit `relevance` with it; a default sort
+ * (null) follows the search.
+ */
+export function withQuery(state: ListingUrlState, q: string | null): ListingUrlState {
+  return { ...state, q, sort: q === null && state.sort === 'relevance' ? null : state.sort }
+}
+
+/*
+ * The search term as the server reads it (06 §6.3): a hyphen that does not
+ * follow a letter, a combining mark (the vowel signs of Devanagari) or a
+ * digit is dropped, since `-` there means NOT to `websearch_to_tsquery`,
+ * and the rest is trimmed. It is searched with 2 to 100 characters,
+ * counted as code points.
+ */
+export function searchedTerm(text: string) {
+  return text.replaceAll(/(^|[^\p{L}\p{M}\p{N}])-+/gu, '$1').trim()
+}
+
+export const SEARCH_TERM_MIN = 2
+export const SEARCH_TERM_MAX = 100
+
+// The sort as the state holds it: null for the default of this search.
+export function stateSort(sort: string | null, q: string | null) {
+  return sort === null || sort === defaultSort(q) ? null : sort
+}
