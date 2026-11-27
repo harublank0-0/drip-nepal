@@ -30,6 +30,9 @@ import {
   sendMove,
 } from '~/components/seller/product_moves'
 import { ProductReadiness, type ReadinessItem } from '~/components/seller/product_readiness'
+import { MAX_GALLERY } from '@shared/ui/product_media'
+import { ProductPhotosForm } from '~/components/seller/product_photos_form'
+import { ProductPhotosView } from '~/components/seller/product_photos_view'
 import { ProductVariantsForm } from '~/components/seller/product_variants_form'
 import { ProductVariantsSummary } from '~/components/seller/product_variants_summary'
 
@@ -98,6 +101,7 @@ export default function SellerProductEdit({
   categories,
   attributes,
   brands,
+  media_base,
   current_shop: current,
 }: Props) {
   // The product a save or a move returned, until the props catch up with it.
@@ -112,6 +116,7 @@ export default function SellerProductEdit({
   const [unsavedTurn, setUnsavedTurn] = useState(0)
   const [detailsDirty, setDetailsDirty] = useState(false)
   const [variantsDirty, setVariantsDirty] = useState(false)
+  const [photosDirty, setPhotosDirty] = useState(false)
   const [archiveOpen, setArchiveOpen] = useState(false)
   const archived = useRef(false)
   const headingRef = useRef<HTMLHeadingElement>(null)
@@ -152,12 +157,14 @@ export default function SellerProductEdit({
 
   // What each form last reported; once nothing is unsaved (saved or undone), the message goes
   // for good, so a later edit does not bring it back.
-  const dirtyNow = useRef({ details: false, variants: false })
-  const reportDirty = useCallback((form: 'details' | 'variants', dirty: boolean) => {
+  const dirtyNow = useRef({ details: false, variants: false, photos: false })
+  const reportDirty = useCallback((form: 'details' | 'variants' | 'photos', dirty: boolean) => {
     dirtyNow.current[form] = dirty
     if (form === 'details') setDetailsDirty(dirty)
-    else setVariantsDirty(dirty)
-    if (!dirtyNow.current.details && !dirtyNow.current.variants) setUnsavedTurn(0)
+    else if (form === 'variants') setVariantsDirty(dirty)
+    else setPhotosDirty(dirty)
+    const { details, variants, photos } = dirtyNow.current
+    if (!details && !variants && !photos) setUnsavedTurn(0)
   }, [])
   const detailsDirtyChange = useCallback(
     (dirty: boolean) => reportDirty('details', dirty),
@@ -167,10 +174,14 @@ export default function SellerProductEdit({
     (dirty: boolean) => reportDirty('variants', dirty),
     [reportDirty]
   )
+  const photosDirtyChange = useCallback(
+    (dirty: boolean) => reportDirty('photos', dirty),
+    [reportDirty]
+  )
 
   if (!current) return null
   const reason = readOnlyReason(newest, current)
-  const unsaved = reason === null && (detailsDirty || variantsDirty)
+  const unsaved = reason === null && (detailsDirty || variantsDirty || photosDirty)
   const nameOf = (code: string) => attributes.find((attribute) => attribute.code === code)?.name
 
   function focusAfter(to: 'moves' | 'readiness') {
@@ -352,6 +363,33 @@ export default function SellerProductEdit({
               attributes={attributes}
               onSaved={adopt}
               onDirtyChange={variantsDirtyChange}
+            />
+          )}
+        </section>
+
+        <section aria-labelledby="photos-heading" className="space-y-4">
+          <div className="space-y-1">
+            <h2
+              id="photos-heading"
+              tabIndex={-1}
+              className="font-heading text-xl font-semibold tracking-tight outline-none"
+            >
+              {t('seller.photos.heading')}
+            </h2>
+            <p className="text-muted-foreground text-sm">
+              {t('seller.photos.intro', { max: MAX_GALLERY })}
+            </p>
+          </div>
+          {reason ? (
+            <ProductPhotosView product={newest} attributes={attributes} mediaBase={media_base} />
+          ) : (
+            <ProductPhotosForm
+              shopSlug={current.slug}
+              product={newest}
+              attributes={attributes}
+              mediaBase={media_base}
+              onSaved={adopt}
+              onDirtyChange={photosDirtyChange}
             />
           )}
         </section>

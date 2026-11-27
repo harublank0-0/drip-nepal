@@ -134,3 +134,15 @@ export const STOCK_LIMITS = {
   units: { max: 2_147_483_647 },
   note: { max: 500 },
 } as const
+
+/*
+ * What an upload may be (docs/06 §9.2, ADR-0013; 01 AC-FR-MED-001-1): an
+ * image of at most 10 MB, JPEG, PNG or WebP. The media module's validator
+ * and the editor's uploader read these (R1-S part 2g-ii);
+ * `media_assets_bytes_check` and `media_assets_mime_check` are the
+ * database's half.
+ */
+export const MEDIA_UPLOAD_LIMITS = {
+  maxBytes: 10_485_760,
+  imageTypes: ['image/jpeg', 'image/png', 'image/webp'],
+} as const

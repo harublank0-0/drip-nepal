@@ -51,6 +51,7 @@ const SHOES: CategoryOption = {
 }
 
 const value = (code: string, label: string, isActive = true) => ({
+  id: `v-${code}`,
   code,
   label,
   swatch_hex: null,
