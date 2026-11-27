@@ -109,6 +109,7 @@ export type ScannedRoutes = {
     'listing.women.accessories': { paramsTuple?: []; params?: {} }
     'listing.category': { paramsTuple: [ParamValue]; params: {'categorySlug': ParamValue} }
     'listing.search': { paramsTuple?: []; params?: {} }
+    'product.show': { paramsTuple: [ParamValue]; params: {'segment': ParamValue} }
     'login': { paramsTuple?: []; params?: {} }
     'signup': { paramsTuple?: []; params?: {} }
     'verify_email': { paramsTuple?: []; params?: {} }
@@ -185,6 +186,7 @@ export type ScannedRoutes = {
     'listing.women.accessories': { paramsTuple?: []; params?: {} }
     'listing.category': { paramsTuple: [ParamValue]; params: {'categorySlug': ParamValue} }
     'listing.search': { paramsTuple?: []; params?: {} }
+    'product.show': { paramsTuple: [ParamValue]; params: {'segment': ParamValue} }
     'login': { paramsTuple?: []; params?: {} }
     'signup': { paramsTuple?: []; params?: {} }
     'verify_email': { paramsTuple?: []; params?: {} }
@@ -259,6 +261,7 @@ export type ScannedRoutes = {
     'listing.women.accessories': { paramsTuple?: []; params?: {} }
     'listing.category': { paramsTuple: [ParamValue]; params: {'categorySlug': ParamValue} }
     'listing.search': { paramsTuple?: []; params?: {} }
+    'product.show': { paramsTuple: [ParamValue]; params: {'segment': ParamValue} }
     'login': { paramsTuple?: []; params?: {} }
     'signup': { paramsTuple?: []; params?: {} }
     'verify_email': { paramsTuple?: []; params?: {} }

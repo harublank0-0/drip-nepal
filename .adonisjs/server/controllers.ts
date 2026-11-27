@@ -84,6 +84,7 @@ export const controllers = {
   storefront: {
     catalog: {
       Listing: () => import('#controllers/storefront/catalog/listing_controller'),
+      Product: () => import('#controllers/storefront/catalog/product_controller'),
     },
     identity: {
       Home: () => import('#controllers/storefront/identity/home_controller'),

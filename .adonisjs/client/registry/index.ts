@@ -636,6 +636,12 @@ const routes = {
     tokens: [{"old":"/search","type":0,"val":"search","end":""}],
     types: placeholder as Registry['listing.search']['types'],
   },
+  'product.show': {
+    methods: ["GET","HEAD"],
+    pattern: '/p/:segment',
+    tokens: [{"old":"/p/:segment","type":0,"val":"p","end":""},{"old":"/p/:segment","type":1,"val":"segment","end":""}],
+    types: placeholder as Registry['product.show']['types'],
+  },
   'login': {
     methods: ["GET","HEAD"],
     pattern: '/login',

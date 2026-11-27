@@ -117,6 +117,9 @@ export interface ApiDefinition {
     category: typeof routes['listing.category']
     search: typeof routes['listing.search']
   }
+  product: {
+    show: typeof routes['product.show']
+  }
   login: typeof routes['login']
   signup: typeof routes['signup']
   verifyEmail: typeof routes['verify_email']

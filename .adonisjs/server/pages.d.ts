@@ -44,5 +44,6 @@ declare module '@adonisjs/inertia/types' {
     'storefront/home': ExtractProps<(typeof import('../../inertia/pages/storefront/home.tsx'))['default']>
     'storefront/legal_document': ExtractProps<(typeof import('../../inertia/pages/storefront/legal_document.tsx'))['default']>
     'storefront/listing': ExtractProps<(typeof import('../../inertia/pages/storefront/listing.tsx'))['default']>
+    'storefront/product': ExtractProps<(typeof import('../../inertia/pages/storefront/product.tsx'))['default']>
   }
 }
