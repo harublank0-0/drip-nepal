@@ -99,6 +99,22 @@ export const PRODUCT_LIMITS = {
 } as const
 
 /*
+ * A product's variant set (docs/04a §7.8, §7.9; 01 AC-FR-CAT-004-1,
+ * AC-FR-CAT-004-4; R1-S part 2b, shared with the variant editor in 2f-ii):
+ * at most 2 option axes and 100 variants; a SKU of 1 to 64 characters in
+ * the shape of `product_variants_sku_check`; prices and compare-at prices
+ * from 0 to 100,000,000 paisa (Rs 10,00,000); a weight of 1 to 50,000 g
+ * (`product_variants_weight_check`).
+ */
+export const VARIANT_LIMITS = {
+  axes: { max: 2 },
+  variants: { min: 1, max: 100 },
+  sku: { min: 1, max: 64, pattern: /^[A-Za-z0-9][A-Za-z0-9._/-]*$/ },
+  priceMinor: { min: 0, max: 100_000_000 },
+  weightGrams: { min: 1, max: 50_000 },
+} as const
+
+/*
  * A product's gallery (docs/04a §7.14, 01 FR-MED-002; R1-S part 2d-iii): at
  * most 12 images, positions 1 to 12, alt text of 1 to 150 characters in
  * code points (`product_media_position_check`, `product_media_alt_text_check`).

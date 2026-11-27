@@ -46,7 +46,9 @@ import { refused } from '#tests/support/schema_rows'
  *   value stays on its variant; an axis the product has stays usable after
  *   its rule is dropped; a live product keeps its required axes, a price
  *   above zero and at least one variant, and never a default variant
- *   beside axis variants.
+ *   beside axis variants. Since R1-S part 2f-ii the editor view gives each
+ *   variant its `option_value_codes` and `has_history`, which the seller's
+ *   variant editor reads.
  * - T-CAT-109: a variant row pointing at another shop's product is 23503.
  * - T-API-004 (428, 412 with `current`), T-SEC-001 (another shop's product,
  *   and case (c): another shop's variant `id`, both 404), T-SEC-003
@@ -595,6 +597,32 @@ test.group('T-CAT-106 variants with history and live products', (group) => {
     await stock(w.shop.shopId, small.id, 3, w.shop.ownerId)
     return { product, small, medium }
   }
+
+  test('T-CAT-106 the editor view gives each variant its option values and whether it has history', async ({
+    assert,
+  }) => {
+    const w = await world()
+    const fresh = await draft(w)
+    const [defaultVariant] = fresh.variants as (Variant & {
+      option_value_codes: Record<string, string>
+      has_history: boolean
+    })[]
+    assert.deepEqual(defaultVariant.option_value_codes, {})
+    assert.isFalse(defaultVariant.has_history)
+
+    const { product, small, medium } = await stockedTwoAxes(w)
+    const read = await send(w.owner, 'GET', productPath(w.shop.slug, product.id))
+    assert.equal(read.status, 200)
+    const variants = read.body.data.variants as (Variant & {
+      option_value_codes: Record<string, string>
+      has_history: boolean
+    })[]
+    const byId = new Map(variants.map((variant) => [variant.id, variant]))
+    assert.deepEqual(byId.get(small.id)?.option_value_codes, { apparel_size: 's', color: 'black' })
+    assert.isTrue(byId.get(small.id)?.has_history, 'stocked')
+    assert.deepEqual(byId.get(medium.id)?.option_value_codes, { apparel_size: 'm', color: 'black' })
+    assert.isFalse(byId.get(medium.id)?.has_history, 'never stocked')
+  })
 
   test('T-CAT-106 a stocked product’s axes are fixed, but may be reordered in place', async ({
     assert,

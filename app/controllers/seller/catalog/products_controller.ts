@@ -6,7 +6,7 @@ import {
   productFormOptions,
   sellerProductData,
 } from '#modules/catalog/queries'
-import { onHandOf } from '#modules/inventory/queries'
+import { variantStock } from '#modules/inventory/queries'
 import { assertShopGate, assertShopPermission } from '#modules/shops/permissions'
 import {
   productFormOptionsJson,
@@ -103,16 +103,17 @@ export default class ProductsController {
     assertShopGate(ctx.shop, 'products_view')
     const data = await sellerProductData(ctx.shop.id, ctx.params.productId)
     if (!data) throw new DomainError('NOT_FOUND')
-    const onHand = await onHandOf(
+    const stock = await variantStock(
       ctx.shop.id,
       data.variants.map((variant) => variant.id)
     )
     const options = await productFormOptions({
       keepCategoryId: data.product.categoryId,
       keepBrandId: data.product.brandId,
+      keepAxisCodes: data.optionAxes,
     })
     return ctx.inertia.render('seller/product_edit', {
-      product: sellerProductJson(data, onHand),
+      product: sellerProductJson(data, stock),
       ...productFormOptionsJson(options),
     })
   }

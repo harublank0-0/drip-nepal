@@ -11,7 +11,7 @@ import { t } from '~/lib/i18n'
  * keyboard-focusable, and one card per product below `md`, with the same
  * fields. The title is the row's only link, to the product editor; no row
  * click handler. Publishing, unpublishing, archiving and restoring (R1-S
- * part 2e-ii's operations) join as row actions with part 2f-ii.
+ * part 2e-ii's operations) join as row actions with part 2f-iii.
  */
 export type ProductListItem = {
   id: string

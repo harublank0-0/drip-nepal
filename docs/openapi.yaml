@@ -2854,6 +2854,8 @@ paths:
                           weight_grams: null
                           is_default: true
                           on_hand: 0
+                          option_value_codes: {}
+                          has_history: false
                       media: []
                       missing_for_submit: [variants, media, warranty_text]
                       updated_at: '2026-11-24T06:00:00.000Z'
@@ -3083,6 +3085,8 @@ paths:
                           weight_grams: null
                           is_default: false
                           on_hand: 0
+                          option_value_codes: { apparel_size: m, color: black }
+                          has_history: false
                         - id: 01929a51-0000-7000-8000-0000000000b2
                           sku: KT-TEE-L-BLK
                           label: 'Size: L / Color: Black'
@@ -3092,6 +3096,8 @@ paths:
                           weight_grams: null
                           is_default: false
                           on_hand: 0
+                          option_value_codes: { apparel_size: l, color: black }
+                          has_history: false
                       media: []
                       missing_for_submit: [media, warranty_text]
                       updated_at: '2026-11-24T06:05:00.000Z'
@@ -8946,9 +8952,26 @@ components:
         A variant in the seller views (04a §7.9). `label` is `Default` for the option-less
         variant, else `Attribute: Value` per axis in axis order joined by ` / ` (06 §14.2). `on_hand` is
         shop-confidential (04a §8.1). `status`, `compare_at_price` and `weight_grams` were added
-        with `getShopProduct` (R1-S part 2a, note 57).
+        with `getShopProduct` (R1-S part 2a, note 57). `option_value_codes` (axis code → value
+        code, as `replaceProductVariants` takes them; empty for the option-less default variant)
+        and `has_history` (the variant has an inventory movement or an order line, so its options
+        stay as they are and the product's axes are fixed, 04a §7.8, §7.9) were added for the
+        seller's variant editor (R1-S part 2f-ii).
       additionalProperties: false
-      required: [id, sku, label, status, price, compare_at_price, weight_grams, is_default, on_hand]
+      required:
+        [
+          id,
+          sku,
+          label,
+          status,
+          price,
+          compare_at_price,
+          weight_grams,
+          is_default,
+          on_hand,
+          option_value_codes,
+          has_history,
+        ]
       properties:
         id: { $ref: '#/components/schemas/Uuid' }
         sku: { type: string, maxLength: 64 }
@@ -8962,6 +8985,12 @@ components:
         weight_grams: { type: [integer, 'null'], minimum: 1, maximum: 50000 }
         is_default: { type: boolean }
         on_hand: { type: integer, minimum: 0 }
+        option_value_codes:
+          type: object
+          maxProperties: 2
+          propertyNames: { pattern: '^[a-z][a-z0-9_]{1,39}$' }
+          additionalProperties: { type: string, pattern: '^[a-z0-9][a-z0-9_-]{0,39}$' }
+        has_history: { type: boolean }
     ProductMediaItem:
       type: object
       description: |
@@ -11418,3 +11447,6 @@ components:
 # 65. `listProducts`, specified here before the build, records it (R1-S part 3b, 2026-11-27; 06
 #     note 74): `nav` as an entry path sent alone, `brand` repeatable, the price range, `in_stock`
 #     `true` only, the typo fallback, and the 400 naming every parameter at fault.
+# 66. `SellerVariant` gains `option_value_codes` and `has_history`, required, for the seller's
+#     variant editor (06 §13.5 `getShopProduct`, 06 note 75; R1-S part 2f-ii). The examples of
+#     `createProduct` and `replaceProductVariants` show them.

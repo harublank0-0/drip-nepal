@@ -87,6 +87,8 @@ test.group('T-CAT-008 createProduct and getShopProduct', (group) => {
         weight_grams: null,
         is_default: true,
         on_hand: 0,
+        option_value_codes: {},
+        has_history: false,
       },
     ])
     assert.deepEqual(created.missing_for_submit, ['variants', 'media', 'warranty_text'])
