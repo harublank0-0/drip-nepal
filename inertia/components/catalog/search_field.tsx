@@ -3,6 +3,7 @@ import { router } from '@inertiajs/react'
 import { SearchIcon, XIcon } from 'lucide-react'
 import { SEARCH_TERM_MAX, SEARCH_TERM_MIN, searchedTerm } from '@shared/ui/listing_url'
 import { t } from '~/lib/i18n'
+import { rememberRecentSearch } from '~/lib/recent_searches'
 
 /*
  * The search field of `/search`'s toolbar (docs/08 §11.1, §7.2; R1-S part
@@ -19,8 +20,12 @@ import { t } from '~/lib/i18n'
  * focus. Without JavaScript the field belongs to the filter form (`form`),
  * so Enter submits it.
  *
- * The recent searches of the header's search modal, which 08 §11.1 has
- * this field feed, come with that modal (R1-S part 3d-iii).
+ * The term searched joins the recent searches of the header's search modal
+ * when the customer is done with it: on Enter, when the field loses focus
+ * and when they leave the page (another page, Back or Forward, a reload, a
+ * closed tab); not on every timed commit, so typing one word does not fill
+ * the list with its prefixes, and a draft never searched is not kept
+ * (R1-S part 3d-iii-b).
  */
 const SEARCH_DELAY_MS = 300
 
@@ -57,6 +62,12 @@ export function SearchField({
   }
   const timer = useRef<number | null>(null)
   const composing = useRef(false)
+  // The term last searched, for the listeners that remember it when the customer leaves.
+  const searched = useRef(q)
+
+  function remember() {
+    if (searched.current) rememberRecentSearch(searched.current)
+  }
   const input = useRef<HTMLInputElement>(null)
 
   function cancel() {
@@ -69,6 +80,7 @@ export function SearchField({
     const next = termOf(value)
     if (next === undefined) return
     setSent(next)
+    searched.current = next
     onCommit(next)
   }
 
@@ -85,6 +97,11 @@ export function SearchField({
       cancel()
     }
     window.addEventListener('popstate', onPopState)
+    // Leaving the page: a reload or a closed tab, or a visit to another page.
+    window.addEventListener('pagehide', remember)
+    const stopBefore = router.on('before', (event) => {
+      if (event.detail.visit.url.pathname !== window.location.pathname) remember()
+    })
     // A visit of its own means the history step brought no page.
     const stopStart = router.on('start', () => {
       fromHistory = false
@@ -98,6 +115,8 @@ export function SearchField({
     })
     return () => {
       window.removeEventListener('popstate', onPopState)
+      window.removeEventListener('pagehide', remember)
+      stopBefore()
       stopStart()
       stop()
       cancel()
@@ -125,7 +144,10 @@ export function SearchField({
         enterKeyHint="search"
         className="border-input bg-background focus-visible:border-ring focus-visible:ring-ring/50 dark:bg-input/30 h-11 w-full rounded-md border pr-11 pl-9 text-base outline-none focus-visible:ring-3 md:text-sm [&::-webkit-search-cancel-button]:hidden"
         onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
+        onBlur={() => {
+          setFocused(false)
+          remember()
+        }}
         onChange={(event) => {
           setDraft(event.target.value)
           if (!composing.current) schedule(event.target.value)
@@ -134,6 +156,7 @@ export function SearchField({
           if (event.key !== 'Enter' || event.nativeEvent.isComposing) return
           event.preventDefault()
           commit(event.currentTarget.value)
+          remember()
         }}
         onCompositionStart={() => {
           composing.current = true
