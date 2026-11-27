@@ -17,6 +17,8 @@ Reviewed: 2026-09-25 · consistency review 2026-09-30 to 2026-10-04
 
 Edited 2026-09-30 (consistency review): decision 1 follows the queue policies of [03 §9](../03-system-architecture.md#9-asynchronous-work) (`catalog.refresh_listing` sends carry no `singletonKey`); the decision is unchanged.
 
+Edited 2026-11-27 (R1-S part 3b, built): decision 3's fallback is trigram word similarity, `:q <% title` ordered by `word_similarity(:q, title)`, at a threshold of 0.5 set for that read alone ([00 A-64](../00-context-assumptions-and-questions.md#6-proposed-defaults-and-assumptions-register)), not `title % :q`: whole-title similarity stays far below any useful threshold for a one-word query in a longer title, and the AC-FR-SRCH-002-2 fixture "snekers" scores 0.55 against "sneakers". The index is unchanged; the decision is otherwise unchanged ([06 note 74](../06-api-design.md#consistency-notes-for-editor)).
+
 ## Context
 
 **Requirements** ([01 §7.6](../01-product-requirements.md#76-discovery-and-search-fr-srch)): R1 needs listings with filters, sort, pagination and URL state (FR-SRCH-001), keyword search of 2–100 characters with typo tolerance and Devanagari exact-word matches (FR-SRCH-002), shop pages (FR-SRCH-003), SEO (FR-SRCH-005) and code-configured navigation entries such as `/men/t-shirts` (FR-SRCH-007). Autocomplete (FR-SRCH-006) and facet counts (FR-SRCH-008) are R2; a dedicated search engine is R3. Ranking must contain no paid placement (AC-FR-SRCH-001-5, REG-11).

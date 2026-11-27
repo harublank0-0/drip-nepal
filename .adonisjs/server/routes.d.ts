@@ -25,6 +25,7 @@ export type ScannedRoutes = {
     'listLocalLevels': { paramsTuple?: []; params?: {} }
     'listCategories': { paramsTuple?: []; params?: {} }
     'listAttributes': { paramsTuple?: []; params?: {} }
+    'listProducts': { paramsTuple?: []; params?: {} }
     'listAddresses': { paramsTuple?: []; params?: {} }
     'createAddress': { paramsTuple?: []; params?: {} }
     'updateAddress': { paramsTuple: [ParamValue]; params: {'addressId': ParamValue} }
@@ -109,6 +110,7 @@ export type ScannedRoutes = {
     'listLocalLevels': { paramsTuple?: []; params?: {} }
     'listCategories': { paramsTuple?: []; params?: {} }
     'listAttributes': { paramsTuple?: []; params?: {} }
+    'listProducts': { paramsTuple?: []; params?: {} }
     'listAddresses': { paramsTuple?: []; params?: {} }
     'listMyShops': { paramsTuple?: []; params?: {} }
     'getSellerShop': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
@@ -152,6 +154,7 @@ export type ScannedRoutes = {
     'listLocalLevels': { paramsTuple?: []; params?: {} }
     'listCategories': { paramsTuple?: []; params?: {} }
     'listAttributes': { paramsTuple?: []; params?: {} }
+    'listProducts': { paramsTuple?: []; params?: {} }
     'listAddresses': { paramsTuple?: []; params?: {} }
     'listMyShops': { paramsTuple?: []; params?: {} }
     'getSellerShop': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }

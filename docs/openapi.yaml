@@ -249,11 +249,21 @@ paths:
         Filters and sorts are a closed allowlist (06 §6.3); anything else, or a repeated
         parameter with more than 20 values, is 400 `INVALID_QUERY_PARAMETER`. Attribute filters
         are named by the filterable attribute's code with value codes.
+        As built (R1-S part 3b, 2026-11-27; 06 note 74): every problem with the query is one 400
+        naming each parameter at fault. `nav` is a navigation entry path without its leading
+        slash (`men/t-shirts`), sent without `category` or `audience`, which it sets. Repeated
+        values of one attribute match any of them, and attributes all apply; `brand` repeats
+        the same way. A product matches the price range when one of its prices lies in it.
+        `in_stock` takes `true` only. `price_desc` orders by the lowest price. A category of no
+        listing answers an empty page. `q` matches `search_tsv` with
+        `websearch_to_tsquery('simple', q)`, ranked by `ts_rank`; when that finds nothing, the
+        words of `q` are matched against the title by trigram word similarity at 00 A-64's
+        threshold (ADR-0014 decision 3). T-CAT-014, T-CAT-003.
         Side effects: none. Rate limit `catalog_ip` 120/min per IP [Assumption]. The read is
         cancelled after 2 s and at most 4 of the web process's 8 connections run it at once; a
         read that waits more than 1 s for a slot, or that the 2 s limit cancels, gets 503
         `SERVICE_BUSY` with `Retry-After`, never 500 `INTERNAL` (all proposed, 07 TM-24; 06 §5.2,
-        §5.3, §9.1) [Assumption].
+        §5.3, §9.1) [Assumption]; the timeout and the slot limit are not built yet.
         `Cache-Control: private, no-store` in R1 (06 §3.8). Release R1·M4.
       x-release: R1·M4
       security: []
@@ -265,8 +275,8 @@ paths:
           schema: { type: string, minLength: 1, maxLength: 80 }
         - name: nav
           in: query
-          description: Navigation entry slug (for example the entry behind `/men/t-shirts`, 03 §6.1).
-          schema: { type: string, minLength: 1, maxLength: 80 }
+          description: A navigation entry path without its leading slash (04 §3.12), such as `men/t-shirts`; sent without `category` or `audience`.
+          schema: { type: string, pattern: '^[a-z]+(?:/[a-z0-9]+(?:-[a-z0-9]+)*)?$' }
         - name: audience
           in: query
           description: Attribute filter `audience` (value codes, repeatable).
@@ -299,24 +309,29 @@ paths:
           schema: { $ref: '#/components/schemas/AttributeValueCodeList' }
         - name: brand
           in: query
-          description: Brand slug (`brands_slug_check`, 3–40 characters, 04a §7.5).
-          schema: { type: string, minLength: 3, maxLength: 40 }
+          description: Brand slugs (`brands_slug_check`, 3–40 characters, 04a §7.5), repeatable; any of them.
+          style: form
+          explode: true
+          schema:
+            type: array
+            maxItems: 20
+            items: { type: string, minLength: 3, maxLength: 40 }
         - name: shop
           in: query
           description: Shop slug.
           schema: { type: string, minLength: 3, maxLength: 40 }
         - name: price_min_minor
           in: query
-          description: Lower bound of the variant price in paisa.
+          description: Lower bound in paisa; a product with any price at or above it matches.
           schema: { type: integer, format: int64, minimum: 0 }
         - name: price_max_minor
           in: query
-          description: Upper bound of the variant price in paisa.
+          description: Upper bound in paisa; a product with any price at or below it matches.
           schema: { type: integer, format: int64, minimum: 0 }
         - name: in_stock
           in: query
-          description: Only listings with at least one available variant.
-          schema: { type: boolean }
+          description: Only listings with at least one available variant; `true` only.
+          schema: { type: boolean, enum: [true] }
         - name: q
           in: query
           description: Free-text search, 2–100 characters (GIN search on `product_listings`).
@@ -11393,3 +11408,6 @@ components:
 # 64. `info.license` says "Proprietary, all rights reserved" and links `LICENSE`: OD-23 was
 #     re-decided on 2026-11-26 as option (b), proprietary with the source public, replacing the
 #     MIT of 2026-09-30 that note 25 records (risks §2.3).
+# 65. `listProducts`, specified here before the build, records it (R1-S part 3b, 2026-11-27; 06
+#     note 74): `nav` as an entry path sent alone, `brand` repeatable, the price range, `in_stock`
+#     `true` only, the typo fallback, and the 400 naming every parameter at fault.

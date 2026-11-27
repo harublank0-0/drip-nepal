@@ -10,8 +10,9 @@ const CatalogController = () => import('#controllers/api/v1/public/catalog/catal
  * (`listProvinces`, `listDistricts`, `listLocalLevels`), which the API
  * limits middleware charges to `catalog_ip` per client network (06 §9.1);
  * R1-S part 3a adds the category tree and the filterable attributes
- * (`listCategories`, `listAttributes`), on `catalog_ip` too; the product,
- * shop and agreement reads come with their parts. Route
+ * (`listCategories`, `listAttributes`), on `catalog_ip` too, and part 3b
+ * the listing (`listProducts`); the product detail, shop and agreement reads
+ * come with their parts. Route
  * names are the operationIds (docs/09 §3.3).
  */
 router
@@ -23,5 +24,6 @@ router
       .as('listLocalLevels')
     router.get('/catalog/categories', [CatalogController, 'listCategories']).as('listCategories')
     router.get('/catalog/attributes', [CatalogController, 'listAttributes']).as('listAttributes')
+    router.get('/catalog/products', [CatalogController, 'listProducts']).as('listProducts')
   })
   .prefix('/api/v1')

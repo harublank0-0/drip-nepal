@@ -27,6 +27,7 @@ export interface ApiDefinition {
   listLocalLevels: typeof routes['listLocalLevels']
   listCategories: typeof routes['listCategories']
   listAttributes: typeof routes['listAttributes']
+  listProducts: typeof routes['listProducts']
   listAddresses: typeof routes['listAddresses']
   createAddress: typeof routes['createAddress']
   updateAddress: typeof routes['updateAddress']

@@ -1,4 +1,4 @@
-import type { CategoryTreeNode, FilterAttribute } from '#modules/catalog/queries'
+import type { CategoryTreeNode, FilterAttribute, ListingCardRow } from '#modules/catalog/queries'
 
 /*
  * The storefront's reference reads as the public API answers them (docs/06
@@ -25,5 +25,33 @@ export function filterAttributeJson(attribute: FilterAttribute) {
       label: value.label,
       swatch_hex: value.swatchHex,
     })),
+  }
+}
+
+const money = (amountMinor: number, currency: string) => ({ amount_minor: amountMinor, currency })
+
+/*
+ * A storefront card (docs/06 §13.2 `listProducts`, §14.1; openapi
+ * `ListingCard`; R1-S part 3b): every field from its `product_listings`
+ * column, prices in integer paisa (ADR-0007), the brand null for own label,
+ * and the position-1 image's alt text and derived keys by width.
+ */
+export function listingCardJson(row: ListingCardRow) {
+  return {
+    public_id: row.public_id,
+    slug: row.slug,
+    title: row.title,
+    shop: { slug: row.shop_slug, name: row.shop_name },
+    brand:
+      row.brand_slug !== null && row.brand_name !== null
+        ? { slug: row.brand_slug, name: row.brand_name }
+        : null,
+    price_min: money(row.min_price_minor, row.currency),
+    price_max: money(row.max_price_minor, row.currency),
+    compare_at:
+      row.compare_at_price_minor === null ? null : money(row.compare_at_price_minor, row.currency),
+    in_stock: row.in_stock,
+    image: { alt: row.primary_image_alt, srcset_keys: row.primary_image_keys },
+    published_at: row.published_at.toISOString(),
   }
 }
