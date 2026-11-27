@@ -261,6 +261,7 @@ test.group('T-SEC-036 the seller overview props', () => {
       { item: 'seller_agreement', done: true },
       { item: 'shipping_rates', done: false },
       { item: 'pickup_address', done: false },
+      { item: 'product_live', done: false },
     ])
     const written = JSON.stringify(props)
     for (const secret of [GRIEVANCE.name, GRIEVANCE.phone, 'grievance', '_enc', shop.shopId]) {
@@ -340,10 +341,12 @@ test.group('T-SEC-036 the seller overview props', () => {
               { item: 'seller_agreement', done: true },
               { item: 'shipping_rates', done: false },
               { item: 'pickup_address', done: true },
+              { item: 'product_live', done: false },
             ]
           : [
               { item: 'seller_agreement', done: true },
               { item: 'shipping_rates', done: false },
+              { item: 'product_live', done: false },
             ]
       )
     })
@@ -651,6 +654,7 @@ test.group('T-UI-041 the seller shipping page', () => {
       { item: 'seller_agreement', done: true },
       { item: 'shipping_rates', done: true },
       { item: 'pickup_address', done: true },
+      { item: 'product_live', done: false },
     ])
     const page = await pageProps(browser, shippingPath(shop.slug))
     assert.isTrue((page.shipping as { configured: boolean }).configured)

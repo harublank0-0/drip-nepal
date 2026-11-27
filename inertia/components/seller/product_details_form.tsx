@@ -16,6 +16,7 @@ import {
   NEPAL,
   offeredValues,
   productAttributesFor,
+  unusedAttributeCodes,
   type AttributeOption,
   type BrandOption,
   type CategoryOption,
@@ -65,7 +66,12 @@ import { RateLimitNotice } from '~/components/forms/rate_limit_notice'
  *
  * The category decides which attributes the form shows (its effective
  * rules with usage `product`); values chosen under another category stay in
- * the form but are not sent. A draft may leave the disclosures empty: each
+ * the form but are not sent. Values the product holds for an attribute its
+ * category no longer uses are named under the attributes, and every save
+ * sends `attributes`, which removes them: the publication gate refuses them
+ * (`unusedAttributeCodes`; R1-S part 2f-iii). `onDirtyChange` tells the
+ * page whether the user has changed anything not yet saved, so publishing
+ * asks for a save first. A draft may leave the disclosures empty: each
  * says it is needed before the product can go live. A live product
  * (`published`, `unpublished`) must keep them, so there they are required
  * (04a §7.6 `products_disclosures_check`). Client rules mirror the server's
@@ -114,6 +120,12 @@ const LABELS: Record<DetailsField, Parameters<typeof t>[0]> = {
 }
 
 const attributeId = (code: string) => `product-attribute-${code}`
+const ATTRIBUTES_ID = 'product-attributes'
+
+// The element a field's problem points at, for the readiness list's links (product_readiness.tsx).
+export function detailsFieldId(field: string): string {
+  return field in FIELD_IDS ? FIELD_IDS[field as keyof typeof FIELD_IDS] : ATTRIBUTES_ID
+}
 
 // Code points after NFC, as the server counts them (docs/04 §2.8).
 const codePoints = (value: string) => [...value.trim().normalize('NFC')].length
@@ -146,6 +158,7 @@ export function ProductDetailsForm({
   attributes,
   brands,
   onSaved,
+  onDirtyChange,
 }: {
   shopSlug: string
   product: SellerProduct | null
@@ -154,6 +167,8 @@ export function ProductDetailsForm({
   brands: BrandOption[]
   // Tells the page the product as now saved, so the variant editor builds on it too.
   onSaved?: (next: SellerProduct) => void
+  // Whether a change of the user's is not saved yet (R1-S part 2f-iii).
+  onDirtyChange?: (dirty: boolean) => void
 }) {
   const mutation = useApiMutation()
   const intentKey = useIntentKey<CreateBody>()
@@ -323,6 +338,15 @@ export function ProductDetailsForm({
   const savedAttributes = new Map(
     (base?.attributes ?? []).map((item) => [item.attribute_code, item.value_codes])
   )
+  // Values of attributes the chosen category does not use: the next save removes them.
+  const unused = base ? unusedAttributeCodes(base, category) : []
+  const current = useStore(form.store, (state) => state.values)
+  const dirty =
+    base !== null &&
+    Object.keys(changedMembers(current, base, category, attributes, { typedOnly: true })).length > 0
+  useEffect(() => {
+    onDirtyChange?.(dirty)
+  }, [dirty, onDirtyChange])
   const summaryFields = [
     { name: 'title', id: FIELD_IDS.title },
     { name: 'category_id', id: FIELD_IDS.category_id },
@@ -458,8 +482,21 @@ export function ProductDetailsForm({
         </form.Field>
       </FieldSet>
 
-      <FieldSet className="gap-5">
+      <FieldSet id={ATTRIBUTES_ID} tabIndex={-1} className="gap-5 outline-none">
         <FieldLegend>{t('seller.product.attributes_legend')}</FieldLegend>
+        {unused.length > 0 && (
+          <Alert role="status">
+            <AlertDescription>
+              {t('seller.product.attributes_unused', {
+                names: unused
+                  .map(
+                    (code) => attributes.find((attribute) => attribute.code === code)?.name ?? code
+                  )
+                  .join(', '),
+              })}
+            </AlertDescription>
+          </Alert>
+        )}
         {shownAttributes.length === 0 ? (
           <FieldDescription>
             {category ? t('seller.product.attributes_none') : t('seller.product.attributes_first')}

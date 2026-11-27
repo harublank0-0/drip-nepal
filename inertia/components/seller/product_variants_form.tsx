@@ -134,6 +134,7 @@ export function ProductVariantsForm({
   categories,
   attributes,
   onSaved,
+  onDirtyChange,
 }: {
   shopSlug: string
   product: SellerProduct
@@ -141,6 +142,8 @@ export function ProductVariantsForm({
   attributes: AttributeOption[]
   // Tells the page the product as now saved, so the details form builds on it too.
   onSaved?: (next: SellerProduct) => void
+  // Whether a change of the user's is not saved yet, so publishing asks for a save first (2f-iii).
+  onDirtyChange?: (dirty: boolean) => void
 }) {
   const mutation = useApiMutation()
   const [problem, showProblem] = useState<Problem | null>(null)
@@ -289,6 +292,10 @@ export function ProductVariantsForm({
   const axes = useStore(form.store, (state) => state.values.axes)
   const chosenValues = useStore(form.store, (state) => state.values.values)
   const rows = useStore(form.store, (state) => state.values.rows)
+  const dirty = !sameAsSaved(variantsBody({ axes, values: chosenValues, rows }), base)
+  useEffect(() => {
+    onDirtyChange?.(dirty)
+  }, [dirty, onDirtyChange])
   const summaryFields = [
     { name: 'axes', id: AXES_ID },
     ...axes.map((axis) => ({ name: `values.${axis}`, id: valuesId(axis) })),

@@ -8,6 +8,7 @@ import { InvariantViolation } from '#exceptions/programming_errors'
 import { recordAudit } from '#modules/audit/actions/record_audit'
 import { checkProductFields } from '#modules/catalog/actions/product_draft'
 import { missingForSubmit } from '#modules/catalog/domain/submit_readiness'
+import { PRODUCT_MOVES } from '#shared/ui/product_status'
 import {
   productEditorData,
   shopProduct,
@@ -76,18 +77,14 @@ type StatusChange = {
 
 /*
  * The operations of these four a product in each status allows, for the
- * 409's `allowed_events`. `pending_review`, `rejected` and `blocked` leave by
- * review, an edit or staff (05 §6.10), so their 409 lists none. A draft is
- * told `publish`, which a `pre` shop or a watch-listed brand then answers
- * with `[submit]`.
+ * 409's `allowed_events`: the list the seller pages offer as buttons
+ * (`PRODUCT_MOVES`, R1-S part 2f-iii). `pending_review`, `rejected` and
+ * `blocked` leave by review, an edit or staff (05 §6.10), so their 409 lists
+ * none. A draft is told `publish`, which a `pre` shop or a watch-listed
+ * brand then answers with `[submit]`; archiving needs a product that was
+ * live (AC-FR-CAT-007-2).
  */
-const ALLOWED: Record<string, string[]> = {
-  // Archiving needs a product that was live (05 §6.10, AC-FR-CAT-007-2).
-  draft: ['publish'],
-  published: ['unpublish', 'archive'],
-  unpublished: ['publish', 'archive'],
-  archived: ['restore'],
-}
+const ALLOWED = PRODUCT_MOVES
 
 // The publication gate (AC-FR-CAT-005-2): every missing item, in one 422.
 async function publishGate(
@@ -190,7 +187,7 @@ async function changeStatus<T>(
     const product = await shopProduct(trx, command.shopId, command.productId, { lock: true })
     if (!product) throw new DomainError('NOT_FOUND')
     if (!change.from.includes(product.status)) {
-      throw new InvalidStateTransition(product.status, ALLOWED[product.status] ?? [])
+      throw new InvalidStateTransition(product.status, [...(ALLOWED[product.status] ?? [])])
     }
     const editor = await productEditorData(trx, product)
     if (change.check) await change.check(trx, product, editor)

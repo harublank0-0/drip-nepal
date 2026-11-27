@@ -548,3 +548,70 @@ test.group('T-UI-042 the product editor page', (group) => {
     assert.equal(malformed.status, 404)
   })
 })
+
+test.group('T-UI-044 the product publishing actions', (group) => {
+  // `createProduct` sends its listing job inside its transaction.
+  group.setup(async () => {
+    await useJobBoss()
+  })
+
+  test('T-UI-044 the overview’s products item is done once a product is published', async ({
+    assert,
+  }) => {
+    const w = await world()
+    const id = await createdId(w, { warranty_text: 'No warranty' })
+    const itemOf = async () => {
+      const props = await pageProps(w.owner, `/seller/${w.shop.slug}`)
+      return (props.checklist as { item: string; done: boolean }[]).find(
+        (entry) => entry.item === 'product_live'
+      )
+    }
+    assert.deepEqual(await itemOf(), { item: 'product_live', done: false })
+    // Published as the gate would leave it (the gate itself is T-CAT-013's).
+    await db
+      .from('products')
+      .where('id', id)
+      .update({ status: 'published', published_at: new Date(), first_published_at: new Date() })
+    assert.deepEqual(await itemOf(), { item: 'product_live', done: true })
+    // Hidden again: nothing is live.
+    await db.from('products').where('id', id).update({ status: 'unpublished' })
+    assert.deepEqual(await itemOf(), { item: 'product_live', done: false })
+  })
+
+  test('T-UI-044 the overview leaves the products item out while the shop’s catalogue cannot be read', async ({
+    assert,
+  }) => {
+    const w = await world()
+    // The owner still opens the overview of a shop under review (07 §4.4), not its products.
+    await setShopStatus(w.shop.shopId, 'pending_review')
+    const props = await pageProps(w.owner, `/seller/${w.shop.slug}`)
+    const items = (props.checklist as { item: string }[]).map((entry) => entry.item)
+    assert.notInclude(items, 'product_live')
+    assert.include(items, 'seller_agreement')
+  })
+
+  test('T-SEC-036 the editor keeps the attributes of the product’s own values when no rule names them', async ({
+    assert,
+  }) => {
+    const w = await world()
+    const id = await createdId(w)
+    // The platform drops every rule that names `material` (inside the test's transaction).
+    const material = await db
+      .from('attributes')
+      .where('code', 'material')
+      .select('id')
+      .firstOrFail()
+    await db.from('category_attributes').where('attribute_id', material.id).delete()
+
+    const editor = await pageProps(w.owner, editPath(w.shop.slug, id))
+    assert.include(
+      (editor.attributes as { code: string }[]).map((attribute) => attribute.code),
+      'material'
+    )
+    const fresh = await pageProps(w.owner, newPath(w.shop.slug))
+    assert.notInclude(
+      (fresh.attributes as { code: string }[]).map((attribute) => attribute.code),
+      'material'
+    )
+  })
+})

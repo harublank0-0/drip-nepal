@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { Link } from '@adonisjs/inertia/react'
 import { formatDateTime } from '@shared/format/date'
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '~/components/ui/table'
@@ -10,8 +11,8 @@ import { t } from '~/lib/i18n'
  * headers, inside a labelled region that is its own scroll container and is
  * keyboard-focusable, and one card per product below `md`, with the same
  * fields. The title is the row's only link, to the product editor; no row
- * click handler. Publishing, unpublishing, archiving and restoring (R1-S
- * part 2e-ii's operations) join as row actions with part 2f-iii.
+ * click handler. `actions` renders a row's status moves (R1-S part
+ * 2f-iii), in an Actions column of the table and at the foot of a card.
  */
 export type ProductListItem = {
   id: string
@@ -38,9 +39,12 @@ function ProductLink({ shopSlug, product }: { shopSlug: string; product: Product
 export function ProductsTable({
   shopSlug,
   products,
+  actions,
 }: {
   shopSlug: string
   products: ProductListItem[]
+  // A row's actions; `layout` keeps the ids of the table and the cards apart.
+  actions?: (product: ProductListItem, layout: 'table' | 'card') => ReactNode
 }) {
   return (
     <>
@@ -62,6 +66,7 @@ export function ProductsTable({
                 {t('seller.products.column.variants')}
               </TableHead>
               <TableHead scope="col">{t('seller.products.column.updated')}</TableHead>
+              {actions && <TableHead scope="col">{t('seller.products.column.actions')}</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -76,6 +81,11 @@ export function ProductsTable({
                 </TableCell>
                 <TableCell className="text-end tabular-nums">{product.variant_count}</TableCell>
                 <TableCell>{formatDateTime(product.updated_at)}</TableCell>
+                {actions && (
+                  <TableCell>
+                    <div className="flex flex-wrap gap-2">{actions(product, 'table')}</div>
+                  </TableCell>
+                )}
               </TableRow>
             ))}
           </TableBody>
@@ -98,6 +108,7 @@ export function ProductsTable({
               <dt className="text-muted-foreground">{t('seller.products.column.updated')}</dt>
               <dd>{formatDateTime(product.updated_at)}</dd>
             </dl>
+            {actions && <div className="flex flex-wrap gap-2 pt-1">{actions(product, 'card')}</div>}
           </li>
         ))}
       </ul>

@@ -188,6 +188,24 @@ export function productAttributesFor(
 }
 
 /*
+ * The attributes `product` holds values for that `category` does not use
+ * (no product rule names them): values the category lost after they were
+ * saved. The publication gate refuses them (06 §13.5 `publishProduct`), so
+ * saving the details sends `attributes` while any is held, which removes
+ * them (R1-S part 2f-iii).
+ */
+export function unusedAttributeCodes(
+  product: Pick<SellerProduct, 'attributes'>,
+  category: CategoryOption | undefined
+): string[] {
+  if (!category) return []
+  const used = new Set(
+    category.rules.filter((rule) => rule.usage === 'product').map((rule) => rule.attribute_code)
+  )
+  return product.attributes.map((item) => item.attribute_code).filter((code) => !used.has(code))
+}
+
+/*
  * The values offered for `attribute`: the active ones, and an inactive one
  * only while `saved` (the product's own values) holds it, because existing
  * products keep a retired value (docs/04a §7.3).
@@ -258,19 +276,21 @@ function sameAttributes(a: DetailsBody['attributes'], b: DetailsBody['attributes
  * The members of `values` that differ from `product`, as the server stores
  * them, for `updateProduct`. `attributes` is sent whole when one of the
  * category's product attributes changes, and also when the category
- * changes, so values the new category does not use leave with it. Values
- * the product holds for an attribute its category no longer uses are not a
- * change on their own: an edit elsewhere leaves them, and the attribute
- * checks, alone, as the server does (`updateProduct` checks only what is
- * sent). The origin pair is sent only when the product's origin
- * changes, or an imported product's country does: a domestic product saved
- * with no country stays as it is.
+ * changes, so values the new category does not use leave with it. While
+ * the product holds values for an attribute its category no longer uses
+ * (`unusedAttributeCodes`), every save sends `attributes` too, which
+ * removes them; the attribute checks then run, as the server's do for what
+ * is sent (R1-S part 2f-iii). `typedOnly` leaves that last case out: what
+ * the user changed, for "save your changes first". The origin pair is sent
+ * only when the product's origin changes, or an imported product's country
+ * does: a domestic product saved with no country stays as it is.
  */
 export function changedMembers(
   values: DetailsValues,
   product: SellerProduct,
   category: CategoryOption | undefined,
-  attributes: readonly AttributeOption[]
+  attributes: readonly AttributeOption[],
+  { typedOnly = false }: { typedOnly?: boolean } = {}
 ): Partial<DetailsBody> {
   const next = createBody(values, category, attributes)
   const body: Partial<DetailsBody> = {}
@@ -279,7 +299,11 @@ export function changedMembers(
   if (next.category_id !== product.category.id) body.category_id = next.category_id
   if (next.brand_id !== (product.brand?.id ?? null)) body.brand_id = next.brand_id
   const saved = attributesBody(detailsFrom(product), category, attributes)
-  if (body.category_id !== undefined || !sameAttributes(next.attributes, saved)) {
+  if (
+    body.category_id !== undefined ||
+    !sameAttributes(next.attributes, saved) ||
+    (!typedOnly && unusedAttributeCodes(product, category).length > 0)
+  ) {
     body.attributes = next.attributes
   }
   if (next.manufacturer_name !== product.manufacturer_name) {
