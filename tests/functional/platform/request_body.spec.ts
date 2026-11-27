@@ -118,13 +118,20 @@ const MULTIPART = [
   '',
 ].join('\r\n')
 
+// A value each parameter's matcher accepts: a UUID, or a public ID (04a §7.6) for `:publicId`.
+const PARAMETER_VALUES: Record<string, string> = { publicId: 'ZZZZZZZZ' }
+
 // Every route the router knows, with each parameter filled in.
 function everyRoute() {
   const routes: { method: string; path: string }[] = []
   for (const list of Object.values(router.toJSON())) {
     for (const route of list) {
       const path = route.pattern
-        .replace(/:[^/]+/g, '0195f3a0-0000-7000-8000-000000000001')
+        .replace(
+          /:([^/]+)/g,
+          (_match: string, name: string) =>
+            PARAMETER_VALUES[name] ?? '0195f3a0-0000-7000-8000-000000000001'
+        )
         .replace(/\*/g, 'any')
       for (const method of route.methods) routes.push({ method, path })
     }

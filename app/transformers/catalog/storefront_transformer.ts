@@ -1,4 +1,10 @@
-import type { CategoryTreeNode, FilterAttribute, ListingCardRow } from '#modules/catalog/queries'
+import {
+  AVAILABLE_CAP,
+  type CategoryTreeNode,
+  type FilterAttribute,
+  type ListingCardRow,
+  type StorefrontProduct,
+} from '#modules/catalog/queries'
 
 /*
  * The storefront's reference reads as the public API answers them (docs/06
@@ -53,5 +59,70 @@ export function listingCardJson(row: ListingCardRow) {
     in_stock: row.in_stock,
     image: { alt: row.primary_image_alt, srcset_keys: row.primary_image_keys },
     published_at: row.published_at.toISOString(),
+  }
+}
+
+/*
+ * The storefront product (docs/06 §13.2 `getProduct`; openapi
+ * `StorefrontProduct`; R1-S part 3c). Each variant gives `in_stock` and
+ * `available_capped`, its available quantity capped at `AVAILABLE_CAP`, so
+ * exact stock above that is not published (08 §11.2). Prices are integer
+ * paisa (ADR-0007).
+ */
+export function storefrontProductJson(product: StorefrontProduct) {
+  return {
+    public_id: product.publicId,
+    slug: product.slug,
+    title: product.title,
+    description: product.description,
+    categories: product.categories,
+    brand: product.brand,
+    shop: {
+      slug: product.shop.slug,
+      name: product.shop.name,
+      return_policy: product.shop.returnPolicy,
+    },
+    attributes: product.attributes,
+    disclosures: {
+      manufacturer_name: product.disclosures.manufacturerName,
+      is_imported: product.disclosures.isImported,
+      country_of_origin: product.disclosures.countryOfOrigin,
+      warranty_text: product.disclosures.warrantyText,
+      care_and_precautions: product.disclosures.careAndPrecautions,
+    },
+    option_axes: product.optionAxes.map((axis) => ({
+      code: axis.code,
+      name: axis.name,
+      values: axis.values.map((value) => ({
+        code: value.code,
+        label: value.label,
+        swatch_hex: value.swatchHex,
+      })),
+    })),
+    variants: product.variants.map((variant) => ({
+      id: variant.id,
+      option_values: variant.optionValues,
+      price: money(variant.priceMinor, product.currency),
+      compare_at:
+        variant.compareAtPriceMinor === null
+          ? null
+          : money(variant.compareAtPriceMinor, product.currency),
+      weight_grams: variant.weightGrams,
+      in_stock: variant.available > 0,
+      available_capped: Math.min(variant.available, AVAILABLE_CAP),
+    })),
+    media: product.media.map((item) => ({
+      alt: item.alt,
+      srcset_keys: item.keys,
+      color: item.colorCode,
+    })),
+    delivery: product.delivery.map((zone) => ({
+      zone_code: zone.zoneCode,
+      zone_name: zone.zoneName,
+      fee: money(zone.feeMinor, zone.currency),
+      est_min_days: zone.estMinDays,
+      est_max_days: zone.estMaxDays,
+    })),
+    published_at: product.publishedAt.toISOString(),
   }
 }

@@ -177,8 +177,8 @@ export const OWN_LIMIT_OPERATIONS: ReadonlySet<string> = new Set([
  * (`clientNetwork`), whether a user is signed in or not, instead of
  * `api_user` (M1 part 6b). The location cascades are on `catalog_ip`, and
  * so are the category tree and the filterable attributes (R1-S part 3a) and
- * the listing (part 3b); the product detail and shop reads join with their
- * parts.
+ * the listing (part 3b) and the product (part 3c); the shop reads join
+ * with their part.
  */
 export const IP_LIMIT_OPERATIONS: ReadonlyMap<string, RateLimitName> = new Map([
   ['listProvinces', 'catalog_ip'],
@@ -187,6 +187,7 @@ export const IP_LIMIT_OPERATIONS: ReadonlyMap<string, RateLimitName> = new Map([
   ['listCategories', 'catalog_ip'],
   ['listAttributes', 'catalog_ip'],
   ['listProducts', 'catalog_ip'],
+  ['getProduct', 'catalog_ip'],
 ])
 
 /*

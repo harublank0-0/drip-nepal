@@ -26,6 +26,7 @@ export type ScannedRoutes = {
     'listCategories': { paramsTuple?: []; params?: {} }
     'listAttributes': { paramsTuple?: []; params?: {} }
     'listProducts': { paramsTuple?: []; params?: {} }
+    'getProduct': { paramsTuple: [ParamValue]; params: {'publicId': ParamValue} }
     'listAddresses': { paramsTuple?: []; params?: {} }
     'createAddress': { paramsTuple?: []; params?: {} }
     'updateAddress': { paramsTuple: [ParamValue]; params: {'addressId': ParamValue} }
@@ -111,6 +112,7 @@ export type ScannedRoutes = {
     'listCategories': { paramsTuple?: []; params?: {} }
     'listAttributes': { paramsTuple?: []; params?: {} }
     'listProducts': { paramsTuple?: []; params?: {} }
+    'getProduct': { paramsTuple: [ParamValue]; params: {'publicId': ParamValue} }
     'listAddresses': { paramsTuple?: []; params?: {} }
     'listMyShops': { paramsTuple?: []; params?: {} }
     'getSellerShop': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }
@@ -155,6 +157,7 @@ export type ScannedRoutes = {
     'listCategories': { paramsTuple?: []; params?: {} }
     'listAttributes': { paramsTuple?: []; params?: {} }
     'listProducts': { paramsTuple?: []; params?: {} }
+    'getProduct': { paramsTuple: [ParamValue]; params: {'publicId': ParamValue} }
     'listAddresses': { paramsTuple?: []; params?: {} }
     'listMyShops': { paramsTuple?: []; params?: {} }
     'getSellerShop': { paramsTuple: [ParamValue]; params: {'shopSlug': ParamValue} }

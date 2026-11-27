@@ -138,6 +138,12 @@ const routes = {
     tokens: [{"old":"/api/v1/catalog/products","type":0,"val":"api","end":""},{"old":"/api/v1/catalog/products","type":0,"val":"v1","end":""},{"old":"/api/v1/catalog/products","type":0,"val":"catalog","end":""},{"old":"/api/v1/catalog/products","type":0,"val":"products","end":""}],
     types: placeholder as Registry['listProducts']['types'],
   },
+  'getProduct': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/v1/catalog/products/:publicId',
+    tokens: [{"old":"/api/v1/catalog/products/:publicId","type":0,"val":"api","end":""},{"old":"/api/v1/catalog/products/:publicId","type":0,"val":"v1","end":""},{"old":"/api/v1/catalog/products/:publicId","type":0,"val":"catalog","end":""},{"old":"/api/v1/catalog/products/:publicId","type":0,"val":"products","end":""},{"old":"/api/v1/catalog/products/:publicId","type":1,"val":"publicId","end":""}],
+    types: placeholder as Registry['getProduct']['types'],
+  },
   'listAddresses': {
     methods: ["GET","HEAD"],
     pattern: '/api/v1/me/addresses',

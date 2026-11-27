@@ -123,7 +123,6 @@ x-foundation-page-routes:
   - GET /payments/{provider}/return # Inertia SSR page, no operationId (06 §12.2, §13.7)
 x-pending-operations:
   # Public (06 §13.2)
-  - getProduct
   - getPublicShop # closed response schema when specified (06 §13.2, 07 TM-29)
   - getCurrentSellerAgreement
   # Customer (06 §13.4)
@@ -422,6 +421,65 @@ paths:
                   - type: object
                     properties:
                       code: { const: SERVICE_BUSY }
+
+  /api/v1/catalog/products/{publicId}:
+    get:
+      operationId: getProduct
+      tags: [Public]
+      summary: A storefront product, for its page
+      description: |
+        Actor: anyone, signed in or not (06 §13.2). Scope: a product that is `published`, of a
+        shop that is `active`; any other, or an unknown public ID, is 404 `NOT_FOUND` like a
+        missing one, and a path segment not of the public ID's shape does not match the route.
+        Answer, read from the source tables (04a §7.6–§7.10): the category path root first, the
+        brand (null for own label), the shop's slug, name and return policy (01 AC-FR-SHOP-013-4
+        as reconciled 2026-11-27; the other business details and the grievance contact never
+        appear), the product attributes, the E-Commerce Act s6 disclosures (FR-CAT-012), the
+        option axes colour first with only the values an active variant offers, in display order
+        (08 §11.2), every active variant with its `id` (which `addCartItem` takes), prices,
+        `weight_grams`, `in_stock` and `available_capped` (the available quantity capped at 10
+        [Assumption]), the ready gallery by position with alt text or the 04a §7.14 fallback and
+        its colour, and `delivery`, the shop's zone rates and estimates (the fallback fee of
+        A-61; the live rate comes with R1-S part 4). `media`, `variants` and `delivery` may be
+        empty, and a variant without a stock row is sold out (06 note 76). Query: none; a parameter is 400
+        `INVALID_QUERY_PARAMETER`. Order: the API limits middleware charges `catalog_ip` (06
+        §9.1) on every call that matches the route, instead of `api_user`; past it, 429. Side effects: none. Built R1-S
+        part 3c. T-CAT-016. Release R1·M4.
+      x-release: R1·M4
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - name: publicId
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/PublicId' }
+      responses:
+        '200':
+          description: The product.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/StorefrontProduct' }
+        '400':
+          description: '`INVALID_QUERY_PARAMETER`: any query parameter.'
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/X-Request-Id' }
+            Cache-Control: { $ref: '#/components/headers/Cache-Control' }
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem400' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/Internal' }
 
   /api/v1/locations/provinces:
     get:
@@ -8808,6 +8866,156 @@ components:
               propertyNames: { pattern: '^[0-9]{2,4}$' }
               additionalProperties: { type: string, maxLength: 300 }
         published_at: { $ref: '#/components/schemas/Timestamp' }
+    StorefrontProduct:
+      type: object
+      description: The storefront product of `getProduct` (06 §13.2; R1-S part 3c).
+      additionalProperties: false
+      required:
+        [
+          public_id,
+          slug,
+          title,
+          description,
+          categories,
+          brand,
+          shop,
+          attributes,
+          disclosures,
+          option_axes,
+          variants,
+          media,
+          delivery,
+          published_at,
+        ]
+      properties:
+        public_id: { $ref: '#/components/schemas/PublicId' }
+        slug: { type: string, maxLength: 80 }
+        title: { type: string, minLength: 3, maxLength: 120 }
+        description: { type: string, maxLength: 5000 }
+        categories:
+          type: array
+          description: The category path, root first.
+          items:
+            type: object
+            additionalProperties: false
+            required: [slug, name]
+            properties:
+              slug: { type: string }
+              name: { type: string }
+        brand:
+          oneOf:
+            - type: object
+              additionalProperties: false
+              required: [slug, name]
+              properties:
+                slug: { type: string, minLength: 3, maxLength: 40 }
+                name: { type: string, minLength: 1, maxLength: 80 }
+            - type: 'null'
+        shop:
+          type: object
+          additionalProperties: false
+          required: [slug, name, return_policy]
+          properties:
+            slug: { type: string, minLength: 3, maxLength: 40 }
+            name: { type: string, minLength: 2, maxLength: 60 }
+            return_policy: { type: string, minLength: 1, maxLength: 5000 }
+        attributes:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [code, name, values]
+            properties:
+              code: { type: string }
+              name: { type: string }
+              values:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: false
+                  required: [code, label]
+                  properties:
+                    code: { type: string }
+                    label: { type: string }
+        disclosures:
+          type: object
+          additionalProperties: false
+          required:
+            [manufacturer_name, is_imported, country_of_origin, warranty_text, care_and_precautions]
+          properties:
+            manufacturer_name: { type: string }
+            is_imported: { type: boolean }
+            country_of_origin: { type: [string, 'null'], pattern: '^[A-Z]{2}$' }
+            warranty_text: { type: string }
+            care_and_precautions: { type: string }
+        option_axes:
+          type: array
+          maxItems: 2
+          items:
+            type: object
+            additionalProperties: false
+            required: [code, name, values]
+            properties:
+              code: { type: string }
+              name: { type: string }
+              values:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: false
+                  required: [code, label, swatch_hex]
+                  properties:
+                    code: { type: string }
+                    label: { type: string }
+                    swatch_hex: { type: [string, 'null'], pattern: '^#[0-9a-f]{6}$' }
+        variants:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              [id, option_values, price, compare_at, weight_grams, in_stock, available_capped]
+            properties:
+              id: { type: string, format: uuid }
+              option_values:
+                type: object
+                description: Axis code to value code.
+                additionalProperties: { type: string }
+              price: { $ref: '#/components/schemas/Money' }
+              compare_at:
+                oneOf:
+                  - $ref: '#/components/schemas/Money'
+                  - type: 'null'
+              weight_grams: { type: [integer, 'null'], minimum: 1, maximum: 50000 }
+              in_stock: { type: boolean }
+              available_capped: { type: integer, minimum: 0, maximum: 10 }
+        media:
+          type: array
+          maxItems: 12
+          items:
+            type: object
+            additionalProperties: false
+            required: [alt, srcset_keys, color]
+            properties:
+              alt: { type: string, maxLength: 200 }
+              srcset_keys:
+                type: object
+                propertyNames: { pattern: '^[0-9]{2,4}$' }
+                additionalProperties: { type: string, maxLength: 300 }
+              color: { type: [string, 'null'], description: A colour value code. }
+        delivery:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [zone_code, zone_name, fee, est_min_days, est_max_days]
+            properties:
+              zone_code: { type: string, pattern: '^[a-z][a-z0-9_]{1,31}$' }
+              zone_name: { type: string }
+              fee: { $ref: '#/components/schemas/Money' }
+              est_min_days: { type: integer, minimum: 0 }
+              est_max_days: { type: integer, minimum: 0 }
+        published_at: { $ref: '#/components/schemas/Timestamp' }
     ListingCardPage:
       type: object
       additionalProperties: false
@@ -11450,3 +11658,6 @@ components:
 # 66. `SellerVariant` gains `option_value_codes` and `has_history`, required, for the seller's
 #     variant editor (06 §13.5 `getShopProduct`, 06 note 75; R1-S part 2f-ii). The examples of
 #     `createProduct` and `replaceProductVariants` show them.
+# 67. `getProduct` moves from `x-pending-operations` to `paths`, written from the code (R1-S part
+#     3c, 2026-11-27; 06 note 76), with the schema `StorefrontProduct`: the shop's return policy
+#     is public (01 AC-FR-SHOP-013-4 as reconciled).

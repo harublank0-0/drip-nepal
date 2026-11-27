@@ -12,6 +12,9 @@ import type {
   ListingFilters,
 } from '#modules/catalog/domain/listing_query'
 
+// The public ID's shape, for the storefront route's matcher (04a §7.6).
+export { PUBLIC_ID_PATTERN } from '#modules/catalog/domain/identifiers'
+
 /*
  * The catalog module's reads (docs/09 §2.2: its public surface is
  * `actions/`, `queries.ts` and `events.ts`; R1-S part 2a). Reads that a
@@ -1066,4 +1069,316 @@ export async function listingPage(
     ])
     return read(trx, 'trigram')
   })
+}
+
+// The quantity the product page may show or offer at most (docs/06 §13.2 `available_capped` [Assumption]).
+export const AVAILABLE_CAP = 10
+
+export type StorefrontProduct = {
+  publicId: string
+  slug: string
+  title: string
+  description: string
+  categories: { slug: string; name: string }[]
+  brand: { slug: string; name: string } | null
+  shop: { slug: string; name: string; returnPolicy: string }
+  attributes: { code: string; name: string; values: { code: string; label: string }[] }[]
+  disclosures: {
+    manufacturerName: string
+    isImported: boolean
+    countryOfOrigin: string | null
+    warrantyText: string
+    careAndPrecautions: string
+  }
+  optionAxes: {
+    code: string
+    name: string
+    values: { code: string; label: string; swatchHex: string | null }[]
+  }[]
+  variants: {
+    id: string
+    optionValues: Record<string, string>
+    priceMinor: number
+    compareAtPriceMinor: number | null
+    weightGrams: number | null
+    available: number
+  }[]
+  media: { alt: string; keys: Record<string, string>; colorCode: string | null }[]
+  delivery: {
+    zoneCode: string
+    zoneName: string
+    feeMinor: number
+    currency: string
+    estMinDays: number
+    estMaxDays: number
+  }[]
+  currency: string
+  publishedAt: Date
+}
+
+/*
+ * The storefront product page's data (docs/06 §13.2 `getProduct`; 08 §11.2;
+ * 01 FR-CAT-012, AC-FR-SRCH-004-2 to -4; R1-S part 3c), read from the source
+ * tables, or null when no published product of an active shop has this
+ * public ID (404 like a missing one).
+ *
+ * - The category path, root first; the brand, or null for own label; the
+ *   shop's name and return policy, which the storefront shows (01
+ *   AC-FR-SHOP-013-4 as reconciled 2026-11-27); its other business details
+ *   and grievance contact never leave the seller area.
+ * - The product attributes with their values, and the E-Commerce Act s6
+ *   disclosures (AC-FR-CAT-012-1).
+ * - The option axes, colour first when present (08 §11.2: the gallery
+ *   follows colour), each with only the values an active variant offers, in
+ *   display order; every active variant with its option values, prices,
+ *   weight and its available stock (`on_hand − reserved`, not below zero),
+ *   which the transformer caps at `AVAILABLE_CAP`.
+ * - The ready gallery by position, each image's alt text or the fallback of
+ *   04a §7.14 ("{title}, {colour}", or the title), its derived keys and
+ *   colour; and the shop's zone rates with their estimates, the fallback fee
+ *   of A-61 shown to guests for both zones (AC-FR-CAT-012-2).
+ * - A variant without a stock row counts as sold out, as the listing does.
+ *   A published product whose last image or variant went later answers
+ *   empty `media` or `variants`, and a shop without rates empty `delivery`;
+ *   the category path is the stored one, active or not.
+ */
+export async function storefrontProduct(publicId: string): Promise<StorefrontProduct | null> {
+  /*
+   * Separate reads on the pool, not one snapshot: a `repeatable read`
+   * transaction cannot run as the savepoint the functional tests open, and
+   * a concurrent `replaceProductVariants` showing variants and axes of two
+   * states is rare and gone on the next read.
+   */
+  return readStorefrontProduct(db.connection(), publicId)
+}
+
+async function readStorefrontProduct(
+  client: QueryClientContract,
+  publicId: string
+): Promise<StorefrontProduct | null> {
+  const product = await client
+    .from('products as p')
+    .join('shops as s', 's.id', 'p.shop_id')
+    .join('categories as c', 'c.id', 'p.category_id')
+    .leftJoin('brands as b', 'b.id', 'p.brand_id')
+    .where('p.public_id', publicId)
+    .where('p.status', 'published')
+    .where('s.status', 'active')
+    .select(
+      'p.id',
+      'p.shop_id',
+      'p.public_id',
+      'p.slug',
+      'p.title',
+      'p.description',
+      'p.manufacturer_name',
+      'p.is_imported',
+      'p.country_of_origin',
+      'p.warranty_text',
+      'p.care_and_precautions',
+      'p.published_at',
+      'c.path as category_path',
+      'b.slug as brand_slug',
+      'b.name as brand_name',
+      's.slug as shop_slug',
+      's.name as shop_name',
+      's.return_policy_text'
+    )
+    .first()
+  if (!product) return null
+
+  const categories: { slug: string; name: string }[] = await client
+    .from('categories')
+    .whereRaw('? LIKE path || ?', [product.category_path, '%'])
+    .orderBy('depth')
+    .select('slug', 'name')
+
+  const attributeRows: { code: string; name: string; value_code: string; label: string }[] =
+    await client
+      .from('product_attribute_values as pav')
+      .join('attributes as a', 'a.id', 'pav.attribute_id')
+      .join('attribute_values as v', 'v.id', 'pav.attribute_value_id')
+      .where('pav.product_id', product.id)
+      .orderBy([
+        { column: 'a.position' },
+        { column: 'a.code' },
+        { column: 'v.position' },
+        { column: 'v.label' },
+      ])
+      .select('a.code', 'a.name', 'v.code as value_code', 'v.label')
+  const attributes: StorefrontProduct['attributes'] = []
+  for (const row of attributeRows) {
+    let attribute = attributes.find((item) => item.code === row.code)
+    if (!attribute) {
+      attribute = { code: row.code, name: row.name, values: [] }
+      attributes.push(attribute)
+    }
+    attribute.values.push({ code: row.value_code, label: row.label })
+  }
+
+  const variantRows: {
+    id: string
+    price_minor: number
+    compare_at_price_minor: number | null
+    weight_grams: number | null
+    available: number
+  }[] = await client
+    .from('product_variants as pv')
+    .leftJoin('inventory_items as ii', 'ii.variant_id', 'pv.id')
+    .where('pv.product_id', product.id)
+    .where('pv.status', 'active')
+    .orderBy([{ column: 'pv.created_at' }, { column: 'pv.id' }])
+    .select(
+      'pv.id',
+      'pv.price_minor',
+      'pv.compare_at_price_minor',
+      'pv.weight_grams',
+      client.raw('COALESCE(GREATEST(ii.on_hand - ii.reserved, 0), 0)::int AS available')
+    )
+  const optionRows: {
+    variant_id: string
+    attribute_code: string
+    value_code: string
+  }[] =
+    variantRows.length === 0
+      ? []
+      : await client
+          .from('variant_option_values as o')
+          .join('attributes as a', 'a.id', 'o.attribute_id')
+          .join('attribute_values as v', 'v.id', 'o.attribute_value_id')
+          .whereIn(
+            'o.variant_id',
+            variantRows.map((row) => row.id)
+          )
+          .select('o.variant_id', 'a.code as attribute_code', 'v.code as value_code')
+  const variants = variantRows.map((row) => ({
+    id: row.id,
+    optionValues: Object.fromEntries(
+      optionRows
+        .filter((option) => option.variant_id === row.id)
+        .map((option) => [option.attribute_code, option.value_code])
+    ),
+    priceMinor: row.price_minor,
+    compareAtPriceMinor: row.compare_at_price_minor,
+    weightGrams: row.weight_grams,
+    available: row.available,
+  }))
+
+  // Each axis with the values its active variants offer, colour first, then by the product's order.
+  const axisRows: {
+    code: string
+    name: string
+    value_code: string
+    label: string
+    swatch_hex: string | null
+  }[] = await client
+    .from('product_option_axes as ax')
+    .join('attributes as a', 'a.id', 'ax.attribute_id')
+    .join('variant_option_values as o', (join) => {
+      join.on('o.product_id', 'ax.product_id').andOn('o.attribute_id', 'ax.attribute_id')
+    })
+    .join('product_variants as pv', 'pv.id', 'o.variant_id')
+    .join('attribute_values as v', 'v.id', 'o.attribute_value_id')
+    .where('ax.product_id', product.id)
+    .where('pv.status', 'active')
+    .select(
+      'a.code',
+      'a.name',
+      'ax.position',
+      'v.code as value_code',
+      'v.label',
+      'v.swatch_hex',
+      'v.position as value_position'
+    )
+    .orderByRaw(`(a.code = 'color') DESC, ax.position, v.position, v.label, v.code`)
+  const optionAxes: StorefrontProduct['optionAxes'] = []
+  for (const row of axisRows) {
+    let axis = optionAxes.find((item) => item.code === row.code)
+    if (!axis) {
+      axis = { code: row.code, name: row.name, values: [] }
+      optionAxes.push(axis)
+    }
+    // One row per variant offering the value: keep the first.
+    if (axis.values.some((value) => value.code === row.value_code)) continue
+    axis.values.push({ code: row.value_code, label: row.label, swatchHex: row.swatch_hex })
+  }
+
+  const mediaRows: {
+    alt_text: string | null
+    derived_keys: Record<string, string>
+    color_code: string | null
+    color_label: string | null
+  }[] = await client
+    .from('product_media as pm')
+    .join('media_assets as ma', 'ma.id', 'pm.media_asset_id')
+    .leftJoin('attribute_values as cv', 'cv.id', 'pm.color_value_id')
+    .where('pm.product_id', product.id)
+    .where('ma.status', 'ready')
+    .orderBy('pm.position')
+    .select('pm.alt_text', 'ma.derived_keys', 'cv.code as color_code', 'cv.label as color_label')
+  const media = mediaRows.map((row) => ({
+    alt:
+      row.alt_text ??
+      (row.color_label === null ? product.title : `${product.title}, ${row.color_label}`),
+    keys: row.derived_keys,
+    colorCode: row.color_code,
+  }))
+
+  const zoneRows: {
+    zone_code: string
+    name_en: string
+    fee_minor: number
+    currency: string
+    est_min_days: number
+    est_max_days: number
+  }[] = await client
+    .from('shop_shipping_rates as r')
+    .join('delivery_zones as z', 'z.code', 'r.zone_code')
+    .where('r.shop_id', product.shop_id)
+    .where('z.is_active', true)
+    .orderBy([{ column: 'z.position' }, { column: 'z.code' }])
+    .select(
+      'r.zone_code',
+      'z.name_en',
+      'r.fee_minor',
+      'r.currency',
+      'r.est_min_days',
+      'r.est_max_days'
+    )
+
+  return {
+    publicId: product.public_id,
+    slug: product.slug,
+    title: product.title,
+    description: product.description,
+    categories,
+    brand:
+      product.brand_slug === null ? null : { slug: product.brand_slug, name: product.brand_name },
+    shop: {
+      slug: product.shop_slug,
+      name: product.shop_name,
+      returnPolicy: product.return_policy_text,
+    },
+    attributes,
+    disclosures: {
+      manufacturerName: product.manufacturer_name,
+      isImported: product.is_imported,
+      countryOfOrigin: product.country_of_origin,
+      warrantyText: product.warranty_text,
+      careAndPrecautions: product.care_and_precautions,
+    },
+    optionAxes,
+    variants,
+    media,
+    delivery: zoneRows.map((row) => ({
+      zoneCode: row.zone_code,
+      zoneName: row.name_en,
+      feeMinor: row.fee_minor,
+      currency: row.currency,
+      estMinDays: row.est_min_days,
+      estMaxDays: row.est_max_days,
+    })),
+    currency: 'NPR',
+    publishedAt: product.published_at,
+  }
 }
