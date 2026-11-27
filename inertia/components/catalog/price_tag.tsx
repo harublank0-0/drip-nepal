@@ -30,7 +30,7 @@ export function PriceTag({
       <span className="font-semibold tabular-nums">{price}</span>
       {was ? (
         <s className="text-muted-foreground text-sm tabular-nums">
-          <span className="sr-only">{t('storefront.price.was', { price: '' })}</span>
+          <span className="sr-only">{t('storefront.price.was_label')} </span>
           {formatNPR(was.amount_minor)}
         </s>
       ) : null}

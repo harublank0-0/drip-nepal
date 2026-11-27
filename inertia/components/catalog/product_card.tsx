@@ -1,5 +1,5 @@
 import { Link } from '@adonisjs/inertia/react'
-import { PriceTag } from '~/components/storefront/price_tag'
+import { PriceTag } from '~/components/catalog/price_tag'
 import { t } from '~/lib/i18n'
 
 export type ListingCard = {
@@ -32,7 +32,7 @@ export function ProductCard({ card, eager = false }: { card: ListingCard; eager?
           <img
             src={card.image.src}
             srcSet={card.image.srcset}
-            sizes="(min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw"
+            sizes="(min-width: 1280px) 304px, (min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw"
             alt={card.image.alt}
             loading={eager ? 'eager' : 'lazy'}
             decoding="async"

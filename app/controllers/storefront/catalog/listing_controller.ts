@@ -5,6 +5,7 @@ import { cappedTotal, parseListingQuery } from '#modules/catalog/domain/listing_
 import { navigationEntry, type NavigationEntry } from '#modules/catalog/navigation'
 import {
   activeCategoryTree,
+  type CategoryTreeNode,
   filterableAttributes,
   listedCategoryPath,
   listingFilterAttributes,
@@ -40,7 +41,9 @@ import {
  *   a page past the last and a refined view with no matches are `noindex`;
  *   the first page of an empty category stays indexable (ADR-0017 decision
  *   8).
- * - A category that is not listed, like an unknown one, is the 404 page.
+ * - A category that is not listed, like an unknown one, is the 404 page,
+ *   and so is a navigation entry whose category is not listed or whose
+ *   audience value is not offered: never an indexable empty page.
  */
 
 type Base = {
@@ -48,8 +51,11 @@ type Base = {
   path: string
   heading: string
   categorySlug: string | null
+  // The listed category's path, read once by the caller.
+  categoryPath: string | null
   audience: string | null
   breadcrumbs: { label: string; href: string }[]
+  tree?: CategoryTreeNode[]
 }
 
 // The parameters a page takes beyond the listing's own: none, and fewer on some pages.
@@ -90,8 +96,7 @@ function stateOf(query: Record<string, unknown>, codes: readonly string[]): List
 const absolute = (path: string) => `${appUrl}${path}`
 
 // The top-level categories, which an empty listing suggests (AC-FR-SRCH-002-4).
-async function topCategories() {
-  const tree = await activeCategoryTree()
+function topCategoriesOf(tree: CategoryTreeNode[]) {
   return tree.map((node) => ({ slug: node.slug, name: node.name }))
 }
 
@@ -99,11 +104,15 @@ export default class ListingController {
   async navigation(ctx: HttpContext) {
     const entry = navigationEntry(ctx.route!.pattern) as NavigationEntry
     const audienceEntry = navigationEntry(`/${entry.audience}`)!
+    const categoryPath =
+      entry.categorySlug === null ? null : await listedCategoryPath(entry.categorySlug)
+    if (entry.categorySlug !== null && categoryPath === null) throw new DomainError('NOT_FOUND')
     return this.render(ctx, {
       kind: 'navigation',
       path: entry.path,
       heading: entry.title,
       categorySlug: entry.categorySlug,
+      categoryPath,
       audience: entry.audience,
       breadcrumbs:
         entry.categorySlug === null
@@ -133,8 +142,10 @@ export default class ListingController {
       path: `/c/${slug}`,
       heading: trail.at(-1)?.label ?? slug,
       categorySlug: slug,
+      categoryPath: path,
       audience: null,
       breadcrumbs: trail,
+      tree,
     })
   }
 
@@ -144,6 +155,7 @@ export default class ListingController {
       path: '/search',
       heading: '',
       categorySlug: null,
+      categoryPath: null,
       audience: null,
       breadcrumbs: [],
     })
@@ -169,15 +181,17 @@ export default class ListingController {
     }
     const filters = parsed.filters!
     if (base.categorySlug !== null) filters.categorySlug = base.categorySlug
-    const audienceId =
-      base.audience === null ? undefined : filterable.get('audience')?.values.get(base.audience)
-    if (audienceId !== undefined) {
+    if (base.audience !== null) {
+      const audienceId = filterable.get('audience')?.values.get(base.audience)
+      // An audience no longer offered would list every audience: the page is gone instead.
+      if (audienceId === undefined) throw new DomainError('NOT_FOUND')
       filters.valueFilters.push({ column: 'audience_value_ids', ids: [audienceId] })
     }
 
     const { rows, counted } = await listingPage(filters)
     const { total, totalIsCapped } = cappedTotal(counted)
-    const state = stateOf(query, codes)
+    // `q` as searched: the parser drops hyphens that would exclude.
+    const state = { ...stateOf(query, codes), q: filters.q }
     const unrefined = isUnrefined(state)
     const pages = Math.min(Math.max(Math.ceil(total / filters.perPage), 1), 100)
     const canonicalState: ListingUrlState = {
@@ -191,12 +205,17 @@ export default class ListingController {
       (rows.length === 0 && filters.page > 1) ||
       (!unrefined && counted === 0)
     const categoryPath =
-      filters.categorySlug === null ? null : await listedCategoryPath(filters.categorySlug)
+      base.categorySlug !== null
+        ? base.categoryPath
+        : filters.categorySlug === null
+          ? null
+          : await listedCategoryPath(filters.categorySlug)
     const attributes = await filterableAttributes(categoryPath)
     const facets = attributes.filter(
       (attribute) => !(base.kind === 'navigation' && attribute.code === 'audience')
     )
-    const suggestions = counted === 0 ? await topCategories() : []
+    const suggestions =
+      counted === 0 ? topCategoriesOf(base.tree ?? (await activeCategoryTree())) : []
 
     return ctx.inertia.render('storefront/listing', {
       base: {

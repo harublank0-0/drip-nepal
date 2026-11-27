@@ -134,6 +134,8 @@ export function storefrontProductJson(product: StorefrontProduct) {
  * §6.1). Page props carry URLs; the JSON API carries keys (06 §14.1).
  */
 export function imageSources(keys: Record<string, string>, mediaBase: string) {
+  // No public store set up (tests): no URL, rather than a path on this site.
+  if (mediaBase === '') return { src: '', srcset: '' }
   const base = mediaBase.replace(/\/$/, '')
   const widths = Object.entries(keys)
     .map(([width, key]) => ({ width: Number(width), url: `${base}/${key}` }))

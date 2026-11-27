@@ -27,8 +27,11 @@
   "listing.previous": "Previous",
   "listing.next": "Next",
   "listing.page": "Page {page}",
-  "listing.page_current": "Page {page}, current page",
   "price.range": "{min} – {max}",
-  "price.was": "was {price}",
-  "price.sold_out": "Sold out"
+  "price.sold_out": "Sold out",
+  "price.was_label": "was",
+  "listing.page_current_label": "Page",
+  "listing.past_last_heading": "This page is past the end of the list",
+  "listing.past_last_body": "There are fewer pages here now.",
+  "listing.first_page": "Go to the first page"
 }

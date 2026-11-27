@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { Head } from '@inertiajs/react'
 import { Link } from '@adonisjs/inertia/react'
 import { ChevronRightIcon } from 'lucide-react'
@@ -6,8 +7,8 @@ import { t } from '~/lib/i18n'
 import { EmptyState } from '~/components/common/empty_state'
 import { PageSeo } from '~/components/seo/page_seo'
 import { SocialMeta } from '~/components/seo/social_meta'
-import { ListingPagination } from '~/components/storefront/listing_pagination'
-import { ProductCard, type ListingCard } from '~/components/storefront/product_card'
+import { ListingPagination } from '~/components/catalog/listing_pagination'
+import { ProductCard, type ListingCard } from '~/components/catalog/product_card'
 import { EMPTY_LISTING_STATE, isUnrefined, listingUrl } from '@shared/ui/listing_url'
 
 /*
@@ -88,6 +89,15 @@ export default function Listing({ base, listing, query, suggestions, seo }: Prop
   const state = urlState(query)
   const refined = !isUnrefined(state)
   const { meta } = listing
+  const pastLast = listing.cards.length === 0 && meta.page > 1
+  // A page link changes only the query, which the layout's heading focus misses (08 §11.1 "Visits").
+  const headingRef = useRef<HTMLHeadingElement>(null)
+  const shownPage = useRef(meta.page)
+  useEffect(() => {
+    if (shownPage.current === meta.page) return
+    shownPage.current = meta.page
+    headingRef.current?.focus()
+  }, [meta.page])
   const count = meta.total_is_capped
     ? t('storefront.listing.count_capped', { count: meta.total })
     : t('storefront.listing.count', { count: meta.total })
@@ -125,6 +135,7 @@ export default function Listing({ base, listing, query, suggestions, seo }: Prop
         ) : null}
         <header className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
           <h1
+            ref={headingRef}
             tabIndex={-1}
             className="font-heading text-2xl font-semibold tracking-tight outline-none md:text-3xl"
           >
@@ -146,25 +157,37 @@ export default function Listing({ base, listing, query, suggestions, seo }: Prop
           ) : (
             <EmptyState
               heading={
-                refined
-                  ? t('storefront.listing.empty_refined_heading')
-                  : t('storefront.listing.empty_heading')
+                pastLast
+                  ? t('storefront.listing.past_last_heading')
+                  : refined
+                    ? t('storefront.listing.empty_refined_heading')
+                    : t('storefront.listing.empty_heading')
               }
               body={
-                refined
-                  ? t('storefront.listing.empty_refined_body')
-                  : t('storefront.listing.empty_body')
+                pastLast
+                  ? t('storefront.listing.past_last_body')
+                  : refined
+                    ? t('storefront.listing.empty_refined_body')
+                    : t('storefront.listing.empty_body')
               }
             >
-              <div className="flex flex-wrap justify-center gap-2">
-                {refined ? (
+              <div className="flex flex-wrap justify-center gap-x-4 gap-y-2">
+                {pastLast ? (
+                  <Link
+                    href={listingUrl(base.path, { ...state, page: 1 })}
+                    className="text-link underline"
+                  >
+                    {t('storefront.listing.first_page')}
+                  </Link>
+                ) : null}
+                {!pastLast && refined ? (
                   <Link
                     href={listingUrl(base.path, {
                       ...EMPTY_LISTING_STATE,
                       q: query.q,
                       category: query.category,
                     })}
-                    className="hover:underline"
+                    className="text-link underline"
                   >
                     {t('storefront.listing.clear_filters')}
                   </Link>
@@ -173,7 +196,7 @@ export default function Listing({ base, listing, query, suggestions, seo }: Prop
                   <Link
                     key={category.slug}
                     href={`/c/${category.slug}`}
-                    className="hover:underline"
+                    className="text-link underline"
                   >
                     {category.name}
                   </Link>

@@ -1,5 +1,7 @@
 import { test } from '@japa/runner'
 import { appUrl, mediaPublicUrl } from '#config/storefront'
+import db from '@adonisjs/lucid/services/db'
+import { randomUUID } from 'node:crypto'
 import { testBrowser } from '#tests/support/browser'
 import { activeShop, listed, valueId } from '#tests/support/listings'
 
@@ -71,8 +73,14 @@ test.group('T-UI-046 the storefront listing pages', () => {
     )
     const card = menPage.listing.cards.find((item) => item.title === 'Men tee')!
     assert.equal(card.href, `/p/${made.slug}-${made.publicId.toLowerCase()}`)
-    assert.equal(card.image.src, `${mediaPublicUrl}/p/${made.productId}/abc-320.webp`)
-    assert.equal(card.image.srcset, `${mediaPublicUrl}/p/${made.productId}/abc-320.webp 320w`)
+    // Without a public store (the tests) a card names no image URL; with one, the URL of each width.
+    const url = `${mediaPublicUrl}/p/${made.productId}/abc-320.webp`
+    assert.equal(card.image.src, mediaPublicUrl === '' ? '' : url)
+    assert.equal(card.image.srcset, mediaPublicUrl === '' ? '' : `${url} 320w`)
+
+    const womenPage = await props('/women')
+    assert.equal(womenPage.base.heading, 'Women')
+    assert.deepEqual(titles(womenPage), ['Women tee'])
 
     const tees = await props('/men/t-shirts')
     assert.equal(tees.base.heading, "Men's T-shirts")
@@ -102,14 +110,64 @@ test.group('T-UI-046 the storefront listing pages', () => {
     }
   })
 
+  test('T-UI-046 a category, or a navigation entry, whose category is not listed is the 404 page', async ({
+    assert,
+  }) => {
+    const bags = await db
+      .from('categories')
+      .where('slug', 'bags')
+      .select('id', 'path')
+      .firstOrFail()
+    const slug = `test-${randomUUID().slice(0, 8)}`
+    await db.table('categories').insert({
+      parent_id: bags.id,
+      slug,
+      name: `Test ${slug.slice(-8)}`,
+      path: `${bags.path}${slug}/`,
+      depth: 2,
+      is_active: false,
+    })
+    const hidden = await status(`/c/${slug}`)
+    assert.equal(hidden.status, 404)
+    // A seeded category made inactive, rolled back with the test: its navigation entry goes too.
+    await db.from('categories').where('slug', 'watches').update({ is_active: false })
+    for (const path of ['/men/watches', '/c/watches', '/c/analog-watches']) {
+      const response = await status(path)
+      assert.equal(response.status, 404, path)
+    }
+    // An audience value no longer offered: its pages go, rather than list every audience.
+    await db
+      .from('attribute_values')
+      .whereIn('attribute_id', db.from('attributes').where('code', 'audience').select('id'))
+      .where('code', 'men')
+      .update({ is_active: false })
+    const menPage = await status('/men')
+    assert.equal(menPage.status, 404)
+  })
+
   test('T-UI-046 the search page lists the matches; an empty listing suggests categories', async ({
     assert,
   }) => {
     const shop = await activeShop()
     await listed(shop, { title: 'Classic white sneakers', category: 'sneakers' })
+    await listed(shop, { title: 'Running sneakers tee', category: 't-shirts' })
     const search = await props('/search?q=sneakers')
     assert.equal(search.base.kind, 'search')
-    assert.deepEqual(titles(search), ['Classic white sneakers'])
+    assert.deepEqual(titles(search), ['Classic white sneakers', 'Running sneakers tee'])
+    // A category on /search is part of the search: it narrows, and the canonical keeps it.
+    const narrowed = await props('/search?q=sneakers&category=footwear')
+    assert.deepEqual(titles(narrowed), ['Classic white sneakers'])
+    assert.equal(narrowed.seo.canonical, `${appUrl}/search?q=sneakers&category=footwear`)
+    assert.include(
+      narrowed.facets.map((facet) => facet.code),
+      'shoe_size_eu'
+    )
+    // q as searched: a leading hyphen is dropped, in the heading and the canonical link too.
+    const hyphen = (await props('/search?q=-sneakers')) as unknown as ListingProps & {
+      query: { q: string }
+    }
+    assert.equal(hyphen.query.q, 'sneakers')
+    assert.equal(hyphen.seo.canonical, `${appUrl}/search?q=sneakers`)
     const empty = await props('/c/watches')
     assert.equal(empty.listing.meta.total, 0)
     assert.include(
@@ -132,6 +190,9 @@ test.group('T-CAT-005 the canonical redirect of a listing page', () => {
       ['/men/t-shirts?category=jeans&sort=price_asc', '/men/t-shirts?sort=price_asc'],
       ['/search?q=x&color=black', '/search?color=black'],
       ['/men?color=black&apparel_size=m&color=nope', '/men?apparel_size=m'],
+      ['/men?per_page=99', '/men'],
+      // The second pass: dropping a one-letter q leaves sort=relevance invalid.
+      ['/search?q=x&sort=relevance', '/search'],
     ]) {
       const response = await status(from)
       assert.equal(response.status, 301, from)
@@ -140,9 +201,22 @@ test.group('T-CAT-005 the canonical redirect of a listing page', () => {
     }
   })
 
-  test('T-CAT-005 a valid URL in another order is served as it is', async ({ assert }) => {
+  test('T-CAT-005 a valid URL in another order is served as it is, with its filters', async ({
+    assert,
+  }) => {
+    const shop = await activeShop()
+    const men = await valueId('audience', 'men')
+    const black = await valueId('color', 'black')
+    await listed(shop, { title: 'Black tee', audience: [men], colors: [black], min: 200000 })
+    await listed(shop, { title: 'Plain tee', audience: [men], min: 100000 })
     const response = await status('/men?sort=price_asc&color=black')
     assert.equal(response.status, 200)
+    const page = await props('/men?sort=price_asc&color=black')
+    assert.deepEqual(titles(page), ['Black tee'])
+    for (const path of ['/men?page=1', '/men?sort=newest']) {
+      const valid = await props(path)
+      assert.equal(valid.seo.canonical, `${appUrl}/men`, path)
+    }
   })
 })
 
@@ -163,8 +237,11 @@ test.group('T-CAT-006 the canonical link and robots of a listing page', () => {
     assert.isTrue(filtered.seo.noindex)
     const past = await props('/men?page=9')
     assert.deepEqual(past.seo, { canonical: `${appUrl}/men?page=9`, noindex: true })
+    // A later page with cards on it is indexable and names itself.
+    for (let i = 3; i < 25; i++) await listed(shop, { title: `Tee ${i}`, audience: [men] })
     const later = await props('/men?page=2')
-    assert.equal(later.seo.canonical, `${appUrl}/men?page=2`)
+    assert.lengthOf(later.listing.cards, 1)
+    assert.deepEqual(later.seo, { canonical: `${appUrl}/men?page=2`, noindex: false })
   })
 
   test('T-CAT-006 the server-rendered HTML names the canonical URL and the heading', async ({
