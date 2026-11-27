@@ -121,6 +121,11 @@ export interface ApiDefinition {
   product: {
     show: typeof routes['product.show']
   }
+  seo: {
+    robots: typeof routes['seo.robots']
+    sitemap: typeof routes['seo.sitemap']
+    sitemapFile: typeof routes['seo.sitemap_file']
+  }
   login: typeof routes['login']
   signup: typeof routes['signup']
   verifyEmail: typeof routes['verify_email']
