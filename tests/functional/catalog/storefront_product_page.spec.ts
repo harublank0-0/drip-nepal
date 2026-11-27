@@ -219,6 +219,8 @@ test.group('T-UI-015 the variant a shared link names', (group) => {
     assert.include(html, 'Only 2 left')
     // Black L has no stock: it stays shown, disabled, and says so.
     assert.match(html, /<input[^>]*id="axis-apparel_size-l"[^>]*disabled=""/)
+    const sizeL = /<input[^>]*id="axis-apparel_size-l"[^>]*>/.exec(html)?.[0] ?? ''
+    assert.include(sizeL, 'aria-label="L, sold out"')
     assert.include(html, 'Sold out in Black: L')
   })
 

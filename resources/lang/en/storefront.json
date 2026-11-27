@@ -102,5 +102,6 @@
   "product.only_left": "Only {count} left",
   "product.cleared_sold_out": "{axis} {value} is sold out in {primary}. Choose another {axisLower}.",
   "product.cleared_not_available": "{axis} {value} is not available in {primary}. Choose another {axisLower}.",
-  "product.link_sold_out": "The option in your link ({values}) is sold out."
+  "product.link_sold_out": "The option in your link ({values}) is sold out.",
+  "product.only_left_lower": "only {count} left"
 }

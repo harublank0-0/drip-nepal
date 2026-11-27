@@ -12,8 +12,12 @@ import { t } from '~/lib/i18n'
  * ("Sold out", "Not available in Black"), never by colour or strike-through
  * alone, its accessible name carries the reason ("XL, sold out"), and the
  * line under the group lists them, so a keyboard user learns of them too.
- * A colour value shows its swatch and its name.
+ * A colour value shows its swatch and its name. `autoComplete="off"` keeps a
+ * browser from restoring a checked radio the page's state does not hold.
  */
+// "Not available in White" inside a name: only its first letter is lowered.
+const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1)
+
 type PickerAxis = {
   code: string
   name: string
@@ -70,16 +74,17 @@ export function VariantPicker({
                         state.reason
                           ? t('storefront.product.value_with_reason', {
                               value: state.label,
-                              reason: reasonOf(state).toLowerCase(),
+                              reason: lowerFirst(reasonOf(state)),
                             })
                           : undefined
                       }
+                      autoComplete="off"
                       className="peer sr-only"
                       onChange={() => onChoose(axis.code, state.code)}
                     />
                     <label
                       htmlFor={id}
-                      className="peer-checked:border-primary peer-checked:ring-primary peer-focus-visible:outline-ring flex min-h-11 cursor-pointer flex-col items-center justify-center rounded-md border px-3 py-1.5 text-sm peer-checked:ring-1 peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-disabled:cursor-not-allowed peer-disabled:border-dashed md:min-h-9"
+                      className="peer-checked:border-primary peer-checked:bg-primary/10 peer-checked:ring-primary peer-focus-visible:outline-ring flex min-h-11 cursor-pointer flex-col items-center justify-center rounded-md border px-3 py-1.5 text-sm peer-checked:ring-2 peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-disabled:cursor-not-allowed peer-disabled:border-dashed md:min-h-9"
                     >
                       <span className="inline-flex items-center gap-1.5">
                         {swatch ? (

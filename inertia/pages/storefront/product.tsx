@@ -150,8 +150,13 @@ export default function ProductPage({ product, selection: linked, seo }: Props) 
     setSelection(result.selection)
     const variant = selectedVariant(axes, product.variants, result.selection)
     const path = new URL(seo.canonical).pathname
+    // The prop follows the URL, so the page restored from history (Back) shows this choice.
     router.replace({
       url: variant ? `${path}?variant=${variant.id}` : path,
+      props: (current) => ({
+        ...current,
+        selection: { variant_id: variant?.id ?? null, sold_out_variant_id: null },
+      }),
       preserveScroll: true,
       preserveState: true,
     })
@@ -180,7 +185,7 @@ export default function ProductPage({ product, selection: linked, seo }: Props) 
           price: formatNPR(variant.price.amount_minor),
           stock:
             variant.available_capped <= LOW_STOCK
-              ? t('storefront.product.only_left', { count: variant.available_capped })
+              ? t('storefront.product.only_left_lower', { count: variant.available_capped })
               : t('storefront.product.in_stock'),
         })
       )
@@ -305,7 +310,7 @@ export default function ProductPage({ product, selection: linked, seo }: Props) 
                 </p>
               ) : null}
             </div>
-            {linkedSoldOut ? (
+            {linkedSoldOut && axes.length > 0 ? (
               <p role="status" className="bg-muted rounded-md px-3 py-2 text-sm">
                 {t('storefront.product.link_sold_out', {
                   values: axes
