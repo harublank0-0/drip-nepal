@@ -1,6 +1,7 @@
 import vine from '@vinejs/vine'
 import { VENDOR_ADJUSTMENT_REASONS } from '#modules/inventory/domain/movement_reasons'
 import { STOCK_MAX } from '#modules/inventory/domain/stock_limits'
+import { STOCK_LIMITS } from '#shared/constants/limits'
 import { clearableNfcText } from '#validators/support/nfc_text'
 
 /*
@@ -30,5 +31,5 @@ export const adjustInventoryValidator = vine.create({
     .range([-STOCK_MAX, STOCK_MAX])
     .use(notZero()),
   reason_code: vine.enum(VENDOR_ADJUSTMENT_REASONS),
-  note: clearableNfcText({ min: 1, max: 500 }).nullable().optional(),
+  note: clearableNfcText({ min: 1, max: STOCK_LIMITS.note.max }).nullable().optional(),
 })
