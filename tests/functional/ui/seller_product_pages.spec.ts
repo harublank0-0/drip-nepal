@@ -493,6 +493,40 @@ test.group('T-UI-042 the product editor page', (group) => {
     )
   })
 
+  test('T-SEC-036 the editor keeps the attributes of the product’s own axes when no rule names them', async ({
+    assert,
+  }) => {
+    const w = await world()
+    const id = await createdId(w, { category_id: await categoryId('jeans') })
+    const sized = await send(
+      w.owner,
+      'PUT',
+      `${productPath(w.shop.slug, id)}/variants`,
+      {
+        option_axes: ['waist_size_in'],
+        variants: [{ option_value_codes: { waist_size_in: '30' }, sku: 'J-30', price_minor: 1 }],
+      },
+      { 'If-Match': '"1"' }
+    )
+    assert.equal(sized.status, 200)
+    // The platform drops every rule that names the axis (inside the test's transaction).
+    const waist = await db
+      .from('attributes')
+      .where('code', 'waist_size_in')
+      .select('id')
+      .firstOrFail()
+    await db.from('category_attributes').where('attribute_id', waist.id).delete()
+
+    const editor = await pageProps(w.owner, editPath(w.shop.slug, id))
+    const codes = (editor.attributes as { code: string }[]).map((attribute) => attribute.code)
+    assert.include(codes, 'waist_size_in')
+    const fresh = await pageProps(w.owner, newPath(w.shop.slug))
+    assert.notInclude(
+      (fresh.attributes as { code: string }[]).map((attribute) => attribute.code),
+      'waist_size_in'
+    )
+  })
+
   test('T-SEC-001 another shop’s product is the 404 page of a missing product', async ({
     assert,
   }) => {

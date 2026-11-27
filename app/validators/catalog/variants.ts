@@ -1,4 +1,5 @@
 import vine from '@vinejs/vine'
+import { VARIANT_LIMITS } from '#shared/constants/limits'
 
 /*
  * `replaceProductVariants` (docs/06 §13.5; `ReplaceProductVariantsRequest`
@@ -9,6 +10,8 @@ import vine from '@vinejs/vine'
  * §7.9):
  *
  * - `option_axes`: at most two distinct attribute codes (AC-FR-CAT-004-1).
+ * The bounds are `VARIANT_LIMITS`, which the seller's variant editor shares
+ * (R1-S part 2f-ii).
  * - `variants`: 1 to 100 (AC-FR-CAT-004-4), each with an optional `id`, its
  *   `option_value_codes` (axis code → value code), a `sku` of 1 to 64
  *   characters in the shape of `product_variants_sku_check`, `price_minor`
@@ -29,12 +32,17 @@ export const VARIANT_MEMBERS = [
   'weight_grams',
 ] as const
 
-const paisa = () => vine.number({ strict: true }).withoutDecimals().min(0).max(100_000_000)
+const paisa = () =>
+  vine
+    .number({ strict: true })
+    .withoutDecimals()
+    .min(VARIANT_LIMITS.priceMinor.min)
+    .max(VARIANT_LIMITS.priceMinor.max)
 
 export const replaceProductVariantsValidator = vine.create({
   option_axes: vine
     .array(vine.string().regex(/^[a-z][a-z0-9_]{1,39}$/))
-    .maxLength(2)
+    .maxLength(VARIANT_LIMITS.axes.max)
     .distinct(),
   variants: vine
     .array(
@@ -44,20 +52,20 @@ export const replaceProductVariantsValidator = vine.create({
         sku: vine
           .string()
           .trim()
-          .minLength(1)
-          .maxLength(64)
-          .regex(/^[A-Za-z0-9][A-Za-z0-9._/-]*$/),
+          .minLength(VARIANT_LIMITS.sku.min)
+          .maxLength(VARIANT_LIMITS.sku.max)
+          .regex(VARIANT_LIMITS.sku.pattern),
         price_minor: paisa(),
         compare_at_price_minor: paisa().nullable().optional(),
         weight_grams: vine
           .number({ strict: true })
           .withoutDecimals()
-          .min(1)
-          .max(50_000)
+          .min(VARIANT_LIMITS.weightGrams.min)
+          .max(VARIANT_LIMITS.weightGrams.max)
           .nullable()
           .optional(),
       })
     )
-    .minLength(1)
-    .maxLength(100),
+    .minLength(VARIANT_LIMITS.variants.min)
+    .maxLength(VARIANT_LIMITS.variants.max),
 })

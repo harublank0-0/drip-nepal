@@ -4,6 +4,7 @@ import type {
   ProductListItem,
 } from '#modules/catalog/queries'
 import { missingForSubmit } from '#modules/catalog/domain/submit_readiness'
+import type { VariantStock } from '#modules/inventory/queries'
 
 /*
  * The seller views of a product (docs/06 §13.5, §14.2; `SellerProduct` and
@@ -13,11 +14,15 @@ import { missingForSubmit } from '#modules/catalog/domain/submit_readiness'
  * `{ amount_minor, currency }` in integer paisa (ADR-0007). `on_hand` is
  * shop-confidential and appears in seller views only (docs/04a §8.1).
  * `missing_for_submit` comes from the same pure function as the submit
- * refusal (T-CAT-002).
+ * refusal (T-CAT-002). Since R1-S part 2f-ii each variant also carries its
+ * `option_value_codes` (axis code → value code, as `replaceProductVariants`
+ * takes them) and `has_history` (an inventory movement or an order line,
+ * so its options stay as they are and the product's axes are fixed, 04a
+ * §7.8, §7.9), which the variant editor needs.
  */
 const money = (amountMinor: number) => ({ amount_minor: amountMinor, currency: 'NPR' as const })
 
-export function sellerProductJson(data: ProductEditorData, onHand: ReadonlyMap<string, number>) {
+export function sellerProductJson(data: ProductEditorData, stock: VariantStock) {
   const { product: p } = data
   return {
     id: p.id,
@@ -49,7 +54,9 @@ export function sellerProductJson(data: ProductEditorData, onHand: ReadonlyMap<s
         variant.compareAtPriceMinor === null ? null : money(variant.compareAtPriceMinor),
       weight_grams: variant.weightGrams,
       is_default: variant.isDefault,
-      on_hand: onHand.get(variant.id) ?? 0,
+      on_hand: stock.onHand.get(variant.id) ?? 0,
+      option_value_codes: variant.codes,
+      has_history: stock.history.has(variant.id),
     })),
     media: data.media.map((item) => ({
       media_asset_id: item.mediaAssetId,

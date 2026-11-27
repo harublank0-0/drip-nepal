@@ -15,8 +15,10 @@ import {
  * choice, one checkbox per option with its label beside it, in a grid that
  * wraps on phones. The help text and the errors belong to the group: each
  * box carries them in `aria-describedby` while shown. `id` is the first
- * box's, so the error summary's link and a failed submit's focus land on the
- * group.
+ * enabled box's, so the error summary's link and a failed submit's focus
+ * land on the group even when its first options are disabled; when every
+ * box is disabled, the fieldset carries it and takes focus itself. An option may be `disabled` (the variant editor's third option, or
+ * options that are fixed), and stays visible with its state.
  */
 export function CheckboxGroupField({
   id,
@@ -30,7 +32,7 @@ export function CheckboxGroupField({
 }: {
   id: string
   legend: string
-  options: { value: string; label: string }[]
+  options: { value: string; label: string; disabled?: boolean }[]
   value: readonly string[]
   onChange: (value: string[]) => void
   onBlur: () => void
@@ -45,18 +47,26 @@ export function CheckboxGroupField({
     .filter(Boolean)
     .join(' ')
   const chosen = new Set(value)
+  // The box that carries the group's id: the first one focus can reach, or none.
+  const focusable = options.findIndex((option) => !option.disabled)
   return (
-    <FieldSet data-invalid={messages.length > 0 || undefined} className="gap-3">
+    <FieldSet
+      id={focusable === -1 ? id : undefined}
+      tabIndex={focusable === -1 ? -1 : undefined}
+      data-invalid={messages.length > 0 || undefined}
+      className="gap-3"
+    >
       <FieldLegend variant="label">{legend}</FieldLegend>
       {description && <FieldDescription id={`${id}-help`}>{description}</FieldDescription>}
       <div className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
         {options.map((option, index) => {
-          const boxId = index === 0 ? id : `${id}-${option.value}`
+          const boxId = index === focusable ? id : `${id}-${option.value}`
           return (
             <Field key={option.value} orientation="horizontal">
               <Checkbox
                 id={boxId}
                 checked={chosen.has(option.value)}
+                disabled={option.disabled}
                 aria-invalid={messages.length > 0 || undefined}
                 aria-describedby={describedBy || undefined}
                 onCheckedChange={(next) => {

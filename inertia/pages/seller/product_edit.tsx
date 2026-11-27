@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Head } from '@inertiajs/react'
 import { Link } from '@adonisjs/inertia/react'
 import {
@@ -16,6 +17,7 @@ import { StatusBadge } from '~/components/common/status_badge'
 import { ProductDetailsForm } from '~/components/seller/product_details_form'
 import { ProductDetailsView } from '~/components/seller/product_details_view'
 import { ProductReadiness } from '~/components/seller/product_readiness'
+import { ProductVariantsForm } from '~/components/seller/product_variants_form'
 import { ProductVariantsSummary } from '~/components/seller/product_variants_summary'
 
 /*
@@ -32,8 +34,13 @@ import { ProductVariantsSummary } from '~/components/seller/product_variants_sum
  * `shop.products.edit`, in a shop that may change its catalogue
  * (`catalogEditable`), on a product that may be edited (`productEditable`):
  * the server's own rules. Anyone else reads the saved details, with a line
- * saying why they cannot be changed. The variants follow, as saved. The UI
- * hides; the server decides (docs/08 §11.6).
+ * saying why they cannot be changed. The variants follow under the same
+ * rule: the variant editor (R1-S part 2f-ii), or the variants as saved.
+ * Both forms write the same product version, so each tells the page what a
+ * save returned, and both build on the newest product known: a details
+ * save followed at once by a variants save never looks like someone else's
+ * change while the props are read again. The UI hides; the server decides
+ * (docs/08 §11.6).
  */
 type Props = InertiaProps<{
   product: SellerProduct
@@ -64,7 +71,10 @@ export default function SellerProductEdit({
   brands,
   current_shop: current,
 }: Props) {
+  // The product a save returned, until the props catch up with it.
+  const [latest, setLatest] = useState<SellerProduct | null>(null)
   if (!current) return null
+  const newest = latest && latest.version > product.version ? latest : product
   const reason = readOnlyReason(product, current)
   return (
     <>
@@ -124,10 +134,11 @@ export default function SellerProductEdit({
           ) : (
             <ProductDetailsForm
               shopSlug={current.slug}
-              product={product}
+              product={newest}
               categories={categories}
               attributes={attributes}
               brands={brands}
+              onSaved={setLatest}
             />
           )}
         </section>
@@ -142,7 +153,17 @@ export default function SellerProductEdit({
             </h2>
             <p className="text-muted-foreground text-sm">{t('seller.product.variants.intro')}</p>
           </div>
-          <ProductVariantsSummary variants={product.variants} />
+          {reason ? (
+            <ProductVariantsSummary variants={product.variants} />
+          ) : (
+            <ProductVariantsForm
+              shopSlug={current.slug}
+              product={newest}
+              categories={categories}
+              attributes={attributes}
+              onSaved={setLatest}
+            />
+          )}
         </section>
       </div>
     </>

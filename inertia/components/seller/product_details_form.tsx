@@ -145,12 +145,15 @@ export function ProductDetailsForm({
   categories,
   attributes,
   brands,
+  onSaved,
 }: {
   shopSlug: string
   product: SellerProduct | null
   categories: CategoryOption[]
   attributes: AttributeOption[]
   brands: BrandOption[]
+  // Tells the page the product as now saved, so the variant editor builds on it too.
+  onSaved?: (next: SellerProduct) => void
 }) {
   const mutation = useApiMutation()
   const intentKey = useIntentKey<CreateBody>()
@@ -191,6 +194,7 @@ export function ProductDetailsForm({
   // Restarts the form from `next`, the product as now saved, then reads the props again.
   function restartFrom(formApi: { reset: (values: DetailsValues) => void }, next: SellerProduct) {
     setLatest(next)
+    onSaved?.(next)
     setConflict(null)
     formApi.reset(detailsFrom(next))
     setReloading(true)

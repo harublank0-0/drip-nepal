@@ -188,6 +188,8 @@ export type VariantRow = {
   weightGrams: number | null
   isDefault: boolean
   status: string
+  // Axis code → value code; empty for the option-less default variant (R1-S part 2f-ii).
+  codes: Record<string, string>
 }
 
 export type ProductEditorData = {
@@ -295,6 +297,22 @@ export async function productEditorData(
     .orderBy('id')
     .select('*')
   const labels = await variantLabels(client, variantRows)
+  const codeRows: { variant_id: string; attribute_code: string; value_code: string }[] =
+    variantRows.length === 0
+      ? []
+      : await client
+          .from('variant_option_values as o')
+          .join('attributes as a', 'a.id', 'o.attribute_id')
+          .join('attribute_values as v', 'v.id', 'o.attribute_value_id')
+          .where('o.product_id', product.id)
+          .select('o.variant_id', 'a.code as attribute_code', 'v.code as value_code')
+  const codesOf = new Map<string, Record<string, string>>()
+  for (const row of codeRows) {
+    codesOf.set(row.variant_id, {
+      ...codesOf.get(row.variant_id),
+      [row.attribute_code]: row.value_code,
+    })
+  }
   const mediaRows: {
     media_asset_id: string
     position: number
@@ -323,6 +341,7 @@ export async function productEditorData(
         weightGrams: row.weight_grams as number | null,
         isDefault: row.is_default as boolean,
         status: row.status as string,
+        codes: codesOf.get(row.id as string) ?? {},
       }
     }),
     media: mediaRows.map((row) => ({
@@ -576,8 +595,9 @@ export type ProductFormOptions = {
 
 /*
  * What the product form chooses from (docs/08 §2.5 `/products/new` and
- * `/products/{productId}`, which read `listCategories` and
- * `listAttributes`; R1-S part 2f-i): public reference data.
+ * `/products/{productId}`; R1-S part 2f-i): public reference data, as page
+ * props. `listCategories` and `listAttributes` serve the storefront, without
+ * the rules' `usage` and `is_required` that the form needs (07 note 68).
  *
  * - `categories`: the leaves a product may go in (`activeLeafCategory`:
  *   active, no child), in tree order, each with its names from the top
@@ -586,14 +606,20 @@ export type ProductFormOptions = {
  *   offers what the actions accept. `keepCategoryId`, the product's own
  *   category, is listed even when it is no longer an active leaf
  *   (`isActive` false), so an edit can keep it (04a §7.1).
- * - `attributes`: the attributes any listed rule names, with every value
- *   in picker order; an inactive value is marked, so the form offers it only
- *   to a product that already has it (04a §7.3).
+ * - `attributes`: the attributes any listed rule names, and `keepAxisCodes`,
+ *   the product's own axes, which the server keeps when no rule names them
+ *   any more (R1-S part 2f-ii), each with every value in picker order; an
+ *   inactive value is marked, so the form offers it only to a product that
+ *   already has it (04a §7.3).
  * - `brands`: the `active` brands by name (04a §7.5), and `keepBrandId`, the
  *   product's own brand, whatever its status.
  */
 export async function productFormOptions(
-  options: { keepCategoryId?: string; keepBrandId?: string | null } = {}
+  options: {
+    keepCategoryId?: string
+    keepBrandId?: string | null
+    keepAxisCodes?: readonly string[]
+  } = {}
 ): Promise<ProductFormOptions> {
   const client = db.connection()
   const rows: {
@@ -662,7 +688,9 @@ export async function productFormOptions(
     list.push(rule)
     rulesOf.set(rule.category_id, list)
   }
-  const codes = [...new Set(ruleRows.map((rule) => rule.code))]
+  const codes = [
+    ...new Set([...ruleRows.map((rule) => rule.code), ...(options.keepAxisCodes ?? [])]),
+  ]
   const attributeRows: { code: string; name: string; input: AttributeInput }[] =
     codes.length === 0
       ? []

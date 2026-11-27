@@ -34,8 +34,10 @@ export async function onHandOf(
  * (`inventory_movements_variant_history_idx`) or an order line
  * (`order_items_variant_idx`). Such a variant is archived, never deleted,
  * keeps its options, and fixes its product's axes (docs/04a §7.8, §7.9).
- * The caller has locked the variants' stock rows, so a concurrent stock
- * adjustment either committed first and shows here, or waits.
+ * `replaceProductVariants` calls it with the variants' stock rows locked, so
+ * a concurrent stock adjustment either committed first and shows here, or
+ * waits; the seller views read it through `variantStock` without locks, as
+ * a snapshot (R1-S part 2f-ii).
  */
 export async function variantsWithHistory(
   client: QueryClientContract,
@@ -50,6 +52,27 @@ export async function variantsWithHistory(
     [ids, ids]
   )
   return new Set((result.rows as { variant_id: string }[]).map((row) => row.variant_id))
+}
+
+/*
+ * What the seller views show of a product's variants' stock (docs/06 §13.5
+ * `SellerVariant`; R1-S part 2f-ii): `on_hand` per variant, and the
+ * variants with history, whose options the variant editor keeps (04a §7.9).
+ */
+export type VariantStock = {
+  onHand: ReadonlyMap<string, number>
+  history: ReadonlySet<string>
+}
+
+export async function variantStock(
+  shopId: string,
+  variantIds: readonly string[],
+  client: QueryClientContract = db.connection()
+): Promise<VariantStock> {
+  return {
+    onHand: await onHandOf(shopId, variantIds, client),
+    history: await variantsWithHistory(client, variantIds),
+  }
 }
 
 export type LastMovement = {

@@ -18,7 +18,7 @@ import {
 } from '#modules/catalog/queries'
 import { createProduct } from '#modules/inventory/actions/create_product'
 import { replaceProductVariants } from '#modules/inventory/actions/replace_product_variants'
-import { onHandOf } from '#modules/inventory/queries'
+import { variantStock } from '#modules/inventory/queries'
 import {
   assertShopGate,
   assertShopPermission,
@@ -92,7 +92,7 @@ export default class ProductsController {
     return async (data: ProductEditorData, client: QueryClientContract) =>
       sellerProductJson(
         data,
-        await onHandOf(
+        await variantStock(
           shopId,
           data.variants.map((variant) => variant.id),
           client
@@ -129,12 +129,12 @@ export default class ProductsController {
     assertShopGate(ctx.shop, 'products_view')
     const data = await sellerProductData(ctx.shop.id, ctx.params.productId)
     if (!data) throw new DomainError('NOT_FOUND')
-    const onHand = await onHandOf(
+    const stock = await variantStock(
       ctx.shop.id,
       data.variants.map((variant) => variant.id)
     )
     setEtag(ctx, data.product.version)
-    return { data: sellerProductJson(data, onHand) }
+    return { data: sellerProductJson(data, stock) }
   }
 
   // createProduct ⚷

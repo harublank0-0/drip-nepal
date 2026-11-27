@@ -85,6 +85,10 @@ export type SellerProduct = {
     weight_grams: number | null
     is_default: boolean
     on_hand: number
+    // Axis code → value code; empty for the option-less default variant (R1-S part 2f-ii).
+    option_value_codes: Record<string, string>
+    // An inventory movement or an order line: its options stay, the axes are fixed.
+    has_history: boolean
   }[]
   media: {
     media_asset_id: string
