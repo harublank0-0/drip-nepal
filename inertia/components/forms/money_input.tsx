@@ -34,6 +34,7 @@ export function MoneyInput({
   labelClassName,
   describedBy: extraDescribedBy,
   onKeyDown,
+  unnamed = false,
 }: {
   id: string
   label: string
@@ -45,6 +46,8 @@ export function MoneyInput({
   labelClassName?: string
   describedBy?: string
   onKeyDown?: (event: KeyboardEvent<HTMLInputElement>) => void
+  // No `name`, so a form submitted without JavaScript does not send the rupees.
+  unnamed?: boolean
 }) {
   const messages = errors.filter((error): error is string => typeof error === 'string')
   const describedBy = [
@@ -67,7 +70,7 @@ export function MoneyInput({
         </InputGroupAddon>
         <InputGroupInput
           id={id}
-          name={id}
+          name={unnamed ? undefined : id}
           type="text"
           inputMode="decimal"
           autoComplete="off"

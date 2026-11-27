@@ -792,6 +792,42 @@ export async function activeCategoryTree(): Promise<CategoryTreeNode[]> {
 }
 
 /*
+ * The brand filter's choices (docs/08 §11.1, AC-FR-SRCH-001-1; R1-S part
+ * 3d-i-b): the brands of the products listed in the page's own scope (its
+ * category subtree and audience, not the refinements), by name, from the
+ * read model's copies (04a §7.12), so a brand with nothing there is not
+ * offered. A brand the URL selects is added from `brands` when it has
+ * nothing there, so its chip and its box can still be read and unticked.
+ */
+export async function listedBrands(scope: {
+  categoryPath: string | null
+  audienceValueId: string | null
+  selected: readonly string[]
+}): Promise<{ slug: string; name: string }[]> {
+  const query = db.from('product_listings').whereNotNull('brand_slug')
+  if (scope.categoryPath !== null) {
+    query.whereRaw('category_path LIKE ?', [`${scope.categoryPath}%`])
+  }
+  if (scope.audienceValueId !== null) {
+    query.whereRaw('audience_value_ids && ?::uuid[]', [`{${scope.audienceValueId}}`])
+  }
+  const rows: { brand_slug: string; brand_name: string }[] = await query.distinct(
+    'brand_slug',
+    'brand_name'
+  )
+  const brands = rows.map((row) => ({ slug: row.brand_slug, name: row.brand_name }))
+  const missing = scope.selected.filter((slug) => !brands.some((brand) => brand.slug === slug))
+  if (missing.length > 0) {
+    const named: { slug: string; name: string }[] = await db
+      .from('brands')
+      .whereIn('slug', missing)
+      .select('slug', 'name')
+    brands.push(...named)
+  }
+  return brands.sort((a, b) => a.name.localeCompare(b.name, 'en') || a.slug.localeCompare(b.slug))
+}
+
+/*
  * The path of an active category whose ancestors are all active, by slug, or
  * null: the subtree the storefront lists under it (docs/04a §7.1).
  */

@@ -1,4 +1,5 @@
 import { navigationEntry } from '#modules/catalog/navigation'
+import { SEARCH_TERM_MAX, SEARCH_TERM_MIN, searchedTerm } from '#shared/ui/listing_url'
 
 /*
  * The storefront listing's query (docs/06 §6.1, §6.3 `listProducts`; 01
@@ -209,16 +210,13 @@ export function parseListingQuery(
   let q: string | null = null
   const qText = one('q')
   if (qText !== undefined) {
-    /*
-     * A hyphen that does not follow a letter, a combining mark (the vowel
-     * signs of Devanagari) or a digit is dropped: `-` there means NOT to
-     * websearch_to_tsquery.
-     */
-    const searched = qText.replaceAll(/(^|[^\p{L}\p{M}\p{N}])-+/gu, '$1').trim()
+    // The term as `searchedTerm` reads it, shared with the search field (docs/08 §11.1).
+    const searched = searchedTerm(qText)
     const length = [...searched].length
     if (CONTROL.test(searched)) refuse('q', 'Send letters, numbers and punctuation only.')
-    else if (length < 2 || length > 100) refuse('q', 'Send 2 to 100 characters.')
-    else q = searched
+    else if (length < SEARCH_TERM_MIN || length > SEARCH_TERM_MAX) {
+      refuse('q', `Send ${SEARCH_TERM_MIN} to ${SEARCH_TERM_MAX} characters.`)
+    } else q = searched
   }
 
   const sortText = one('sort')

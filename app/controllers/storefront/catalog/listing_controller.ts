@@ -7,12 +7,15 @@ import {
   activeCategoryTree,
   type CategoryTreeNode,
   filterableAttributes,
+  listedBrands,
   listedCategoryPath,
   listingFilterAttributes,
   listingPage,
 } from '#modules/catalog/queries'
 import {
+  brandOptionJson,
   filterAttributeJson,
+  filterCategoryJson,
   listingPageCardJson,
 } from '#transformers/catalog/storefront_transformer'
 import {
@@ -181,10 +184,12 @@ export default class ListingController {
     }
     const filters = parsed.filters!
     if (base.categorySlug !== null) filters.categorySlug = base.categorySlug
+    let audienceValueId: string | null = null
     if (base.audience !== null) {
       const audienceId = filterable.get('audience')?.values.get(base.audience)
       // An audience no longer offered would list every audience: the page is gone instead.
       if (audienceId === undefined) throw new DomainError('NOT_FOUND')
+      audienceValueId = audienceId
       filters.valueFilters.push({ column: 'audience_value_ids', ids: [audienceId] })
     }
 
@@ -211,11 +216,32 @@ export default class ListingController {
           ? null
           : await listedCategoryPath(filters.categorySlug)
     const attributes = await filterableAttributes(categoryPath)
+    /*
+     * A value the URL selects for an attribute this category does not use
+     * (a category chosen on `/search` after it) keeps its group, so its chip
+     * has a label and its box can be unticked.
+     */
+    const kept = Object.keys(state.values).filter(
+      (code) =>
+        state.values[code].length > 0 && !attributes.some((attribute) => attribute.code === code)
+    )
+    if (kept.length > 0) {
+      const all = await filterableAttributes(null)
+      attributes.push(...all.filter((attribute) => kept.includes(attribute.code)))
+    }
     const facets = attributes.filter(
       (attribute) => !(base.kind === 'navigation' && attribute.code === 'audience')
     )
-    const suggestions =
-      counted === 0 ? topCategoriesOf(base.tree ?? (await activeCategoryTree())) : []
+    // `/search` takes a category, so it offers the category tree (part 3d-i-b).
+    const tree =
+      base.tree ??
+      (counted === 0 || base.kind === 'search' ? await activeCategoryTree() : undefined)
+    const suggestions = counted === 0 && tree ? topCategoriesOf(tree) : []
+    const brands = await listedBrands({
+      categoryPath,
+      audienceValueId,
+      selected: state.brand,
+    })
 
     return ctx.inertia.render('storefront/listing', {
       base: {
@@ -253,6 +279,8 @@ export default class ListingController {
         per_page: filters.perPage,
       },
       facets: facets.map(filterAttributeJson),
+      brands: brands.map(brandOptionJson),
+      categories: base.kind === 'search' && tree ? tree.map(filterCategoryJson) : [],
       suggestions,
       seo: { canonical: absolute(listingUrl(base.path, canonicalState)), noindex },
     })

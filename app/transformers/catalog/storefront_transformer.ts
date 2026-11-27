@@ -21,6 +21,18 @@ export function categoryNodeJson(node: CategoryTreeNode): Record<string, unknown
   }
 }
 
+// A choice of the listing's brand filter (docs/08 §11.1).
+export function brandOptionJson(brand: { slug: string; name: string }) {
+  return { slug: brand.slug, name: brand.name }
+}
+
+// A category of the listing's category filter on `/search` (docs/08 §11.1).
+export type FilterCategoryJson = { slug: string; name: string; children: FilterCategoryJson[] }
+
+export function filterCategoryJson(node: CategoryTreeNode): FilterCategoryJson {
+  return { slug: node.slug, name: node.name, children: node.children.map(filterCategoryJson) }
+}
+
 export function filterAttributeJson(attribute: FilterAttribute) {
   return {
     code: attribute.code,

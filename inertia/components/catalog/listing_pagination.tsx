@@ -4,17 +4,20 @@ import { t } from '~/lib/i18n'
 /*
  * Page links of a listing (docs/08 §11.1): every page is an `<a href>` in
  * the server-rendered HTML, so paging works before JavaScript loads and is
- * crawlable (AC-J01-06); a page visit pushes history. `href(page)` builds
- * the URL in canonical order.
+ * crawlable (AC-J01-06); a page visit pushes history, and `onNavigate`
+ * runs once it has arrived (the page moves focus to the results heading).
+ * `href(page)` builds the URL in canonical order.
  */
 export function ListingPagination({
   page,
   pages,
   href,
+  onNavigate,
 }: {
   page: number
   pages: number
   href: (page: number) => string
+  onNavigate: () => void
 }) {
   if (pages <= 1) return null
   // A page past the last links back into the listing, never to another empty page.
@@ -30,6 +33,7 @@ export function ListingPagination({
             <Link
               href={href(Math.min(current - 1, pages))}
               rel="prev"
+              onSuccess={onNavigate}
               className="rounded-md px-3 py-2 hover:underline"
             >
               {t('storefront.listing.previous')}
@@ -50,6 +54,7 @@ export function ListingPagination({
               <Link
                 href={href(n)}
                 aria-label={t('storefront.listing.page', { page: n })}
+                onSuccess={onNavigate}
                 className="rounded-md px-3 py-2 hover:underline"
               >
                 {n}
@@ -62,6 +67,7 @@ export function ListingPagination({
             <Link
               href={href(current + 1)}
               rel="next"
+              onSuccess={onNavigate}
               className="rounded-md px-3 py-2 hover:underline"
             >
               {t('storefront.listing.next')}
