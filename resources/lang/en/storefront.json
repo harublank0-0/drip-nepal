@@ -70,7 +70,6 @@
   "product.sold_out": "Sold out",
   "product.discount": "{percent}% off",
   "product.tax_included": "The price includes all taxes.",
-  "product.options": "Options",
   "product.delivery_heading": "Delivery",
   "product.delivery_zone": "{zone}: {fee}",
   "product.delivery_days": "{min} to {max, plural, one {# day} other {# days}}",

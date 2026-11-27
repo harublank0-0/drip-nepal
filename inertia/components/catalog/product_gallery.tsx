@@ -6,13 +6,16 @@ import { t } from '~/lib/i18n'
  * 3d-ii). One large image, and with more than one a toolbar of thumbnail
  * buttons named by their alt text: Left and Right (Home, End) move between
  * them, Enter, Space or a click shows the image. No swipe is needed and
- * nothing moves by itself (SC 2.5.7). Each image keeps a square box, so
+ * nothing moves by itself (SC 2.5.7). The shown thumbnail is marked by a
+ * ring and focus by an outline, so a focused shown thumbnail still shows
+ * focus (SC 2.4.7). Each image keeps a square box, so
  * the page does not shift as it loads. Without a public image store (the
  * tests, a local server) the box is empty.
  */
 export type GalleryImage = { alt: string; src: string; srcset: string; color: string | null }
 
-const MAIN_SIZES = '(min-width: 1280px) 600px, (min-width: 768px) 50vw, 100vw'
+// The image sizes of 08 §10.4's table.
+const MAIN_SIZES = '(min-width: 768px) 50vw, 100vw'
 
 export function ProductGallery({ media }: { media: GalleryImage[] }) {
   const [shown, setShown] = useState(0)
@@ -65,7 +68,7 @@ export function ProductGallery({ media }: { media: GalleryImage[] }) {
           role="toolbar"
           aria-label={t('storefront.product.images')}
           aria-orientation="horizontal"
-          className="flex gap-2 overflow-x-auto p-0.5"
+          className="flex gap-2 overflow-x-auto p-1.5"
           onKeyDown={moveFocus}
         >
           {media.map((image, index) => (
@@ -78,7 +81,7 @@ export function ProductGallery({ media }: { media: GalleryImage[] }) {
               tabIndex={index === focus ? 0 : -1}
               aria-pressed={index === shown}
               aria-label={image.alt}
-              className="bg-muted focus-visible:ring-ring/50 aria-pressed:ring-primary size-16 shrink-0 overflow-hidden rounded-md outline-none focus-visible:ring-3 aria-pressed:ring-2"
+              className="bg-muted aria-pressed:ring-primary focus-visible:outline-ring size-20 shrink-0 overflow-hidden rounded-md outline-none focus-visible:outline-2 focus-visible:outline-offset-2 aria-pressed:ring-2"
               onFocus={() => setFocus(index)}
               onClick={() => setShown(index)}
             >
@@ -86,7 +89,8 @@ export function ProductGallery({ media }: { media: GalleryImage[] }) {
                 <img
                   src={image.src}
                   srcSet={image.srcset}
-                  sizes="64px"
+                  sizes="80px"
+                  loading="lazy"
                   alt=""
                   className="size-full object-cover"
                 />

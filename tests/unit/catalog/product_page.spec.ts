@@ -1,6 +1,8 @@
 import { test } from '@japa/runner'
 import { publicIdFromPath } from '#modules/catalog/domain/identifiers'
 import { discountPercent } from '#shared/format/money'
+import type { StorefrontProduct } from '#modules/catalog/queries'
+import { productJsonLd } from '#transformers/catalog/storefront_transformer'
 
 /*
  * T-UI-048 (the unit part): reading a product page's path segment
@@ -32,5 +34,35 @@ test.group('T-UI-048 the product path and the saving', () => {
     assert.isNull(discountPercent(199900, null))
     assert.isNull(discountPercent(199900, 199900))
     assert.isNull(discountPercent(199900, 150000))
+  })
+
+  test('T-UI-048 the JSON-LD names the brand and the images it is given', ({ assert }) => {
+    const product = {
+      title: 'Crew tee',
+      description: 'Soft.',
+      brand: { slug: 'himal-wear', name: 'Himal Wear' },
+      optionAxes: [],
+      variants: [{ priceMinor: 129950, available: 0 }],
+      currency: 'NPR',
+    } as unknown as StorefrontProduct
+    const url = 'https://dripnepal.com/p/crew-tee-8k3m9qzt'
+    const image = 'https://media.example/p/a/x-640.webp'
+    assert.deepEqual(productJsonLd(product, url, [image]), {
+      '@context': 'https://schema.org',
+      '@type': 'Product',
+      'name': 'Crew tee',
+      'description': 'Soft.',
+      'url': url,
+      'image': [image],
+      'brand': { '@type': 'Brand', 'name': 'Himal Wear' },
+      'offers': {
+        '@type': 'Offer',
+        'price': '1299.50',
+        'priceCurrency': 'NPR',
+        'availability': 'https://schema.org/OutOfStock',
+        'itemCondition': 'https://schema.org/NewCondition',
+        'url': url,
+      },
+    })
   })
 })

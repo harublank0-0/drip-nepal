@@ -5,7 +5,7 @@ import { testBrowser } from '#tests/support/browser'
 import { world } from '#tests/support/catalog'
 import { useJobBoss } from '#tests/support/jobs'
 import { setShopStatus } from '#tests/support/shops'
-import { publishedPlain, publishedTee } from '#tests/support/storefront_products'
+import { act, publishedPlain, publishedTee } from '#tests/support/storefront_products'
 
 /*
  * The storefront product page (docs/08 §2.2, §11.2; ADR-0017 decisions 1,
@@ -19,11 +19,14 @@ import { publishedPlain, publishedTee } from '#tests/support/storefront_products
  *   `Offer` at the default variant's price for a product without axes, an
  *   `AggregateOffer` from the lowest to the highest price for one with
  *   axes, in stock or not as at render time, its text escaped.
- * - T-CAT-005 (the product part): another slug, no slug, another case or a
- *   Crockford alias answers 301 to the canonical path with `Cache-Control:
- *   public, max-age=86400`, keeping only `variant`.
- * - The 404 page for a segment with no public ID, an unknown one, a product
- *   the storefront does not show, or one of a shop not active.
+ * - T-CAT-004: another slug, no slug, another case or a Crockford alias
+ *   answers 301 to the canonical path; a segment with no public ID, an
+ *   unknown or overlong one, an unpublished product, or one of a shop not
+ *   active is the 404 page.
+ * - T-CAT-005 (the product part): the 301 keeps only `variant` and carries
+ *   `Cache-Control: public, max-age=86400`.
+ * - T-CAT-006 (the product part): the HTML names the canonical URL, without
+ *   `variant`, and is not `noindex`.
  */
 type ProductProps = {
   product: {
@@ -185,36 +188,34 @@ test.group('T-UI-048 the storefront product page', (group) => {
   })
 })
 
-test.group('T-CAT-005 the product page redirects', (group) => {
+test.group('T-CAT-004 the product path', (group) => {
   group.setup(async () => {
     await useJobBoss()
   })
 
-  test('T-CAT-005 any other form of the path answers 301 to the canonical one', async ({
+  test('T-CAT-004 any other form of the path answers 301 to the canonical one', async ({
     assert,
   }) => {
     const w = await world()
     const made = await publishedPlain(w)
-    const id = made.publicId
+    // A public ID with a 0 and a 1, so the aliases O, I and L stand for them.
+    const id = '0A1B0C1D'
+    await db.from('products').where('id', made.productId).update({ public_id: id })
     const canonical = canonicalOf('organic-cotton-crew-tee', id)
-    const aliased = id.toLowerCase().replaceAll('0', 'o').replaceAll('1', 'l')
-    for (const [path, target] of [
-      [`/p/old-name-${id}`, canonical],
-      [`/p/${id}`, canonical],
-      [`/p/organic-cotton-crew-tee-${id}`, canonical],
-      [`/p/organic-cotton-crew-tee-${aliased.toUpperCase()}`, canonical],
-      [`/p/x-${id}?variant=abc&utm_source=feed`, `${canonical}?variant=abc`],
+    for (const path of [
+      `/p/old-name-${id}`,
+      `/p/${id}`,
+      `/p/organic-cotton-crew-tee-${id}`,
+      '/p/organic-cotton-crew-tee-OAlBOCID',
+      '/p/organic-cotton-crew-tee-oaiboc1d',
     ]) {
       const response = await request(path)
       assert.equal(response.status, 301, path)
-      assert.equal(response.headers.get('location'), target, path)
-      assert.equal(response.headers.get('cache-control'), 'public, max-age=86400', path)
+      assert.equal(response.headers.get('location'), canonical, path)
     }
-    const served = await request(`${canonical}?utm_source=feed`)
-    assert.equal(served.status, 200)
   })
 
-  test('T-CAT-005 a path with no public ID, or a product not shown, is the 404 page', async ({
+  test('T-CAT-004 a path with no public ID, or a product not shown, is the 404 page', async ({
     assert,
   }) => {
     const w = await world()
@@ -232,5 +233,55 @@ test.group('T-CAT-005 the product page redirects', (group) => {
     await setShopStatus(w.shop.shopId, 'suspended')
     const suspended = await request(canonical)
     assert.equal(suspended.status, 404)
+  })
+
+  test('T-CAT-004 an unpublished product is the 404 page', async ({ assert }) => {
+    const w = await world()
+    const made = await publishedPlain(w)
+    const unpublished = await act(w, made.productId, 'unpublish')
+    assert.equal(unpublished.status, 200, unpublished.text)
+    const response = await request(canonicalOf('organic-cotton-crew-tee', made.publicId))
+    assert.equal(response.status, 404)
+  })
+})
+
+test.group('T-CAT-005 the product redirect keeps only its parameter', (group) => {
+  group.setup(async () => {
+    await useJobBoss()
+  })
+
+  test('T-CAT-005 a 301 keeps only variant and is cached for a day', async ({ assert }) => {
+    const w = await world()
+    const made = await publishedPlain(w)
+    const canonical = canonicalOf('organic-cotton-crew-tee', made.publicId)
+    const response = await request(`/p/x-${made.publicId}?variant=abc&utm_source=feed`)
+    assert.equal(response.status, 301)
+    assert.equal(response.headers.get('location'), `${canonical}?variant=abc`)
+    assert.equal(response.headers.get('cache-control'), 'public, max-age=86400')
+    const plain = await request(`/p/${made.publicId}`)
+    assert.equal(plain.headers.get('location'), canonical)
+    assert.equal(plain.headers.get('cache-control'), 'public, max-age=86400')
+    // The canonical path itself is served whatever else its query holds.
+    const served = await request(`${canonical}?utm_source=feed`)
+    assert.equal(served.status, 200)
+  })
+})
+
+test.group('T-CAT-006 the product page names its URL', (group) => {
+  group.setup(async () => {
+    await useJobBoss()
+  })
+
+  test('T-CAT-006 the server-rendered HTML names the canonical URL and is indexable', async ({
+    assert,
+  }) => {
+    const w = await world()
+    const made = await publishedPlain(w)
+    const path = canonicalOf('organic-cotton-crew-tee', made.publicId)
+    const response = await request(`${path}?variant=abc`)
+    const html = await response.text()
+    assert.include(html, `<link rel="canonical" href="${appUrl}${path}"`)
+    assert.notInclude(html, 'name="robots" content="noindex"')
+    assert.equal(jsonLd(html).url, `${appUrl}${path}`)
   })
 })
