@@ -5,6 +5,7 @@ import {
   type ListingCardRow,
   type StorefrontProduct,
 } from '#modules/catalog/queries'
+import { minorToRupeesFixed } from '#shared/format/money'
 
 /*
  * The storefront's reference reads as the public API answers them (docs/06
@@ -175,4 +176,85 @@ export function listingPageCardJson(row: ListingCardRow, mediaBase: string) {
     href: productHref(row.slug, row.public_id),
     image: { alt: card.image.alt, ...imageSources(row.primary_image_keys, mediaBase) },
   }
+}
+
+/*
+ * The product page's props (docs/08 §2.2, §11.2; R1-S part 3d-ii): the
+ * product as `getProduct` answers it, with each image as `<img>` takes it,
+ * from the public bucket's base URL.
+ */
+export function storefrontProductPageJson(product: StorefrontProduct, mediaBase: string) {
+  const { media, ...json } = storefrontProductJson(product)
+  return {
+    ...json,
+    media: media.map((item) => ({
+      alt: item.alt,
+      color: item.color,
+      ...imageSources(item.srcset_keys, mediaBase),
+    })),
+  }
+}
+
+const SCHEMA_STOCK = {
+  in: 'https://schema.org/InStock',
+  out: 'https://schema.org/OutOfStock',
+}
+
+/*
+ * The product's JSON-LD `Product` (01 AC-FR-SRCH-005-4, 02 AC-J02-07;
+ * ADR-0017 decision 8), on its canonical URL only. A product without
+ * option axes offers its default variant: its price in NPR and whether it
+ * is in stock at render time. A product with axes has no default variant
+ * (01 glossary), so it offers an `AggregateOffer`: its lowest and highest
+ * variant prices, the number of variants, and in stock when any is.
+ * Prices are decimal strings built from paisa, never floats.
+ */
+export function productJsonLd(
+  product: StorefrontProduct,
+  canonicalUrl: string,
+  images: string[]
+): Record<string, unknown> {
+  const prices = product.variants.map((variant) => variant.priceMinor)
+  const inStock = product.variants.some((variant) => variant.available > 0)
+  const offers =
+    product.optionAxes.length === 0 && product.variants.length === 1
+      ? {
+          '@type': 'Offer',
+          'price': minorToRupeesFixed(prices[0]),
+          'priceCurrency': product.currency,
+          'availability': inStock ? SCHEMA_STOCK.in : SCHEMA_STOCK.out,
+          'itemCondition': 'https://schema.org/NewCondition',
+          'url': canonicalUrl,
+        }
+      : {
+          '@type': 'AggregateOffer',
+          'lowPrice': minorToRupeesFixed(Math.min(...prices)),
+          'highPrice': minorToRupeesFixed(Math.max(...prices)),
+          'offerCount': product.variants.length,
+          'priceCurrency': product.currency,
+          'availability': inStock ? SCHEMA_STOCK.in : SCHEMA_STOCK.out,
+        }
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    'name': product.title,
+    'description': product.description,
+    'url': canonicalUrl,
+    ...(images.length > 0 ? { image: images } : {}),
+    ...(product.brand ? { brand: { '@type': 'Brand', 'name': product.brand.name } } : {}),
+    offers,
+  }
+}
+
+/*
+ * JSON for a `<script type="application/ld+json">`: `<`, `>`, `&` and the
+ * line separators escaped, so no text of the product can close the script.
+ */
+export function jsonLdScript(value: Record<string, unknown>) {
+  return JSON.stringify(value)
+    .replaceAll('<', '\\u003c')
+    .replaceAll('>', '\\u003e')
+    .replaceAll('&', '\\u0026')
+    .replaceAll('\u2028', '\\u2028')
+    .replaceAll('\u2029', '\\u2029')
 }

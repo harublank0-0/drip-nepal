@@ -1267,6 +1267,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['search']>>>
     }
   }
+  'product.show': {
+    methods: ["GET","HEAD"]
+    pattern: '/p/:segment'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { segment: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/product_controller').default['show']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/product_controller').default['show']>>>
+    }
+  }
   'login': {
     methods: ["GET","HEAD"]
     pattern: '/login'

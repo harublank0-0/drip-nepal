@@ -34,3 +34,24 @@ export function productSlug(title: string): string {
     .replace(/-+$/, '')
   return slug || 'product'
 }
+
+// A product page's path segment is the slug, a hyphen and the ID; the ID alone is allowed too.
+const SEGMENT_MAX = 100
+// Crockford base32 reads O as 0 and I and L as 1 (ADR-0017 decision 1).
+const ALIASES: Record<string, string> = { O: '0', I: '1', L: '1' }
+
+/*
+ * The public ID in a product page's path segment `{slug}-{publicId}`
+ * (docs/adr/0017-product-urls-public-id.md decision 1; R1-S part 3d-ii):
+ * the 8 characters after the last hyphen, in any case, with Crockford's
+ * aliases mapped. Null for a segment that holds none, or one over 100
+ * characters, which the page answers with 404.
+ */
+export function publicIdFromPath(segment: string): string | null {
+  if (segment.length > SEGMENT_MAX) return null
+  const id = segment
+    .slice(segment.lastIndexOf('-') + 1)
+    .toUpperCase()
+    .replaceAll(/[OIL]/g, (letter) => ALIASES[letter])
+  return PUBLIC_ID_PATTERN.test(id) ? id : null
+}

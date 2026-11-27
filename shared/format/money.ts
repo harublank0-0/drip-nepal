@@ -70,3 +70,13 @@ export function parseRupeesToMinor(typed: string): number | null {
   const [, whole, fraction = ''] = match
   return Number(whole + fraction.padEnd(2, '0'))
 }
+
+/*
+ * The saving against a compare-at price, in whole percent rounded down
+ * ("20% off" for 199900 against 250000; 02 AC-J02-03), from integer paisa.
+ * Null when there is no higher compare-at price.
+ */
+export function discountPercent(priceMinor: number, compareAtMinor: number | null) {
+  if (compareAtMinor === null || compareAtMinor <= priceMinor) return null
+  return Math.floor(((compareAtMinor - priceMinor) * 100) / compareAtMinor)
+}

@@ -2,6 +2,7 @@ import router from '@adonisjs/core/services/router'
 
 const HomeController = () => import('#controllers/storefront/identity/home_controller')
 const ListingController = () => import('#controllers/storefront/catalog/listing_controller')
+const ProductController = () => import('#controllers/storefront/catalog/product_controller')
 import { NAVIGATION } from '#modules/catalog/navigation'
 const LegalDocumentsController = () =>
   import('#controllers/storefront/platform/legal_documents_controller')
@@ -32,3 +33,11 @@ router
   .as('listing.category')
   .where('categorySlug', { match: /^[a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])$/ })
 router.get('/search', [ListingController, 'search']).as('listing.search')
+
+/*
+ * The product page (docs/08 §2.2; ADR-0017 decision 1; R1-S part 3d-ii):
+ * one path segment, `{slug}-{publicId}`, read by the controller, which
+ * redirects any form but the canonical one and answers 404 for a segment
+ * holding no public ID.
+ */
+router.get('/p/:segment', [ProductController, 'show']).as('product.show')
