@@ -89,8 +89,13 @@ export default function Listing({ base, listing, query, suggestions, seo }: Prop
   const state = urlState(query)
   const refined = !isUnrefined(state)
   const { meta } = listing
-  const pastLast = listing.cards.length === 0 && meta.page > 1
-  // A page link changes only the query, which the layout's heading focus misses (08 §11.1 "Visits").
+  // Past the last page of a listing that has products; an empty listing shows its own empty state.
+  const pastLast = listing.cards.length === 0 && meta.page > 1 && meta.total > 0
+  /*
+   * A page link changes only the query, which the layout's heading focus
+   * misses (08 §11.1 "Visits"). Part 3d-i-b's filter visits also drop `page`
+   * but keep focus on the control: they must not land here.
+   */
   const headingRef = useRef<HTMLHeadingElement>(null)
   const shownPage = useRef(meta.page)
   useEffect(() => {

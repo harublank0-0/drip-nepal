@@ -73,7 +73,8 @@ test.group('T-UI-046 the storefront listing pages', () => {
     )
     const card = menPage.listing.cards.find((item) => item.title === 'Men tee')!
     assert.equal(card.href, `/p/${made.slug}-${made.publicId.toLowerCase()}`)
-    // Without a public store (the tests) a card names no image URL; with one, the URL of each width.
+    // .env.test leaves MEDIA_PUBLIC_URL empty, so a card names no image URL here;
+    // tests/unit/catalog/image_sources.spec.ts covers the URLs built from a base.
     const url = `${mediaPublicUrl}/p/${made.productId}/abc-320.webp`
     assert.equal(card.image.src, mediaPublicUrl === '' ? '' : url)
     assert.equal(card.image.srcset, mediaPublicUrl === '' ? '' : `${url} 320w`)

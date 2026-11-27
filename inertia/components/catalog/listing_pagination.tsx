@@ -43,7 +43,7 @@ export function ListingPagination({
                 aria-current="page"
                 className="bg-primary text-primary-foreground rounded-md px-3 py-2 font-medium"
               >
-                <span className="sr-only">{t('storefront.listing.page_current_label')}</span>
+                <span className="sr-only">{t('storefront.listing.page_current_label')} </span>
                 {n}
               </span>
             ) : (
