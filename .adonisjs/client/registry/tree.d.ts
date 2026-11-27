@@ -85,6 +85,38 @@ export interface ApiDefinition {
   legal: {
     document: typeof routes['legal.document']
   }
+  listing: {
+    men: typeof routes['listing.men'] & {
+      clothing: typeof routes['listing.men.clothing']
+      tShirts: typeof routes['listing.men.t-shirts']
+      shirts: typeof routes['listing.men.shirts']
+      hoodies: typeof routes['listing.men.hoodies']
+      jeans: typeof routes['listing.men.jeans']
+      joggers: typeof routes['listing.men.joggers']
+      traditionalWear: typeof routes['listing.men.traditional-wear']
+      footwear: typeof routes['listing.men.footwear']
+      sneakers: typeof routes['listing.men.sneakers']
+      bags: typeof routes['listing.men.bags']
+      watches: typeof routes['listing.men.watches']
+      accessories: typeof routes['listing.men.accessories']
+    }
+    women: typeof routes['listing.women'] & {
+      clothing: typeof routes['listing.women.clothing']
+      tops: typeof routes['listing.women.tops']
+      dresses: typeof routes['listing.women.dresses']
+      jeans: typeof routes['listing.women.jeans']
+      traditionalWear: typeof routes['listing.women.traditional-wear']
+      sarees: typeof routes['listing.women.sarees']
+      kurtas: typeof routes['listing.women.kurtas']
+      footwear: typeof routes['listing.women.footwear']
+      sneakers: typeof routes['listing.women.sneakers']
+      bags: typeof routes['listing.women.bags']
+      watches: typeof routes['listing.women.watches']
+      accessories: typeof routes['listing.women.accessories']
+    }
+    category: typeof routes['listing.category']
+    search: typeof routes['listing.search']
+  }
   login: typeof routes['login']
   signup: typeof routes['signup']
   verifyEmail: typeof routes['verify_email']

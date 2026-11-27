@@ -126,3 +126,39 @@ export function storefrontProductJson(product: StorefrontProduct) {
     published_at: product.publishedAt.toISOString(),
   }
 }
+
+/*
+ * The image of a storefront page as `<img>` takes it: every derived width
+ * in `srcset` and a fallback `src` (the widest at most 640 px, else the
+ * narrowest), from the public bucket's base URL (`MEDIA_PUBLIC_URL`, docs/09
+ * §6.1). Page props carry URLs; the JSON API carries keys (06 §14.1).
+ */
+export function imageSources(keys: Record<string, string>, mediaBase: string) {
+  const base = mediaBase.replace(/\/$/, '')
+  const widths = Object.entries(keys)
+    .map(([width, key]) => ({ width: Number(width), url: `${base}/${key}` }))
+    .sort((a, b) => a.width - b.width)
+  const fallback = widths.filter((item) => item.width <= 640).at(-1) ?? widths[0]
+  return {
+    src: fallback?.url ?? '',
+    srcset: widths.map((item) => `${item.url} ${item.width}w`).join(', '),
+  }
+}
+
+// The storefront product page's path: the current slug and the lowercase public ID (ADR-0017).
+export const productHref = (slug: string, publicId: string) =>
+  `/p/${slug}-${publicId.toLowerCase()}`
+
+/*
+ * A listing page's card (docs/08 §2.2 `storefront/listing`; R1-S part 3d-i):
+ * the `ListingCard` of `listProducts` with the product's page path and the
+ * image as URLs.
+ */
+export function listingPageCardJson(row: ListingCardRow, mediaBase: string) {
+  const card = listingCardJson(row)
+  return {
+    ...card,
+    href: productHref(row.slug, row.public_id),
+    image: { alt: card.image.alt, ...imageSources(row.primary_image_keys, mediaBase) },
+  }
+}

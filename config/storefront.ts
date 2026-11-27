@@ -28,3 +28,10 @@ export const support = {
  * The public address of the site, for absolute links in social previews.
  */
 export const appUrl = env.get('APP_URL').replace(/\/+$/, '')
+
+/*
+ * The public bucket's base URL (docs/09 §6.1 `MEDIA_PUBLIC_URL`), from which
+ * the storefront pages build image URLs; empty where no store is set up
+ * (tests), so a page then gives the keys alone.
+ */
+export const mediaPublicUrl = (env.get('MEDIA_PUBLIC_URL') ?? '').replace(/\/+$/, '')

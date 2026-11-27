@@ -931,6 +931,342 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/storefront/platform/legal_documents_controller').default['show']>>>
     }
   }
+  'listing.men': {
+    methods: ["GET","HEAD"]
+    pattern: '/men'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['navigation']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['navigation']>>>
+    }
+  }
+  'listing.men.clothing': {
+    methods: ["GET","HEAD"]
+    pattern: '/men/clothing'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['navigation']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['navigation']>>>
+    }
+  }
+  'listing.men.t-shirts': {
+    methods: ["GET","HEAD"]
+    pattern: '/men/t-shirts'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['navigation']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['navigation']>>>
+    }
+  }
+  'listing.men.shirts': {
+    methods: ["GET","HEAD"]
+    pattern: '/men/shirts'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['navigation']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['navigation']>>>
+    }
+  }
+  'listing.men.hoodies': {
+    methods: ["GET","HEAD"]
+    pattern: '/men/hoodies'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['navigation']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['navigation']>>>
+    }
+  }
+  'listing.men.jeans': {
+    methods: ["GET","HEAD"]
+    pattern: '/men/jeans'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['navigation']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['navigation']>>>
+    }
+  }
+  'listing.men.joggers': {
+    methods: ["GET","HEAD"]
+    pattern: '/men/joggers'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['navigation']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['navigation']>>>
+    }
+  }
+  'listing.men.traditional-wear': {
+    methods: ["GET","HEAD"]
+    pattern: '/men/traditional-wear'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['navigation']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['navigation']>>>
+    }
+  }
+  'listing.men.footwear': {
+    methods: ["GET","HEAD"]
+    pattern: '/men/footwear'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['navigation']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['navigation']>>>
+    }
+  }
+  'listing.men.sneakers': {
+    methods: ["GET","HEAD"]
+    pattern: '/men/sneakers'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['navigation']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['navigation']>>>
+    }
+  }
+  'listing.men.bags': {
+    methods: ["GET","HEAD"]
+    pattern: '/men/bags'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['navigation']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['navigation']>>>
+    }
+  }
+  'listing.men.watches': {
+    methods: ["GET","HEAD"]
+    pattern: '/men/watches'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['navigation']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['navigation']>>>
+    }
+  }
+  'listing.men.accessories': {
+    methods: ["GET","HEAD"]
+    pattern: '/men/accessories'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['navigation']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['navigation']>>>
+    }
+  }
+  'listing.women': {
+    methods: ["GET","HEAD"]
+    pattern: '/women'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['navigation']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['navigation']>>>
+    }
+  }
+  'listing.women.clothing': {
+    methods: ["GET","HEAD"]
+    pattern: '/women/clothing'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['navigation']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['navigation']>>>
+    }
+  }
+  'listing.women.tops': {
+    methods: ["GET","HEAD"]
+    pattern: '/women/tops'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['navigation']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['navigation']>>>
+    }
+  }
+  'listing.women.dresses': {
+    methods: ["GET","HEAD"]
+    pattern: '/women/dresses'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['navigation']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['navigation']>>>
+    }
+  }
+  'listing.women.jeans': {
+    methods: ["GET","HEAD"]
+    pattern: '/women/jeans'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['navigation']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['navigation']>>>
+    }
+  }
+  'listing.women.traditional-wear': {
+    methods: ["GET","HEAD"]
+    pattern: '/women/traditional-wear'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['navigation']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['navigation']>>>
+    }
+  }
+  'listing.women.sarees': {
+    methods: ["GET","HEAD"]
+    pattern: '/women/sarees'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['navigation']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['navigation']>>>
+    }
+  }
+  'listing.women.kurtas': {
+    methods: ["GET","HEAD"]
+    pattern: '/women/kurtas'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['navigation']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['navigation']>>>
+    }
+  }
+  'listing.women.footwear': {
+    methods: ["GET","HEAD"]
+    pattern: '/women/footwear'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['navigation']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['navigation']>>>
+    }
+  }
+  'listing.women.sneakers': {
+    methods: ["GET","HEAD"]
+    pattern: '/women/sneakers'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['navigation']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['navigation']>>>
+    }
+  }
+  'listing.women.bags': {
+    methods: ["GET","HEAD"]
+    pattern: '/women/bags'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['navigation']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['navigation']>>>
+    }
+  }
+  'listing.women.watches': {
+    methods: ["GET","HEAD"]
+    pattern: '/women/watches'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['navigation']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['navigation']>>>
+    }
+  }
+  'listing.women.accessories': {
+    methods: ["GET","HEAD"]
+    pattern: '/women/accessories'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['navigation']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['navigation']>>>
+    }
+  }
+  'listing.category': {
+    methods: ["GET","HEAD"]
+    pattern: '/c/:categorySlug'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { categorySlug: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['category']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['category']>>>
+    }
+  }
+  'listing.search': {
+    methods: ["GET","HEAD"]
+    pattern: '/search'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['search']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/storefront/catalog/listing_controller').default['search']>>>
+    }
+  }
   'login': {
     methods: ["GET","HEAD"]
     pattern: '/login'
