@@ -47,8 +47,9 @@ import { addMember, setShopStatus } from '#tests/support/shops'
  *   before `below_reserved`; the split names the shop orders the vendor can
  *   act on, oldest first, at most 20, and never an unpaid one.
  * - T-INV-009: `listInventory` lists the shop's products, newest change
- *   first, with their active variants: SKU, label, `on_hand`, `reserved`,
- *   `available` and the latest movement (02 J-11 step 1); archived
+ *   first, with their active variants, then their archived variants that
+ *   still hold stock (R1-S part 2f-iv-b): SKU, label, `status`, `on_hand`,
+ *   `reserved`, `available` and the latest movement (02 J-11 step 1); archived
  *   products only with `status=archived`; `q` on a title prefix in any
  *   case or a SKU prefix; cursor pages, and a cursor made for other filters
  *   is 400; `low_stock` (R2) and unknown parameters are 400.
@@ -635,13 +636,14 @@ test.group('T-INV-009 listInventory', (group) => {
       status: 'draft',
     })
     const variants = item.variants as Record<string, unknown>[]
+    // The archived variant still holds 2 units, so it follows the active ones (R1-S part 2f-iv-b).
     assert.deepEqual(
-      variants.map((variant) => [variant.variant_id, variant.sku, variant.label]),
+      variants.map((variant) => [variant.variant_id, variant.sku, variant.label, variant.status]),
       [
-        [small.id, 'TEE-S', 'Size: S'],
-        [medium.id, 'TEE-M', 'Size: M'],
-      ],
-      'the archived variant is not shown'
+        [small.id, 'TEE-S', 'Size: S', 'active'],
+        [medium.id, 'TEE-M', 'Size: M', 'active'],
+        [large.id, 'TEE-L', 'Size: L', 'archived'],
+      ]
     )
     assert.deepInclude(variants[0], {
       is_default: false,
@@ -657,6 +659,17 @@ test.group('T-INV-009 listInventory', (group) => {
       reserved_delta: 0,
     })
     assert.deepInclude(variants[1], { on_hand: 0, last_movement: null })
+    assert.deepInclude(variants[2], { on_hand: 2, reserved: 0 })
+    // Written off, the archived variant holds nothing and leaves the list.
+    const off = await adjust(w, large.id, { delta: -2, reason_code: 'lost' })
+    assert.equal(off.status, 201, off.text)
+    const after = await list(w)
+    assert.deepEqual(
+      (after.body.data[0].variants as { variant_id: string }[]).map(
+        (variant) => variant.variant_id
+      ),
+      [small.id, medium.id]
+    )
   })
 
   test('T-INV-009 filters, cursor pages and parameters', async ({ assert }) => {

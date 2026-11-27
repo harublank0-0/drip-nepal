@@ -24,7 +24,8 @@ import {
  * `/seller/{shopSlug}/inventory`, the stock page (docs/08 §2.5 `/inventory`
  * row; 02 J-11; R1-S part 2f-iv-a), rendered in the browser in the seller
  * layout. Its props are one cursor page of `listInventory` (`inventory`:
- * each product with its active variants' stock) and the filters the server
+ * each product with its active variants' stock, then its archived variants
+ * that still hold stock) and the filters the server
  * read from the URL (`filters`), shared with the product list: the status
  * and a title or SKU prefix (app/controllers/seller/inventory).
  *

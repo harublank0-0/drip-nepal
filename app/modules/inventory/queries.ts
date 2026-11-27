@@ -1,9 +1,9 @@
 import db from '@adonisjs/lucid/services/db'
 import type { QueryClientContract } from '@adonisjs/lucid/types/database'
 import {
-  activeVariantsOf,
+  stockVariantsOf,
   listShopProducts,
-  type ActiveVariant,
+  type StockVariant,
   type ProductListItem,
   type Seek,
 } from '#modules/catalog/queries'
@@ -85,7 +85,7 @@ export type LastMovement = {
 
 type ProductStatus = ProductListItem['status']
 
-export type InventoryListVariant = ActiveVariant & {
+export type InventoryListVariant = StockVariant & {
   onHand: number
   reserved: number
   version: number
@@ -105,10 +105,13 @@ export type InventoryListItem = {
  * `listInventory` (docs/06 §13.5, §6.3; 02 J-11 step 1; R1-S part 2c): the
  * shop's stock by product, with the product list's filters, order and
  * cursor (`listShopProducts`: newest change first, `status`, `q`), each
- * product with all its active variants (docs/04a §8.1): SKU, label,
- * `on_hand`, `reserved` and the latest movement, read by
+ * product with its active variants and, after them, its archived variants
+ * that still hold stock (`on_hand` or `reserved` above 0), each with its
+ * status: an archived variant keeps its stock row, which may still be
+ * adjusted or counted (docs/05 §5.9; R1-S part 2f-iv-b). Each has its SKU,
+ * label, `on_hand`, `reserved` and the latest movement, read by
  * `inventory_movements_variant_history_idx`. A variant without a stock row
- * (none should exist) shows 0 and 0.
+ * (none should exist) shows 0 and 0, so an archived one is left out.
  */
 export async function listInventory(filters: {
   shopId: string
@@ -119,7 +122,7 @@ export async function listInventory(filters: {
 }): Promise<{ items: InventoryListItem[]; last: Seek | null }> {
   const client = db.connection()
   const page = await listShopProducts(filters)
-  const variants = await activeVariantsOf(
+  const variants = await stockVariantsOf(
     client,
     filters.shopId,
     page.items.map((item) => item.id)
@@ -151,12 +154,16 @@ export async function listInventory(filters: {
       title: item.title,
       status: item.status,
       updatedAt: item.updatedAt,
-      variants: (variants.get(item.id) ?? []).map((variant) => {
+      variants: (variants.get(item.id) ?? []).flatMap((variant) => {
         const row = stock.get(variant.id)
-        return {
+        const onHand = (row?.on_hand as number | undefined) ?? 0
+        const reserved = (row?.reserved as number | undefined) ?? 0
+        // An archived variant is listed only while it holds stock.
+        if (variant.status === 'archived' && onHand === 0 && reserved === 0) return []
+        const listed: InventoryListVariant = {
           ...variant,
-          onHand: (row?.on_hand as number | undefined) ?? 0,
-          reserved: (row?.reserved as number | undefined) ?? 0,
+          onHand,
+          reserved,
           version: (row?.version as number | undefined) ?? 1,
           lastMovement: row?.kind
             ? {
@@ -168,6 +175,7 @@ export async function listInventory(filters: {
               }
             : null,
         }
+        return [listed]
       }),
     })),
     last: page.last,
@@ -217,5 +225,89 @@ export async function reservedSplit(
     committed: committed.reduce((sum, row) => sum + row.quantity, 0),
     committedShopOrders: numbers.slice(0, COMMITTED_SHOP_ORDERS_SHOWN),
     held: rows.filter((row) => row.status === 'held').reduce((sum, row) => sum + row.quantity, 0),
+  }
+}
+
+export type StockMovement = {
+  id: string
+  kind: MovementKind
+  reasonCode: string
+  onHandDelta: number
+  reservedDelta: number
+  note: string | null
+  actorUserId: string | null
+  requestId: string | null
+  createdAt: Date
+}
+
+/*
+ * A variant's stock and its movement history, newest first, one cursor page
+ * at a time (02 J-11 step 4: who changed what, why, and with which request
+ * ID; R1-S part 2f-iv-b), read by `inventory_movements_variant_history_idx`.
+ * Both are scoped to the shop. The stock is 0 and 0 without a stock row.
+ */
+export async function variantStockHistory(filters: {
+  shopId: string
+  variantId: string
+  limit: number
+  seek: Seek | null
+}): Promise<{
+  stock: { onHand: number; reserved: number; version: number }
+  movements: StockMovement[]
+  last: Seek | null
+}> {
+  const client = db.connection()
+  const item: { on_hand: number; reserved: number; version: number } | null = await client
+    .from('inventory_items')
+    .where({ shop_id: filters.shopId, variant_id: filters.variantId })
+    .select('on_hand', 'reserved', 'version')
+    .first()
+  const query = client
+    .from('inventory_movements')
+    .where({ shop_id: filters.shopId, variant_id: filters.variantId })
+    .orderBy('created_at', 'desc')
+    .orderBy('id', 'desc')
+    .limit(filters.limit + 1)
+    .select(
+      'id',
+      'kind',
+      'reason_code',
+      'on_hand_delta',
+      'reserved_delta',
+      'note',
+      'actor_user_id',
+      'request_id',
+      'created_at',
+      client.raw(
+        `to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as sort_key`
+      )
+    )
+  if (filters.seek) {
+    query.whereRaw('(created_at, id) < (?::timestamptz, ?::uuid)', [
+      filters.seek.key,
+      filters.seek.id,
+    ])
+  }
+  const rows: Record<string, unknown>[] = await query
+  const page = rows.slice(0, filters.limit)
+  const last = rows.length > filters.limit ? rows[filters.limit - 1] : null
+  return {
+    stock: {
+      onHand: item?.on_hand ?? 0,
+      reserved: item?.reserved ?? 0,
+      version: item?.version ?? 1,
+    },
+    movements: page.map((row) => ({
+      id: row.id as string,
+      kind: row.kind as MovementKind,
+      reasonCode: row.reason_code as string,
+      onHandDelta: row.on_hand_delta as number,
+      reservedDelta: row.reserved_delta as number,
+      note: (row.note as string | null) ?? null,
+      actorUserId: (row.actor_user_id as string | null) ?? null,
+      requestId: (row.request_id as string | null) ?? null,
+      createdAt: row.created_at as Date,
+    })),
+    last: last ? { key: last.sort_key as string, id: last.id as string } : null,
   }
 }

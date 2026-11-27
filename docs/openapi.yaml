@@ -3591,13 +3591,14 @@ paths:
         list's filters, order and cursor (06 §6.3, as `listShopProducts`): `status` (default:
         every product but the archived ones), `q` (a title or SKU prefix, case-insensitive, 1 to
         100 characters), newest change first by `(updated_at, id)` on `products_seller_list_idx`.
-        Each item carries all the product's active variants (04a §8.1), in the editor's order:
-        SKU, label, `on_hand`, `reserved`, `available` (`on_hand - reserved`), the stock row's
-        `version` and the latest movement, or `null` for a variant never changed (02 J-11 step
-        1). `low_stock` is R2 (FR-INV-004), so in R1 it is an unknown parameter. The parameter
-        list is closed: an unknown parameter, a value outside `status`, a `q` out of range or a
-        foreign cursor is 400 `INVALID_QUERY_PARAMETER`. No side effects. T-INV-009, T-SEC-001,
-        T-SEC-030, T-SEC-031. Release R1·M3 (R1-S part 2c).
+        Each item carries all the product's active variants (04a §8.1), in the editor's order,
+        then its archived variants that still hold stock (`on_hand` or `reserved` above 0; R1-S
+        part 2f-iv-b), each with its `status`: SKU, label, `on_hand`, `reserved`, `available`
+        (`on_hand - reserved`), the stock row's `version` and the latest movement, or `null` for a
+        variant never changed (02 J-11 step 1). `low_stock` is R2 (FR-INV-004), so in R1 it is an
+        unknown parameter. The parameter list is closed: an unknown parameter, a value outside
+        `status`, a `q` out of range or a foreign cursor is 400 `INVALID_QUERY_PARAMETER`. No side
+        effects. T-INV-009, T-SEC-001, T-SEC-030, T-SEC-031. Release R1·M3 (R1-S part 2c).
       x-release: R1·M3
       x-permission: shop.products.view
       parameters:
@@ -3636,6 +3637,7 @@ paths:
                             sku: TEE-S
                             label: 'Size: S'
                             is_default: false
+                            status: active
                             on_hand: 6
                             reserved: 0
                             available: 6
@@ -3650,11 +3652,27 @@ paths:
                             sku: TEE-M
                             label: 'Size: M'
                             is_default: false
+                            status: active
                             on_hand: 0
                             reserved: 0
                             available: 0
                             version: 1
                             last_movement: null
+                          - variant_id: 01929a51-0000-7000-8000-0000000000b3
+                            sku: TEE-L
+                            label: 'Size: L'
+                            is_default: false
+                            status: archived
+                            on_hand: 2
+                            reserved: 0
+                            available: 2
+                            version: 2
+                            last_movement:
+                              kind: adjustment
+                              reason_code: received_stock
+                              on_hand_delta: 2
+                              reserved_delta: 0
+                              created_at: '2026-11-24T06:05:00.000Z'
                     meta: { limit: 25, next_cursor: null }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
@@ -9490,12 +9508,30 @@ components:
       type: object
       additionalProperties: false
       required:
-        [variant_id, sku, label, is_default, on_hand, reserved, available, version, last_movement]
+        [
+          variant_id,
+          sku,
+          label,
+          is_default,
+          status,
+          on_hand,
+          reserved,
+          available,
+          version,
+          last_movement,
+        ]
       properties:
         variant_id: { $ref: '#/components/schemas/Uuid' }
         sku: { type: string, minLength: 1, maxLength: 64 }
         label: { type: string, maxLength: 200, description: '`Default` for the default variant.' }
         is_default: { type: boolean }
+        status:
+          type: string
+          enum: [active, archived]
+          description: >-
+            An archived variant is listed, after the active ones, only while it holds stock
+            (`on_hand` or `reserved` above 0); its stock may still be adjusted or counted (05 §5.9;
+            R1-S part 2f-iv-b).
         on_hand: { type: integer, minimum: 0 }
         reserved: { type: integer, minimum: 0 }
         available: { type: integer, minimum: 0, description: '`on_hand - reserved`.' }
@@ -9506,7 +9542,9 @@ components:
             - { type: 'null' }
     InventoryListItem:
       type: object
-      description: One product of `listInventory` with all its active variants.
+      description: >-
+        One product of `listInventory` with all its active variants and, after them, its archived
+        variants that still hold stock.
       additionalProperties: false
       required: [product_id, public_id, title, status, updated_at, variants]
       properties:
@@ -11661,3 +11699,6 @@ components:
 # 67. `getProduct` moves from `x-pending-operations` to `paths`, written from the code (R1-S part
 #     3c, 2026-11-27; 06 note 76), with the schema `StorefrontProduct`: the shop's return policy
 #     is public (01 AC-FR-SHOP-013-4 as reconciled).
+# 68. `listInventory` also lists, after the active variants, the archived variants that still hold
+#     stock, and `InventoryListVariant` gains the required `status` (`active`, `archived`; R1-S part
+#     2f-iv-b, 2026-11-27; 06 note 78). The example shows an archived variant holding 2 units.

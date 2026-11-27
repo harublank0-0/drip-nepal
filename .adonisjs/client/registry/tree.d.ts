@@ -138,7 +138,9 @@ export interface ApiDefinition {
       new: typeof routes['seller.products.new']
       edit: typeof routes['seller.products.edit']
     }
-    inventory: typeof routes['seller.inventory']
+    inventory: typeof routes['seller.inventory'] & {
+      history: typeof routes['seller.inventory.history']
+    }
   }
   admin: {
     logistics: typeof routes['admin.logistics']

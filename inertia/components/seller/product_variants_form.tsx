@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useForm, useStore, type AnyFormApi } from '@tanstack/react-form'
 import { router } from '@inertiajs/react'
+import { Link } from '@adonisjs/inertia/react'
 import type { Route } from '@tuyau/core/types'
 import type { Problem } from '@shared/api/problem'
 import { VARIANT_LIMITS } from '@shared/constants/limits'
@@ -126,6 +127,50 @@ function conflictProduct(problem: Problem): SellerProduct | null {
   return typeof current === 'object' && current !== null && 'version' in current
     ? (current as SellerProduct)
     : null
+}
+
+/*
+ * A row's stock: the on-hand count, a link to the variant's stock history
+ * once the variant is saved (02 J-11 "Entry points"; R1-S part 2f-iv-b).
+ * Phones read "3 in stock"; wide screens show the number under the column
+ * header, and screen readers always hear the label.
+ */
+function StockCount({
+  shopSlug,
+  variantId,
+  onHand,
+  name,
+}: {
+  shopSlug: string
+  variantId: string | null
+  onHand: number
+  // The row's name, so each link says whose history it opens.
+  name: string
+}) {
+  const content = (
+    <>
+      <span className="sr-only">
+        {t('seller.product.variants.on_hand_count', { count: onHand })}
+      </span>
+      <span aria-hidden="true" className="lg:hidden">
+        {t('seller.product.variants.on_hand_count', { count: onHand })}
+      </span>
+      <span aria-hidden="true" className="hidden lg:inline">
+        {onHand}
+      </span>
+    </>
+  )
+  if (!variantId) return content
+  return (
+    <Link
+      route="seller.inventory.history"
+      routeParams={{ shopSlug, variantId }}
+      className="text-link underline-offset-4 hover:underline"
+    >
+      {content}
+      <span className="sr-only"> {t('seller.product.variants.stock_history', { name })}</span>
+    </Link>
+  )
 }
 
 export function ProductVariantsForm({
@@ -631,15 +676,12 @@ export function ProductVariantsForm({
                     )}
                   </form.Field>
                   <p className="text-sm tabular-nums lg:text-end lg:leading-9">
-                    <span className="sr-only">
-                      {t('seller.product.variants.on_hand_count', { count: row.onHand })}
-                    </span>
-                    <span aria-hidden="true" className="lg:hidden">
-                      {t('seller.product.variants.on_hand_count', { count: row.onHand })}
-                    </span>
-                    <span aria-hidden="true" className="hidden lg:inline">
-                      {row.onHand}
-                    </span>
+                    <StockCount
+                      shopSlug={shopSlug}
+                      variantId={row.id}
+                      onHand={row.onHand}
+                      name={labelOf(row)}
+                    />
                   </p>
                 </li>
               ))}
@@ -655,10 +697,20 @@ export function ProductVariantsForm({
             <ul className="ml-4 list-disc text-sm">
               {archivedAside.map((variant) => (
                 <li key={variant.id}>
-                  {t('seller.product.variants.archived_item', {
-                    label: variant.label,
-                    sku: variant.sku,
-                  })}
+                  <Link
+                    route="seller.inventory.history"
+                    routeParams={{ shopSlug, variantId: variant.id }}
+                    className="text-link underline-offset-4 hover:underline"
+                  >
+                    {t('seller.product.variants.archived_item', {
+                      label: variant.label,
+                      sku: variant.sku,
+                    })}
+                    <span className="sr-only">
+                      {' '}
+                      {t('seller.product.variants.stock_history', { name: variant.label })}
+                    </span>
+                  </Link>
                 </li>
               ))}
             </ul>

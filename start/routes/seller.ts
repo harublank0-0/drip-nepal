@@ -14,7 +14,8 @@ const InventoryController = () => import('#controllers/seller/inventory/inventor
  * and a caller who is not the shop's owner or an active member gets the
  * 404 page of an unknown slug (T-SEC-001). R1-S part 1a builds the
  * overview, 1b `/settings`, 1c `/shipping`, 2f-i the product list, the
- * new product and the product editor, and 2f-iv-a `/inventory`. Each
+ * new product and the product editor, 2f-iv-a `/inventory` and 2f-iv-b
+ * `/inventory/:variantId`, a variant's stock history. Each
  * page's controller checks the permission and the status gate of the
  * operation that serves it (docs/07 §4.5 "Page routes"). Page routes keep
  * dotted names (docs/09 §4.3).
@@ -31,6 +32,10 @@ router
       .as('products.edit')
       .where('productId', router.matchers.uuid())
     router.get('/inventory', [InventoryController, 'index']).as('inventory')
+    router
+      .get('/inventory/:variantId', [InventoryController, 'history'])
+      .as('inventory.history')
+      .where('variantId', router.matchers.uuid())
   })
   .prefix('/seller/:shopSlug')
   .as('seller')

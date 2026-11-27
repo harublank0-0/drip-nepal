@@ -395,29 +395,37 @@ async function variantLabels(
   )
 }
 
-export type ActiveVariant = { id: string; sku: string; label: string; isDefault: boolean }
+export type StockVariant = {
+  id: string
+  sku: string
+  label: string
+  isDefault: boolean
+  status: 'active' | 'archived'
+}
 
 /*
- * The active variants of the shop's products `productIds`, by product, in
- * the editor's order (creation, then ID), with their labels. `listInventory`
- * shows these (docs/06 §6.3, docs/04a §8.1).
+ * The variants of the shop's products `productIds`, by product, active ones
+ * first, each group in the editor's order (creation, then ID), with their
+ * labels. `listInventory` shows the active ones and the archived ones that
+ * still hold stock, which it reads itself (docs/06 §6.3, docs/04a §8.1;
+ * R1-S part 2f-iv-b).
  */
-export async function activeVariantsOf(
+export async function stockVariantsOf(
   client: QueryClientContract,
   shopId: string,
   productIds: readonly string[]
-): Promise<Map<string, ActiveVariant[]>> {
+): Promise<Map<string, StockVariant[]>> {
   if (productIds.length === 0) return new Map()
   const rows: Record<string, unknown>[] = await client
     .from('product_variants')
     .where('shop_id', shopId)
     .whereIn('product_id', [...productIds])
-    .where('status', 'active')
+    .orderByRaw("status = 'active' DESC")
     .orderBy('created_at')
     .orderBy('id')
-    .select('id', 'product_id', 'sku', 'is_default')
+    .select('id', 'product_id', 'sku', 'is_default', 'status')
   const labels = await variantLabels(client, rows)
-  const byProduct = new Map<string, ActiveVariant[]>()
+  const byProduct = new Map<string, StockVariant[]>()
   for (const row of rows) {
     const list = byProduct.get(row.product_id as string) ?? []
     list.push({
@@ -425,10 +433,60 @@ export async function activeVariantsOf(
       sku: row.sku as string,
       label: labels.get(row.id as string)!,
       isDefault: row.is_default as boolean,
+      status: row.status as StockVariant['status'],
     })
     byProduct.set(row.product_id as string, list)
   }
   return byProduct
+}
+
+/*
+ * One variant of the shop, active or archived, with its label and its
+ * product, for its stock history page (R1-S part 2f-iv-b); null when the
+ * shop has no such variant, so another shop's is the 404 of a missing one
+ * (T-SEC-001).
+ */
+export async function shopVariant(
+  shopId: string,
+  variantId: string,
+  client: QueryClientContract = db.connection()
+): Promise<
+  | (StockVariant & {
+      product: { id: string; publicId: string; title: string; status: ProductListItem['status'] }
+    })
+  | null
+> {
+  const row: Record<string, unknown> | null = await client
+    .from('product_variants as v')
+    .join('products as p', 'p.id', 'v.product_id')
+    .where('v.shop_id', shopId)
+    .where('v.id', variantId)
+    .select(
+      'v.id',
+      'v.sku',
+      'v.is_default',
+      'v.status',
+      'p.id as product_id',
+      'p.public_id',
+      'p.title',
+      'p.status as product_status'
+    )
+    .first()
+  if (!row) return null
+  const labels = await variantLabels(client, [row])
+  return {
+    id: row.id as string,
+    sku: row.sku as string,
+    label: labels.get(row.id as string)!,
+    isDefault: row.is_default as boolean,
+    status: row.status as StockVariant['status'],
+    product: {
+      id: row.product_id as string,
+      publicId: row.public_id as string,
+      title: row.title as string,
+      status: row.product_status as ProductListItem['status'],
+    },
+  }
 }
 
 /*

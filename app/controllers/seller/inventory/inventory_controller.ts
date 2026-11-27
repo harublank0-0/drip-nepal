@@ -1,8 +1,14 @@
 import type { HttpContext } from '@adonisjs/core/http'
-import { LIST_PRODUCT_STATUSES } from '#modules/catalog/queries'
-import { listInventory } from '#modules/inventory/queries'
+import { DomainError } from '#exceptions/domain_error'
+import { LIST_PRODUCT_STATUSES, shopVariant } from '#modules/catalog/queries'
+import { listInventory, variantStockHistory } from '#modules/inventory/queries'
 import { assertShopGate, assertShopPermission } from '#modules/shops/permissions'
-import { inventoryListItemJson } from '#transformers/seller/inventory_transformer'
+import { shopRolesOf } from '#modules/shops/queries'
+import {
+  inventoryListItemJson,
+  stockHistoryVariantJson,
+  stockMovementJson,
+} from '#transformers/seller/inventory_transformer'
 import {
   listRequest,
   oneOf,
@@ -26,6 +32,14 @@ import {
  * (`filters`), with the operation's own parameters (`status`, `q`,
  * `cursor`, `limit`; 06 §6.3). A parameter the list refuses is dropped by a
  * redirect to the same page without it (08 §7.2), as on the product list.
+ *
+ * `/seller/{shopSlug}/inventory/{variantId}`, a variant's stock and its
+ * history (02 J-11 step 4; R1-S part 2f-iv-b), is gated the same way. The
+ * variant is looked up inside the shop, active or archived; another shop's
+ * is the 404 of a missing one (T-SEC-001). Its props are the variant with
+ * its product and stock now (`variant`) and one cursor page of its
+ * movements, newest first (`movements`, `cursor` and `limit` only), each
+ * naming who made it by role (`movementActor`).
  */
 const LIST_PARAMETERS = ['status', 'q'] as const
 
@@ -64,6 +78,43 @@ export default class InventoryController {
         meta: list.meta(result.last),
       },
       filters: { status: status ?? null, q: q ?? null },
+    })
+  }
+
+  async history(ctx: HttpContext) {
+    ctx.response.header('Cache-Control', 'private, no-store')
+    assertShopPermission(ctx.shop, 'shop.products.view')
+    assertShopGate(ctx.shop, 'products_view')
+    const variant = await shopVariant(ctx.shop.id, ctx.params.variantId)
+    if (!variant) throw new DomainError('NOT_FOUND')
+    let list: ListRequest
+    try {
+      list = listRequest(ctx, {
+        sort: 'created_desc',
+        keyKind: 'timestamp',
+        parameters: [],
+        filters: { variant: variant.id },
+      })
+    } catch (error) {
+      const path = pathWithoutRefused(ctx, error)
+      if (path === null) throw error
+      return ctx.response.redirect().toPath(path)
+    }
+    const history = await variantStockHistory({
+      shopId: ctx.shop.id,
+      variantId: variant.id,
+      limit: list.limit,
+      seek: list.seek,
+    })
+    const actors = [...new Set(history.movements.flatMap((movement) => movement.actorUserId ?? []))]
+    const roles = await shopRolesOf(ctx.shop.id, actors)
+    const viewerId = ctx.auth.getUserOrFail().id
+    return ctx.inertia.render('seller/stock_history', {
+      variant: stockHistoryVariantJson(variant, history.stock),
+      movements: {
+        items: history.movements.map((movement) => stockMovementJson(movement, roles, viewerId)),
+        meta: list.meta(history.last),
+      },
     })
   }
 }
