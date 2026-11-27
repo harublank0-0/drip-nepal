@@ -334,3 +334,85 @@ jobs:
       # and React hydrates it in Chromium with no error.
       - name: T-OPS-010 image checks and T-ARCH-002 hydration
         run: scripts/check_image.sh dripnepal:ci node scripts/check_hydration.mjs --base http://127.0.0.1:3399
+
+  # docs/10 §5.1 Reports: T-PERF-003, Lighthouse on the storefront pages of a
+  # production build (docs/08 §10.1, docs/11 §12.3), report only. The job
+  # fails when a page cannot be measured, never on a budget, and it is not a
+  # required check (docs/10 §5.4); the table is in the job summary and the
+  # reports are an artifact. The perf suite rebuilds the test database and
+  # commits the launch catalogue, with its photos in SeaweedFS; the build then
+  # runs with APP_ENV=development over http, because staging and production
+  # need https (start/env_policy.ts), and serves its built assets either way.
+  lighthouse:
+    name: Lighthouse
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: docker.io/postgres:18.4
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: secret
+          POSTGRES_DB: dripnepal_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d dripnepal_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+      - name: App key for the run
+        run: echo "APP_KEY=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+      - name: Database roles
+        env:
+          PGPASSWORD: secret
+        run: |
+          psql -v ON_ERROR_STOP=1 -h "$DB_HOST" -p "$DB_PORT" -U postgres -d "$DB_DATABASE" <<'SQL'
+          CREATE ROLE dripnepal_migrator LOGIN PASSWORD 'secret' NOSUPERUSER NOCREATEDB NOCREATEROLE;
+          CREATE ROLE dripnepal_app LOGIN PASSWORD 'secret' NOSUPERUSER NOCREATEDB NOCREATEROLE;
+          CREATE ROLE dripnepal_readonly LOGIN PASSWORD 'secret' NOSUPERUSER NOCREATEDB NOCREATEROLE;
+          GRANT pg_read_all_stats TO dripnepal_readonly;
+          ALTER DATABASE dripnepal_test OWNER TO dripnepal_migrator;
+          SQL
+      - name: S3 server (SeaweedFS)
+        run: docker compose up -d --wait seaweedfs
+      - name: T-PERF-003 the launch catalogue
+        env:
+          PERF_CATALOGUE_REQUIRED: '1'
+        run: node ace test perf
+      - name: Production build
+        run: node ace build
+      - name: Start the built app
+        env:
+          NODE_ENV: development
+          APP_ENV: development
+          DB_DEBUG: 'false'
+          MEDIA_PUBLIC_URL: http://localhost:8333/dripnepal-test-public
+        run: |
+          cp .env.test build/.env
+          mkdir -p tmp
+          (cd build && nohup node bin/server.js > ../tmp/server.log 2>&1 &)
+          curl -sf -o /dev/null --retry 60 --retry-delay 1 --retry-connrefused http://localhost:3333/health/ready
+      - name: T-PERF-003 Lighthouse (report only)
+        run: node scripts/run_lighthouse.mjs --base http://localhost:3333 --out tmp/lighthouse
+      - name: Lighthouse reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: lighthouse-reports
+          path: |
+            tmp/lighthouse
+            tmp/server.log
+          retention-days: 14
+          if-no-files-found: ignore
