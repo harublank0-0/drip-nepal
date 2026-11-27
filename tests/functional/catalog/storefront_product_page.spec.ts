@@ -188,6 +188,82 @@ test.group('T-UI-048 the storefront product page', (group) => {
   })
 })
 
+test.group('T-UI-015 the variant a shared link names', (group) => {
+  group.setup(async () => {
+    await useJobBoss()
+  })
+
+  test('T-UI-015 a link to a variant with stock preselects it on the server', async ({
+    assert,
+  }) => {
+    const w = await world()
+    const made = await publishedTee(w)
+    const path = canonicalOf('organic-cotton-crew-tee', made.publicId)
+    const blackM = made.variants.get('BM')!
+    const linked = (await props(`${path}?variant=${blackM}`)) as unknown as ProductProps & {
+      selection: { variant_id: string | null; sold_out_variant_id: string | null }
+    }
+    assert.deepEqual(linked.selection, { variant_id: blackM, sold_out_variant_id: null })
+    const response = await request(`${path}?variant=${blackM}`)
+    const html = markup(await response.text())
+    // Black and M are chosen in the server HTML, with that variant's price and saving.
+    for (const [axis, value] of [
+      ['color', 'black'],
+      ['apparel_size', 'm'],
+    ]) {
+      assert.match(html, new RegExp(`<input[^>]*id="axis-${axis}-${value}"[^>]*checked=""`))
+    }
+    assert.include(html, 'Rs\u00a01,299')
+    assert.notInclude(html, 'Rs\u00a01,299 – Rs\u00a01,399')
+    assert.include(html, '18% off')
+    assert.include(html, 'Only 2 left')
+    // Black L has no stock: it stays shown, disabled, and says so.
+    assert.match(html, /<input[^>]*id="axis-apparel_size-l"[^>]*disabled=""/)
+    const sizeL = /<input[^>]*id="axis-apparel_size-l"[^>]*>/.exec(html)?.[0] ?? ''
+    assert.include(sizeL, 'aria-label="L, sold out"')
+    assert.include(html, 'Sold out in Black: L')
+  })
+
+  test('T-UI-015 the price of the chosen variant replaces the range', async ({ assert }) => {
+    const w = await world()
+    const made = await publishedTee(w)
+    const path = canonicalOf('organic-cotton-crew-tee', made.publicId)
+    const blackL = made.variants.get('BL')!
+    await db.from('inventory_items').where('variant_id', blackL).update({ on_hand: 4 })
+    const response = await request(`${path}?variant=${blackL}`)
+    const html = markup(await response.text())
+    assert.include(html, 'Rs\u00a01,399')
+    assert.notInclude(html, 'Rs\u00a01,299')
+    assert.notInclude(html, 'Only')
+  })
+
+  test('T-UI-015 a link to a sold-out variant says so; any other value is ignored', async ({
+    assert,
+  }) => {
+    const w = await world()
+    const made = await publishedTee(w)
+    const path = canonicalOf('organic-cotton-crew-tee', made.publicId)
+    const blackL = made.variants.get('BL')!
+    const soldOut = (await props(`${path}?variant=${blackL}`)) as unknown as ProductProps & {
+      selection: { variant_id: string | null; sold_out_variant_id: string | null }
+    }
+    assert.deepEqual(soldOut.selection, { variant_id: null, sold_out_variant_id: blackL })
+    const soldOutPage = await request(`${path}?variant=${blackL}`)
+    const html = markup(await soldOutPage.text())
+    assert.include(html, 'The option in your link (Black, L) is sold out.')
+    assert.notMatch(html, /<input[^>]*type="radio"[^>]*checked=""/)
+    for (const value of [
+      'nope',
+      made.variants.get('PL') ?? '00000000-0000-0000-0000-000000000000',
+    ]) {
+      const ignored = (await props(`${path}?variant=${value}`)) as unknown as {
+        selection: { variant_id: string | null; sold_out_variant_id: string | null }
+      }
+      assert.deepEqual(ignored.selection, { variant_id: null, sold_out_variant_id: null })
+    }
+  })
+})
+
 test.group('T-CAT-004 the product path', (group) => {
   group.setup(async () => {
     await useJobBoss()
