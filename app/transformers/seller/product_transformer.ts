@@ -105,6 +105,7 @@ export function productFormOptionsJson(options: ProductFormOptions) {
       name: attribute.name,
       input: attribute.input,
       values: attribute.values.map((value) => ({
+        id: value.id,
         code: value.code,
         label: value.label,
         swatch_hex: value.swatchHex,

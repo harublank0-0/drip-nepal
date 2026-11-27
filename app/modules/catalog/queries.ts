@@ -654,7 +654,8 @@ export type AttributeOption = {
   code: string
   name: string
   input: AttributeInput
-  values: { code: string; label: string; swatchHex: string | null; isActive: boolean }[]
+  // `id` names a colour for the gallery's `color_value_id` (R1-S part 2g-ii).
+  values: { id: string; code: string; label: string; swatchHex: string | null; isActive: boolean }[]
 }
 
 export type BrandOption = { id: string; name: string; requiresModeration: boolean }
@@ -776,6 +777,7 @@ export async function productFormOptions(
           .select('code', 'name', 'input')
   const valueRows: {
     attribute_code: string
+    id: string
     code: string
     label: string
     swatch_hex: string | null
@@ -789,7 +791,14 @@ export async function productFormOptions(
           .whereIn('a.code', codes)
           .orderBy('v.position')
           .orderBy('v.code')
-          .select('a.code as attribute_code', 'v.code', 'v.label', 'v.swatch_hex', 'v.is_active')
+          .select(
+            'a.code as attribute_code',
+            'v.id',
+            'v.code',
+            'v.label',
+            'v.swatch_hex',
+            'v.is_active'
+          )
   const brandQuery = client
     .from('brands')
     .where('status', 'active')
@@ -814,6 +823,7 @@ export async function productFormOptions(
       values: valueRows
         .filter((value) => value.attribute_code === attribute.code)
         .map((value) => ({
+          id: value.id,
           code: value.code,
           label: value.label,
           swatchHex: value.swatch_hex,

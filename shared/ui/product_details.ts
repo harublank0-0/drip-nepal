@@ -40,6 +40,8 @@ export type CategoryOption = {
 }
 
 export type AttributeValueOption = {
+  // The value's ID, which the gallery sends as `color_value_id` (R1-S part 2g-ii).
+  id: string
   code: string
   label: string
   swatch_hex: string | null

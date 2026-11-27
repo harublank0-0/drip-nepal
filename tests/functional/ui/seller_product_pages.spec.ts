@@ -360,7 +360,7 @@ test.group('T-UI-042 the new product page', () => {
     const attributes = props.attributes as {
       code: string
       input: string
-      values: { code: string; is_active: boolean }[]
+      values: { id: string; code: string; is_active: boolean }[]
     }[]
     const named = new Set(
       categories.flatMap((category) => category.rules.map((r) => r.attribute_code))
@@ -375,6 +375,22 @@ test.group('T-UI-042 the new product page', () => {
       audience.values.map((value) => value.code),
       ['men', 'women', 'kids']
     )
+    // Each value carries its ID, which the gallery sends as `color_value_id` (R1-S part 2g-ii).
+    const men = await db
+      .from('attribute_values as v')
+      .join('attributes as a', 'a.id', 'v.attribute_id')
+      .where('a.code', 'audience')
+      .where('v.code', 'men')
+      .select('v.id')
+      .firstOrFail()
+    assert.sameMembers(Object.keys(audience.values[0]), [
+      'id',
+      'code',
+      'label',
+      'swatch_hex',
+      'is_active',
+    ])
+    assert.equal(audience.values[0].id, men.id)
 
     const brands = (props.brands as { id: string }[]).map((brand) => brand.id)
     assert.include(brands, active)

@@ -5,11 +5,14 @@
  * 10 minutes. `media_assets_bytes_check` and `media_assets_mime_check` are
  * the database's half.
  */
-export const MEDIA_MAX_BYTES = 10_485_760
+import { MEDIA_UPLOAD_LIMITS } from '#shared/constants/limits'
+
+// Shared with the editor's uploader (shared/constants/limits.ts; R1-S part 2g-ii).
+export const MEDIA_MAX_BYTES = MEDIA_UPLOAD_LIMITS.maxBytes
 
 export const UPLOAD_URL_SECONDS = 600
 
-export const IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const
+export const IMAGE_MIME_TYPES = MEDIA_UPLOAD_LIMITS.imageTypes
 export type ImageMimeType = (typeof IMAGE_MIME_TYPES)[number]
 
 /*

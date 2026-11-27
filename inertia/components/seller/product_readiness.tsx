@@ -19,8 +19,8 @@ import { detailsFieldId } from '~/components/seller/product_details_form'
  *
  * Each item links to where it is fixed when that is on this page and the
  * forms are offered (`editable`): a field of the details form, the
- * variants; the agreement links to the overview and shipping to the
- * shipping page. Photos come with R1-S part 2g, so that item is text only.
+ * variants or the photos (R1-S part 2g-ii); the agreement links to the
+ * overview and shipping to the shipping page.
  */
 export type ReadinessItem = { field: string; code?: string; message?: string }
 
@@ -38,9 +38,10 @@ const ITEMS: Record<string, Parameters<typeof t>[0]> = {
 
 const SHOWN_FOR = new Set(['draft', 'rejected'])
 
-// The variant editor's own targets (product_variants_form.tsx, product_edit.tsx).
+// The variant editor's and the photos' own targets (product_edit.tsx).
 const VARIANTS_HEADING_ID = 'product-variants-heading'
 const AXES_ID = 'variants-axes'
+const PHOTOS_HEADING_ID = 'photos-heading'
 
 function textOf(item: ReadinessItem, nameOf: (code: string) => string | undefined) {
   // A missing item reads as the catalogue says it; a failed rule as the server explains it.
@@ -84,13 +85,17 @@ function ItemText({
       </Link>
     )
   }
-  if (!editable || (fix.kind !== 'details' && fix.kind !== 'variants')) return <span>{text}</span>
+  if (!editable || (fix.kind !== 'details' && fix.kind !== 'variants' && fix.kind !== 'photos')) {
+    return <span>{text}</span>
+  }
   const id =
     fix.kind === 'details'
       ? detailsFieldId(fix.field)
-      : item.field === 'option_axes'
-        ? AXES_ID
-        : VARIANTS_HEADING_ID
+      : fix.kind === 'photos'
+        ? PHOTOS_HEADING_ID
+        : item.field === 'option_axes'
+          ? AXES_ID
+          : VARIANTS_HEADING_ID
   return (
     <a
       href={`#${id}`}
