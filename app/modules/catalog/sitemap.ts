@@ -39,6 +39,7 @@ export const sitemapFileKey = (n: number) => `sitemaps/urls-${n}.xml`
 const SITEMAP_MAX_BYTES = 60 * 1024 * 1024
 const PRODUCT_BATCH = 1000
 
+// `lastmod` is kept for a time that marks a real change; none is set today (see above).
 export type SitemapEntry = { loc: string; lastmod: string | null }
 
 function flatten(nodes: CategoryTreeNode[]): string[] {
@@ -120,11 +121,12 @@ export const sitemapCaches = new WeakMap<
   Map<string, { at: number; body: Buffer | null }>
 >()
 
+// The file's bytes, null when there is none, or undefined when two reads lost a race with the job.
 export async function readStoredSitemap(
   storage: ObjectStorage,
   key: string,
   requestId: string | null
-): Promise<Buffer | null> {
+): Promise<Buffer | null | undefined> {
   const ctx = { requestId, timeoutMs: 10_000 }
   // A second try, when the nightly run overwrote the file between the two calls.
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -143,7 +145,7 @@ export async function readStoredSitemap(
     }
     if (read.outcome === 'missing') return null
   }
-  return null
+  return undefined
 }
 
 // A sitemap file as stored, or null when none has been written yet.
@@ -154,6 +156,8 @@ export async function readSitemap(key: string, requestId: string | null): Promis
   const kept = cache.get(key)
   if (kept && Date.now() - kept.at < CACHE_MS) return kept.body
   const body = await readStoredSitemap(storage, key, requestId)
+  // A lost race is not kept: the next request reads the new file.
+  if (body === undefined) return null
   cache.set(key, { at: Date.now(), body })
   return body
 }

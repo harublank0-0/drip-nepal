@@ -25,6 +25,7 @@ export async function generateSitemap(
   const storage = await app.container.make(ObjectStorage)
   const ctx = { requestId, timeoutMs: 30_000 }
   const previous = await readStoredSitemap(storage, SITEMAP_INDEX_KEY, requestId)
+  // The files the last finished run named; one a failed run wrote past its index stays, unnamed.
   const previousFiles = previous ? (previous.toString('utf8').match(/<sitemap>/g)?.length ?? 0) : 0
   const entries = await sitemapEntries()
   const chunks = splitSitemap(entries, options.maxUrls)
@@ -51,6 +52,7 @@ export async function generateSitemap(
   for (let n = files + 1; n <= previousFiles; n++) {
     await storage.delete('private', sitemapFileKey(n), ctx)
   }
+  // Only this process's reads: the web process's cache ages out within 5 minutes.
   sitemapCaches.delete(storage)
   logger.info({ urls: entries.length, files }, 'sitemap written')
   return { urls: entries.length, files }
