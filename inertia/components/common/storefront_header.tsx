@@ -45,7 +45,10 @@ const NAV_LINK =
 const ACCOUNT_LINK = 'text-link rounded-sm text-sm underline underline-offset-4'
 
 export function StorefrontHeader() {
-  const { user, seller_shops: shops } = usePage<Data.SharedProps>().props
+  const { props, url } = usePage<Data.SharedProps>()
+  const { user, seller_shops: shops } = props
+  const here = url.split('?')[0]
+  const current = (path: string) => (path === here ? ('page' as const) : undefined)
   // Only a shop whose overview opens for this user (docs/07 §4.4) gets the link.
   const shop = shops?.find((candidate) => memberRoutesOpen(candidate.status, candidate.role))
   // The phone menu closes when one of its links is followed.
@@ -62,7 +65,11 @@ export function StorefrontHeader() {
               <span className="sr-only">{t('storefront.header.menu')}</span>
             </Button>
           </SheetTrigger>
-          <SheetContent side="left" className="w-[20rem] max-w-[85vw] overflow-y-auto">
+          <SheetContent
+            side="left"
+            aria-describedby={undefined}
+            className="w-[20rem] max-w-[85vw] overflow-y-auto"
+          >
             <SheetHeader className="border-b">
               <SheetTitle>{t('storefront.header.menu')}</SheetTitle>
             </SheetHeader>
@@ -72,7 +79,12 @@ export function StorefrontHeader() {
             >
               {AUDIENCES.map(({ page, entries }) => (
                 <section key={page.path} className="flex flex-col gap-1">
-                  <Link href={page.path} className="text-base font-semibold" onClick={closeMenu}>
+                  <Link
+                    href={page.path}
+                    aria-current={current(page.path)}
+                    className="text-base font-semibold"
+                    onClick={closeMenu}
+                  >
                     {page.label}
                   </Link>
                   <ul className="flex flex-col">
@@ -80,6 +92,7 @@ export function StorefrontHeader() {
                       <li key={entry.path}>
                         <Link
                           href={entry.path}
+                          aria-current={current(entry.path)}
                           className="block py-1.5 text-sm"
                           onClick={closeMenu}
                         >
@@ -93,19 +106,19 @@ export function StorefrontHeader() {
             </nav>
           </SheetContent>
         </Sheet>
-        <a
+        <Link
           href="/"
           className="font-heading text-primary me-2 rounded-sm text-xl font-semibold tracking-tight"
         >
           {t('common.brand')}
-        </a>
+        </Link>
         <nav
           aria-label={t('storefront.header.main_nav')}
           className="hidden items-center gap-1 lg:flex"
         >
           {AUDIENCES.map(({ page, entries }) => (
             <div key={page.path} className="flex items-center">
-              <Link href={page.path} className={NAV_LINK}>
+              <Link href={page.path} aria-current={current(page.path)} className={NAV_LINK}>
                 {page.label}
               </Link>
               <DropdownMenu>
@@ -120,7 +133,9 @@ export function StorefrontHeader() {
                 <DropdownMenuContent align="start" className="w-56">
                   {entries.map((entry) => (
                     <DropdownMenuItem key={entry.path} asChild>
-                      <Link href={entry.path}>{entry.label}</Link>
+                      <Link href={entry.path} aria-current={current(entry.path)}>
+                        {entry.label}
+                      </Link>
                     </DropdownMenuItem>
                   ))}
                 </DropdownMenuContent>

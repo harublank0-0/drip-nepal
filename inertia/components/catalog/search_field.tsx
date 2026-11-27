@@ -64,6 +64,10 @@ export function SearchField({
   const composing = useRef(false)
   // The term last searched, for the listeners that remember it when the customer leaves.
   const searched = useRef(q)
+  // A term the URL brings another way (a search from the header, Back) replaces it, unremembered.
+  useEffect(() => {
+    searched.current = q
+  }, [q])
 
   function remember() {
     if (searched.current) rememberRecentSearch(searched.current)
@@ -117,6 +121,8 @@ export function SearchField({
       window.removeEventListener('popstate', onPopState)
       window.removeEventListener('pagehide', remember)
       stopBefore()
+      // Leaving `/search` for another listing, Back or Forward included, unmounts the field.
+      remember()
       stopStart()
       stop()
       cancel()

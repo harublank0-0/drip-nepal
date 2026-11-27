@@ -12,6 +12,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from '~/components/ui/dialog'
 
 /*
@@ -32,7 +33,11 @@ export function SearchModal() {
 
   function onOpenChange(next: boolean) {
     setOpen(next)
-    if (next) setRecent(recentSearches())
+    // Each opening starts empty and shows the list as it is now.
+    if (next) {
+      setDraft('')
+      setRecent(recentSearches())
+    }
   }
 
   function search(term: string) {
@@ -44,10 +49,13 @@ export function SearchModal() {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <Button type="button" variant="ghost" size="icon" onClick={() => onOpenChange(true)}>
-        <SearchIcon aria-hidden="true" />
-        <span className="sr-only">{t('storefront.header.search')}</span>
-      </Button>
+      {/* The trigger: focus returns to it when the dialog closes. */}
+      <DialogTrigger asChild>
+        <Button type="button" variant="ghost" size="icon">
+          <SearchIcon aria-hidden="true" />
+          <span className="sr-only">{t('storefront.header.search')}</span>
+        </Button>
+      </DialogTrigger>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{t('storefront.search.dialog_title')}</DialogTitle>

@@ -37,8 +37,20 @@ test.group('T-UI-050 the storefront header', () => {
         assert.include(header, `href="${audience}"`, path)
       }
       assert.include(header, 'Men categories')
+      assert.include(header, 'Women categories')
       assert.include(header, 'href="/login"')
     }
+  })
+
+  test('T-UI-050 the current audience page is marked in the header', async ({ assert }) => {
+    const page = await html('/men')
+    const body = markup(page.body)
+    const header = body.slice(body.indexOf('<header'), body.indexOf('</header>'))
+    assert.match(
+      header,
+      /<a[^>]*href="\/men"[^>]*aria-current="page"|<a[^>]*aria-current="page"[^>]*href="\/men"/
+    )
+    assert.notMatch(header, /<a[^>]*href="\/women"[^>]*aria-current="page"/)
   })
 
   test('T-UI-050 the sign-in pages keep their own header', async ({ assert }) => {
