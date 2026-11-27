@@ -81,7 +81,7 @@ export function ProductGallery({ media }: { media: GalleryImage[] }) {
               tabIndex={index === focus ? 0 : -1}
               aria-pressed={index === shown}
               aria-label={image.alt}
-              className="bg-muted aria-pressed:ring-primary focus-visible:outline-ring size-20 shrink-0 overflow-hidden rounded-md outline-none focus-visible:outline-2 focus-visible:outline-offset-2 aria-pressed:ring-2"
+              className="bg-muted aria-pressed:ring-primary focus-visible:outline-ring size-20 shrink-0 overflow-hidden rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 aria-pressed:ring-2"
               onFocus={() => setFocus(index)}
               onClick={() => setShown(index)}
             >
